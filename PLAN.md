@@ -1,84 +1,84 @@
-# Canopy (working name) — Session Organization Platform
+# Canopy (가칭) — 세션 조직화 플랫폼
 
-*Name is provisional — chosen for the tree metaphor (a canopy is the organizing layer above individual trees/branches), distinct from Relay's flow/plumbing metaphor. Open to changing it.*
+*이름은 가제입니다 — 트리 은유(canopy는 개별 나무/가지 위를 덮는 조직화 레이어라는 뜻)를 살려서 붙였고, Relay의 흐름/배관 은유와는 다른 결로 골랐습니다. 바뀔 수 있습니다.*
 
-## The headline idea
+## 핵심 아이디어
 
-Everything designed so far under "context base," "orchestration layer," etc. has one idea at the center, and this project should say it plainly instead of burying it under mechanism: **organize AI agent sessions into a navigable hierarchy, the same way you'd organize any other body of ongoing work — by client, by project, by day — and make that organization the thing that also solves context continuity, not a side effect of it.**
+지금까지 "컨텍스트 베이스", "오케스트레이션 레이어" 등의 이름으로 설계해온 것들은 사실 하나의 아이디어를 중심으로 돌아가고 있는데, 지금까지는 그 아이디어를 메커니즘 뒤에 숨겨왔습니다. 이제 명확하게 말하면: **AI 에이전트 세션을 다른 진행 중인 업무를 조직화하는 것과 똑같은 방식으로 — 클라이언트별로, 프로젝트별로, 하루 단위로 — 계층 구조에 담아 정리하고, 그 조직화 자체가 컨텍스트 연속성 문제도 함께 풀어주게 만드는 것.**
 
-Previous docs (`relay/docs/CONTEXT_PLATFORM_OVERVIEW.md`, `relay/docs/ORCHESTRATION_ARCHITECTURE.md`) arrived at this from the angle of "how do we make model switching lossless." That's still true and still the mechanism, but it undersells the product: the tree of organized sessions is valuable on its own, independent of whether a switch ever happens, the same way a well-organized filing system is valuable independent of whether you ever need to hand a file to a colleague. **Session organization is the product. Lossless switching is one (important, differentiating) thing that a well-organized session tree makes possible.**
+이전 문서들(`relay/docs/CONTEXT_PLATFORM_OVERVIEW.md`, `relay/docs/ORCHESTRATION_ARCHITECTURE.md`)은 "모델 전환을 어떻게 손실 없이 만들까"라는 각도에서 이 아이디어에 도달했습니다. 그 방향은 여전히 맞고 여전히 핵심 메커니즘이지만, 그렇게만 설명하면 제품의 가치를 과소평가하게 됩니다: **잘 정리된 세션 트리는 전환이 일어나든 안 일어나든 그 자체로 가치가 있습니다** — 잘 정리된 파일 시스템이 동료에게 파일을 넘길 일이 있든 없든 그 자체로 가치 있는 것과 같습니다. **세션 조직화가 제품입니다. 손실 없는 전환은 잘 조직된 세션 트리가 가능하게 해주는, 중요하지만 하나의 부수 효과일 뿐입니다.**
 
-## Relationship to Relay
+## Relay와의 관계
 
-Relay is not replaced or absorbed — it becomes this project's **native execution core**, used as-is:
+Relay는 대체되거나 흡수되지 않습니다 — 이 프로젝트의 **네이티브 실행 코어**가 되어 그대로 쓰입니다:
 
-- Relay's task queue, quota-aware scheduling, coding-agent adapters (`claude.js`/`codex.js`), and git worktree lifecycle are unchanged.
-- Canopy is a layer that sits **around** Relay: it owns the tree (company → project → session), the source-of-truth context store, and ancestor-path routing. It talks to Relay's existing API (`POST /api/tasks`, `GET /api/tasks/:id`, etc.) to enqueue and observe work, rather than modifying Relay's internals.
-- Concretely: a "session" in Canopy's tree corresponds to one or more Relay tasks. When Canopy dispatches work, it calls Relay's API with a task description assembled from ancestor-path context; when Relay reports a task done/rate-limited, Canopy records that into the tree as part of the session's history.
+- Relay의 태스크 큐, 쿼터 인지 스케줄링, 코딩 에이전트 어댑터(`claude.js`/`codex.js`), git worktree 생명주기는 그대로 둡니다.
+- Canopy는 Relay를 **감싸는** 레이어입니다: 트리(회사 → 프로젝트 → 세션), source-of-truth 컨텍스트 저장소, 조상 경로 라우팅을 담당합니다. Relay의 내부를 수정하는 대신, 기존 API(`POST /api/tasks` 등)를 호출해서 작업을 큐에 넣고 상태를 관찰합니다.
+- 구체적으로: Canopy 트리의 "세션" 하나는 Relay 태스크 하나 이상에 대응됩니다. Canopy가 작업을 디스패치할 때는 조상 경로 컨텍스트로 조립한 태스크 설명을 담아 Relay API를 호출하고, Relay가 태스크 완료/rate-limit을 보고하면 Canopy는 그걸 세션 히스토리의 일부로 트리에 기록합니다.
 
-This keeps Relay's already-validated, working system untouched and treats it as a dependency, not something to be rebuilt inside a bigger repo.
+이렇게 하면 이미 검증되고 동작 중인 Relay 시스템을 건드리지 않고, 그걸 재구축 대상이 아니라 의존성으로 취급하게 됩니다.
 
-## Architecture
+## 아키텍처
 
 ```
 ┌───────────────────────────────────────────────────────────┐
 │                          Canopy                              │
 │                                                               │
-│  Tree data model (company → project → session)                │
-│  Source-of-truth context store (via Memory Provider contract)  │
-│  Ancestor-path routing (assembles context for a new dispatch)   │
-│  Daily digest generation (via Aux LLM Provider contract)          │
-│  Web UI (channel/thread view — see prior UI design doc)             │
+│  트리 데이터 모델 (회사 → 프로젝트 → 세션)                       │
+│  Source-of-truth 컨텍스트 저장소 (Memory Provider 계약을 통해)    │
+│  조상 경로 라우팅 (새 디스패치를 위한 컨텍스트 조립)                │
+│  일일 다이제스트 생성 (Aux LLM Provider 계약을 통해)                │
+│  웹 UI (채널/스레드 뷰 — 이전 UI 설계 문서 참고)                      │
 └──────────────┬──────────────────────────┬───────────────────────┘
                │                          │
-      [calls Relay's API]        [Memory / Aux LLM Provider contracts]
+       [Relay API 호출]           [Memory / Aux LLM Provider 계약]
                │                          │
                ▼                          ▼
      ┌─────────────────┐      ┌─────────────────────────┐
-     │  Relay (unchanged) │      │  ai-memory / agentmemory  │
-     │  - task queue        │      │  / mem0 / direct API-key   │
-     │  - quota scheduling    │      │  (swappable, per                │
-     │  - claude/codex adapters │      │   docs/ORCHESTRATION_       │
-     │  - worktree/gate/PR         │      │   ARCHITECTURE.md)              │
+     │  Relay (변경 없음)  │      │  ai-memory / agentmemory  │
+     │  - 태스크 큐          │      │  / mem0 / 직접 API 키       │
+     │  - 쿼터 스케줄링         │      │  (교체 가능,                │
+     │  - claude/codex 어댑터    │      │   docs/ORCHESTRATION_      │
+     │  - worktree/gate/PR         │      │   ARCHITECTURE.md 참고)         │
      └─────────────────┘      └─────────────────────────┘
 ```
 
-## Data model
+## 데이터 모델
 
-**Tree**: `Company → Project → Session`. A session is roughly what Relay calls a task, but framed from the organizing side — it's a node with its own context, a status, and a position in the tree. (`docs/CONTEXT_PLATFORM_OVERVIEW.md` has the full rationale for why tree-shaped, ancestor-path routing over search-based routing.)
+**트리**: `회사 → 프로젝트 → 세션`. 세션은 대략 Relay가 "태스크"라 부르는 것과 같지만, 조직화하는 쪽에서 바라본 프레임입니다 — 자기만의 컨텍스트, 상태, 트리 상의 위치를 가진 노드입니다. (트리 형태가 왜 검색 기반 라우팅보다 나은지에 대한 전체 근거는 `docs/CONTEXT_PLATFORM_OVERVIEW.md`에 있습니다.)
 
-**Per-node context** (via the Memory Provider contract): each tree node can accumulate its own standing context — a company's conventions, a project's memory, a session's specific history — and every descendant inherits everything above it automatically, without a search step.
+**노드별 컨텍스트** (Memory Provider 계약을 통해): 각 트리 노드는 자기만의 고정 컨텍스트를 쌓을 수 있습니다 — 회사의 컨벤션, 프로젝트의 메모리, 세션의 구체적 이력 — 그리고 모든 하위 노드는 검색 단계 없이 그 위의 모든 것을 자동으로 상속받습니다.
 
-**Source-of-truth guarantee**: for any given piece of work, there is exactly one authoritative record of what happened and why, regardless of how many different models touched it. This is what makes "organize once, use forever" true instead of "organize once, hope it's still accurate."
+**Source-of-truth 보장**: 어떤 작업이든, 몇 개의 서로 다른 모델이 손을 댔든 상관없이 "무슨 일이 있었고 왜 그랬는지"에 대한 권위 있는 기록은 정확히 하나만 존재합니다. 이게 있어야 "한 번 정리하면 영원히 쓴다"가 "한 번 정리했지만 지금도 맞는지는 모른다"가 되지 않습니다.
 
-## MVP scope
+## MVP 스코프
 
-Deliberately narrow, given how much has been designed conceptually versus built:
+지금까지 개념적으로 설계한 것에 비해 실제로 만든 건 적다는 걸 감안해서 의도적으로 좁게 잡습니다:
 
-1. **Tree CRUD** — create companies, projects, sessions; list/browse the hierarchy. No memory provider integration yet — just the structure.
-2. **Relay integration** — creating a session in Canopy enqueues a task in Relay (via its existing API); Canopy polls Relay for status and records the result into the session node.
-3. **One memory provider, verified first** — per `ORCHESTRATION_ARCHITECTURE.md`'s risk section, spike-test the leading candidate (ai-memory) against the Memory Provider contract *before* building the adapter, specifically confirming hook behavior in Relay's always-headless dispatch mode. Only build the real adapter once that's confirmed; otherwise fall back to the `none` no-op provider for MVP and revisit.
-4. **Ancestor-path context assembly** — when Canopy enqueues a Relay task for a session, it walks the tree, pulls whatever the memory provider returns per ancestor, and prepends it to the task description Relay dispatches.
-5. **Minimal UI** — the channel/thread view designed in the UI handoff doc, scoped to just: browse the tree, see session status/history, add a new session. No search, no daily digest yet — those are explicitly deferred (see below).
+1. **트리 CRUD** — 회사, 프로젝트, 세션을 생성하고 계층 구조를 조회/탐색. 아직 메모리 프로바이더 연동은 없이, 구조만.
+2. **Relay 연동** — Canopy에서 세션을 만들면 (기존 Relay API를 통해) Relay에 태스크가 큐잉됩니다. Canopy는 Relay의 상태를 폴링해서 결과를 세션 노드에 기록합니다.
+3. **검증부터 마친 메모리 프로바이더 하나** — `ORCHESTRATION_ARCHITECTURE.md`의 리스크 섹션대로, 가장 유력한 후보(ai-memory)를 Memory Provider 계약에 맞춰 스파이크 테스트부터 하고 나서 어댑터를 만듭니다 — 특히 Relay가 항상 헤드리스로 디스패치하는 모드에서 훅이 실제로 동작하는지를 확인합니다. 이게 확인된 뒤에만 진짜 어댑터를 만들고, 아니면 MVP는 no-op `none` 프로바이더로 시작하고 나중에 다시 봅니다.
+4. **조상 경로 컨텍스트 조립** — Canopy가 세션을 위해 Relay 태스크를 큐잉할 때, 트리를 타고 올라가면서 메모리 프로바이더가 각 조상 노드에 대해 반환하는 걸 모아서 Relay가 디스패치할 태스크 설명 앞에 붙입니다.
+5. **최소한의 UI** — UI 핸드오프 문서에서 설계한 채널/스레드 뷰를, 딱 이 범위로만: 트리 탐색, 세션 상태/이력 보기, 새 세션 추가. 검색과 일일 다이제스트는 명시적으로 미룹니다(아래 참고).
 
-## Explicitly deferred past MVP
+## MVP 이후로 명시적으로 미루는 것
 
-- Daily digest generation (needs real usage data across real sessions before the summarization prompt can be tuned meaningfully)
-- Cross-tree search (only useful once there's enough tree depth/breadth to need it)
-- Auxiliary LLM provider plugin (MVP can hardcode a direct API key for the one place an LLM call is needed, if any — no need for the routing abstraction until there's a second use case)
-- Multiple memory providers side-by-side / provider switching UI — one verified provider is enough to prove the architecture
+- 일일 다이제스트 생성 (요약 프롬프트를 의미 있게 튜닝하려면 실제 세션들에 걸친 실사용 데이터가 먼저 필요)
+- 트리를 넘나드는 검색 (트리가 필요할 만큼 깊고 넓어져야 의미가 생김)
+- Auxiliary LLM 프로바이더 플러그인 (MVP는 LLM 호출이 필요한 곳이 있어도 직접 API 키 하나로 하드코딩하면 충분 — 두 번째 사용처가 생기기 전까지는 라우팅 추상화가 필요 없음)
+- 여러 메모리 프로바이더 동시 지원/전환 UI (아키텍처를 증명하는 데는 검증된 프로바이더 하나면 충분)
 
-## Build phases
+## 빌드 단계
 
-1. Spike: verify ai-memory's hook behavior in headless mode (blocking prerequisite for phase 3)
-2. Tree data model + CRUD, no external integrations — prove the structure alone
-3. Relay integration (enqueue + status polling)
-4. Memory provider adapter (ai-memory, if phase 1 confirms; `none` otherwise) + ancestor-path assembly
-5. Minimal UI over the above
-6. Reassess: daily digest, search, and multi-provider support only after the above is real and in use
+1. 스파이크: ai-memory의 훅이 헤드리스 모드에서 어떻게 동작하는지 검증 (3단계의 필수 선행 조건)
+2. 트리 데이터 모델 + CRUD, 외부 연동 없이 — 구조 자체를 먼저 증명
+3. Relay 연동 (큐잉 + 상태 폴링)
+4. 메모리 프로바이더 어댑터 (1단계가 확인되면 ai-memory, 아니면 `none`) + 조상 경로 조립
+5. 위 위에 최소한의 UI
+6. 재평가: 일일 다이제스트, 검색, 멀티 프로바이더 지원은 위의 것들이 실제로 만들어지고 쓰인 뒤에만
 
-## Open questions
+## 열린 질문들
 
-- **Naming.** "Canopy" is a placeholder — worth revisiting once the product is tangible rather than conceptual.
-- **Repo/deployment relationship to Relay.** This plan assumes Canopy is a separate codebase that talks to Relay over its existing HTTP API (loopback, same machine, per Relay's desktop-first scoping). Worth confirming that's still the right boundary once phase 3 is underway, rather than e.g. importing Relay's modules directly.
-- **What exactly is a "session" when it spans multiple Relay tasks** (e.g. a rate-limit handoff creates a new Relay task under the hood, per Relay's own `adapter_history` mechanism) — does Canopy treat that as one session node with multiple Relay-task-executions inside it, or does each Relay task get its own session node with a parent/continuation link? This affects the tree schema and hasn't been resolved yet.
+- **이름.** "Canopy"는 가제입니다 — 제품이 개념이 아니라 실체를 갖추면 다시 논의할 가치가 있습니다.
+- **Relay와의 저장소/배포 관계.** 이 계획은 Canopy가 별도 코드베이스로 존재하면서 Relay의 기존 HTTP API를 (로컬호스트, 같은 머신, Relay의 데스크톱 우선 스코핑에 맞춰) 호출한다고 가정합니다. Relay 모듈을 직접 import하는 대신 이 경계가 맞는지는 3단계에 들어가면 다시 확인할 가치가 있습니다.
+- **세션 하나가 Relay 태스크 여러 개에 걸칠 때(rate-limit로 인한 handoff로 Relay가 내부적으로 새 태스크를 만드는 경우, Relay 자체의 `adapter_history` 메커니즘 참고) 이걸 어떻게 다룰지** — Canopy는 이걸 여러 번의 Relay 태스크 실행을 담은 하나의 세션 노드로 취급할지, 아니면 각 Relay 태스크마다 부모/연속 링크가 있는 별도 세션 노드를 만들지가 아직 안 정해졌습니다. 이건 트리 스키마에 영향을 주는데 아직 해결 안 됐습니다.
