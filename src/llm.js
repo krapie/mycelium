@@ -13,7 +13,7 @@ const PROVIDER = process.env.MYCELIUM_LLM || 'claude';
 const CLAUDE_MODEL = process.env.MYCELIUM_CLAUDE_MODEL || 'haiku';
 const CODEX_MODEL = process.env.MYCELIUM_CODEX_MODEL || 'gpt-5.5';
 
-export function complete(prompt, { timeoutMs = 120000 } = {}) {
+export function complete(prompt, { timeoutMs = 240000 } = {}) {
   return new Promise((resolve, reject) => {
     let cmd, args;
     if (PROVIDER === 'codex') {
