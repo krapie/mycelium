@@ -1,0 +1,21 @@
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { mkdirSync, existsSync } from 'node:fs';
+
+// Mycelium's own data home. Files are the source of truth; the sqlite index
+// under db/ is a derived artifact that can be rebuilt from raw/ at any time.
+export const HOME = process.env.MYCELIUM_HOME || join(homedir(), '.mycelium');
+
+export const RAW_DIR = join(HOME, 'raw'); // normalized neutral-schema sessions
+export const TREE_DIR = join(HOME, 'tree'); // user folder structure = real dirs
+export const DIGEST_DIR = join(HOME, 'digests');
+export const DB_DIR = join(HOME, 'db');
+export const DB_PATH = join(DB_DIR, 'index.db');
+export const CONFIG_PATH = join(HOME, 'config.json');
+export const INBOX = join(TREE_DIR, '_inbox');
+
+export function ensureDirs() {
+  for (const d of [HOME, RAW_DIR, TREE_DIR, DIGEST_DIR, DB_DIR, INBOX]) {
+    if (!existsSync(d)) mkdirSync(d, { recursive: true });
+  }
+}
