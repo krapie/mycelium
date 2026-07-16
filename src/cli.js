@@ -2,6 +2,12 @@
 import { scan, allRaw } from './scanner.js';
 import { firstUserText } from './schema.js';
 import { reindex, search, listTags } from './index-db.js';
+import { mkdir, move, tag, autoOrganize, addRule } from './organize.js';
+
+function fail(msg) {
+  console.error(msg);
+  process.exit(1);
+}
 
 function parseFlags(args) {
   const flags = {};
@@ -54,6 +60,45 @@ async function main() {
     }
     case 'tags': {
       for (const t of listTags()) console.log(`${String(t.n).padStart(4)}  ${t.name}`);
+      break;
+    }
+    case 'organize': {
+      const res = autoOrganize();
+      reindex();
+      console.log(`auto-placed ${res.placed}, kept ${res.skippedHuman} human-organized sessions untouched`);
+      break;
+    }
+    case 'mkdir': {
+      const [folder] = args;
+      if (!folder) return fail('Usage: mycelium mkdir <folder-path>');
+      console.log(`created ${mkdir(folder)}`);
+      break;
+    }
+    case 'mv': {
+      const [sessionId, folder] = args;
+      if (!sessionId) return fail('Usage: mycelium mv <sessionId> <folder-path>');
+      const res = move(sessionId, folder || null);
+      if (!res.ok) return fail(res.error);
+      reindex();
+      console.log(`moved ${sessionId.slice(0, 8)} → ${res.session.folder || '_inbox'} (human)`);
+      break;
+    }
+    case 'tag': {
+      const [sessionId, ...rest] = args;
+      if (!sessionId) return fail('Usage: mycelium tag <sessionId> +tag -tag');
+      const add = rest.filter((t) => t.startsWith('+')).map((t) => t.slice(1));
+      const remove = rest.filter((t) => t.startsWith('-')).map((t) => t.slice(1));
+      const res = tag(sessionId, add, remove);
+      if (!res.ok) return fail(res.error);
+      reindex();
+      console.log(`${sessionId.slice(0, 8)} tags: ${res.session.extracted.tags.join(', ') || '(none)'} (human)`);
+      break;
+    }
+    case 'rule': {
+      const [prefix, folder] = args;
+      if (!prefix || !folder) return fail('Usage: mycelium rule <cwd-prefix> <folder-path>');
+      addRule(prefix, folder);
+      console.log(`rule added: ${prefix} → ${folder}`);
       break;
     }
     case 'list': {
