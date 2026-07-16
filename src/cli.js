@@ -7,6 +7,7 @@ import { mkdir, move, tag, autoOrganize, addRule } from './organize.js';
 import { autoTagSession, tagAll } from './learn.js';
 import { generateDigest, extractKnowledge, foldersWithSessions } from './insight.js';
 import { assembleContext, folderForCwd, injectAgentsMd, contextForSession } from './reuse.js';
+import { buildHandoff } from './handoff.js';
 
 function fail(msg) {
   console.error(msg);
@@ -187,12 +188,37 @@ async function main() {
       console.log(`AGENTS.md 갱신: ${res.path} (${res.folder} 지식 주입)`);
       break;
     }
+    case 'handoff': {
+      const [sessionId] = args;
+      if (!sessionId) return fail('Usage: mycelium handoff <sessionId>');
+      const res = buildHandoff(sessionId);
+      if (!res.ok) return fail(res.error);
+      console.log(res.prompt);
+      break;
+    }
+    case 'daemon': {
+      const { runDaemon } = await import('./daemon.js');
+      await runDaemon();
+      break;
+    }
     default:
       console.log(`Mycelium — AI 협업 컨텍스트 라이프사이클
 
-Usage:
-  mycelium scan     세션 저장소를 스캔해 중립 스키마로 가져오기
-  mycelium list     가져온 세션 목록
+Capture   scan                          세션 저장소 스캔 → 중립 스키마
+Organize  organize                      cwd 기반 자동 배치 (사람 결정은 보존)
+          mkdir <folder>                폴더 생성
+          mv <session> <folder>         세션 수동 이동
+          tag <session> +t -t           태그 수동 편집
+          rule <cwd-prefix> <folder>    cwd→폴더 자동배치 규칙
+Learn     autotag [<session>] [--force] 내용 기반 자동 태깅 (소급 일괄)
+          digest [week] [--date D]      일일/주간 서사 다이제스트
+          knowledge [<folder>]          폴더별 KNOWLEDGE.md 추출
+Reuse     context <session>|--folder|--cwd   조상 경로 컨텍스트 출력
+          inject [--dir D] [--folder F] AGENTS.md에 지식 주입
+          handoff <session>            다른 에이전트용 인수인계 프롬프트
+Find      search <q> [--tag t] [--folder f]
+          list / tags
+Run       daemon                        스캔 폴링 + 다이제스트 + 웹 UI
 `);
       process.exit(cmd ? 1 : 0);
   }

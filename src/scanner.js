@@ -2,8 +2,9 @@ import { join } from 'node:path';
 import { writeFileSync, readFileSync, existsSync, readdirSync } from 'node:fs';
 import { ensureDirs, RAW_DIR } from './paths.js';
 import * as claudeCode from './adapters/claude-code.js';
+import * as codex from './adapters/codex.js';
 
-const ADAPTERS = [claudeCode];
+const ADAPTERS = [claudeCode, codex];
 
 function rawPath(id) {
   // session ids are uuids / safe filenames already, but guard anyway
