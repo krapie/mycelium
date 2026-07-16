@@ -3,10 +3,15 @@ import { scan, allRaw } from './scanner.js';
 import { firstUserText } from './schema.js';
 import { reindex, search, listTags } from './index-db.js';
 import { mkdir, move, tag, autoOrganize, addRule } from './organize.js';
+import { autoTagSession, tagAll } from './learn.js';
 
 function fail(msg) {
   console.error(msg);
   process.exit(1);
+}
+
+function fmtTags(tags) {
+  return tags && tags.length ? '#' + tags.join(' #') : '(no tags)';
 }
 
 function parseFlags(args) {
@@ -99,6 +104,26 @@ async function main() {
       if (!prefix || !folder) return fail('Usage: mycelium rule <cwd-prefix> <folder-path>');
       addRule(prefix, folder);
       console.log(`rule added: ${prefix} → ${folder}`);
+      break;
+    }
+    case 'autotag': {
+      const { flags, positional } = parseFlags(args);
+      if (positional[0]) {
+        const res = await autoTagSession(positional[0]);
+        if (!res.ok) return fail(res.error);
+        console.log(`${positional[0].slice(0, 8)}  ${fmtTags(res.session.extracted.tags)}`);
+        console.log(`  ${res.session.extracted.summary || ''}`);
+      } else {
+        const res = await tagAll({
+          force: !!flags.force,
+          onProgress: (s, err) => {
+            if (err) console.log(`  ! ${err.message}`);
+            else console.log(`  + ${s.id.slice(0, 8)}  ${fmtTags(s.extracted.tags)}`);
+          },
+        });
+        console.log(`tagged ${res.tagged}, skipped ${res.skipped}, failed ${res.failed}`);
+      }
+      reindex();
       break;
     }
     case 'list': {

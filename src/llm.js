@@ -1,0 +1,84 @@
+import { spawn } from 'node:child_process';
+
+/**
+ * Minimal LLM call via a headless coding-CLI subprocess. We reuse whatever
+ * subscription the user already has (Claude Code / Codex) rather than asking
+ * for a separate API key, and stay inside "ordinary scripted use" of the
+ * official CLI — never touching auth tokens directly.
+ *
+ * Default provider is Claude Code with a cheap model, matching ai-memory's
+ * choice of a small model for consolidation-style work.
+ */
+const PROVIDER = process.env.MYCELIUM_LLM || 'claude';
+const CLAUDE_MODEL = process.env.MYCELIUM_CLAUDE_MODEL || 'haiku';
+const CODEX_MODEL = process.env.MYCELIUM_CODEX_MODEL || 'gpt-5.5';
+
+export function complete(prompt, { timeoutMs = 120000 } = {}) {
+  return new Promise((resolve, reject) => {
+    let cmd, args;
+    if (PROVIDER === 'codex') {
+      cmd = 'codex';
+      args = ['exec', prompt, '--sandbox', 'read-only', '--skip-git-repo-check', '-c', 'approval_policy=never', '-m', CODEX_MODEL];
+    } else {
+      cmd = 'claude';
+      args = ['-p', prompt, '--model', CLAUDE_MODEL, '--output-format', 'json'];
+    }
+
+    const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    let out = '';
+    let err = '';
+    const timer = setTimeout(() => {
+      child.kill('SIGTERM');
+      reject(new Error('llm timeout'));
+    }, timeoutMs);
+
+    child.stdout.on('data', (d) => (out += d));
+    child.stderr.on('data', (d) => (err += d));
+    child.on('error', (e) => {
+      clearTimeout(timer);
+      reject(e);
+    });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      if (code !== 0) return reject(new Error(err.trim() || `${cmd} exited ${code}`));
+      resolve(extractText(out));
+    });
+  });
+}
+
+function extractText(stdout) {
+  // Claude Code --output-format json wraps the reply in { result: "..." }.
+  try {
+    const j = JSON.parse(stdout);
+    if (typeof j.result === 'string') return j.result;
+  } catch {
+    /* not claude json — fall through */
+  }
+  // Codex --json emits JSONL events; pull the last agent_message text.
+  let last = null;
+  for (const line of stdout.split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      const e = JSON.parse(line);
+      if (e?.msg?.type === 'agent_message' && e.msg.message) last = e.msg.message;
+      else if (e?.payload?.type === 'agent_message' && e.payload.message) last = e.payload.message;
+    } catch {
+      /* plain text line */
+    }
+  }
+  return last ?? stdout.trim();
+}
+
+/** Parse the first JSON object found in an LLM reply (they often wrap it in prose/fences). */
+export function parseJsonReply(text) {
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const candidate = fence ? fence[1] : text;
+  const start = candidate.indexOf('{');
+  const end = candidate.lastIndexOf('}');
+  if (start === -1 || end === -1) return null;
+  try {
+    return JSON.parse(candidate.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+}
