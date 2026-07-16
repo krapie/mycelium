@@ -1,9 +1,12 @@
 #!/usr/bin/env node
+import { readFileSync } from 'node:fs';
 import { scan, allRaw } from './scanner.js';
 import { firstUserText } from './schema.js';
 import { reindex, search, listTags } from './index-db.js';
 import { mkdir, move, tag, autoOrganize, addRule } from './organize.js';
 import { autoTagSession, tagAll } from './learn.js';
+import { generateDigest, extractKnowledge, foldersWithSessions } from './insight.js';
+import { assembleContext, folderForCwd, injectAgentsMd, contextForSession } from './reuse.js';
 
 function fail(msg) {
   console.error(msg);
@@ -135,6 +138,53 @@ async function main() {
         console.log(`          ${firstUserText(n).slice(0, 70)}`);
       }
       console.log(`\n${raws.length} sessions`);
+      break;
+    }
+    case 'digest': {
+      const { flags, positional } = parseFlags(args);
+      const period = positional[0] === 'week' ? 'week' : 'day';
+      const res = await generateDigest({ period, date: flags.date });
+      if (!res.ok) return fail(res.error);
+      console.log(`${res.keyed} 다이제스트 생성 (${res.count} 세션) → ${res.path}`);
+      console.log('');
+      console.log(readFileSync(res.path, 'utf8'));
+      break;
+    }
+    case 'knowledge': {
+      const [folder] = args;
+      if (folder) {
+        const res = await extractKnowledge(folder);
+        if (!res.ok) return fail(res.error);
+        console.log(`${res.folder} KNOWLEDGE.md 생성 (${res.count} 세션) → ${res.path}`);
+      } else {
+        for (const f of foldersWithSessions()) {
+          const res = await extractKnowledge(f);
+          console.log(res.ok ? `  + ${f} (${res.count})` : `  ! ${f}: ${res.error}`);
+        }
+      }
+      break;
+    }
+    case 'context': {
+      const { flags, positional } = parseFlags(args);
+      if (positional[0]) {
+        const res = contextForSession(positional[0]);
+        if (!res.ok) return fail(res.error);
+        console.log(res.context || '(상속할 컨텍스트 없음)');
+      } else if (flags.folder) {
+        console.log(assembleContext(flags.folder) || '(상속할 컨텍스트 없음)');
+      } else if (flags.cwd) {
+        console.log(assembleContext(folderForCwd(flags.cwd)) || '(상속할 컨텍스트 없음)');
+      } else fail('Usage: mycelium context <sessionId> | --folder <path> | --cwd <dir>');
+      break;
+    }
+    case 'inject': {
+      const { flags } = parseFlags(args);
+      const targetDir = flags.dir || process.cwd();
+      const folder = flags.folder || folderForCwd(targetDir);
+      if (!folder) return fail('대상 폴더를 결정할 수 없습니다 (--folder 로 지정하세요)');
+      const res = injectAgentsMd(targetDir, folder);
+      if (!res.ok) return fail(res.error);
+      console.log(`AGENTS.md 갱신: ${res.path} (${res.folder} 지식 주입)`);
       break;
     }
     default:

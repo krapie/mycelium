@@ -1,0 +1,128 @@
+import { join } from 'node:path';
+import { writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { complete } from './llm.js';
+import { allRaw } from './scanner.js';
+import { TREE_DIR, DIGEST_DIR, ensureDirs } from './paths.js';
+
+function dayOf(iso) {
+  return iso ? iso.slice(0, 10) : null;
+}
+
+function isoWeek(iso) {
+  const d = new Date(iso);
+  const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const day = t.getUTCDay() || 7;
+  t.setUTCDate(t.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((t - yearStart) / 86400000 + 1) / 7);
+  return `${t.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+
+function groupByFolder(sessions) {
+  const by = new Map();
+  for (const s of sessions) {
+    const f = s.folder || '_inbox';
+    if (!by.has(f)) by.set(f, []);
+    by.get(f).push(s);
+  }
+  return by;
+}
+
+/**
+ * Narrative digest for a period. Reuses the per-session summaries that
+ * auto-tagging already produced (no re-reading full transcripts — cheap), and
+ * asks the LLM to write it the way a colleague's handoff note reads, grouped by
+ * folder. memory-journal-mcp is the only surveyed tool with a scheduled digest,
+ * but it only works in a long-running HTTP server; here the daemon owns the
+ * schedule and this is a plain function it calls.
+ */
+export async function generateDigest({ period = 'day', date } = {}) {
+  ensureDirs();
+  const target = date || new Date().toISOString().slice(0, 10);
+  const keyed = period === 'week' ? isoWeek(`${target}T00:00:00Z`) : target;
+
+  const sessions = allRaw().filter((s) => {
+    if (!s.startedAt) return false;
+    return period === 'week' ? isoWeek(s.startedAt) === keyed : dayOf(s.startedAt) === target;
+  });
+
+  if (sessions.length === 0) return { ok: false, error: `no sessions for ${keyed}` };
+
+  const byFolder = groupByFolder(sessions);
+  const blocks = [];
+  for (const [folder, ss] of byFolder) {
+    const items = ss
+      .map((s) => `- [${folder}] ${s.extracted.summary || s.turns.find((t) => t.role === 'user')?.text?.slice(0, 80) || '(요약 없음)'}`)
+      .join('\n');
+    blocks.push(items);
+  }
+
+  const prompt = `아래는 ${keyed} 기간 동안의 AI 작업 세션 요약 목록이다(폴더별). 이걸 사람이 아침에 읽는 인수인계 메모처럼 서사형으로 정리해라. 상태 카운트 말고, 무슨 일이 있었고 무엇이 결정됐고 뭐가 남았는지 3~6문장. 한국어.
+
+${blocks.join('\n')}
+
+출력은 마크다운 본문만.`;
+
+  let narrative;
+  try {
+    narrative = await complete(prompt);
+  } catch (err) {
+    return { ok: false, error: `LLM 실패: ${err.message}` };
+  }
+
+  const md = `# ${keyed} 다이제스트\n\n${narrative.trim()}\n\n---\n\n## 세션 (${sessions.length})\n\n${[...byFolder]
+    .map(([f, ss]) => `### ${f}\n${ss.map((s) => `- ${s.extracted.summary || '(요약 없음)'}`).join('\n')}`)
+    .join('\n\n')}\n`;
+
+  const path = join(DIGEST_DIR, `${keyed}.md`);
+  writeFileSync(path, md);
+  return { ok: true, path, keyed, count: sessions.length };
+}
+
+/**
+ * Extract durable Project Knowledge for a folder from its sessions' summaries
+ * and decisions, and write it to that folder's KNOWLEDGE.md. This is the file
+ * that ancestor-path reuse later renders into AGENTS.md — closing the
+ * self-improving loop (insight → agent memory). Follows ai-memory's
+ * "compile-not-retrieve": a coherent page, not raw logs.
+ */
+export async function extractKnowledge(folder) {
+  ensureDirs();
+  const sessions = allRaw().filter((s) => {
+    const f = s.folder || '_inbox';
+    return f === folder || f.startsWith(folder + '/');
+  });
+  if (sessions.length === 0) return { ok: false, error: `no sessions in ${folder}` };
+
+  const material = sessions
+    .map((s) => {
+      const parts = [`- ${s.extracted.summary || '(요약 없음)'}`];
+      for (const d of s.extracted.decisions || []) parts.push(`  · 결정: ${d}`);
+      return parts.join('\n');
+    })
+    .join('\n');
+
+  const prompt = `아래는 "${folder}" 작업 공간에서 있었던 세션 요약과 결정들이다. 이 공간에서 새 작업을 시작하는 AI가 미리 알아야 할 "프로젝트 지식"을 정리해라. 반복되는 컨벤션, 확정된 결정, 자주 나오는 용어, 주의할 점 위주로. 개별 세션 나열이 아니라 정제된 지식으로. 한국어 마크다운 본문만.
+
+${material}`;
+
+  let knowledge;
+  try {
+    knowledge = await complete(prompt);
+  } catch (err) {
+    return { ok: false, error: `LLM 실패: ${err.message}` };
+  }
+
+  const dir = join(TREE_DIR, ...folder.split('/'));
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  const path = join(dir, 'KNOWLEDGE.md');
+  writeFileSync(path, `# ${folder} — Project Knowledge\n\n${knowledge.trim()}\n`);
+  return { ok: true, path, folder, count: sessions.length };
+}
+
+/** Every distinct folder that currently has sessions (for batch knowledge extraction). */
+export function foldersWithSessions() {
+  const set = new Set();
+  for (const s of allRaw()) if (s.folder) set.add(s.folder);
+  return [...set];
+}
