@@ -20,6 +20,11 @@ export function loadRaw(id) {
   }
 }
 
+export function saveRaw(neutral) {
+  ensureDirs();
+  writeFileSync(rawPath(neutral.id), JSON.stringify(neutral, null, 2));
+}
+
 /**
  * Scan every adapter's session store, parse new/changed sessions into the
  * neutral schema, and write them to raw/. Preserves any `extracted`/`folder`/
