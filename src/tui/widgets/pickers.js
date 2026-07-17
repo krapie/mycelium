@@ -1,0 +1,115 @@
+import pkg from 'neo-blessed';
+const blessed = pkg.default || pkg;
+import { C } from '../theme.js';
+import * as data from '../data.js';
+
+/**
+ * Folder picker: choose an existing folder or create a new path. Returns the
+ * chosen folder path (or null for _inbox) via cb.
+ */
+export function pickFolder(app, cb) {
+  const { list } = data.folders();
+  const CREATE = '{+}-fg 새 폴더 입력…';
+  const items = ['{gray-fg}_inbox (미분류){/}', ...list, `{${C.spore}-fg}+ 새 폴더 입력…{/}`];
+  const box = blessed.list({
+    parent: app.screen,
+    top: 'center',
+    left: 'center',
+    width: '60%',
+    height: '60%',
+    label: ' 폴더 선택 (Enter, Esc 취소) ',
+    tags: true,
+    keys: true,
+    mouse: true,
+    border: { type: 'line' },
+    style: { border: { fg: C.fox }, selected: { bg: C.surface, fg: C.text }, fg: C.dim },
+  });
+  box.focus();
+  app.render();
+  const close = () => {
+    box.destroy();
+    app.render();
+  };
+  box.key(['escape'], () => {
+    close();
+    cb(undefined);
+  });
+  box.on('select', (_, idx) => {
+    if (idx === 0) {
+      close();
+      cb(null);
+    } else if (idx === items.length - 1) {
+      close();
+      textPrompt(app, '새 폴더 경로 (예: 회사/플랫폼/인증)', '', (v) => cb(v ? v.trim() : undefined));
+    } else {
+      const folder = list[idx - 1];
+      close();
+      cb(folder);
+    }
+  });
+}
+
+/** Tag editor: shows current tags, accepts `+tag -tag` syntax like the CLI. */
+export function editTags(app, current, cb) {
+  const shown = current.length ? current.map((t) => '#' + t).join(' ') : '(없음)';
+  textPrompt(app, `태그 편집 — 현재: ${shown}\n+추가 -삭제 (예: +긴급 -오분류)`, '', (v) => {
+    if (v == null) return cb(null);
+    const add = [];
+    const remove = [];
+    for (const tok of v.split(/\s+/).filter(Boolean)) {
+      if (tok.startsWith('-')) remove.push(tok.slice(1));
+      else add.push(tok.replace(/^\+/, ''));
+    }
+    cb({ add, remove });
+  });
+}
+
+export function textPrompt(app, label, initial, cb) {
+  const p = blessed.prompt({
+    parent: app.screen,
+    top: 'center',
+    left: 'center',
+    width: '60%',
+    height: 'shrink',
+    border: { type: 'line' },
+    label: ' 입력 ',
+    tags: true,
+    style: { border: { fg: C.fox }, fg: C.text },
+  });
+  p.input(label, initial || '', (err, val) => {
+    p.destroy();
+    app.render();
+    cb(err ? null : val);
+  });
+}
+
+/** A small menu picker returning the chosen value. */
+export function menu(app, label, choices, cb) {
+  const box = blessed.list({
+    parent: app.screen,
+    top: 'center',
+    left: 'center',
+    width: '40%',
+    height: 'shrink',
+    label: ` ${label} `,
+    tags: true,
+    keys: true,
+    mouse: true,
+    items: choices.map((c) => c.label),
+    border: { type: 'line' },
+    style: { border: { fg: C.fox }, selected: { bg: C.surface, fg: C.text }, fg: C.dim },
+    padding: { left: 1, right: 1 },
+  });
+  box.focus();
+  app.render();
+  box.key(['escape'], () => {
+    box.destroy();
+    app.render();
+    cb(undefined);
+  });
+  box.on('select', (_, idx) => {
+    box.destroy();
+    app.render();
+    cb(choices[idx].value);
+  });
+}

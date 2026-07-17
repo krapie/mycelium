@@ -2,6 +2,8 @@ import pkg from 'neo-blessed';
 const blessed = pkg.default || pkg;
 import { C, sourceColor } from '../theme.js';
 import * as data from '../data.js';
+import { move as organizeMove, tag as organizeTag } from '../../organize.js';
+import { pickFolder, editTags } from '../widgets/pickers.js';
 
 /**
  * The main cockpit view: folder tree (left), session list (right top), detail
@@ -169,6 +171,44 @@ export function sessionsView(opts = {}) {
           reloadList();
           listBox.focus();
           app.render();
+        });
+      });
+
+      // Which sessions an action targets: the multi-selection if any, else the row under the cursor.
+      const targets = () => (state.selected.size ? [...state.selected] : currentRow() ? [currentRow().id] : []);
+
+      const afterMutate = () => {
+        state.selected.clear();
+        data.refresh();
+        reloadFolders();
+        reloadList();
+        app.render();
+      };
+
+      // Organize: move to folder.
+      listBox.key('m', () => {
+        const ids = targets();
+        if (!ids.length) return;
+        pickFolder(app, (folder) => {
+          if (folder === undefined) return listBox.focus();
+          for (const id of ids) organizeMove(id, folder);
+          app.notify(`${ids.length}개 세션 → ${folder || '_inbox'}`);
+          afterMutate();
+          listBox.focus();
+        });
+      });
+
+      // Organize: edit tags.
+      listBox.key('t', () => {
+        const ids = targets();
+        if (!ids.length) return;
+        const cur = ids.length === 1 ? data.detail(ids[0])?.extracted.tags || [] : [];
+        editTags(app, cur, (edit) => {
+          if (!edit) return listBox.focus();
+          for (const id of ids) organizeTag(id, edit.add, edit.remove);
+          app.notify(`${ids.length}개 세션 태그 갱신`);
+          afterMutate();
+          listBox.focus();
         });
       });
 
