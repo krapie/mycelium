@@ -74,8 +74,15 @@ export function resumeSession(app, session, done) {
     app.notify(`${bin}가 설치되어 있지 않습니다`, 3);
     return done && done();
   }
+  // The agent resolves --resume against the project dir it was launched from,
+  // not the cwd recorded in messages — so prefer projectDir.
+  const candidates = [session.projectDir, session.cwd].filter(Boolean);
+  const cwd = candidates.find((d) => existsSync(d));
+  if (!cwd) {
+    app.notify(`원래 작업 디렉토리가 없어 이어열 수 없습니다 (워크트리 삭제 등). 핸드오프(h)를 쓰세요.`, 4);
+    return done && done();
+  }
   const args = session.source === 'codex' ? ['resume', session.id] : ['--resume', session.id];
-  const cwd = session.cwd && existsSync(session.cwd) ? session.cwd : process.cwd();
   app.screen.exec(bin, args, { cwd }, () => {
     // Resuming may extend the session; re-capture it.
     try {

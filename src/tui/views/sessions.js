@@ -271,7 +271,7 @@ export function sessionsView(opts = {}) {
         const r = currentRow();
         if (!r) return;
         const n = data.detail(r.id);
-        resumeSession(app, { id: r.id, source: r.source, cwd: n?.cwd }, () => {
+        resumeSession(app, { id: r.id, source: r.source, cwd: n?.cwd, projectDir: n?.projectDir }, () => {
           data.refresh();
           reloadFolders();
           reloadList();

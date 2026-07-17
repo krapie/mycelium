@@ -23,7 +23,8 @@ export function emptyNeutral(id, source) {
   return {
     id,
     source,
-    cwd: null,
+    cwd: null, // message-level working dir (used for organize / folder auto-placement)
+    projectDir: null, // dir the agent resolves --resume against (Claude: the project folder)
     startedAt: null,
     endedAt: null,
     turns: [],

@@ -1,7 +1,17 @@
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname, basename } from 'node:path';
 import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs';
 import { emptyNeutral } from '../schema.js';
+
+// Claude Code stores sessions under ~/.claude/projects/<encoded-project-dir>/,
+// where the folder name is the launch directory with every '/' turned into '-'.
+// `claude --resume <id>` resolves against THAT project dir, not the cwd recorded
+// inside individual messages — so we recover it from the folder name.
+function decodeProjectDir(sessionFilePath) {
+  const folder = basename(dirname(sessionFilePath));
+  const decoded = folder.replace(/-/g, '/').replace(/\/+/g, '/');
+  return decoded;
+}
 
 export const name = 'claude-code';
 
@@ -61,6 +71,7 @@ function toolActivityFromContent(content, sink) {
 
 export function parse(ref) {
   const neutral = emptyNeutral(ref.id, name);
+  neutral.projectDir = decodeProjectDir(ref.path);
   const raw = readFileSync(ref.path, 'utf8');
   const lines = raw.split('\n');
 

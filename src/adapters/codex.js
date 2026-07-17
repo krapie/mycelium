@@ -59,6 +59,7 @@ export function parse(ref) {
     if (evt.type === 'session_meta' && evt.payload) {
       neutral.id = evt.payload.id || neutral.id;
       neutral.cwd = evt.payload.cwd || neutral.cwd;
+      neutral.projectDir = evt.payload.cwd || neutral.projectDir; // codex resumes against launch cwd
       if (evt.timestamp) neutral.startedAt = evt.timestamp;
       continue;
     }
