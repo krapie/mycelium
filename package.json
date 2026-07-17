@@ -3,7 +3,14 @@
   "version": "0.1.0",
   "description": "Context Lifecycle platform for AI collaboration — capture, organize, learn, reuse.",
   "type": "module",
-  "bin": { "mycelium": "./src/cli.js" },
-  "engines": { "node": ">=22.0.0" },
-  "license": "MIT"
+  "bin": {
+    "mycelium": "./src/cli.js"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "neo-blessed": "^0.2.0"
+  }
 }

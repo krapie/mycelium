@@ -37,6 +37,11 @@ function parseFlags(args) {
 
 async function main() {
   const [, , cmd, ...args] = process.argv;
+  // No command (or `tui`) → launch the interactive cockpit.
+  if (!cmd || cmd === 'tui') {
+    const { runTui } = await import('./tui/index.js');
+    return runTui();
+  }
   switch (cmd) {
     case 'scan': {
       const res = scan({
