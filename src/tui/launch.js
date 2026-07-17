@@ -63,6 +63,31 @@ function resolveDir(app, folder, cb) {
   });
 }
 
+/**
+ * Resume an existing session in its ORIGINAL agent — the true "reopen this
+ * exact conversation" (vs. handoff, which starts a new session on possibly a
+ * different agent with the context injected). Uses each CLI's native resume.
+ */
+export function resumeSession(app, session, done) {
+  const bin = session.source === 'codex' ? 'codex' : 'claude';
+  if (!which(bin)) {
+    app.notify(`${bin}가 설치되어 있지 않습니다`, 3);
+    return done && done();
+  }
+  const args = session.source === 'codex' ? ['resume', session.id] : ['--resume', session.id];
+  const cwd = session.cwd && existsSync(session.cwd) ? session.cwd : process.cwd();
+  app.screen.exec(bin, args, { cwd }, () => {
+    // Resuming may extend the session; re-capture it.
+    try {
+      scan();
+      reindex();
+    } catch {
+      /* ignore */
+    }
+    if (done) done();
+  });
+}
+
 function run(app, { agentKey, dir, folder, seed }, done) {
   const agent = AGENTS[agentKey];
 
