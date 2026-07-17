@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { basename } from 'node:path';
-import { mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, existsSync, readFileSync, writeFileSync, renameSync, rmSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { ensureDirs, TREE_DIR, CONFIG_PATH } from './paths.js';
 import { loadRaw, saveRaw, allRaw } from './scanner.js';
 
@@ -94,6 +95,73 @@ export function autoOrganize() {
     }
   }
   return { placed, skippedHuman };
+}
+
+function updateRuleFolders(map) {
+  const cfg = loadConfig();
+  let changed = false;
+  for (const r of cfg.cwdRules || []) {
+    const next = map(r.folder);
+    if (next !== r.folder) {
+      if (next === null) r._drop = true;
+      else r.folder = next;
+      changed = true;
+    }
+  }
+  if (changed) {
+    cfg.cwdRules = (cfg.cwdRules || []).filter((r) => !r._drop);
+    saveConfig(cfg);
+  }
+}
+
+/**
+ * Rename or re-nest a folder: rewrite the path prefix on every session under it
+ * (preserving each session's organizedBy — this is a structural move, not a
+ * re-filing), move the real directory (with its KNOWLEDGE.md), and fix cwd rules.
+ * `moveFolder` is just a rename into a new parent.
+ */
+export function renameFolder(oldPath, newPath) {
+  if (!oldPath || !newPath || oldPath === newPath) return { ok: false, error: '잘못된 경로' };
+  if (newPath === oldPath || newPath.startsWith(oldPath + '/')) return { ok: false, error: '자기 자신/하위로는 옮길 수 없습니다' };
+
+  for (const n of allRaw()) {
+    if (n.folder === oldPath) {
+      n.folder = newPath;
+      saveRaw(n);
+    } else if (n.folder && n.folder.startsWith(oldPath + '/')) {
+      n.folder = newPath + n.folder.slice(oldPath.length);
+      saveRaw(n);
+    }
+  }
+  updateRuleFolders((f) => (f === oldPath ? newPath : f && f.startsWith(oldPath + '/') ? newPath + f.slice(oldPath.length) : f));
+
+  const from = folderDir(oldPath);
+  const to = folderDir(newPath);
+  if (existsSync(from)) {
+    mkdirSync(dirname(to), { recursive: true });
+    if (existsSync(to)) rmSync(to, { recursive: true, force: true });
+    renameSync(from, to);
+  } else {
+    mkdir(newPath);
+  }
+  return { ok: true, from: oldPath, to: newPath };
+}
+
+/** Delete a folder: reassign its sessions (default → _inbox) and remove the dir. */
+export function deleteFolder(folderPath, { reassignTo = null } = {}) {
+  if (!folderPath) return { ok: false, error: '잘못된 경로' };
+  let moved = 0;
+  for (const n of allRaw()) {
+    if (n.folder === folderPath || (n.folder && n.folder.startsWith(folderPath + '/'))) {
+      n.folder = reassignTo;
+      saveRaw(n);
+      moved++;
+    }
+  }
+  updateRuleFolders((f) => (f === folderPath || (f && f.startsWith(folderPath + '/')) ? null : f));
+  const dir = folderDir(folderPath);
+  if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
+  return { ok: true, moved, reassignTo };
 }
 
 /** Reverse of a cwd rule: the working directory configured for a folder, if any. */

@@ -2,8 +2,9 @@ import pkg from 'neo-blessed';
 const blessed = pkg.default || pkg;
 import { C, sourceColor } from '../theme.js';
 import * as data from '../data.js';
-import { move as organizeMove, tag as organizeTag } from '../../organize.js';
-import { pickFolder, editTags } from '../widgets/pickers.js';
+import { move as organizeMove, tag as organizeTag, mkdir, renameFolder, deleteFolder } from '../../organize.js';
+import { pickFolder, editTags, menu } from '../widgets/pickers.js';
+import { basename } from 'node:path';
 import { launchAgent, resumeSession } from '../launch.js';
 import { buildHandoff } from '../../handoff.js';
 import { autoTagSession } from '../../learn.js';
@@ -142,7 +143,7 @@ export function sessionsView(opts = {}) {
       const setLevel = (lvl) => {
         state.level = lvl;
         const hints = {
-          folders: '{bold}폴더{/}: ↑↓ 이동  Enter 세션보기  </>검색  <n>새세션  <:>명령  <q>종료',
+          folders: '{bold}폴더{/}: ↑↓  Enter 열기  <a>새폴더  <R>이름변경  <m>이동/중첩  <D>삭제  </>검색  <q>종료',
           sessions: '{bold}세션{/}: ↑↓ 이동  Enter 상세  Esc 폴더로  <r>이어서열기  <h>핸드오프  <m>이동  <t>태그  <A>태깅  <Space>선택',
           detail: '{bold}상세{/}: ↑↓ 스크롤  Esc 세션으로  <r>이어서열기',
         };
@@ -170,6 +171,80 @@ export function sessionsView(opts = {}) {
         if (rows[0]) showDetail(rows[0].id);
         setLevel('sessions');
         app.render();
+      });
+
+      // ── Folder management (only when the folders pane is focused) ──
+      const curFolder = () => foldersBox._keys[foldersBox.selected];
+      const isRealFolder = (f) => f && f !== '_inbox';
+      const refreshFolders = (selectPath) => {
+        state.selected.clear();
+        data.refresh();
+        reloadFolders();
+        // try to keep the cursor on a sensible folder
+        if (selectPath) {
+          const idx = foldersBox._keys.indexOf(selectPath);
+          if (idx >= 0) foldersBox.select(idx);
+        }
+        previewFolder();
+        foldersBox.focus();
+        app.render();
+      };
+
+      // a: new subfolder under the selected folder (or root).
+      foldersBox.key('a', () => {
+        const parent = isRealFolder(curFolder()) ? curFolder() : '';
+        prompt(app, `새 폴더 이름${parent ? ` (${parent} 아래)` : ' (루트)'}`, '', (name) => {
+          foldersBox.focus();
+          if (!name || !name.trim()) return;
+          const path = (parent ? parent + '/' : '') + name.trim().replace(/^\/+|\/+$/g, '');
+          mkdir(path);
+          app.notify(`폴더 생성: ${path}`);
+          refreshFolders(path);
+        });
+      });
+
+      // R: rename the selected folder.
+      foldersBox.key('R', () => {
+        const f = curFolder();
+        if (!isRealFolder(f)) return app.notify('일반/_inbox는 이름을 바꿀 수 없습니다', 3);
+        prompt(app, `이름 변경: ${f}`, f, (val) => {
+          foldersBox.focus();
+          if (!val || val.trim() === f) return;
+          const res = renameFolder(f, val.trim().replace(/^\/+|\/+$/g, ''));
+          app.notify(res.ok ? `이름 변경: ${res.to}` : res.error, res.ok ? 2 : 3);
+          refreshFolders(res.ok ? res.to : f);
+        });
+      });
+
+      // m: move (re-nest) the selected folder into another folder.
+      foldersBox.key('m', () => {
+        const f = curFolder();
+        if (!isRealFolder(f)) return app.notify('일반/_inbox는 옮길 수 없습니다', 3);
+        pickFolder(app, (dest) => {
+          foldersBox.focus();
+          if (dest === undefined) return;
+          const target = (dest ? dest + '/' : '') + basename(f);
+          const res = renameFolder(f, target);
+          app.notify(res.ok ? `이동: ${res.to}` : res.error, res.ok ? 2 : 3);
+          refreshFolders(res.ok ? res.to : f);
+        });
+      });
+
+      // D: delete the selected folder (sessions → _inbox).
+      foldersBox.key('D', () => {
+        const f = curFolder();
+        if (!isRealFolder(f)) return app.notify('일반/_inbox는 삭제할 수 없습니다', 3);
+        menu(app, `"${f}" 삭제?`, [
+          { label: '삭제 (세션은 _inbox로)', value: 'yes' },
+          { label: '취소', value: 'no' },
+        ], (ans) => {
+          foldersBox.focus();
+          if (ans !== 'yes') return;
+          const res = deleteFolder(f);
+          app.notify(res.ok ? `삭제됨 (세션 ${res.moved}개 → _inbox)` : res.error);
+          state.folder = null;
+          refreshFolders(null);
+        });
       });
 
       // Session navigation previews detail; Enter opens detail; Esc goes back.
