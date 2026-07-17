@@ -3,11 +3,11 @@ import { reindex } from './index-db.js';
 import { autoOrganize } from './organize.js';
 import { tagAll } from './learn.js';
 import { generateDigest } from './insight.js';
-import { startServer } from './server.js';
 
+// Headless background worker: keeps the store fresh (scan → organize → tag) and
+// generates the daily digest on schedule. The interactive front-end is the TUI
+// (`mycelium`); this daemon just does the unattended lifecycle upkeep.
 const SCAN_INTERVAL_MS = Number(process.env.MYCELIUM_SCAN_MS || 5 * 60 * 1000);
-const HOST = process.env.MYCELIUM_HOST || '127.0.0.1';
-const PORT = Number(process.env.MYCELIUM_PORT || 7420);
 
 async function scanCycle() {
   try {
@@ -44,9 +44,8 @@ async function digestCycle() {
 }
 
 export async function runDaemon() {
-  console.log('Mycelium daemon starting.');
+  console.log('Mycelium daemon starting (background upkeep: scan + digest).');
   console.log(`  scan interval: ${SCAN_INTERVAL_MS}ms`);
-  startServer({ host: HOST, port: PORT });
 
   await scanCycle();
   await digestCycle();

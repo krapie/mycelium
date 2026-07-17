@@ -6,6 +6,11 @@ import { move as organizeMove, tag as organizeTag } from '../../organize.js';
 import { pickFolder, editTags } from '../widgets/pickers.js';
 import { launchAgent } from '../launch.js';
 import { buildHandoff } from '../../handoff.js';
+import { autoTagSession } from '../../learn.js';
+import { generateDigest, extractKnowledge } from '../../insight.js';
+import { assembleContext, injectAgentsMd } from '../../reuse.js';
+import { textView, digestReader } from '../widgets/viewers.js';
+import { textPrompt } from '../widgets/pickers.js';
 
 /**
  * The main cockpit view: folder tree (left), session list (right top), detail
@@ -85,7 +90,7 @@ export function sessionsView(opts = {}) {
   }
 
   return {
-    help: '<Tab>패널 </>검색 <n>새세션 <m>이동 <t>태그 <Space>선택 <h>핸드오프 <:>명령 <q>종료',
+    help: '</>검색 <n>새세션 <m>이동 <t>태그 <A>태깅 <h>핸드오프 <D>다이제스트 <d>보기 <c>컨텍스트 <i>주입 <K>지식 <q>종료',
     async mount(a) {
       app = a;
       foldersBox = blessed.list({
@@ -237,6 +242,63 @@ export function sessionsView(opts = {}) {
           reloadList();
           listBox.focus();
           app.render();
+        });
+      });
+
+      // Learn: auto-tag the current session (content-based).
+      listBox.key('A', async () => {
+        const r = currentRow();
+        if (!r) return;
+        app.notify('태깅 중…', 30);
+        const res = await autoTagSession(r.id);
+        if (res.ok) {
+          data.refresh();
+          reloadList();
+          showDetail(r.id);
+          app.notify(`#${res.session.extracted.tags.join(' #') || '(태그 없음)'}`);
+        } else app.notify(res.error, 3);
+      });
+
+      // Learn: extract KNOWLEDGE.md for the current folder.
+      listBox.key('K', async () => {
+        if (!state.folder || state.folder === '_inbox') return app.notify('폴더를 먼저 선택하세요', 3);
+        app.notify('지식 추출 중…', 60);
+        const res = await extractKnowledge(state.folder);
+        app.notify(res.ok ? `KNOWLEDGE.md 생성: ${state.folder}` : res.error, 3);
+      });
+
+      // Learn: generate a digest (day, or `week`).
+      screenKey(app, ['D'], () => {
+        textPrompt(app, "다이제스트 기간 (빈칸=오늘, 'week'=이번주, 날짜 YYYY-MM-DD)", '', async (v) => {
+          listBox.focus();
+          const arg = (v || '').trim();
+          const period = arg === 'week' ? 'week' : 'day';
+          const date = /^\d{4}-\d{2}-\d{2}$/.test(arg) ? arg : undefined;
+          app.notify('다이제스트 생성 중…', 60);
+          const res = await generateDigest({ period, date });
+          if (res.ok) {
+            app.notify(`생성: ${res.keyed}`);
+            digestReader(app);
+          } else app.notify(res.error, 3);
+        });
+      });
+
+      // Learn/Reuse read-only: digest reader, context, inject.
+      screenKey(app, ['d'], () => digestReader(app));
+      listBox.key('c', () => {
+        const r = currentRow();
+        if (!r) return;
+        const ctx = assembleContext(r.folder);
+        textView(app, `컨텍스트 · ${r.folder || '_inbox'}`, ctx || '(상속할 컨텍스트 없음)');
+      });
+      listBox.key('i', () => {
+        const r = currentRow();
+        if (!r || !r.folder) return app.notify('폴더가 있는 세션에서만 가능합니다', 3);
+        textPrompt(app, 'AGENTS.md를 주입할 디렉토리', process.cwd(), (dir) => {
+          listBox.focus();
+          if (!dir) return;
+          const res = injectAgentsMd(dir.trim(), r.folder);
+          app.notify(res.ok ? `AGENTS.md 주입: ${dir.trim()}` : res.error, 3);
         });
       });
 
