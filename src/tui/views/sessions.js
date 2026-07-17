@@ -4,7 +4,7 @@ import { C, sourceColor } from '../theme.js';
 import * as data from '../data.js';
 import { move as organizeMove, tag as organizeTag } from '../../organize.js';
 import { pickFolder, editTags } from '../widgets/pickers.js';
-import { launchAgent } from '../launch.js';
+import { launchAgent, resumeSession } from '../launch.js';
 import { buildHandoff } from '../../handoff.js';
 import { autoTagSession } from '../../learn.js';
 import { generateDigest, extractKnowledge } from '../../insight.js';
@@ -90,7 +90,7 @@ export function sessionsView(opts = {}) {
   }
 
   return {
-    help: '</>검색 <n>새세션 <m>이동 <t>태그 <A>태깅 <h>핸드오프 <D>다이제스트 <d>보기 <c>컨텍스트 <i>주입 <K>지식 <q>종료',
+    help: '</>검색 <n>새세션 <r>이어서열기 <h>핸드오프 <m>이동 <t>태그 <A>태깅 <D>다이제스트 <c>컨텍스트 <i>주입 <K>지식 <q>종료',
     async mount(a) {
       app = a;
       foldersBox = blessed.list({
@@ -103,7 +103,7 @@ export function sessionsView(opts = {}) {
         tags: true,
         keys: true,
         border: { type: 'line' },
-        style: { border: { fg: C.border }, selected: { bg: C.surface }, fg: C.dim },
+        style: { border: { fg: C.border }, selected: { bg: C.surface, fg: C.fox }, fg: C.dim, focus: { border: { fg: C.fox } } },
       });
       listBox = blessed.list({
         parent: app.body,
@@ -116,7 +116,7 @@ export function sessionsView(opts = {}) {
         keys: true,
         scrollbar: { ch: ' ', style: { bg: C.border } },
         border: { type: 'line' },
-        style: { border: { fg: C.border }, selected: { bg: C.surface, fg: C.text }, fg: C.dim },
+        style: { border: { fg: C.border }, selected: { bg: C.surface, fg: C.text }, fg: C.dim, focus: { border: { fg: C.fox } } },
       });
       detailBox = blessed.box({
         parent: app.body,
@@ -132,32 +132,68 @@ export function sessionsView(opts = {}) {
         mouse: true,
         scrollbar: { ch: ' ', style: { bg: C.border } },
         border: { type: 'line' },
-        style: { border: { fg: C.border }, fg: C.text },
+        style: { border: { fg: C.border }, fg: C.text, focus: { border: { fg: C.fox } } },
       });
 
       reloadFolders();
       reloadList();
-      app.setStatus(this.help);
 
-      foldersBox.on('select', () => {
+      // ── k9s-style drill-down: Folders → Sessions → Detail, Enter=in, Esc=out ──
+      const setLevel = (lvl) => {
+        state.level = lvl;
+        const hints = {
+          folders: '{bold}폴더{/}: ↑↓ 이동  Enter 세션보기  </>검색  <n>새세션  <:>명령  <q>종료',
+          sessions: '{bold}세션{/}: ↑↓ 이동  Enter 상세  Esc 폴더로  <r>이어서열기  <h>핸드오프  <m>이동  <t>태그  <A>태깅  <Space>선택',
+          detail: '{bold}상세{/}: ↑↓ 스크롤  Esc 세션으로  <r>이어서열기',
+        };
+        app.setStatus(' ' + (hints[lvl] || this.help));
+      };
+
+      // Live-preview the highlighted folder's sessions as you move (no drill yet).
+      const previewFolder = () => {
         state.folder = foldersBox._keys[foldersBox.selected];
         reloadFolders();
         reloadList();
+        if (rows[0]) showDetail(rows[0].id);
+        app.render();
+      };
+      foldersBox.on('keypress', (ch, key) => {
+        if (key && ['up', 'down', 'k', 'j', 'pageup', 'pagedown', 'home', 'end', 'g'].includes(key.name)) {
+          setImmediate(previewFolder);
+        }
+      });
+      // Enter a folder → drill into its sessions.
+      foldersBox.key('enter', () => {
+        previewFolder();
+        listBox.focus();
+        listBox.select(0);
+        if (rows[0]) showDetail(rows[0].id);
+        setLevel('sessions');
         app.render();
       });
-      listBox.on('select item', () => {
-        const r = currentRow();
-        if (r) showDetail(r.id);
-      });
-      listBox.key('enter', () => detailBox.focus());
-      detailBox.key(['escape', 'q'], () => listBox.focus());
 
-      // Tab cycles panes.
-      const panes = [foldersBox, listBox, detailBox];
-      let pi = 1;
-      screenKey(app, ['tab'], () => {
-        pi = (pi + 1) % panes.length;
-        panes[pi].focus();
+      // Session navigation previews detail; Enter opens detail; Esc goes back.
+      listBox.on('keypress', (ch, key) => {
+        if (key && ['up', 'down', 'k', 'j', 'pageup', 'pagedown', 'home', 'end', 'g'].includes(key.name)) {
+          setImmediate(() => {
+            const r = currentRow();
+            if (r) showDetail(r.id);
+          });
+        }
+      });
+      listBox.key('enter', () => {
+        detailBox.focus();
+        setLevel('detail');
+        app.render();
+      });
+      listBox.key('escape', () => {
+        foldersBox.focus();
+        setLevel('folders');
+        app.render();
+      });
+      detailBox.key(['escape'], () => {
+        listBox.focus();
+        setLevel('sessions');
         app.render();
       });
 
@@ -230,7 +266,24 @@ export function sessionsView(opts = {}) {
         });
       });
 
-      // Reuse: hand the current session off to another agent (seeded continuation).
+      // Reuse: RESUME the exact session in its original agent (claude --resume / codex resume).
+      const doResume = () => {
+        const r = currentRow();
+        if (!r) return;
+        const n = data.detail(r.id);
+        resumeSession(app, { id: r.id, source: r.source, cwd: n?.cwd }, () => {
+          data.refresh();
+          reloadFolders();
+          reloadList();
+          listBox.focus();
+          setLevel('sessions');
+          app.render();
+        });
+      };
+      listBox.key('r', doResume);
+      detailBox.key('r', doResume);
+
+      // Reuse: hand the current session off to another agent (seeded NEW session).
       listBox.key('h', () => {
         const r = currentRow();
         if (!r) return;
@@ -327,8 +380,11 @@ export function sessionsView(opts = {}) {
       };
       if (opts.onReady) opts.onReady(this._api);
 
-      listBox.focus();
-      if (rows[0]) showDetail(rows[0].id);
+      // k9s model: start on the folders pane. Enter drills into sessions.
+      previewFolder();
+      foldersBox.focus();
+      foldersBox.select(0);
+      setLevel('folders');
     },
     unmount() {},
   };

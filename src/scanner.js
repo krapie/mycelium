@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { writeFileSync, readFileSync, existsSync, readdirSync } from 'node:fs';
+import { writeFileSync, readFileSync, existsSync, readdirSync, rmSync } from 'node:fs';
 import { ensureDirs, RAW_DIR } from './paths.js';
 import * as claudeCode from './adapters/claude-code.js';
 import * as codex from './adapters/codex.js';
@@ -9,6 +9,21 @@ const ADAPTERS = [claudeCode, codex];
 function rawPath(id) {
   // session ids are uuids / safe filenames already, but guard anyway
   return join(RAW_DIR, `${id.replace(/[^\w.-]/g, '_')}.json`);
+}
+
+// Mycelium runs its own LLM calls via `claude -p` / `codex exec`, which the
+// agents then store as sessions — capturing those back would pollute the store
+// with the tagging/digest/knowledge prompts. Detect and skip them.
+const META_SIGNATURES = [
+  '실제로 수행된 작업(task) 관점에서',
+  '다음은 AI 코딩/업무 세션의 대화 기록',
+  '인수인계 메모처럼 서사형으로',
+  '"프로젝트 지식"을 정리해라',
+  '출력 형식:\n{"tags"',
+];
+function isMyceliumMeta(neutral) {
+  const firstUser = neutral.turns.find((t) => t.role === 'user')?.text || '';
+  return META_SIGNATURES.some((sig) => firstUser.includes(sig));
 }
 
 export function loadRaw(id) {
@@ -32,8 +47,29 @@ export function saveRaw(neutral) {
  * `organizedBy` already stored (those are owned by later lifecycle stages, not
  * by capture). Returns a summary { scanned, imported, skipped, failed }.
  */
+/** Remove already-stored raw files that are Mycelium's own LLM calls. */
+export function purgeMeta() {
+  ensureDirs();
+  let removed = 0;
+  for (const f of readdirSync(RAW_DIR)) {
+    if (!f.endsWith('.json')) continue;
+    const p = join(RAW_DIR, f);
+    try {
+      const n = JSON.parse(readFileSync(p, 'utf8'));
+      if (isMyceliumMeta(n)) {
+        rmSync(p);
+        removed++;
+      }
+    } catch {
+      /* skip */
+    }
+  }
+  return removed;
+}
+
 export function scan({ onImport } = {}) {
   ensureDirs();
+  purgeMeta();
   let scanned = 0;
   let imported = 0;
   let skipped = 0;
@@ -66,8 +102,8 @@ export function scan({ onImport } = {}) {
         continue;
       }
 
-      if (neutral.turns.length === 0) {
-        skipped++; // empty/meta-only session, nothing worth keeping
+      if (neutral.turns.length === 0 || isMyceliumMeta(neutral)) {
+        skipped++; // empty session, or Mycelium's own LLM call — not real work
         continue;
       }
 
