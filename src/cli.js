@@ -223,7 +223,8 @@ Reuse     context <session>|--folder|--cwd   조상 경로 컨텍스트 출력
           handoff <session>            다른 에이전트용 인수인계 프롬프트
 Find      search <q> [--tag t] [--folder f]
           list / tags
-Run       daemon                        스캔 폴링 + 다이제스트 + 웹 UI
+Run       (인자 없음) 또는 tui          인터랙티브 TUI (콕핏)
+          daemon                        백그라운드 스캔 폴링 + 다이제스트
 `);
       process.exit(cmd ? 1 : 0);
   }
