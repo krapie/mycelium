@@ -4,6 +4,8 @@ import { C, sourceColor } from '../theme.js';
 import * as data from '../data.js';
 import { move as organizeMove, tag as organizeTag } from '../../organize.js';
 import { pickFolder, editTags } from '../widgets/pickers.js';
+import { launchAgent } from '../launch.js';
+import { buildHandoff } from '../../handoff.js';
 
 /**
  * The main cockpit view: folder tree (left), session list (right top), detail
@@ -209,6 +211,32 @@ export function sessionsView(opts = {}) {
           app.notify(`${ids.length}개 세션 태그 갱신`);
           afterMutate();
           listBox.focus();
+        });
+      });
+
+      // Capture: launch a new agent session in the current folder's context.
+      listBox.key('n', () => {
+        launchAgent(app, { folder: state.folder }, () => {
+          data.refresh();
+          reloadFolders();
+          reloadList();
+          listBox.focus();
+          app.render();
+        });
+      });
+
+      // Reuse: hand the current session off to another agent (seeded continuation).
+      listBox.key('h', () => {
+        const r = currentRow();
+        if (!r) return;
+        const hb = buildHandoff(r.id);
+        if (!hb.ok) return app.notify(hb.error, 3);
+        launchAgent(app, { folder: r.folder, seed: hb.prompt }, () => {
+          data.refresh();
+          reloadFolders();
+          reloadList();
+          listBox.focus();
+          app.render();
         });
       });
 

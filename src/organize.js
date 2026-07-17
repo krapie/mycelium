@@ -96,6 +96,13 @@ export function autoOrganize() {
   return { placed, skippedHuman };
 }
 
+/** Reverse of a cwd rule: the working directory configured for a folder, if any. */
+export function cwdForFolder(folder) {
+  const cfg = loadConfig();
+  const rule = (cfg.cwdRules || []).find((r) => r.folder === folder);
+  return rule ? rule.prefix : null;
+}
+
 /** cwd→folder rule so future sessions from a path auto-file into a chosen folder. */
 export function addRule(prefix, folder) {
   const cfg = loadConfig();
