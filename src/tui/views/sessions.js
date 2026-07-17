@@ -94,24 +94,27 @@ export function sessionsView(opts = {}) {
     help: '</>검색 <n>새세션 <r>이어서열기 <h>핸드오프 <m>이동 <t>태그 <A>태깅 <D>다이제스트 <c>컨텍스트 <i>주입 <K>지식 <q>종료',
     async mount(a) {
       app = a;
+      // Three full-width rows stacked vertically: Folders / Sessions / Detail.
+      // The focused row expands so empty space isn't wasted (k9s feel).
       foldersBox = blessed.list({
         parent: app.body,
         top: 0,
         left: 0,
-        width: 28,
-        bottom: 0,
+        right: 0,
+        height: '30%',
         label: ' Folders ',
         tags: true,
         keys: true,
+        scrollbar: { ch: ' ', style: { bg: C.border } },
         border: { type: 'line' },
         style: { border: { fg: C.border }, selected: { bg: C.surface, fg: C.fox }, fg: C.dim, focus: { border: { fg: C.fox } } },
       });
       listBox = blessed.list({
         parent: app.body,
-        top: 0,
-        left: 28,
+        top: '30%',
+        left: 0,
         right: 0,
-        height: '55%',
+        height: '35%',
         label: ' Sessions ',
         tags: true,
         keys: true,
@@ -121,9 +124,9 @@ export function sessionsView(opts = {}) {
       });
       detailBox = blessed.box({
         parent: app.body,
-        left: 28,
+        left: 0,
         right: 0,
-        top: '55%',
+        top: '65%',
         bottom: 0,
         label: ' Detail ',
         tags: true,
@@ -139,9 +142,24 @@ export function sessionsView(opts = {}) {
       reloadFolders();
       reloadList();
 
+      // Focused row grows; the other two stay compact. {folders%, sessions%}.
+      const LAYOUT = {
+        folders: { f: 55, s: 25 },
+        sessions: { f: 16, s: 49 },
+        detail: { f: 12, s: 22 },
+      };
+      const applyLayout = (lvl) => {
+        const L = LAYOUT[lvl] || LAYOUT.sessions;
+        foldersBox.height = L.f + '%';
+        listBox.top = L.f + '%';
+        listBox.height = L.s + '%';
+        detailBox.top = L.f + L.s + '%';
+      };
+
       // ── k9s-style drill-down: Folders → Sessions → Detail, Enter=in, Esc=out ──
       const setLevel = (lvl) => {
         state.level = lvl;
+        applyLayout(lvl);
         const hints = {
           folders: '{bold}폴더{/}: ↑↓  Enter 열기  <a>새폴더  <R>이름변경  <m>이동/중첩  <D>삭제  </>검색  <q>종료',
           sessions: '{bold}세션{/}: ↑↓ 이동  Enter 상세  Esc 폴더로  <r>이어서열기  <h>핸드오프  <m>이동  <t>태그  <A>태깅  <Space>선택',
