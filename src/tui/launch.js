@@ -13,18 +13,42 @@ function which(cmd) {
 }
 
 /**
- * Run a full-screen program in the foreground. blessed's own screen.exec did
- * not fully release the alternate screen, so the agent's UI rendered *on top
- * of* the TUI (merged/garbled). We explicitly leave blessed's screen, hand the
- * raw terminal to the child (stdio inherit), then re-enter and force a full
- * redraw when it exits.
+ * Run a full-screen program in the foreground and cleanly return to the TUI.
+ * blessed's own screen.exec left the two UIs merged; a bare leave/enter fixed
+ * the launch but broke the return (input raw-mode + mouse weren't restored).
+ * This replicates blessed's full spawn suspend/resume: exit the alt buffer and
+ * hand over raw stdin, then on exit restore raw-mode/mouse/alt-buffer and force
+ * a full redraw.
  */
 function foreground(app, bin, args, cwd, after) {
   const screen = app.screen;
-  const back = () => {
+  const program = screen.program;
+  const input = program.input;
+  const mouseWasOn = program.mouseEnabled;
+
+  // --- suspend blessed, give the raw terminal to the child ---
+  try {
+    program.saveCursor();
+    program.normalBuffer(); // leave alternate screen
+    program.showCursor();
+    if (mouseWasOn) program.disableMouse();
+    if (input.setRawMode) input.setRawMode(false);
+    input.pause();
+  } catch {
+    /* ignore */
+  }
+
+  let resumed = false;
+  const resume = () => {
+    if (resumed) return;
+    resumed = true;
     try {
-      screen.enter();
-      if (typeof screen.alloc === 'function') screen.alloc();
+      input.resume();
+      if (input.setRawMode) input.setRawMode(true);
+      program.alternateBuffer(); // re-enter alternate screen
+      program.hideCursor();
+      if (mouseWasOn) program.enableMouse();
+      if (typeof screen.alloc === 'function') screen.alloc(); // blank buffer → full redraw
     } catch {
       /* ignore */
     }
@@ -34,19 +58,15 @@ function foreground(app, bin, args, cwd, after) {
       screen.render();
     }
   };
-  try {
-    screen.leave();
-  } catch {
-    /* ignore */
-  }
+
   let child;
   try {
     child = spawn(bin, args, { cwd, stdio: 'inherit' });
   } catch {
-    return back();
+    return resume();
   }
-  child.on('error', back);
-  child.on('exit', back);
+  child.on('error', resume);
+  child.on('exit', resume);
 }
 
 /** Distinct existing working directories of the sessions in a folder subtree. */

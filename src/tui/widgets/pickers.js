@@ -67,6 +67,8 @@ export function editTags(app, current, cb) {
 }
 
 export function textPrompt(app, label, initial, cb) {
+  // No border label — the question is shown inside via .input() (setting both
+  // makes the title appear twice).
   const p = blessed.prompt({
     parent: app.screen,
     top: 'center',
@@ -74,7 +76,6 @@ export function textPrompt(app, label, initial, cb) {
     width: '60%',
     height: 'shrink',
     border: { type: 'line' },
-    label: ' 입력 ',
     tags: true,
     style: { border: { fg: C.fox }, fg: C.text },
   });
