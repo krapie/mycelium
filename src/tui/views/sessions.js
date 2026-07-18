@@ -94,14 +94,14 @@ export function sessionsView(opts = {}) {
     help: '</>검색 <n>새세션 <r>이어서열기 <h>핸드오프 <m>이동 <t>태그 <A>태깅 <D>다이제스트 <c>컨텍스트 <i>주입 <K>지식 <q>종료',
     async mount(a) {
       app = a;
-      // Three full-width rows stacked vertically: Folders / Sessions / Detail.
-      // The focused row expands so empty space isn't wasted (k9s feel).
+      // Three columns side by side: Folders | Sessions | Detail. The focused
+      // column widens so space isn't wasted (k9s feel); the others stay compact.
       foldersBox = blessed.list({
         parent: app.body,
         top: 0,
         left: 0,
-        right: 0,
-        height: '30%',
+        width: '22%',
+        bottom: 0,
         label: ' Folders ',
         tags: true,
         keys: true,
@@ -111,10 +111,10 @@ export function sessionsView(opts = {}) {
       });
       listBox = blessed.list({
         parent: app.body,
-        top: '30%',
-        left: 0,
-        right: 0,
-        height: '35%',
+        top: 0,
+        left: '22%',
+        width: '38%',
+        bottom: 0,
         label: ' Sessions ',
         tags: true,
         keys: true,
@@ -124,9 +124,9 @@ export function sessionsView(opts = {}) {
       });
       detailBox = blessed.box({
         parent: app.body,
-        left: 0,
+        top: 0,
+        left: '60%',
         right: 0,
-        top: '65%',
         bottom: 0,
         label: ' Detail ',
         tags: true,
@@ -142,19 +142,27 @@ export function sessionsView(opts = {}) {
       reloadFolders();
       reloadList();
 
-      // Focused row grows; the other two stay compact. {folders%, sessions%}.
-      const LAYOUT = {
-        folders: { f: 55, s: 25 },
-        sessions: { f: 16, s: 49 },
-        detail: { f: 12, s: 22 },
-      };
+      // Folder names are short, so the folder column is a FIXED-width sidebar
+      // (not a %, which would keep growing on wide terminals). The remaining
+      // width is split between sessions and detail — detail gets more (it holds
+      // the transcript), and whichever of the two is focused gets a bit more.
       const applyLayout = (lvl) => {
-        const L = LAYOUT[lvl] || LAYOUT.sessions;
-        foldersBox.height = L.f + '%';
-        listBox.top = L.f + '%';
-        listBox.height = L.s + '%';
-        detailBox.top = L.f + L.s + '%';
+        const W = app.screen.width || 120;
+        const foldersW = Math.min(30, Math.max(18, Math.round(W * 0.14)));
+        const rest = W - foldersW;
+        const sessionFrac = lvl === 'sessions' ? 0.5 : lvl === 'detail' ? 0.34 : 0.42;
+        const sessionsW = Math.max(22, Math.round(rest * sessionFrac));
+        foldersBox.left = 0;
+        foldersBox.width = foldersW;
+        listBox.left = foldersW;
+        listBox.width = sessionsW;
+        detailBox.left = foldersW + sessionsW;
+        detailBox.width = null; // right:0 lets detail fill the remainder
       };
+      app.screen.on('resize', () => {
+        applyLayout(state.level || 'folders');
+        app.render();
+      });
 
       // ── k9s-style drill-down: Folders → Sessions → Detail, Enter=in, Esc=out ──
       const setLevel = (lvl) => {
