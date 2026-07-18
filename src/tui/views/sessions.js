@@ -173,8 +173,8 @@ export function sessionsView(opts = {}) {
         applyLayout(lvl);
         const hints = {
           folders: '{bold}폴더{/}: ↑↓  Enter 열기  <a>새폴더  <R>이름변경  <m>이동/중첩  <D>삭제  </>검색  <q>종료',
-          sessions: '{bold}세션{/}: ↑↓ 이동  Enter 상세  Esc 폴더로  <r>이어서열기  <h>핸드오프  <m>이동  <t>태그  <A>태깅  <Space>선택',
-          detail: '{bold}상세{/}: ↑↓ 스크롤  Esc 세션으로  <r>이어서열기',
+          sessions: '{bold}세션{/}: ↑↓  Enter 상세  Esc 폴더로  {bold}Shift+A 요약생성{/}  <r>이어서열기  <h>핸드오프  <m>이동  <t>태그  <Space>선택',
+          detail: '{bold}상세{/}: ↑↓ 스크롤  Esc 세션으로  {bold}Shift+A 요약생성{/}  <r>이어서열기',
         };
         app.setStatus(' ' + (hints[lvl] || this.help));
       };
@@ -402,19 +402,29 @@ export function sessionsView(opts = {}) {
         });
       });
 
-      // Learn: auto-tag the current session (content-based).
-      listBox.key('A', async () => {
-        const r = currentRow();
-        if (!r) return;
-        app.notify('태깅 중…', 30);
-        const res = await autoTagSession(r.id);
-        if (res.ok) {
+      // Learn: generate summary + tags (content-based). Works on the multi-
+      // selection if any, else the current row. This is how a session gets its
+      // summary — the LLM reads the session and writes the task summary + tags.
+      const doAutoTag = async () => {
+        const ids = state.selected.size ? [...state.selected] : currentRow() ? [currentRow().id] : [];
+        if (!ids.length) return;
+        let done = 0;
+        let failed = 0;
+        for (const id of ids) {
+          app.notify(`요약·태깅 생성 중… (${done + 1}/${ids.length})`, 90);
+          const res = await autoTagSession(id);
+          if (res.ok) done++;
+          else failed++;
           data.refresh();
           reloadList();
-          showDetail(r.id);
-          app.notify(`#${res.session.extracted.tags.join(' #') || '(태그 없음)'}`);
-        } else app.notify(res.error, 3);
-      });
+          if (currentRow() && currentRow().id === id) showDetail(id);
+        }
+        state.selected.clear();
+        reloadList();
+        app.notify(`요약·태깅 완료: ${done}개${failed ? ` (실패 ${failed})` : ''}`, 3);
+      };
+      listBox.key('A', doAutoTag);
+      detailBox.key('A', doAutoTag);
 
       // Learn: extract KNOWLEDGE.md for the current folder.
       listBox.key('K', async () => {
