@@ -1,80 +1,114 @@
 # Mycelium
 
-AI 협업에서 생성되는 컨텍스트를 **생성 → 조직화 → 학습 → 재사용**까지 관리하는 Context Lifecycle 플랫폼.
+AI 협업에서 생성되는 컨텍스트를 **생성(Capture) → 조직화(Organize) → 학습(Learn) → 재사용(Reuse)**까지 관리하는 Context Lifecycle 플랫폼. 모델(Claude Code, Codex 등)·시간·공간의 경계로 컨텍스트가 단절되는 문제를 해결합니다.
 
-모델(Claude Code, Codex 등), 시간, 공간의 경계로 컨텍스트가 단절되는 문제를 해결합니다. 개념과 배경은 [`PROJECT_OVERVIEW.md`](./PROJECT_OVERVIEW.md), 설계는 [`PLAN.md`](./PLAN.md) 참고.
+개념과 배경은 [`PROJECT_OVERVIEW.md`](./PROJECT_OVERVIEW.md), 설계는 [`PLAN.md`](./PLAN.md) / [`TUI_PLAN.md`](./TUI_PLAN.md) 참고.
 
 ## 요구사항
 
-- Node.js ≥ 22 (내장 `node:sqlite` 사용, 외부 의존성 0)
-- Claude Code / Codex CLI (세션 소스이자, 학습 단계의 LLM 호출에 사용)
+- **Node.js ≥ 22** (내장 `node:sqlite` 사용)
+- **git**
+- (선택) **`claude` / `codex` CLI** — 설치 및 로그인되어 있으면 요약 생성·이어열기·핸드오프·에이전트 실행에 사용. 단순 탐색/검색만 할 거면 없어도 됩니다.
 
-## 라이프사이클 명령어
+## 설치
 
 ```sh
-# ① Capture — 세션 저장소를 스캔해 모델 비종속 중립 스키마로 가져오기
-mycelium scan
-
-# ② Organize — cwd 기반 자동 배치(사람이 정리한 건 보존) + 수동 조작
-mycelium organize
-mycelium mkdir 회사/플랫폼/인증
-mycelium mv <session> 회사/플랫폼/인증
-mycelium tag <session> +긴급 -오분류
-mycelium rule /Users/me/work/relay projects/relay   # cwd→폴더 규칙
-
-# ③ Learn — 내용 기반 자동 태깅, 서사형 다이제스트, 폴더 지식 추출
-mycelium autotag                # 과거 세션 소급 일괄 태깅
-mycelium digest [week]          # 일일/주간 다이제스트
-mycelium knowledge 회사/플랫폼/인증   # KNOWLEDGE.md 추출
-
-# ④ Reuse — 조상 경로 컨텍스트 주입 + 인수인계
-mycelium context <session>      # 이 세션이 상속하는 컨텍스트
-mycelium inject --dir <프로젝트> # AGENTS.md에 지식 주입 (자기개선 루프)
-mycelium handoff <session>      # 다른 에이전트용 인수인계 프롬프트
-
-# 탐색
-mycelium search "쿼터" --tag 인프라 --folder 회사
-mycelium list / tags
-
-# 인터랙티브 TUI (콕핏) — 인자 없이 실행
-mycelium                        # k9s식 터미널 UI
-#   </>검색 <n>새세션 <m>이동 <t>태그 <A>태깅
-#   <h>핸드오프 <D>다이제스트 <c>컨텍스트 <i>주입 <K>지식 <q>종료
-
-# 백그라운드 업키핑 (스캔 폴링 + 다이제스트 스케줄, UI 없음)
-mycelium daemon
+git clone <this-repo-url> mycelium
+cd mycelium
+npm install                 # 의존성은 neo-blessed(TUI) 하나뿐
+npm link                    # (선택) 전역 `mycelium` 명령 등록
 ```
+
+## 시작하기
+
+```sh
+mycelium scan               # 이 머신의 Claude/Codex 세션을 가져오기(임포트)
+mycelium                    # 인터랙티브 TUI 실행
+```
+
+> 전역 등록(`npm link`)을 안 했으면 `node src/cli.js <명령>` 형태로 실행하세요.
+
+**머신별로 독립적입니다.** Mycelium은 그 컴퓨터의 로컬 세션(`~/.claude/projects/`, `~/.codex/sessions/`)만 읽고, 데이터도 그 컴퓨터의 `~/.mycelium/`에 저장합니다. 다른 컴퓨터의 세션이 자동으로 넘어오지 않습니다.
 
 ## TUI (콕핏)
 
-`mycelium`을 인자 없이 실행하면 k9s 스타일의 터미널 UI가 뜹니다. 폴더 트리(좌) · 세션 리스트(우상) · 상세(우하) 3-pane 구성이며, 여기서 라이프사이클 4단계를 전부 수행합니다:
+`mycelium`을 인자 없이 실행하면 터미널 UI가 뜹니다. **폴더 | 세션 | 상세** 3-컬럼이고, k9s처럼 드릴다운합니다: 폴더에서 시작 → `Enter`로 세션 → `Enter`로 상세 → `Esc`로 뒤로. 포커스한 컬럼이 넓어집니다.
 
-- **Capture**: `n` — 폴더 컨텍스트를 주입한 채 Claude Code/Codex를 그 자리에서 띄우고(포그라운드), 종료하면 새 세션이 자동 캡처·정리됩니다. `h` — 현재 세션을 다른 에이전트로 이어받기.
-- **Organize**: `m` 폴더 이동, `t` 태그 편집, `Space` 다중선택 후 일괄 적용.
-- **Learn**: `A` 내용 기반 자동 태깅, `D` 다이제스트 생성, `K` 폴더 지식 추출, `d` 다이제스트 읽기.
-- **Reuse**: `c` 조상 경로 컨텍스트 보기, `i` AGENTS.md 주입.
-- **Find**: `/` 전문검색.
+**폴더 패널**
+| 키 | 동작 |
+|---|---|
+| `a` | 새 (하위)폴더 |
+| `R` / `m` / `D` | 이름변경 / 이동·중첩 / 삭제 |
+| `Enter` | 이 폴더의 세션 보기 |
+
+**세션 패널**
+| 키 | 동작 |
+|---|---|
+| `a` | 내용 기반 요약·태그 생성 (LLM, 여러 개는 `Space` 후 일괄) |
+| `r` | 원래 에이전트에서 그 세션 그대로 **이어열기** (resume) |
+| `h` | 다른 에이전트로 컨텍스트 넘겨 **새 세션 시작** (handoff) |
+| `n` | 이 폴더 컨텍스트로 새 에이전트 세션 띄우기 |
+| `m` / `t` | 폴더 이동 / 태그 편집 |
+| `y` | 세션 내용(제목+요약+대화)을 클립보드로 복사 |
+| `Space` | 다중 선택 |
+| `/` | 전문 검색 |
+| `D` / `K` / `c` / `i` / `d` | 다이제스트 생성 / 폴더 지식 추출 / 컨텍스트 보기 / AGENTS.md 주입 / 다이제스트 읽기 |
+| `q` | 종료 |
+
+핸드오프로 이어진 세션은 리스트에 `↩`/`→` 마커와 상세에 "이어받음/이어감" 링크로 표시됩니다.
+
+## CLI (스크립팅용)
+
+TUI 없이 개별 명령으로도 전부 됩니다:
+
+```sh
+# Capture / Organize
+mycelium scan
+mycelium organize                              # cwd 기반 자동 배치(사람 정리분 보존)
+mycelium mkdir 회사/플랫폼/인증
+mycelium mv <session> 회사/플랫폼/인증
+mycelium tag <session> +긴급 -오분류
+mycelium rule /path/to/repo projects/relay     # cwd→폴더 규칙
+
+# Learn
+mycelium autotag                               # 과거 세션 소급 일괄 요약·태깅
+mycelium digest [week] [--date YYYY-MM-DD]
+mycelium knowledge 회사/플랫폼/인증
+
+# Reuse / Find
+mycelium context <session>
+mycelium inject --dir <프로젝트> --folder <폴더> # AGENTS.md에 지식 주입
+mycelium handoff <session>                     # 인수인계 프롬프트 출력
+mycelium search "쿼터" --tag 인프라 --folder 회사
+mycelium list / tags / reindex
+
+# 백그라운드 업키핑 (주기 스캔 + 일일 다이제스트, UI 없음)
+mycelium daemon
+```
 
 ## 데이터 위치
 
-모든 데이터는 `~/.mycelium/`에 로컬로 저장됩니다. **파일이 원본, sqlite는 파생 인덱스**(지워도 `mycelium reindex`로 재생성):
+모든 데이터는 `~/.mycelium/`에 로컬 저장. **파일이 원본, sqlite는 파생 인덱스**(지워도 `mycelium reindex`로 재생성):
 
 ```
 ~/.mycelium/
   raw/<id>.json          중립 스키마로 정규화된 세션 (source of truth)
   tree/<폴더>/           사용자 폴더 구조 = 실제 디렉토리
     KNOWLEDGE.md         폴더별 프로젝트 지식 (상속 단위)
-  digests/YYYY-MM-DD.md  서사형 다이제스트
+  digests/YYYY-Wnn.md    서사형 다이제스트
   db/index.db            sqlite FTS5 검색 인덱스 (재생성 가능)
+  config.json            cwd→폴더 규칙 등
 ```
+
+머신 간에 세션을 옮기려면 `raw/`와 `tree/`를 복사한 뒤 대상에서 `mycelium reindex`.
 
 ## 설계 원칙
 
-- **로컬 전용**: 세션에는 민감한 업무(인사 등)가 포함되므로 외부 전송 없음. 인터페이스는 로컬 터미널 TUI. LLM 호출도 사용자 본인의 CLI 구독 경유.
+- **로컬 전용**: 세션에는 민감한 업무가 포함되므로 외부 전송 없음. 인터페이스는 로컬 터미널 TUI, LLM 호출도 사용자 본인의 CLI 구독 경유.
 - **모델 비종속**: 저장 포맷이 특정 벤더 세션 형식이 아닌 중립 스키마. 새 에이전트 추가 = 어댑터 한 파일.
-- **사람 우선**: 자동 배치/태깅은 제안일 뿐, 사람이 정리한 세션(`organizedBy: human`)은 자동화가 절대 덮어쓰지 않음.
-- **외부 의존성 0**: `node:sqlite`/`node:http`만 사용 → 감사 용이, 라이선스 충돌 없음(MIT).
+- **사람 우선**: 자동 배치/태깅은 제안일 뿐, 사람이 정리한 세션(`organizedBy: human`)은 자동화가 덮어쓰지 않음.
+- **의존성 최소**: 코어는 Node 내장 모듈(`node:sqlite` 등)만, TUI만 `neo-blessed`(MIT) 하나. MIT 라이선스.
 
 ## 상태
 
-POC. 라이프사이클 4단계 전부 실제 로컬 세션(Claude Code + Codex)으로 동작 검증. TUI는 neo-blessed 기반, pty 스모크 테스트로 렌더/종료 확인(실제 상호작용은 사용자 터미널에서 검증).
+POC. 라이프사이클 4단계 전부 실제 로컬 세션(Claude Code + Codex)으로 동작 검증. TUI는 neo-blessed 기반이며 실제 터미널에서 사용 검증 중.
