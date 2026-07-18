@@ -61,8 +61,9 @@ export function listTreeDirs() {
 /**
  * Decide the folder for a session from its cwd — deterministic, no LLM.
  * 1) first matching config rule (prefix → folder) wins
- * 2) else group by repo: projects/<basename-of-cwd>
- * 3) else null (→ _inbox), e.g. sessions with no cwd
+ * 2) cwd no longer exists (e.g. a deleted git worktree) → _archive
+ * 3) else group by repo: projects/<basename-of-cwd>
+ * 4) else null (→ _inbox), e.g. sessions with no cwd
  */
 export function autoFolderFor(neutral, cfg = loadConfig()) {
   if (!neutral.cwd) return null;
@@ -71,6 +72,9 @@ export function autoFolderFor(neutral, cfg = loadConfig()) {
       return rule.folder;
     }
   }
+  // Dead working dirs (worktrees removed, temp dirs gone) are noise — cluster
+  // them in one _archive folder instead of littering projects/ with them.
+  if (!existsSync(neutral.cwd)) return '_archive';
   const base = basename(neutral.cwd);
   return base ? `projects/${base}` : null;
 }
