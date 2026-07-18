@@ -195,6 +195,22 @@ export function deleteFolder(folderPath, { reassignTo = null } = {}) {
   return { ok: true, moved, reassignTo };
 }
 
+/** Record that `childId` is a handoff continuation of `parentId` (links both ways). */
+export function linkContinuation(childId, parentId) {
+  if (childId === parentId) return;
+  const child = loadRaw(childId);
+  if (child) {
+    child.continuationOf = parentId;
+    saveRaw(child);
+  }
+  const parent = loadRaw(parentId);
+  if (parent) {
+    parent.continuedTo = parent.continuedTo || [];
+    if (!parent.continuedTo.includes(childId)) parent.continuedTo.push(childId);
+    saveRaw(parent);
+  }
+}
+
 /** Reverse of a cwd rule: the working directory configured for a folder, if any. */
 export function cwdForFolder(folder) {
   const cfg = loadConfig();

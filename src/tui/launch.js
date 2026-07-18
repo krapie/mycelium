@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { scan, allRaw } from '../scanner.js';
 import { reindex } from '../index-db.js';
-import { move, addRule, cwdForFolder } from '../organize.js';
+import { move, addRule, cwdForFolder, linkContinuation } from '../organize.js';
 import { injectAgentsMd } from '../reuse.js';
 import { menu, textPrompt } from './widgets/pickers.js';
 
@@ -26,7 +26,7 @@ const AGENTS = {
  * `seed` (optional) pre-fills the agent's first prompt — used by handoff to
  * continue a prior session on a different agent.
  */
-export function launchAgent(app, { folder, seed } = {}, done) {
+export function launchAgent(app, { folder, seed, parentId } = {}, done) {
   const available = Object.entries(AGENTS).filter(([, a]) => which(a.bin));
   if (!available.length) {
     app.notify('설치된 에이전트(claude/codex)가 없습니다', 3);
@@ -41,7 +41,7 @@ export function launchAgent(app, { folder, seed } = {}, done) {
       if (!agentKey) return done && done();
       resolveDir(app, folder, (dir) => {
         if (!dir) return done && done();
-        run(app, { agentKey, dir, folder, seed }, done);
+        run(app, { agentKey, dir, folder, seed, parentId }, done);
       });
     },
   );
@@ -95,7 +95,7 @@ export function resumeSession(app, session, done) {
   });
 }
 
-function run(app, { agentKey, dir, folder, seed }, done) {
+function run(app, { agentKey, dir, folder, seed, parentId }, done) {
   const agent = AGENTS[agentKey];
 
   // Inject the folder's knowledge so the agent starts context-aware.
@@ -119,8 +119,11 @@ function run(app, { agentKey, dir, folder, seed }, done) {
       const now = allRaw();
       const fresh = now.filter((n) => !before.has(n.id));
       if (folder) for (const n of fresh) if (n.organizedBy !== 'human') move(n.id, folder);
+      // If this was a handoff, mark the new session(s) as a continuation of the parent.
+      if (parentId) for (const n of fresh) linkContinuation(n.id, parentId);
       reindex();
-      app.notify(fresh.length ? `새 세션 ${fresh.length}개 캡처 → ${folder || '_inbox'}` : '새 세션 없음', 3);
+      const note = parentId ? '이어받은 세션' : '새 세션';
+      app.notify(fresh.length ? `${note} ${fresh.length}개 캡처 → ${folder || '_inbox'}` : '새 세션 없음', 3);
     } catch (err) {
       app.notify(`캡처 실패: ${err.message}`, 3);
     }

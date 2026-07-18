@@ -55,6 +55,8 @@ export function sessions({ folder, query, tags } = {}) {
         preview: (n.turns.find((t) => t.role === 'user')?.text || '').slice(0, 200),
         organizedBy: n.organizedBy,
         tags: n.extracted.tags,
+        continuationOf: n.continuationOf,
+        continuedTo: n.continuedTo || [],
       }))
       .sort((a, b) => (b.startedAt || '').localeCompare(a.startedAt || ''));
   }

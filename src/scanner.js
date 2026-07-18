@@ -112,6 +112,8 @@ export function scan({ onImport } = {}) {
         neutral.extracted = existing.extracted || neutral.extracted;
         neutral.folder = existing.folder ?? neutral.folder;
         neutral.organizedBy = existing.organizedBy || neutral.organizedBy;
+        neutral.continuationOf = existing.continuationOf ?? neutral.continuationOf;
+        neutral.continuedTo = existing.continuedTo ?? neutral.continuedTo;
       }
       neutral._mtimeMs = ref.mtimeMs;
 
