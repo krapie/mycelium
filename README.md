@@ -86,6 +86,25 @@ mycelium list / tags / reindex
 mycelium daemon
 ```
 
+## 정리 (실험 단계)
+
+아직 실험 단계라 테스트하다 보면 세션/폴더가 지저분해질 수 있습니다. `cleanup`으로 정리합니다:
+
+```sh
+mycelium cleanup            # (= tidy) 안전 정리: Mycelium 자체 LLM 호출 세션 제거
+                            #  + 빈 폴더 제거 + 인덱스 재생성. 수시로 돌려도 됨.
+mycelium cleanup folders    # 빈 폴더만 제거
+mycelium cleanup archive    # _archive(원본 디렉토리가 사라진 세션)를 스토어에서 삭제
+mycelium cleanup index      # sqlite 인덱스만 재생성 (검색이 이상할 때)
+mycelium cleanup reset --yes # 전체 초기화: ~/.mycelium 통째로 삭제 → 다시 scan
+```
+
+- **`tidy`(기본)와 `folders`/`index`는 안전**합니다 — 원본 세션(`raw/`)을 지우지 않습니다.
+- **`archive`**는 죽은 cwd 세션을 스토어에서 지웁니다. 원본 `~/.claude`/`~/.codex` 로그는 그대로라, 다시 `scan`하면 재유입됩니다(단 자동으로 다시 `_archive`로 감).
+- **`reset --yes`는 되돌릴 수 없습니다** — `~/.mycelium`(정규화 세션·폴더·지식·인덱스)를 전부 삭제합니다. 그래도 원본 에이전트 세션 로그는 안 건드리므로, `mycelium scan`으로 처음부터 다시 만들 수 있습니다.
+
+깨끗하게 새로 시작하려면: `mycelium cleanup reset --yes && mycelium scan`.
+
 ## 데이터 위치
 
 모든 데이터는 `~/.mycelium/`에 로컬 저장. **파일이 원본, sqlite는 파생 인덱스**(지워도 `mycelium reindex`로 재생성):

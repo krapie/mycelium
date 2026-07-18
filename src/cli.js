@@ -193,6 +193,38 @@ async function main() {
       console.log(`AGENTS.md 갱신: ${res.path} (${res.folder} 지식 주입)`);
       break;
     }
+    case 'cleanup': {
+      const { flags, positional } = parseFlags(args);
+      const { tidy, pruneEmptyFolders, clearArchive, rebuildIndex, resetStore } = await import('./cleanup.js');
+      const target = positional[0] || 'tidy';
+      switch (target) {
+        case 'tidy': {
+          const r = tidy();
+          console.log(`정리 완료: 메타세션 ${r.meta}개 제거, 빈 폴더 ${r.folders}개 제거, 인덱스 ${r.indexed}개 재생성`);
+          break;
+        }
+        case 'folders':
+          console.log(`빈 폴더 ${pruneEmptyFolders()}개 제거`);
+          rebuildIndex();
+          break;
+        case 'archive':
+          console.log(`_archive 세션 ${clearArchive()}개 삭제`);
+          rebuildIndex();
+          break;
+        case 'index':
+          console.log(`인덱스 ${rebuildIndex()}개 재생성`);
+          break;
+        case 'reset':
+          if (!flags.yes) {
+            return fail('전체 데이터(~/.mycelium)를 삭제합니다. 확실하면: mycelium cleanup reset --yes');
+          }
+          console.log(`전체 초기화 완료: ${resetStore()} (다시 mycelium scan 하세요)`);
+          break;
+        default:
+          return fail(`알 수 없는 대상: ${target}\n사용: mycelium cleanup [tidy|folders|archive|index|reset --yes]`);
+      }
+      break;
+    }
     case 'handoff': {
       const [sessionId] = args;
       if (!sessionId) return fail('Usage: mycelium handoff <sessionId>');
@@ -225,6 +257,9 @@ Find      search <q> [--tag t] [--folder f]
           list / tags
 Run       (인자 없음) 또는 tui          인터랙티브 TUI (콕핏)
           daemon                        백그라운드 스캔 폴링 + 다이제스트
+Clean     cleanup [tidy]                메타세션 제거 + 빈 폴더 정리 + 인덱스 재생성
+          cleanup folders|archive|index 부분 정리
+          cleanup reset --yes           전체 데이터(~/.mycelium) 초기화
 `);
       process.exit(cmd ? 1 : 0);
   }
