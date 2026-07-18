@@ -2,6 +2,31 @@ import pkg from 'neo-blessed';
 const blessed = pkg.default || pkg;
 import { C } from './theme.js';
 
+// blessed mis-compiles some xterm-256color capabilities (notably `Setulc`,
+// set-underline-color) into JS with a syntax error, then dumps the generated
+// source to the terminal via console.error and rethrows. We don't use those
+// capabilities, so wrap the compiler to swallow the dump and return a no-op
+// for any capability that fails to compile. Must run before any screen is made.
+(function patchTput() {
+  const Tput = blessed.Tput;
+  if (!Tput || !Tput.prototype || Tput.prototype.__myceliumPatched) return;
+  const orig = Tput.prototype._compile;
+  Tput.prototype._compile = function (info, key, str) {
+    const origErr = console.error;
+    console.error = () => {};
+    try {
+      return orig.call(this, info, key, str);
+    } catch {
+      return function () {
+        return '';
+      };
+    } finally {
+      console.error = origErr;
+    }
+  };
+  Tput.prototype.__myceliumPatched = true;
+})();
+
 /**
  * The TUI shell: a full-screen blessed screen with a header (breadcrumb +
  * counts), a body that hosts the active view, and a statusbar of key hints.
@@ -14,7 +39,19 @@ export function createApp() {
     title: 'Mycelium',
     fullUnicode: true,
     autoPadding: true,
+    // blessed mis-compiles the xterm-256color `Setulc` (underline-color)
+    // capability and dumps the generated JS to the terminal on exit. We don't
+    // use underline colors, so skip extended terminfo entirely to avoid it.
+    extended: false,
   });
+
+  // Belt-and-suspenders: neutralize the broken capability if it slipped through.
+  try {
+    const tput = screen.program && screen.program.tput;
+    if (tput) for (const k of ['setulc', 'Su', 'setUnderlineColor']) if (typeof tput[k] === 'function') tput[k] = () => '';
+  } catch {
+    /* ignore */
+  }
 
   const header = blessed.box({
     parent: screen,
