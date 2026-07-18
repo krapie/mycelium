@@ -92,7 +92,9 @@ export function menu(app, label, choices, cb) {
     top: 'center',
     left: 'center',
     width: '40%',
-    height: 'shrink',
+    // Explicit height — blessed 'shrink' on a list can render only the first
+    // item, which was hiding the second agent (e.g. Codex) in the handoff menu.
+    height: Math.min(choices.length + 2, 14),
     label: ` ${label} `,
     tags: true,
     keys: true,
@@ -100,7 +102,6 @@ export function menu(app, label, choices, cb) {
     items: choices.map((c) => c.label),
     border: { type: 'line' },
     style: { border: { fg: C.fox }, selected: { bg: C.surface, fg: C.text }, fg: C.dim },
-    padding: { left: 1, right: 1 },
   });
   box.focus();
   app.render();

@@ -77,7 +77,7 @@ export function sessionsView(opts = {}) {
     if (n.extracted.summary) {
       lines.push(`{${C.text}-fg}${n.extracted.summary}{/}`, '');
     } else {
-      lines.push(`{${C.faint}-fg}(요약 없음 — 세션에서 A를 눌러 자동 태깅){/}`, '');
+      lines.push(`{${C.faint}-fg}(요약 없음 — 세션에서 a를 눌러 요약·태깅 생성){/}`, '');
       const firstUser = n.turns.find((t) => t.role === 'user')?.text;
       if (firstUser) lines.push(`{${C.faint}-fg}첫 요청:{/} ${firstUser.replace(/\s+/g, ' ').slice(0, 300)}`, '');
     }
@@ -94,7 +94,7 @@ export function sessionsView(opts = {}) {
   }
 
   return {
-    help: '</>검색 <n>새세션 <r>이어서열기 <h>핸드오프 <m>이동 <t>태그 <A>태깅 <D>다이제스트 <c>컨텍스트 <i>주입 <K>지식 <q>종료',
+    help: '</>검색 <n>새세션 <r>이어서열기 <h>핸드오프 <m>이동 <t>태그 <a>요약생성 <D>다이제스트 <c>컨텍스트 <i>주입 <K>지식 <q>종료',
     async mount(a) {
       app = a;
       // Three columns side by side: Folders | Sessions | Detail. The focused
@@ -173,8 +173,8 @@ export function sessionsView(opts = {}) {
         applyLayout(lvl);
         const hints = {
           folders: '{bold}폴더{/}: ↑↓  Enter 열기  <a>새폴더  <R>이름변경  <m>이동/중첩  <D>삭제  </>검색  <q>종료',
-          sessions: '{bold}세션{/}: ↑↓  Enter 상세  Esc 폴더로  {bold}Shift+A 요약생성{/}  <r>이어서열기  <h>핸드오프  <m>이동  <t>태그  <Space>선택',
-          detail: '{bold}상세{/}: ↑↓ 스크롤  Esc 세션으로  {bold}Shift+A 요약생성{/}  <r>이어서열기',
+          sessions: '{bold}세션{/}: ↑↓  Enter 상세  Esc 폴더로  {bold}<a>요약생성{/}  <r>이어서열기  <h>핸드오프  <m>이동  <t>태그  <Space>선택',
+          detail: '{bold}상세{/}: ↑↓ 스크롤  Esc 세션으로  {bold}<a>요약생성{/}  <r>이어서열기',
         };
         app.setStatus(' ' + (hints[lvl] || this.help));
       };
@@ -423,8 +423,8 @@ export function sessionsView(opts = {}) {
         reloadList();
         app.notify(`요약·태깅 완료: ${done}개${failed ? ` (실패 ${failed})` : ''}`, 3);
       };
-      listBox.key('A', doAutoTag);
-      detailBox.key('A', doAutoTag);
+      listBox.key('a', doAutoTag);
+      detailBox.key('a', doAutoTag);
 
       // Learn: extract KNOWLEDGE.md for the current folder.
       listBox.key('K', async () => {
