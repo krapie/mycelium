@@ -18,9 +18,11 @@ export function pickFolder(app, cb) {
     width: '60%',
     height: '60%',
     label: ' 폴더 선택 (Enter, Esc 취소) ',
+    items,
     tags: true,
     keys: true,
     mouse: true,
+    scrollbar: { ch: ' ', style: { bg: C.border } },
     border: { type: 'line' },
     style: { border: { fg: C.fox }, selected: { bg: C.surface, fg: C.text }, fg: C.dim },
   });
