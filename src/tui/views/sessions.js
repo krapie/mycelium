@@ -48,12 +48,14 @@ export function sessionsView(opts = {}) {
   function reloadList() {
     rows = data.sessions({ folder: state.folder, query: state.query, tags: state.tags });
     const items = rows.map((r) => {
-      const dot = `{${sourceColor(r.source)}-fg}●{/}`;
+      // Readable colored agent label instead of a bare color dot.
+      const name = r.source === 'codex' ? 'codex ' : 'claude';
+      const src = `{${sourceColor(r.source)}-fg}${name}{/}`;
       const human = r.organizedBy === 'human' ? `{${C.spore}-fg}[사람]{/}` : '';
       const mark = state.selected.has(r.id) ? `{${C.fox}-fg}✓{/}` : ' ';
       const tags = (r.tags || []).map((t) => `{${C.fox}-fg}#${t}{/}`).join(' ');
       const text = (r.summary || r.preview || '(내용 없음)').replace(/\s+/g, ' ').slice(0, 60);
-      return `${mark} ${dot} {${C.faint}-fg}${r.id.slice(0, 8)}{/} ${text} ${tags} ${human}`;
+      return `${mark} ${src}  ${text} ${tags} ${human}`;
     });
     listBox.setItems(items.length ? items : ['{gray-fg}세션 없음{/}']);
     updateHeader();
@@ -69,18 +71,19 @@ export function sessionsView(opts = {}) {
     const n = data.detail(id);
     if (!n) return;
     const lines = [];
-    lines.push(`{${C.fox}-fg}{bold}${(n.extracted.summary || n.turns.find((t) => t.role === 'user')?.text || n.id).slice(0, 70)}{/}`);
-    lines.push(`{${C.dim}-fg}${n.source} · ${n.id.slice(0, 8)} · ${(n.startedAt || '').slice(0, 16).replace('T', ' ')} · ${n.folder || '_inbox'}{/}`);
+    const srcName = n.source === 'codex' ? 'codex' : 'claude';
+    lines.push(`{${sourceColor(n.source)}-fg}{bold}${srcName}{/}  {${C.dim}-fg}${(n.startedAt || '').slice(0, 16).replace('T', ' ')} · ${n.folder || '_inbox'}{/}`);
     lines.push('');
-    if (n.extracted.summary) lines.push(`{${C.faint}-fg}요약{/} ${n.extracted.summary}`, '');
+    if (n.extracted.summary) {
+      lines.push(`{${C.text}-fg}${n.extracted.summary}{/}`, '');
+    } else {
+      lines.push(`{${C.faint}-fg}(요약 없음 — 세션에서 A를 눌러 자동 태깅){/}`, '');
+      const firstUser = n.turns.find((t) => t.role === 'user')?.text;
+      if (firstUser) lines.push(`{${C.faint}-fg}첫 요청:{/} ${firstUser.replace(/\s+/g, ' ').slice(0, 300)}`, '');
+    }
     if (n.extracted.decisions?.length) lines.push(`{${C.faint}-fg}결정{/}`, ...n.extracted.decisions.map((d) => `  · ${d}`), '');
     if (n.extracted.todos?.length) lines.push(`{${C.faint}-fg}할일{/}`, ...n.extracted.todos.map((t) => `  · ${t}`), '');
-    if (n.artifacts.filesChanged?.length) lines.push(`{${C.faint}-fg}파일{/} ${n.artifacts.filesChanged.slice(0, 8).join(', ')}`, '');
-    lines.push(`{${C.faint}-fg}대화{/}`);
-    for (const t of n.turns.slice(0, 40)) {
-      const role = t.role === 'user' ? `{${C.fox}-fg}▸ user{/}` : `{${C.dim}-fg}  asst{/}`;
-      lines.push(`${role} ${t.text.replace(/\s+/g, ' ').slice(0, 200)}`);
-    }
+    if (n.artifacts.filesChanged?.length) lines.push(`{${C.faint}-fg}파일{/} ${n.artifacts.filesChanged.slice(0, 10).join(', ')}`);
     detailBox.setContent(lines.join('\n'));
     detailBox.setScroll(0);
     app.render();
