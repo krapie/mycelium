@@ -549,7 +549,8 @@ function screenKey(app, keys, fn) {
   app.screen.key(keys, fn);
 }
 
-// Simple modal text prompt.
+// Simple modal text prompt. The question is shown inside via .input(); no
+// border label (setting both duplicates the title).
 export function prompt(app, label, initial, cb) {
   const p = blessed.prompt({
     parent: app.screen,
@@ -558,7 +559,6 @@ export function prompt(app, label, initial, cb) {
     width: '60%',
     height: 'shrink',
     border: { type: 'line' },
-    label: ` ${label} `,
     tags: true,
     style: { border: { fg: C.fox }, fg: C.text },
   });
