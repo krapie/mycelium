@@ -58,14 +58,16 @@ export function createApp() {
     top: 0,
     left: 0,
     right: 0,
-    height: 1,
+    height: 3,
     tags: true,
-    style: { fg: C.text },
+    padding: { left: 1, right: 1 },
+    border: { type: 'line' },
+    style: { fg: C.text, border: { fg: C.border } },
   });
 
   const body = blessed.box({
     parent: screen,
-    top: 1,
+    top: 3,
     left: 0,
     right: 0,
     bottom: 1,
@@ -78,6 +80,7 @@ export function createApp() {
     right: 0,
     height: 1,
     tags: true,
+    padding: { left: 1, right: 1 },
     style: { fg: C.dim },
   });
 
