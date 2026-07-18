@@ -1,5 +1,6 @@
 import { allRaw, loadRaw } from '../scanner.js';
 import { reindex, search, listTags } from '../index-db.js';
+import { listTreeDirs } from '../organize.js';
 
 // Thin data layer the TUI views read from — wraps the existing core so views
 // never touch sqlite/raw directly.
@@ -12,6 +13,17 @@ export function folders() {
     total++;
     if (!n.folder) inbox++;
     else counts.set(n.folder, (counts.get(n.folder) || 0) + 1);
+  }
+  // Include real (possibly empty) tree directories, plus every ancestor path
+  // of a session's folder, so nested/empty folders always appear and are
+  // selectable for folder operations.
+  for (const dir of listTreeDirs()) if (!counts.has(dir)) counts.set(dir, 0);
+  for (const f of [...counts.keys()]) {
+    const parts = f.split('/');
+    for (let i = 1; i < parts.length; i++) {
+      const anc = parts.slice(0, i).join('/');
+      if (!counts.has(anc)) counts.set(anc, 0);
+    }
   }
   return { list: [...counts.keys()].sort(), counts, inbox, total };
 }

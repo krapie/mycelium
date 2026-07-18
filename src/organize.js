@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { basename } from 'node:path';
-import { mkdirSync, existsSync, readFileSync, writeFileSync, renameSync, rmSync } from 'node:fs';
+import { mkdirSync, existsSync, readFileSync, writeFileSync, renameSync, rmSync, readdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { ensureDirs, TREE_DIR, CONFIG_PATH } from './paths.js';
 import { loadRaw, saveRaw, allRaw } from './scanner.js';
@@ -29,6 +29,33 @@ export function mkdir(folderPath) {
   const dir = folderDir(folderPath);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   return folderPath;
+}
+
+/**
+ * All real folder directories under the tree (recursively), as '/'-joined
+ * paths — including empty ones that hold no sessions yet. This is what lets a
+ * freshly-created folder show up in the UI before anything is filed into it.
+ */
+export function listTreeDirs() {
+  ensureDirs();
+  const out = [];
+  const walk = (absDir, rel) => {
+    let entries;
+    try {
+      entries = readdirSync(absDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      if (!e.isDirectory()) continue;
+      if (rel === '' && e.name === '_inbox') continue; // virtual folder
+      const path = rel ? `${rel}/${e.name}` : e.name;
+      out.push(path);
+      walk(join(absDir, e.name), path);
+    }
+  };
+  walk(TREE_DIR, '');
+  return out;
 }
 
 /**
