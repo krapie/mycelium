@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { spawn } from 'node:child_process';
 import { scan, allRaw } from '../scanner.js';
 import { reindex } from '../index-db.js';
 import { move, addRule, cwdForFolder, linkContinuation } from '../organize.js';
@@ -9,6 +10,56 @@ import { menu, textPrompt } from './widgets/pickers.js';
 function which(cmd) {
   const paths = (process.env.PATH || '').split(':');
   return paths.some((p) => p && existsSync(`${p}/${cmd}`));
+}
+
+/**
+ * Run a full-screen program in the foreground. blessed's own screen.exec did
+ * not fully release the alternate screen, so the agent's UI rendered *on top
+ * of* the TUI (merged/garbled). We explicitly leave blessed's screen, hand the
+ * raw terminal to the child (stdio inherit), then re-enter and force a full
+ * redraw when it exits.
+ */
+function foreground(app, bin, args, cwd, after) {
+  const screen = app.screen;
+  const back = () => {
+    try {
+      screen.enter();
+      if (typeof screen.alloc === 'function') screen.alloc();
+    } catch {
+      /* ignore */
+    }
+    try {
+      after();
+    } finally {
+      screen.render();
+    }
+  };
+  try {
+    screen.leave();
+  } catch {
+    /* ignore */
+  }
+  let child;
+  try {
+    child = spawn(bin, args, { cwd, stdio: 'inherit' });
+  } catch {
+    return back();
+  }
+  child.on('error', back);
+  child.on('exit', back);
+}
+
+/** Distinct existing working directories of the sessions in a folder subtree. */
+function dirsForFolder(folder) {
+  if (!folder) return [];
+  const set = new Set();
+  for (const n of allRaw()) {
+    const inFolder = n.folder === folder || (n.folder && n.folder.startsWith(folder + '/'));
+    if (!inFolder) continue;
+    const d = n.projectDir || n.cwd;
+    if (d && existsSync(d)) set.add(d);
+  }
+  return [...set];
 }
 
 const AGENTS = {
@@ -49,17 +100,29 @@ export function launchAgent(app, { folder, seed, parentId } = {}, done) {
 
 function resolveDir(app, folder, cb) {
   const known = folder ? cwdForFolder(folder) : null;
-  const def = known || process.cwd();
-  textPrompt(app, `작업 디렉토리${folder ? ` (${folder})` : ''}`, def, (dir) => {
+  const finish = (dir) => {
     if (!dir) return cb(null);
     dir = dir.trim();
     if (!existsSync(dir)) {
       app.notify('디렉토리가 존재하지 않습니다', 3);
       return cb(null);
     }
-    // Remember this dir↔folder mapping so future sessions auto-file here.
-    if (folder && dir !== known) addRule(dir, folder);
+    if (folder && dir !== known) addRule(dir, folder); // remember dir↔folder
     cb(dir);
+  };
+  const typePrompt = () => textPrompt(app, `작업 디렉토리${folder ? ` (${folder})` : ''}`, known || process.cwd(), finish);
+
+  // Offer the directories this folder's sessions already used — no need to
+  // retype long paths.
+  const dirs = dirsForFolder(folder);
+  if (known && !dirs.includes(known) && existsSync(known)) dirs.unshift(known);
+  if (dirs.length === 0) return typePrompt();
+
+  const choices = [...dirs.map((d) => ({ label: d, value: d })), { label: '+ 직접 입력…', value: '__type__' }];
+  menu(app, `작업 디렉토리 선택 (${folder})`, choices, (val) => {
+    if (val === undefined) return cb(null);
+    if (val === '__type__') return typePrompt();
+    finish(val);
   });
 }
 
@@ -83,7 +146,7 @@ export function resumeSession(app, session, done) {
     return done && done();
   }
   const args = session.source === 'codex' ? ['resume', session.id] : ['--resume', session.id];
-  app.screen.exec(bin, args, { cwd }, () => {
+  foreground(app, bin, args, cwd, () => {
     // Resuming may extend the session; re-capture it.
     try {
       scan();
@@ -109,9 +172,9 @@ function run(app, { agentKey, dir, folder, seed, parentId }, done) {
 
   const before = new Set(allRaw().map((n) => n.id));
 
-  // blessed leaves the alternate screen, runs the agent in the foreground,
-  // and re-enters afterward. This is the k9s "shell into a pod" pattern.
-  app.screen.exec(agent.bin, agent.args(seed), { cwd: dir }, () => {
+  // Hand the terminal to the agent in the foreground; capture on return.
+  // (k9s "shell into a pod" pattern.)
+  foreground(app, agent.bin, agent.args(seed), dir, () => {
     // Back in the TUI: capture whatever the agent produced.
     try {
       scan();
