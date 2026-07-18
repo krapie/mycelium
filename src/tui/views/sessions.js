@@ -70,8 +70,9 @@ export function sessionsView(opts = {}) {
       const human = r.organizedBy === 'human' ? `{${C.spore}-fg}[사람]{/}` : '';
       const mark = state.selected.has(r.id) ? `{${C.fox}-fg}✓{/}` : ' ';
       const tags = (r.tags || []).map((t) => `{${C.fox}-fg}#${t}{/}`).join(' ');
-      const text = (r.title || r.summary || r.preview || '(내용 없음)').replace(/\s+/g, ' ').slice(0, 60);
-      return `${mark} ${src}  ${text} ${tags} ${human}`;
+      const link = r.continuationOf ? `{${C.spore}-fg}↩{/}` : (r.continuedTo && r.continuedTo.length) ? `{${C.spore}-fg}→{/}` : ' ';
+      const text = (r.title || r.summary || r.preview || '(내용 없음)').replace(/\s+/g, ' ').slice(0, 58);
+      return `${mark}${link}${src}  ${text} ${tags} ${human}`;
     });
     listBox.setItems(items.length ? items : ['{gray-fg}세션 없음{/}']);
     updateHeader();
@@ -102,6 +103,15 @@ export function sessionsView(opts = {}) {
     if (n.extracted.decisions?.length) lines.push(`{${C.faint}-fg}결정{/}`, ...n.extracted.decisions.map((d) => `  · ${d}`), '');
     if (n.extracted.todos?.length) lines.push(`{${C.faint}-fg}할일{/}`, ...n.extracted.todos.map((t) => `  · ${t}`), '');
     if (n.artifacts.filesChanged?.length) lines.push(`{${C.faint}-fg}파일{/} ${n.artifacts.filesChanged.slice(0, 10).join(', ')}`);
+    // Handoff continuation links (this is one flow across a model switch).
+    if (n.continuationOf) {
+      const p = data.detail(n.continuationOf);
+      lines.push('', `{${C.spore}-fg}↩ 이어받음: ${p ? p.source + ' #' + n.continuationOf.slice(0, 8) : '#' + n.continuationOf.slice(0, 8)}{/}`);
+    }
+    for (const cid of n.continuedTo || []) {
+      const c = data.detail(cid);
+      lines.push(`{${C.spore}-fg}→ 이어감: ${c ? c.source + ' #' + cid.slice(0, 8) : '#' + cid.slice(0, 8)}{/}`);
+    }
     detailBox.setContent(lines.join('\n'));
     detailBox.setScroll(0);
     app.render();
@@ -411,7 +421,7 @@ export function sessionsView(opts = {}) {
         if (!r) return;
         const hb = buildHandoff(r.id);
         if (!hb.ok) return app.notify(hb.error, 3);
-        launchAgent(app, { folder: r.folder, seed: hb.prompt }, () => {
+        launchAgent(app, { folder: r.folder, seed: hb.prompt, parentId: r.id }, () => {
           data.refresh();
           reloadFolders();
           reloadList();

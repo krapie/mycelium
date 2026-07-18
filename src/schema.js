@@ -33,6 +33,8 @@ export function emptyNeutral(id, source) {
     extracted: { title: null, tags: [], summary: null, decisions: [], todos: [] },
     organizedBy: 'auto',
     folder: null,
+    continuationOf: null, // this session continues another (handoff parent id)
+    continuedTo: [], // sessions that continued this one (handoff children)
   };
 }
 
