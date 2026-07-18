@@ -15,13 +15,16 @@ function sessionExcerpt(neutral, budget = 6000) {
 
 function buildPrompt(neutral, existingTags) {
   const vocab = existingTags.length ? existingTags.join(', ') : '(아직 없음)';
-  return `아래 세션 기록을 읽고, **실제로 수행된 작업(task)** 관점에서 아래 JSON만 출력해라. 설명 금지.
+  return `아래 세션 기록을 읽고, 이 세션의 **실질 내용(알맹이)**을 아래 JSON으로만 출력해라. 설명 금지.
 
 핵심 규칙:
-- summary는 "대화가 어떻게 흘러갔는지"가 아니라 **"무슨 작업을 했고 무엇이 만들어지거나 바뀌었는지"**를 결과물 중심으로 1~2문장. 예: "인증 미들웨어의 JWT 검증 로직을 별도 함수로 분리하고 테스트를 추가함." 나쁜 예: "사용자가 요청했고 어시스턴트가 분석한 뒤 답변함."
-- "이 세션은/어시스턴트가/사용자가 ~했다" 같은 대화 서술 금지. 산출물과 행위(만듦/수정함/고침/추가함/결정함) 중심으로.
-- tags: 작업의 주제를 나타내는 2~4개 태그. 아래 "기존 태그"에 맞는 게 있으면 반드시 재사용, 없을 때만 새로. 짧은 한국어 명사구.
-- decisions: 내려진 기술/업무 결정 (없으면 []).
+- title: 이 세션이 무엇에 관한 것인지 한 줄로 나타내는 짧은 제목(명사구, 12자~30자). 예: "KT Cloud vs AWS 선택 이유", "JWT 인증 미들웨어 리팩토링".
+- summary: 이 세션에서 **실제로 오간 내용의 알맹이**를 2~3문장으로 담아라. 무엇을 묻거나 하려 했고, 그 **핵심 답변·결론·결과·근거**가 무엇인지가 반드시 들어가야 한다.
+    · 질문/논의/조사 세션: 질문의 요지 + 핵심 답과 근거를 담아라. 예: "AWS 대신 KT Cloud 등 국내 클라우드를 쓰는 이유를 논의. 데이터 주권·규제 준수(컴플라이언스)와 국내 리전 요구가 주된 이유로 정리됨."
+    · 코딩/작업 세션: 무엇을 만들거나 고쳤고 그 결과가 무엇인지.
+    · **금지**: "코드 변경 없음", "정보 제공만 있었음", "사용자가 묻고 어시스턴트가 답함" 같은 메타 서술. 실제 내용(답/결론/지식) 자체를 요약해라. 코드 변경 여부가 아니라 대화의 알맹이가 중요하다.
+- tags: 주제 태그 2~4개. 아래 "기존 태그"에 맞는 게 있으면 반드시 재사용, 없을 때만 새로. 짧은 한국어 명사구.
+- decisions: 내려진 결정/결론 (없으면 []).
 - todos: 남은 할 일 (없으면 []).
 
 기존 태그: ${vocab}
@@ -32,7 +35,7 @@ ${sessionExcerpt(neutral)}
 """
 
 출력 형식:
-{"tags": [], "summary": "", "decisions": [], "todos": []}`;
+{"title": "", "tags": [], "summary": "", "decisions": [], "todos": []}`;
 }
 
 /**
@@ -56,6 +59,7 @@ export async function autoTagSession(sessionId, { existingTags } = {}) {
   if (n.organizedBy !== 'human' && Array.isArray(parsed.tags)) {
     n.extracted.tags = parsed.tags.filter((t) => typeof t === 'string' && t.trim()).slice(0, 5);
   }
+  if (typeof parsed.title === 'string') n.extracted.title = parsed.title.trim();
   if (typeof parsed.summary === 'string') n.extracted.summary = parsed.summary;
   if (Array.isArray(parsed.decisions)) n.extracted.decisions = parsed.decisions;
   if (Array.isArray(parsed.todos)) n.extracted.todos = parsed.todos;

@@ -4,6 +4,7 @@ import { C } from '../theme.js';
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { DIGEST_DIR } from '../../paths.js';
+import { copyToClipboard } from '../clipboard.js';
 
 /** Scrollable read-only overlay for markdown/text (context, knowledge, digest). */
 export function textView(app, title, content) {
@@ -13,7 +14,7 @@ export function textView(app, title, content) {
     left: 'center',
     width: '80%',
     height: '80%',
-    label: ` ${title} (↑↓ 스크롤, Esc 닫기) `,
+    label: ` ${title} (↑↓ 스크롤, y 복사, Esc 닫기) `,
     content: content || '(내용 없음)',
     tags: false,
     scrollable: true,
@@ -29,6 +30,11 @@ export function textView(app, title, content) {
   app.render();
   box.key(['escape', 'q'], () => {
     box.destroy();
+    app.render();
+  });
+  box.key('y', () => {
+    const ok = copyToClipboard(content || '');
+    box.setLabel(ok ? ` ${title} (복사됨) ` : ` ${title} (복사 실패) `);
     app.render();
   });
   return box;

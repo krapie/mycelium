@@ -12,6 +12,22 @@ import { generateDigest, extractKnowledge } from '../../insight.js';
 import { assembleContext, injectAgentsMd } from '../../reuse.js';
 import { textView, digestReader } from '../widgets/viewers.js';
 import { textPrompt } from '../widgets/pickers.js';
+import { copyToClipboard } from '../clipboard.js';
+
+// Plain-text rendering of a session for the clipboard (title, summary, and the
+// full transcript — everything you'd want to paste elsewhere).
+function sessionToText(n) {
+  const L = [];
+  if (n.extracted.title) L.push(`# ${n.extracted.title}`);
+  L.push(`${n.source} · ${(n.startedAt || '').slice(0, 16).replace('T', ' ')} · ${n.folder || '_inbox'}`, '');
+  if (n.extracted.summary) L.push('## 요약', n.extracted.summary, '');
+  if (n.extracted.decisions?.length) L.push('## 결정', ...n.extracted.decisions.map((d) => `- ${d}`), '');
+  if (n.extracted.todos?.length) L.push('## 할 일', ...n.extracted.todos.map((t) => `- ${t}`), '');
+  if (n.artifacts.filesChanged?.length) L.push('## 파일', ...n.artifacts.filesChanged.map((f) => `- ${f}`), '');
+  L.push('## 대화');
+  for (const t of n.turns) L.push(`[${t.role}] ${t.text}`, '');
+  return L.join('\n');
+}
 
 /**
  * The main cockpit view: folder tree (left), session list (right top), detail
@@ -54,7 +70,7 @@ export function sessionsView(opts = {}) {
       const human = r.organizedBy === 'human' ? `{${C.spore}-fg}[사람]{/}` : '';
       const mark = state.selected.has(r.id) ? `{${C.fox}-fg}✓{/}` : ' ';
       const tags = (r.tags || []).map((t) => `{${C.fox}-fg}#${t}{/}`).join(' ');
-      const text = (r.summary || r.preview || '(내용 없음)').replace(/\s+/g, ' ').slice(0, 60);
+      const text = (r.title || r.summary || r.preview || '(내용 없음)').replace(/\s+/g, ' ').slice(0, 60);
       return `${mark} ${src}  ${text} ${tags} ${human}`;
     });
     listBox.setItems(items.length ? items : ['{gray-fg}세션 없음{/}']);
@@ -72,7 +88,9 @@ export function sessionsView(opts = {}) {
     if (!n) return;
     const lines = [];
     const srcName = n.source === 'codex' ? 'codex' : 'claude';
-    lines.push(`{${sourceColor(n.source)}-fg}{bold}${srcName}{/}  {${C.dim}-fg}${(n.startedAt || '').slice(0, 16).replace('T', ' ')} · ${n.folder || '_inbox'}{/}`);
+    // Title as the headline, then metadata, then the description (summary).
+    if (n.extracted.title) lines.push(`{${C.fox}-fg}{bold}${n.extracted.title}{/}`);
+    lines.push(`{${sourceColor(n.source)}-fg}${srcName}{/}  {${C.dim}-fg}${(n.startedAt || '').slice(0, 16).replace('T', ' ')} · ${n.folder || '_inbox'}{/}`);
     lines.push('');
     if (n.extracted.summary) {
       lines.push(`{${C.text}-fg}${n.extracted.summary}{/}`, '');
@@ -173,8 +191,8 @@ export function sessionsView(opts = {}) {
         applyLayout(lvl);
         const hints = {
           folders: '{bold}폴더{/}: ↑↓  Enter 열기  <a>새폴더  <R>이름변경  <m>이동/중첩  <D>삭제  </>검색  <q>종료',
-          sessions: '{bold}세션{/}: ↑↓  Enter 상세  Esc 폴더로  {bold}<a>요약생성{/}  <r>이어서열기  <h>핸드오프  <m>이동  <t>태그  <Space>선택',
-          detail: '{bold}상세{/}: ↑↓ 스크롤  Esc 세션으로  {bold}<a>요약생성{/}  <r>이어서열기',
+          sessions: '{bold}세션{/}: ↑↓  Enter 상세  Esc 폴더로  <a>요약생성  <y>복사  <r>이어서열기  <h>핸드오프  <m>이동  <t>태그  <Space>선택',
+          detail: '{bold}상세{/}: ↑↓ 스크롤  Esc 세션으로  <a>요약생성  <y>복사  <r>이어서열기',
         };
         app.setStatus(' ' + (hints[lvl] || this.help));
       };
@@ -425,6 +443,18 @@ export function sessionsView(opts = {}) {
       };
       listBox.key('a', doAutoTag);
       detailBox.key('a', doAutoTag);
+
+      // Copy the current session (title + summary + full transcript) to clipboard.
+      const doCopy = () => {
+        const r = currentRow();
+        if (!r) return;
+        const n = data.detail(r.id);
+        if (!n) return;
+        const ok = copyToClipboard(sessionToText(n));
+        app.notify(ok ? '세션 내용을 클립보드에 복사함' : '복사 도구(pbcopy 등)를 찾지 못함', ok ? 2 : 3);
+      };
+      listBox.key('y', doCopy);
+      detailBox.key('y', doCopy);
 
       // Learn: extract KNOWLEDGE.md for the current folder.
       listBox.key('K', async () => {
