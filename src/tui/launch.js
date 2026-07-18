@@ -198,15 +198,21 @@ function run(app, { agentKey, dir, folder, seed, parentId }, done) {
     // Back in the TUI: capture whatever the agent produced.
     try {
       scan();
-      reindex();
       const now = allRaw();
       const fresh = now.filter((n) => !before.has(n.id));
-      if (folder) for (const n of fresh) if (n.organizedBy !== 'human') move(n.id, folder);
-      // If this was a handoff, mark the new session(s) as a continuation of the parent.
-      if (parentId) for (const n of fresh) linkContinuation(n.id, parentId);
+      // scan() captures ALL new sessions on the system — including anything
+      // created concurrently in other terminals/projects. Only the session(s)
+      // actually produced in THIS launch's working dir belong to this folder.
+      const inLaunchDir = (n) => {
+        const d = n.projectDir || n.cwd || '';
+        return d === dir || d.startsWith(dir + '/');
+      };
+      const mine = fresh.filter(inLaunchDir);
+      if (folder) for (const n of mine) if (n.organizedBy !== 'human') move(n.id, folder);
+      if (parentId) for (const n of mine) linkContinuation(n.id, parentId);
       reindex();
       const note = parentId ? '이어받은 세션' : '새 세션';
-      app.notify(fresh.length ? `${note} ${fresh.length}개 캡처 → ${folder || '_inbox'}` : '새 세션 없음', 3);
+      app.notify(mine.length ? `${note} ${mine.length}개 → ${folder || '_inbox'}` : '이 디렉토리의 새 세션 없음', 3);
     } catch (err) {
       app.notify(`캡처 실패: ${err.message}`, 3);
     }
