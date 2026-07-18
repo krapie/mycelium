@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   folder TEXT,
   started_at TEXT,
   preview TEXT,
+  title TEXT,
   summary TEXT,
   organized_by TEXT
 );
@@ -39,6 +40,13 @@ export function openDb() {
   db = new DatabaseSync(DB_PATH);
   db.exec('PRAGMA journal_mode = WAL;');
   db.exec(SCHEMA);
+  // Migrate older index DBs that predate the title column (index is derived,
+  // but we ALTER rather than drop to keep it simple).
+  try {
+    db.exec('ALTER TABLE sessions ADD COLUMN title TEXT');
+  } catch (err) {
+    if (!String(err.message).includes('duplicate column')) throw err;
+  }
   return db;
 }
 
@@ -47,7 +55,7 @@ export function reindex() {
   const d = openDb();
   d.exec('DELETE FROM sessions; DELETE FROM session_fts; DELETE FROM session_tags;');
   const insSession = d.prepare(
-    'INSERT OR REPLACE INTO sessions (id, source, folder, started_at, preview, summary, organized_by) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    'INSERT OR REPLACE INTO sessions (id, source, folder, started_at, preview, title, summary, organized_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
   );
   const insFts = d.prepare('INSERT INTO session_fts (id, body) VALUES (?, ?)');
   const upsertTag = d.prepare('INSERT OR IGNORE INTO tags (name) VALUES (?)');
@@ -56,7 +64,7 @@ export function reindex() {
 
   const raws = allRaw();
   for (const n of raws) {
-    insSession.run(n.id, n.source, n.folder, n.startedAt, firstUserText(n), n.extracted.summary, n.organizedBy);
+    insSession.run(n.id, n.source, n.folder, n.startedAt, firstUserText(n), n.extracted.title ?? null, n.extracted.summary ?? null, n.organizedBy);
     insFts.run(n.id, searchableText(n));
     for (const tag of n.extracted.tags || []) {
       upsertTag.run(tag);

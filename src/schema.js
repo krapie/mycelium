@@ -30,7 +30,7 @@ export function emptyNeutral(id, source) {
     turns: [],
     toolActivity: [],
     artifacts: { filesChanged: [], diffSummary: null },
-    extracted: { tags: [], summary: null, decisions: [], todos: [] },
+    extracted: { title: null, tags: [], summary: null, decisions: [], todos: [] },
     organizedBy: 'auto',
     folder: null,
   };
