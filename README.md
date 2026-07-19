@@ -55,6 +55,7 @@ mycelium                    # 인터랙티브 TUI 실행
 | `y` | 세션 내용(제목+요약+대화)을 클립보드로 복사 |
 | `Space` | 다중 선택 |
 | `/` | 전문 검색 |
+| `s` | **스캔 + 자동배치**를 TUI에서 바로 (`mycelium scan && mycelium organize`와 동일 — 여러 탭/터미널에서 켜둔 세션을 CLI 없이 그대로 불러와 정리) |
 | `w` / `c` / `i` / `d` | 폴더 지식 추출(미리보기 후 확인) / 컨텍스트 보기 / AGENTS.md 주입(미리보기 후 확인) / 다이제스트 읽기 (안에서 `n`/`w`로 오늘/이번주 생성) |
 | `q` | 종료 |
 
@@ -99,8 +100,8 @@ Mycelium이 "자동으로 좋아진다"는 건 Claude Code의 `/write`, `/proofr
 
 | 단계 | `mycelium daemon` 실행 중 | 안 켜놨을 때 |
 |---|---|---|
-| Capture (스캔) | 5분마다 자동 | `mycelium scan` 또는 TUI 진입 시 수동 |
-| Organize (자동 배정) | 자동 (사람이 정리한 세션은 보존) | `mycelium organize` 수동 |
+| Capture (스캔) | 5분마다 자동 | 수동 — `mycelium scan` 또는 TUI에서 `s` (TUI는 진입 시 자동 스캔하지 않음) |
+| Organize (자동 배정) | 자동 (사람이 정리한 세션은 보존) | 수동 — `mycelium organize` 또는 TUI에서 `s` (스캔과 함께 한 번에) |
 | Learn: 요약·태깅 (`a`) | 새로 들어온 세션에 자동 실행 | `a` 또는 `mycelium autotag` 수동 |
 | Learn: 폴더 지식 (`w`) | **자동 아님** | `w` 또는 `mycelium knowledge <폴더>` 수동 |
 | Reuse: AGENTS.md 주입 | 다음 에이전트 실행(`n`/`h`) 시 항상 자동 | 동일 — 데몬 여부와 무관 |
