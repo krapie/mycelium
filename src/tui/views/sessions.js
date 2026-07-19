@@ -15,19 +15,20 @@ import { textView, digestReader, confirmText, helpModal } from '../widgets/viewe
 import { textPrompt } from '../widgets/pickers.js';
 import { copyToClipboard } from '../clipboard.js';
 import { editSessionContent } from '../widgets/editor.js';
+import { t } from '../i18n.js';
 
 // Plain-text rendering of a session for the clipboard (title, summary, and the
 // full transcript — everything you'd want to paste elsewhere).
 function sessionToText(n) {
   const L = [];
   if (n.extracted.title) L.push(`# ${n.extracted.title}`);
-  L.push(`${n.source} · ${(n.startedAt || '').slice(0, 16).replace('T', ' ')} · ${n.folder || 'New'}`, '');
-  if (n.extracted.summary) L.push('## 요약', n.extracted.summary, '');
-  if (n.extracted.decisions?.length) L.push('## 결정', ...n.extracted.decisions.map((d) => `- ${d}`), '');
-  if (n.extracted.todos?.length) L.push('## 할 일', ...n.extracted.todos.map((t) => `- ${t}`), '');
-  if (n.artifacts.filesChanged?.length) L.push('## 파일', ...n.artifacts.filesChanged.map((f) => `- ${f}`), '');
-  L.push('## 대화');
-  for (const t of n.turns) L.push(`[${t.role}] ${t.text}`, '');
+  L.push(`${n.source} · ${(n.startedAt || '').slice(0, 16).replace('T', ' ')} · ${n.folder || t('sessions.newBadge')}`, '');
+  if (n.extracted.summary) L.push(t('export.summary'), n.extracted.summary, '');
+  if (n.extracted.decisions?.length) L.push(t('export.decisions'), ...n.extracted.decisions.map((d) => `- ${d}`), '');
+  if (n.extracted.todos?.length) L.push(t('export.todos'), ...n.extracted.todos.map((td) => `- ${td}`), '');
+  if (n.artifacts.filesChanged?.length) L.push(t('export.files'), ...n.artifacts.filesChanged.map((f) => `- ${f}`), '');
+  L.push(t('export.conversation'));
+  for (const turn of n.turns) L.push(`[${turn.role}] ${turn.text}`, '');
   return L.join('\n');
 }
 
@@ -47,7 +48,7 @@ export function sessionsView(opts = {}) {
     const { list, counts, inbox } = data.folders();
     // Root's count is unfiled sessions only, matching what it actually shows
     // now — not every session everywhere (those live in their own folder).
-    const items = [`{${state.folder === null ? C.fox : C.dim}-fg}Root (${inbox}){/}`];
+    const items = [`{${state.folder === null ? C.fox : C.dim}-fg}${t('folders.root')} (${inbox}){/}`];
     const keys = [null];
     for (const f of list) {
       // +1: every real folder nests visually under Root, not flush with it.
@@ -69,19 +70,19 @@ export function sessionsView(opts = {}) {
       const name = r.source === 'codex' ? 'codex ' : 'claude';
       const src = `{${sourceColor(r.source)}-fg}${name}{/}`;
       const mark = state.selected.has(r.id) ? `{${C.fox}-fg}✓{/}` : ' ';
-      const tags = (r.tags || []).map((t) => `{${C.fox}-fg}#${t}{/}`).join(' ');
+      const tags = (r.tags || []).map((tg) => `{${C.fox}-fg}#${tg}{/}`).join(' ');
       const link = r.continuationOf ? `{${C.spore}-fg}↩{/}` : (r.continuedTo && r.continuedTo.length) ? `{${C.spore}-fg}→{/}` : ' ';
-      const isNew = !r.folder ? `{${C.spore}-fg}[New]{/}` : '';
-      const text = (r.title || r.summary || r.preview || '(내용 없음)').replace(/\s+/g, ' ').slice(0, 58);
+      const isNew = !r.folder ? `{${C.spore}-fg}[${t('sessions.newBadge')}]{/}` : '';
+      const text = (r.title || r.summary || r.preview || t('common.noContent')).replace(/\s+/g, ' ').slice(0, 58);
       return `${mark}${link}${src}  ${text} ${tags} ${isNew}`;
     });
-    listBox.setItems(items.length ? items : ['{gray-fg}세션 없음{/}']);
+    listBox.setItems(items.length ? items : [`{gray-fg}${t('sessions.empty')}{/}`]);
     updateHeader();
   }
 
   function updateHeader() {
-    const crumb = state.folder || 'Root';
-    const filt = [state.query && `/${state.query}`, ...state.tags.map((t) => `#${t}`)].filter(Boolean).join(' ');
+    const crumb = state.folder || t('folders.root');
+    const filt = [state.query && `/${state.query}`, ...state.tags.map((tg) => `#${tg}`)].filter(Boolean).join(' ');
     app.setHeader(`${crumb}${filt ? '  {' + C.spore + '-fg}' + filt + '{/}' : ''}`, `${rows.length} sessions`);
   }
 
@@ -92,26 +93,30 @@ export function sessionsView(opts = {}) {
     const srcName = n.source === 'codex' ? 'codex' : 'claude';
     // Title as the headline, then metadata, then the description (summary).
     if (n.extracted.title) lines.push(`{${C.fox}-fg}{bold}${n.extracted.title}{/}`);
-    lines.push(`{${sourceColor(n.source)}-fg}${srcName}{/}  {${C.dim}-fg}${(n.startedAt || '').slice(0, 16).replace('T', ' ')} · ${n.folder || 'New'}{/}`);
+    lines.push(
+      `{${sourceColor(n.source)}-fg}${srcName}{/}  {${C.dim}-fg}${(n.startedAt || '').slice(0, 16).replace('T', ' ')} · ${n.folder || t('sessions.newBadge')}{/}`,
+    );
     lines.push('');
     if (n.extracted.summary) {
       lines.push(`{${C.text}-fg}${n.extracted.summary}{/}`, '');
     } else {
-      lines.push(`{${C.faint}-fg}(요약 없음 — 세션에서 a를 눌러 요약·태깅 생성){/}`, '');
-      const firstUser = n.turns.find((t) => t.role === 'user')?.text;
-      if (firstUser) lines.push(`{${C.faint}-fg}첫 요청:{/} ${firstUser.replace(/\s+/g, ' ').slice(0, 300)}`, '');
+      lines.push(`{${C.faint}-fg}${t('detail.noSummary')}{/}`, '');
+      const firstUser = n.turns.find((turn) => turn.role === 'user')?.text;
+      if (firstUser) lines.push(`{${C.faint}-fg}${t('detail.firstRequest')}{/} ${firstUser.replace(/\s+/g, ' ').slice(0, 300)}`, '');
     }
-    if (n.extracted.decisions?.length) lines.push(`{${C.faint}-fg}결정{/}`, ...n.extracted.decisions.map((d) => `  · ${d}`), '');
-    if (n.extracted.todos?.length) lines.push(`{${C.faint}-fg}할일{/}`, ...n.extracted.todos.map((t) => `  · ${t}`), '');
-    if (n.artifacts.filesChanged?.length) lines.push(`{${C.faint}-fg}파일{/} ${n.artifacts.filesChanged.slice(0, 10).join(', ')}`);
+    if (n.extracted.decisions?.length) lines.push(`{${C.faint}-fg}${t('detail.decisions')}{/}`, ...n.extracted.decisions.map((d) => `  · ${d}`), '');
+    if (n.extracted.todos?.length) lines.push(`{${C.faint}-fg}${t('detail.todos')}{/}`, ...n.extracted.todos.map((td) => `  · ${td}`), '');
+    if (n.artifacts.filesChanged?.length) lines.push(`{${C.faint}-fg}${t('detail.files')}{/} ${n.artifacts.filesChanged.slice(0, 10).join(', ')}`);
     // Handoff continuation links (this is one flow across a model switch).
     if (n.continuationOf) {
       const p = data.detail(n.continuationOf);
-      lines.push('', `{${C.spore}-fg}↩ 이어받음: ${p ? p.source + ' #' + n.continuationOf.slice(0, 8) : '#' + n.continuationOf.slice(0, 8)}{/}`);
+      const label = p ? p.source + ' #' + n.continuationOf.slice(0, 8) : '#' + n.continuationOf.slice(0, 8);
+      lines.push('', `{${C.spore}-fg}${t('detail.continuationOf', label)}{/}`);
     }
     for (const cid of n.continuedTo || []) {
       const c = data.detail(cid);
-      lines.push(`{${C.spore}-fg}→ 이어감: ${c ? c.source + ' #' + cid.slice(0, 8) : '#' + cid.slice(0, 8)}{/}`);
+      const label = c ? c.source + ' #' + cid.slice(0, 8) : '#' + cid.slice(0, 8);
+      lines.push(`{${C.spore}-fg}${t('detail.continuedTo', label)}{/}`);
     }
     detailBox.setContent(lines.join('\n'));
     detailBox.setScroll(0);
@@ -123,7 +128,7 @@ export function sessionsView(opts = {}) {
   }
 
   return {
-    help: '? 전체 단축키   q 종료',
+    help: t('status.helpFallback'),
     async mount(a) {
       app = a;
       // Three columns side by side: Folders | Sessions | Detail. The focused
@@ -203,9 +208,9 @@ export function sessionsView(opts = {}) {
         // Full keymap lives in the ? modal now, not crammed into this line —
         // just enough breadcrumb to know where you are and how to get help.
         const hints = {
-          folders: '{bold}폴더{/}  ·  Enter 열기  ·  ? 전체 단축키  ·  q 종료',
-          sessions: '{bold}세션{/}  ·  Enter 상세  ·  Esc 폴더로  ·  ? 전체 단축키  ·  q 종료',
-          detail: '{bold}상세{/}  ·  ↑↓ 스크롤  ·  Esc 세션으로  ·  ? 전체 단축키  ·  q 종료',
+          folders: t('status.folders'),
+          sessions: t('status.sessions'),
+          detail: t('status.detail'),
         };
         app.setStatus(' ' + (hints[lvl] || this.help));
       };
@@ -235,7 +240,7 @@ export function sessionsView(opts = {}) {
 
       // ── Folder management (only when the folders pane is focused) ──
       const curFolder = () => foldersBox._keys[foldersBox.selected];
-      // The only non-real entry in this panel now is "Root" itself (key: null).
+      // The only non-real entry in this panel now is Root itself (key: null).
       const isRealFolder = (f) => !!f;
       const refreshFolders = (selectPath) => {
         state.selected.clear();
@@ -254,12 +259,12 @@ export function sessionsView(opts = {}) {
       // a: new subfolder under the selected folder (or root).
       foldersBox.key('a', () => {
         const parent = isRealFolder(curFolder()) ? curFolder() : '';
-        prompt(app, `새 폴더 이름${parent ? ` (${parent} 아래)` : ' (루트)'}`, '', (name) => {
+        prompt(app, t('folders.newPrompt', parent), '', (name) => {
           foldersBox.focus();
           if (!name || !name.trim()) return;
           const path = (parent ? parent + '/' : '') + name.trim().replace(/^\/+|\/+$/g, '');
           mkdir(path);
-          app.notify(`폴더 생성: ${path}`);
+          app.notify(t('folders.created', path));
           refreshFolders(path);
         });
       });
@@ -267,12 +272,12 @@ export function sessionsView(opts = {}) {
       // e: rename the selected folder.
       foldersBox.key('e', () => {
         const f = curFolder();
-        if (!isRealFolder(f)) return app.notify('Root는 이름을 바꿀 수 없습니다', 3);
-        prompt(app, `이름 변경: ${f}`, f, (val) => {
+        if (!isRealFolder(f)) return app.notify(t('folders.cannotRenameRoot'), 3);
+        prompt(app, t('folders.renamePrompt', f), f, (val) => {
           foldersBox.focus();
           if (!val || val.trim() === f) return;
           const res = renameFolder(f, val.trim().replace(/^\/+|\/+$/g, ''));
-          app.notify(res.ok ? `이름 변경: ${res.to}` : res.error, res.ok ? 2 : 3);
+          app.notify(res.ok ? t('folders.renamed', res.to) : res.error, res.ok ? 2 : 3);
           refreshFolders(res.ok ? res.to : f);
         });
       });
@@ -280,32 +285,37 @@ export function sessionsView(opts = {}) {
       // m: move (re-nest) the selected folder into another folder.
       foldersBox.key('m', () => {
         const f = curFolder();
-        if (!isRealFolder(f)) return app.notify('Root는 옮길 수 없습니다', 3);
+        if (!isRealFolder(f)) return app.notify(t('folders.cannotMoveRoot'), 3);
         pickFolder(app, (dest) => {
           foldersBox.focus();
           if (dest === undefined) return;
           const target = (dest ? dest + '/' : '') + basename(f);
           const res = renameFolder(f, target);
-          app.notify(res.ok ? `이동: ${res.to}` : res.error, res.ok ? 2 : 3);
+          app.notify(res.ok ? t('folders.movedTo', res.to) : res.error, res.ok ? 2 : 3);
           refreshFolders(res.ok ? res.to : f);
         });
       });
 
-      // x: delete the selected folder (sessions → unfiled, shown as New in All).
+      // x: delete the selected folder (sessions → unfiled, shown as New in Root).
       foldersBox.key('x', () => {
         const f = curFolder();
-        if (!isRealFolder(f)) return app.notify('Root는 삭제할 수 없습니다', 3);
-        menu(app, `"${f}" 삭제?`, [
-          { label: '삭제 (세션은 미분류로, All에서 New로 표시)', value: 'yes' },
-          { label: '취소', value: 'no' },
-        ], (ans) => {
-          foldersBox.focus();
-          if (ans !== 'yes') return;
-          const res = deleteFolder(f);
-          app.notify(res.ok ? `삭제됨 (세션 ${res.moved}개 → 미분류)` : res.error);
-          state.folder = null;
-          refreshFolders(null);
-        });
+        if (!isRealFolder(f)) return app.notify(t('folders.cannotDeleteRoot'), 3);
+        menu(
+          app,
+          t('folders.deleteConfirmTitle', f),
+          [
+            { label: t('folders.deleteConfirmYes', t('folders.root')), value: 'yes' },
+            { label: t('common.cancel'), value: 'no' },
+          ],
+          (ans) => {
+            foldersBox.focus();
+            if (ans !== 'yes') return;
+            const res = deleteFolder(f);
+            app.notify(res.ok ? t('folders.deleted', res.moved) : res.error);
+            state.folder = null;
+            refreshFolders(null);
+          },
+        );
       });
 
       // Session navigation previews detail; Enter opens detail; Esc goes back.
@@ -358,7 +368,7 @@ export function sessionsView(opts = {}) {
 
       // Live search.
       screenKey(app, ['/'], () => {
-        prompt(app, '검색', state.query, (val) => {
+        prompt(app, t('common.searchPrompt'), state.query, (val) => {
           state.query = (val || '').trim();
           reloadList();
           listBox.focus();
@@ -371,19 +381,19 @@ export function sessionsView(opts = {}) {
       // auto-organize — that reassigns folders by cwd rule and isn't wired to
       // any key here yet; run `mycelium organize` when you want that.
       screenKey(app, ['s'], () => {
-        app.notify('스캔 중…', 30);
+        app.notify(t('scan.inProgress'), 30);
         setImmediate(() => {
           let s;
           try {
             s = scan();
           } catch (err) {
-            app.notify(`스캔 실패: ${err.message}`, 4);
+            app.notify(t('scan.failed', err.message), 4);
             return;
           }
           data.refresh();
           reloadFolders();
           reloadList();
-          app.notify(`스캔 +${s.imported} (총 ${s.scanned}, 건너뜀 ${s.skipped}${s.failed ? `, 실패 ${s.failed}` : ''})`, 4);
+          app.notify(t('scan.done', s.imported, s.scanned, s.skipped, s.failed), 4);
           app.render();
         });
       });
@@ -409,7 +419,7 @@ export function sessionsView(opts = {}) {
         pickFolder(app, (folder) => {
           if (folder === undefined) return listBox.focus();
           for (const id of ids) organizeMove(id, folder);
-          app.notify(`${ids.length}개 세션 → ${folder || 'New'}`);
+          app.notify(t('sessions.movedTo', ids.length, folder || t('sessions.newBadge')));
           afterMutate();
           listBox.focus();
         });
@@ -423,7 +433,7 @@ export function sessionsView(opts = {}) {
         editTags(app, cur, (edit) => {
           if (!edit) return listBox.focus();
           for (const id of ids) organizeTag(id, edit.add, edit.remove);
-          app.notify(`${ids.length}개 세션 태그 갱신`);
+          app.notify(t('sessions.tagsUpdated', ids.length));
           afterMutate();
           listBox.focus();
         });
@@ -437,15 +447,15 @@ export function sessionsView(opts = {}) {
         if (!ids.length) return;
         menu(
           app,
-          `${ids.length}개 세션 삭제? (Mycelium에서만 삭제, 원본 로그는 유지)`,
+          t('sessions.deleteConfirmTitle', ids.length),
           [
-            { label: '삭제', value: 'yes' },
-            { label: '취소', value: 'no' },
+            { label: t('common.delete'), value: 'yes' },
+            { label: t('common.cancel'), value: 'no' },
           ],
           (ans) => {
             if (ans !== 'yes') return listBox.focus();
             for (const id of ids) deleteSession(id);
-            app.notify(`${ids.length}개 세션 삭제됨`);
+            app.notify(t('sessions.deleted', ids.length));
             afterMutate();
             listBox.focus();
             setLevel('sessions');
@@ -507,7 +517,7 @@ export function sessionsView(opts = {}) {
         let done = 0;
         let failed = 0;
         for (const id of ids) {
-          app.notify(`요약·태깅 생성 중… (${done + 1}/${ids.length})`, 90);
+          app.notify(t('sessions.summarizing', done + 1, ids.length), 90);
           const res = await autoTagSession(id);
           if (res.ok) done++;
           else failed++;
@@ -517,7 +527,7 @@ export function sessionsView(opts = {}) {
         }
         state.selected.clear();
         reloadList();
-        app.notify(`요약·태깅 완료: ${done}개${failed ? ` (실패 ${failed})` : ''}`, 3);
+        app.notify(t('sessions.summarizeDone', done, failed), 3);
       };
       listBox.key('a', doAutoTag);
       detailBox.key('a', doAutoTag);
@@ -546,7 +556,7 @@ export function sessionsView(opts = {}) {
         const n = data.detail(r.id);
         if (!n) return;
         const ok = copyToClipboard(sessionToText(n));
-        app.notify(ok ? '세션 내용을 클립보드에 복사함' : '복사 도구(pbcopy 등)를 찾지 못함', ok ? 2 : 3);
+        app.notify(ok ? t('sessions.copied') : t('sessions.copyFailed'), ok ? 2 : 3);
       };
       listBox.key('y', doCopy);
       detailBox.key('y', doCopy);
@@ -555,21 +565,21 @@ export function sessionsView(opts = {}) {
       // human what it's about to write (it feeds AGENTS.md for every future
       // session in this folder), and only save on explicit confirm.
       const doKnowledge = async () => {
-        if (!state.folder) return app.notify('폴더를 먼저 선택하세요', 3);
+        if (!state.folder) return app.notify(t('folders.selectFirst'), 3);
         const refocus = () => (state.level === 'folders' ? foldersBox : listBox).focus();
-        app.notify('지식 초안 생성 중…', 60);
+        app.notify(t('knowledge.generating'), 60);
         const gen = await buildKnowledgeText(state.folder);
         if (!gen.ok) {
           app.notify(gen.error, 3);
           return refocus();
         }
-        confirmText(app, `KNOWLEDGE.md 미리보기 · ${state.folder}`, gen.text, (ok) => {
+        confirmText(app, t('knowledge.previewTitle', state.folder), gen.text, (ok) => {
           if (!ok) {
-            app.notify('취소됨 — KNOWLEDGE.md 변경 없음', 2);
+            app.notify(t('knowledge.cancelled'), 2);
             return refocus();
           }
           const w = writeKnowledgeText(state.folder, gen.text);
-          app.notify(w.ok ? `KNOWLEDGE.md 저장: ${state.folder}` : w.error, 3);
+          app.notify(w.ok ? t('knowledge.saved', state.folder) : w.error, 3);
           refocus();
         });
       };
@@ -582,27 +592,27 @@ export function sessionsView(opts = {}) {
         const r = currentRow();
         if (!r) return;
         const ctx = assembleContext(r.folder);
-        textView(app, `컨텍스트 · ${r.folder || 'New'}`, ctx || '(상속할 컨텍스트 없음)');
+        textView(app, t('context.title', r.folder || t('sessions.newBadge')), ctx || t('context.empty'));
       });
       // i: inject the folder's KNOWLEDGE.md into a directory's AGENTS.md —
       // show exactly what will be written before touching that file.
       listBox.key('i', () => {
         const r = currentRow();
-        if (!r || !r.folder) return app.notify('폴더가 있는 세션에서만 가능합니다', 3);
-        textPrompt(app, 'AGENTS.md를 주입할 디렉토리', process.cwd(), (dir) => {
+        if (!r || !r.folder) return app.notify(t('context.needsFolder'), 3);
+        textPrompt(app, t('inject.dirPrompt'), process.cwd(), (dir) => {
           if (!dir) return listBox.focus();
           const ctx = assembleContext(r.folder);
           if (!ctx) {
-            app.notify(`주입할 KNOWLEDGE.md가 없습니다: ${r.folder}`, 3);
+            app.notify(t('inject.noKnowledge', r.folder), 3);
             return listBox.focus();
           }
-          confirmText(app, `${dir.trim()}/AGENTS.md 에 주입할 내용`, ctx, (ok) => {
+          confirmText(app, t('inject.previewTitle', dir.trim()), ctx, (ok) => {
             if (!ok) {
-              app.notify('취소됨 — AGENTS.md 변경 없음', 2);
+              app.notify(t('inject.cancelled'), 2);
               return listBox.focus();
             }
             const res = injectAgentsMd(dir.trim(), r.folder);
-            app.notify(res.ok ? `AGENTS.md 주입: ${dir.trim()}` : res.error, 3);
+            app.notify(res.ok ? t('inject.done', dir.trim()) : res.error, 3);
             listBox.focus();
           });
         });

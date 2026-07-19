@@ -36,6 +36,8 @@ mycelium                    # 인터랙티브 TUI 실행
 
 하단 상태바는 짧은 breadcrumb만 보여줍니다 — 전체 단축키는 아무 화면에서나 **`?`**를 누르면 뜨는 도움말 모달에서 확인하세요.
 
+**표시 언어는 기본 영어**입니다. `mycelium lang ko`로 한국어로 바꿀 수 있고(다음 TUI 실행부터 적용), `mycelium lang en`으로 되돌릴 수 있습니다. TUI 안에서 바로 전환하는 키는 없습니다 — 실행 전에 CLI로 설정하는 방식입니다.
+
 **폴더 패널**
 
 맨 위 **`Root`**는 트리의 최상위(고정, 이름변경/이동/삭제 불가)이고, 사용자가 만든 실제 폴더들은 그 아래 한 단 들여써서 표시됩니다. `_inbox` 같은 별도 폴더는 없습니다 — **`Root`는 아직 어느 폴더에도 배정되지 않은 세션만 보여줍니다** (이미 폴더에 들어간 세션은 그 폴더에서만 보이고 `Root`에는 안 뜸 — 문자 그대로 트리 최상위). 제목/요약 옆에는 **`[New]`** 표시가 붙습니다 — `m`으로 원하는 폴더로 옮기면 그 폴더로 옮겨가고 `Root`에서는 사라집니다. `/` 검색은 예외로, `Root`에서 검색해도 이미 폴더에 정리된 세션까지 전체 대상으로 찾아줍니다(실제 폴더 안에서 검색하면 그 폴더로 범위가 좁혀짐).
@@ -206,6 +208,11 @@ mycelium list / tags / reindex
 
 # 백그라운드 업키핑 (주기 스캔 + 일일 다이제스트, UI 없음)
 mycelium daemon
+
+# TUI 표시 언어 (기본 en) — 다음 TUI 실행부터 적용
+mycelium lang        # 현재 설정 확인
+mycelium lang ko      # 한국어로 전환
+mycelium lang en      # 영어로 전환
 ```
 
 ## 정리 (실험 단계)
@@ -238,7 +245,7 @@ mycelium cleanup reset --yes # 전체 초기화: ~/.mycelium 통째로 삭제 �
     KNOWLEDGE.md         폴더별 프로젝트 지식 (상속 단위)
   digests/YYYY-Wnn.md    서사형 다이제스트
   db/index.db            sqlite FTS5 검색 인덱스 (재생성 가능)
-  config.json            cwd→폴더 규칙 등
+  config.json            cwd→폴더 규칙, 삭제 목록, 표시 언어(locale) 등
 ```
 
 머신 간에 세션을 옮기려면 `raw/`와 `tree/`를 복사한 뒤 대상에서 `mycelium reindex`.

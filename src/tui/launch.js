@@ -5,6 +5,7 @@ import { move, addRule, cwdForFolder, linkContinuation } from '../organize.js';
 import { injectAgentsMd } from '../reuse.js';
 import { menu, textPrompt } from './widgets/pickers.js';
 import { foreground } from './foreground.js';
+import { t } from './i18n.js';
 
 // Which CLIs are actually installed → which agents we can offer.
 function which(cmd) {
@@ -43,13 +44,13 @@ const AGENTS = {
 export function launchAgent(app, { folder, seed, parentId } = {}, done) {
   const available = Object.entries(AGENTS).filter(([, a]) => which(a.bin));
   if (!available.length) {
-    app.notify('설치된 에이전트(claude/codex)가 없습니다', 3);
+    app.notify(t('launch.noAgents'), 3);
     return done && done();
   }
 
   menu(
     app,
-    '에이전트 선택',
+    t('launch.selectAgent'),
     available.map(([k, a]) => ({ label: a.label, value: k })),
     (agentKey) => {
       if (!agentKey) return done && done();
@@ -67,13 +68,13 @@ function resolveDir(app, folder, cb) {
     if (!dir) return cb(null);
     dir = dir.trim();
     if (!existsSync(dir)) {
-      app.notify('디렉토리가 존재하지 않습니다', 3);
+      app.notify(t('launch.dirNotFound'), 3);
       return cb(null);
     }
     if (folder && dir !== known) addRule(dir, folder); // remember dir↔folder
     cb(dir);
   };
-  const typePrompt = () => textPrompt(app, `작업 디렉토리${folder ? ` (${folder})` : ''}`, known || process.cwd(), finish);
+  const typePrompt = () => textPrompt(app, t('launch.dirPrompt', folder), known || process.cwd(), finish);
 
   // Offer the directories this folder's sessions already used — no need to
   // retype long paths.
@@ -81,8 +82,8 @@ function resolveDir(app, folder, cb) {
   if (known && !dirs.includes(known) && existsSync(known)) dirs.unshift(known);
   if (dirs.length === 0) return typePrompt();
 
-  const choices = [...dirs.map((d) => ({ label: d, value: d })), { label: '+ 직접 입력…', value: '__type__' }];
-  menu(app, `작업 디렉토리 선택 (${folder})`, choices, (val) => {
+  const choices = [...dirs.map((d) => ({ label: d, value: d })), { label: t('launch.typeManually'), value: '__type__' }];
+  menu(app, t('launch.selectDir', folder), choices, (val) => {
     if (val === undefined) return cb(null);
     if (val === '__type__') return typePrompt();
     finish(val);
@@ -97,7 +98,7 @@ function resolveDir(app, folder, cb) {
 export function resumeSession(app, session, done) {
   const bin = session.source === 'codex' ? 'codex' : 'claude';
   if (!which(bin)) {
-    app.notify(`${bin}가 설치되어 있지 않습니다`, 3);
+    app.notify(t('launch.binNotInstalled', bin), 3);
     return done && done();
   }
   // The agent resolves --resume against the project dir it was launched from,
@@ -105,7 +106,7 @@ export function resumeSession(app, session, done) {
   const candidates = [session.projectDir, session.cwd].filter(Boolean);
   const cwd = candidates.find((d) => existsSync(d));
   if (!cwd) {
-    app.notify(`원래 작업 디렉토리가 없어 이어열 수 없습니다 (워크트리 삭제 등). 핸드오프(h)를 쓰세요.`, 4);
+    app.notify(t('launch.noWorkDir'), 4);
     return done && done();
   }
   const args = session.source === 'codex' ? ['resume', session.id] : ['--resume', session.id];
@@ -154,10 +155,10 @@ function run(app, { agentKey, dir, folder, seed, parentId }, done) {
       if (folder) for (const n of mine) if (n.organizedBy !== 'human') move(n.id, folder);
       if (parentId) for (const n of mine) linkContinuation(n.id, parentId);
       reindex();
-      const note = parentId ? '이어받은 세션' : '새 세션';
-      app.notify(mine.length ? `${note} ${mine.length}개 → ${folder || '_inbox'}` : '이 디렉토리의 새 세션 없음', 3);
+      const note = parentId ? t('launch.continuedSession') : t('launch.newSession');
+      app.notify(mine.length ? t('launch.captured', note, mine.length, folder || t('sessions.newBadge')) : t('launch.noNewSessions'), 3);
     } catch (err) {
-      app.notify(`캡처 실패: ${err.message}`, 3);
+      app.notify(t('launch.captureFailed', err.message), 3);
     }
     if (done) done();
   });

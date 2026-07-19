@@ -246,6 +246,18 @@ async function main() {
       await runDaemon();
       break;
     }
+    case 'lang': {
+      const { getLocale, setLocale } = await import('./tui/i18n.js');
+      const [locale] = args;
+      if (!locale) {
+        console.log(`current: ${getLocale()}`);
+        break;
+      }
+      if (locale !== 'en' && locale !== 'ko') return fail("Usage: mycelium lang <en|ko>");
+      setLocale(locale);
+      console.log(`language set to ${locale} (applies to the TUI on next launch)`);
+      break;
+    }
     default:
       console.log(`Mycelium — AI 협업 컨텍스트 라이프사이클
 
@@ -265,6 +277,7 @@ Find      search <q> [--tag t] [--folder f]
           list [--folder f] / tags     (_archive는 기본 숨김 — list --folder _archive)
 Run       (인자 없음) 또는 tui          인터랙티브 TUI (콕핏)
           daemon                        백그라운드 스캔 폴링 + 다이제스트
+          lang [en|ko]                  TUI 표시 언어 설정/확인 (기본 en)
 Clean     cleanup [tidy]                메타세션 제거 + 빈 폴더 정리 + 인덱스 재생성
           cleanup folders|archive|index 부분 정리
           cleanup reset --yes           전체 데이터(~/.mycelium) 초기화

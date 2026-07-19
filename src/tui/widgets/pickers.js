@@ -2,6 +2,7 @@ import pkg from 'neo-blessed';
 const blessed = pkg.default || pkg;
 import { C } from '../theme.js';
 import * as data from '../data.js';
+import { t } from '../i18n.js';
 
 /**
  * Folder picker: choose an existing folder or create a new path. Returns the
@@ -12,10 +13,10 @@ import * as data from '../data.js';
 export function pickFolder(app, cb) {
   const { list } = data.folders();
   const entries = [
-    { label: '{gray-fg}New (미분류){/}', value: null },
+    { label: t('picker.newLabel'), value: null },
     ...list.map((f) => ({ label: f, value: f })),
     { label: `{${C.faint}-fg}_archive{/}`, value: '_archive' },
-    { label: `{${C.spore}-fg}+ 새 폴더 입력…{/}`, value: '__create__' },
+    { label: `{${C.spore}-fg}${t('picker.createNew')}{/}`, value: '__create__' },
   ];
   const box = blessed.list({
     parent: app.screen,
@@ -23,7 +24,7 @@ export function pickFolder(app, cb) {
     left: 'center',
     width: '60%',
     height: '60%',
-    label: ' 폴더 선택 (Enter, Esc 취소) ',
+    label: t('picker.folderLabel'),
     items: entries.map((e) => e.label),
     tags: true,
     keys: true,
@@ -46,7 +47,7 @@ export function pickFolder(app, cb) {
     const val = entries[idx].value;
     close();
     if (val === '__create__') {
-      textPrompt(app, '새 폴더 경로 (예: 회사/플랫폼/인증)', '', (v) => cb(v ? v.trim() : undefined));
+      textPrompt(app, t('picker.newPathPrompt'), '', (v) => cb(v ? v.trim() : undefined));
     } else {
       cb(val);
     }
@@ -55,8 +56,8 @@ export function pickFolder(app, cb) {
 
 /** Tag editor: shows current tags, accepts `+tag -tag` syntax like the CLI. */
 export function editTags(app, current, cb) {
-  const shown = current.length ? current.map((t) => '#' + t).join(' ') : '(없음)';
-  textPrompt(app, `태그 편집 — 현재: ${shown}\n+추가 -삭제 (예: +긴급 -오분류)`, '', (v) => {
+  const shown = current.length ? current.map((tag) => '#' + tag).join(' ') : t('common.none');
+  textPrompt(app, t('picker.tagEditPrompt', shown), '', (v) => {
     if (v == null) return cb(null);
     const add = [];
     const remove = [];
