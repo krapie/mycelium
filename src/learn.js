@@ -56,7 +56,15 @@ export async function autoTagSession(sessionId, { existingTags } = {}) {
   if (n.turns.length === 0) return { ok: false, error: 'empty session' };
 
   const vocab = existingTags || listTags().map((t) => t.name);
-  const reply = await complete(buildPrompt(n, vocab));
+  let reply;
+  try {
+    reply = await complete(buildPrompt(n, vocab));
+  } catch (err) {
+    // complete() rejects on spawn failure, non-zero exit, or timeout — this
+    // was previously unguarded, so any of those became an unhandled promise
+    // rejection instead of a reported failure (no message, just "it failed").
+    return { ok: false, error: `LLM failed: ${err.message}` };
+  }
   const parsed = parseJsonReply(reply);
   if (!parsed) return { ok: false, error: 'unparseable LLM reply' };
 

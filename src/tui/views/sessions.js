@@ -523,18 +523,30 @@ export function sessionsView(opts = {}) {
         if (!ids.length) return;
         let done = 0;
         let failed = 0;
+        let lastError = null;
         for (const id of ids) {
           app.notify(t('sessions.summarizing', done + 1, ids.length), 90);
-          const res = await autoTagSession(id);
-          if (res.ok) done++;
-          else failed++;
+          try {
+            const res = await autoTagSession(id);
+            if (res.ok) done++;
+            else {
+              failed++;
+              lastError = res.error;
+            }
+          } catch (err) {
+            // Defense in depth: autoTagSession() now catches its own LLM
+            // call, but anything else unexpected (disk write, etc.) still
+            // shouldn't kill the rest of a multi-select batch.
+            failed++;
+            lastError = err.message;
+          }
           data.refresh();
           reloadList();
           if (currentRow() && currentRow().id === id) showDetail(id);
         }
         state.selected.clear();
         reloadList();
-        app.notify(t('sessions.summarizeDone', done, failed), 3);
+        app.notify(t('sessions.summarizeDone', done, failed, lastError), failed ? 6 : 3);
       };
       listBox.key('a', doAutoTag);
       detailBox.key('a', doAutoTag);
