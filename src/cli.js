@@ -136,7 +136,15 @@ async function main() {
       break;
     }
     case 'list': {
-      const raws = allRaw().sort((a, b) => (b.startedAt || '').localeCompare(a.startedAt || ''));
+      const { flags } = parseFlags(args);
+      let raws = allRaw().sort((a, b) => (b.startedAt || '').localeCompare(a.startedAt || ''));
+      // _archive is hidden from the TUI by default (see tui/data.js) — this
+      // is the "specific command" that still shows it: mycelium list --folder _archive
+      if (flags.folder) {
+        raws = raws.filter((n) => n.folder === flags.folder || (n.folder && n.folder.startsWith(flags.folder + '/')));
+      } else {
+        raws = raws.filter((n) => n.folder !== '_archive' && !(n.folder && n.folder.startsWith('_archive/')));
+      }
       for (const n of raws) {
         const folder = n.folder || '_inbox';
         const tags = n.extracted.tags.length ? ` #${n.extracted.tags.join(' #')}` : '';
@@ -254,7 +262,7 @@ Reuse     context <session>|--folder|--cwd   조상 경로 컨텍스트 출력
           inject [--dir D] [--folder F] AGENTS.md에 지식 주입
           handoff <session>            다른 에이전트용 인수인계 프롬프트
 Find      search <q> [--tag t] [--folder f]
-          list / tags
+          list [--folder f] / tags     (_archive는 기본 숨김 — list --folder _archive)
 Run       (인자 없음) 또는 tui          인터랙티브 TUI (콕핏)
           daemon                        백그라운드 스캔 폴링 + 다이제스트
 Clean     cleanup [tidy]                메타세션 제거 + 빈 폴더 정리 + 인덱스 재생성
