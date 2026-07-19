@@ -55,7 +55,6 @@ const en = {
   'detail.firstRequest': 'First request:',
   'detail.decisions': 'Decisions',
   'detail.todos': 'To-dos',
-  'detail.files': 'Files',
   'detail.continuationOf': (label) => `↩ continues: ${label}`,
   'detail.continuedTo': (label) => `→ continued by: ${label}`,
 
@@ -174,7 +173,6 @@ const ko = {
   'detail.firstRequest': '첫 요청:',
   'detail.decisions': '결정',
   'detail.todos': '할일',
-  'detail.files': '파일',
   'detail.continuationOf': (label) => `↩ 이어받음: ${label}`,
   'detail.continuedTo': (label) => `→ 이어감: ${label}`,
 

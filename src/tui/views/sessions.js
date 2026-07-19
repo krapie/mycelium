@@ -109,7 +109,6 @@ export function sessionsView(opts = {}) {
     }
     if (n.extracted.decisions?.length) lines.push(`{${C.faint}-fg}${t('detail.decisions')}{/}`, ...n.extracted.decisions.map((d) => `  · ${d}`), '');
     if (n.extracted.todos?.length) lines.push(`{${C.faint}-fg}${t('detail.todos')}{/}`, ...n.extracted.todos.map((td) => `  · ${td}`), '');
-    if (n.artifacts.filesChanged?.length) lines.push(`{${C.faint}-fg}${t('detail.files')}{/} ${n.artifacts.filesChanged.slice(0, 10).join(', ')}`);
     // Handoff continuation links (this is one flow across a model switch).
     if (n.continuationOf) {
       const p = data.detail(n.continuationOf);
