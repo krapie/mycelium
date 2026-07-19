@@ -48,7 +48,8 @@ const en = {
   'sessions.deleteConfirmTitle': (n) => `Delete ${n} session(s)? (Mycelium record only, original log kept)`,
   'sessions.deleted': (n) => `${n} session(s) deleted`,
   'sessions.summarizing': (i, n) => `Summarizing… (${i}/${n})`,
-  'sessions.summarizeDone': (done, failed) => `Summarized: ${done}${failed ? ` (failed ${failed})` : ''}`,
+  'sessions.summarizeDone': (done, failed, lastError) =>
+    `Summarized: ${done}${failed ? ` (failed ${failed}${lastError ? `: ${lastError}` : ''})` : ''}`,
   'sessions.copied': 'Session content copied to clipboard',
   'sessions.copyFailed': 'No clipboard tool found (pbcopy etc.)',
   'detail.noSummary': '(no summary yet — press a in the session to summarize/tag)',
@@ -166,7 +167,8 @@ const ko = {
   'sessions.deleteConfirmTitle': (n) => `${n}개 세션 삭제? (Mycelium에서만 삭제, 원본 로그는 유지)`,
   'sessions.deleted': (n) => `${n}개 세션 삭제됨`,
   'sessions.summarizing': (i, n) => `요약·태깅 생성 중… (${i}/${n})`,
-  'sessions.summarizeDone': (done, failed) => `요약·태깅 완료: ${done}개${failed ? ` (실패 ${failed})` : ''}`,
+  'sessions.summarizeDone': (done, failed, lastError) =>
+    `요약·태깅 완료: ${done}개${failed ? ` (실패 ${failed}개${lastError ? `: ${lastError}` : ''})` : ''}`,
   'sessions.copied': '세션 내용을 클립보드에 복사함',
   'sessions.copyFailed': '복사 도구(pbcopy 등)를 찾지 못함',
   'detail.noSummary': '(요약 없음 — 세션에서 a를 눌러 요약·태깅 생성)',
