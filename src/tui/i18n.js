@@ -54,9 +54,9 @@ const en = {
   'sessions.copyFailed': 'No clipboard tool found (pbcopy etc.)',
   'detail.noSummary': '(no summary yet — press a in the session to summarize/tag)',
   'detail.firstRequest': 'First request:',
-  'detail.tags': 'Tags',
+  'detail.summary': 'Summary',
   'detail.decisions': 'Decisions',
-  'detail.todos': 'To-dos',
+  'detail.todos': 'Action Items',
   'detail.continuationOf': (label) => `↩ continues: ${label}`,
   'detail.continuedTo': (label) => `→ continued by: ${label}`,
 
@@ -174,9 +174,9 @@ const ko = {
   'sessions.copyFailed': '복사 도구(pbcopy 등)를 찾지 못함',
   'detail.noSummary': '(요약 없음 — 세션에서 a를 눌러 요약·태깅 생성)',
   'detail.firstRequest': '첫 요청:',
-  'detail.tags': '태그',
+  'detail.summary': '요약',
   'detail.decisions': '결정',
-  'detail.todos': '할일',
+  'detail.todos': '실행 항목',
   'detail.continuationOf': (label) => `↩ 이어받음: ${label}`,
   'detail.continuedTo': (label) => `→ 이어감: ${label}`,
 

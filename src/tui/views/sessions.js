@@ -118,13 +118,13 @@ export function sessionsView(opts = {}) {
       `{${sourceColor(n.source)}-fg}${srcName}{/}  {${C.dim}-fg}${(n.startedAt || '').slice(0, 16).replace('T', ' ')} · ${n.folder || t('sessions.newBadge')}{/}`,
     );
     if (n.extracted.tags?.length) {
-      lines.push(`{${C.faint}-fg}${t('detail.tags')}{/} ` + n.extracted.tags.map((tg) => `{${C.tag}-fg}#${tg}{/}`).join(' '));
+      lines.push(n.extracted.tags.map((tg) => `{${C.tag}-fg}#${tg}{/}`).join(' '));
     }
     lines.push('');
     if (n.extracted.summary) {
       // Bullet points, not one prose paragraph — matches decisions/todos
       // below and is much easier to scan than a dense block of sentences.
-      lines.push(...splitSentences(n.extracted.summary).map((s) => `{${C.text}-fg}- ${s}{/}`), '');
+      lines.push(`{${C.faint}-fg}${t('detail.summary')}{/}`, ...splitSentences(n.extracted.summary).map((s) => `- ${s}`), '');
     } else {
       lines.push(`{${C.faint}-fg}${t('detail.noSummary')}{/}`, '');
       const firstUser = n.turns.find((turn) => turn.role === 'user')?.text;
