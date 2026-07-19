@@ -170,8 +170,21 @@ export function renameFolder(oldPath, newPath) {
   const to = folderDir(newPath);
   if (existsSync(from)) {
     mkdirSync(dirname(to), { recursive: true });
-    if (existsSync(to)) rmSync(to, { recursive: true, force: true });
-    renameSync(from, to);
+    // On case-insensitive filesystems (default on macOS/Windows), `from` and
+    // `to` can resolve to the very same directory when the rename only
+    // changes case (vpc -> VPC). existsSync(to) then reports true even though
+    // nothing else is really there, so the old code deleted the folder being
+    // renamed and then failed to rename it (ENOENT). Route case-only renames
+    // through a throwaway name so the destructive-overwrite branch below only
+    // ever runs against a genuinely different, pre-existing folder.
+    if (from.toLowerCase() === to.toLowerCase() && from !== to) {
+      const tmp = `${from}.__mycelium_rename_${Date.now()}`;
+      renameSync(from, tmp);
+      renameSync(tmp, to);
+    } else {
+      if (existsSync(to)) rmSync(to, { recursive: true, force: true });
+      renameSync(from, to);
+    }
   } else {
     mkdir(newPath);
   }
