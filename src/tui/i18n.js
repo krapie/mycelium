@@ -63,7 +63,7 @@ const en = {
   'status.helpFallback': '? all shortcuts   q quit',
   'status.folders': '{bold}Folders{/}  ·  Enter open  ·  ? all shortcuts  ·  q quit',
   'status.sessions': '{bold}Sessions{/}  ·  Enter detail  ·  Esc to folders  ·  ? all shortcuts  ·  q quit',
-  'status.detail': '{bold}Detail{/}  ·  ↑↓ scroll  ·  Esc to sessions  ·  ? all shortcuts  ·  q quit',
+  'status.detail': '{bold}Detail{/}  ·  ↑↓ scroll  ·  Enter resume  ·  Esc to sessions  ·  ? all shortcuts  ·  q quit',
 
   // sessions.js — scan
   'scan.inProgress': 'Scanning…',
@@ -181,7 +181,7 @@ const ko = {
   'status.helpFallback': '? 전체 단축키   q 종료',
   'status.folders': '{bold}폴더{/}  ·  Enter 열기  ·  ? 전체 단축키  ·  q 종료',
   'status.sessions': '{bold}세션{/}  ·  Enter 상세  ·  Esc 폴더로  ·  ? 전체 단축키  ·  q 종료',
-  'status.detail': '{bold}상세{/}  ·  ↑↓ 스크롤  ·  Esc 세션으로  ·  ? 전체 단축키  ·  q 종료',
+  'status.detail': '{bold}상세{/}  ·  ↑↓ 스크롤  ·  Enter 이어열기  ·  Esc 세션으로  ·  ? 전체 단축키  ·  q 종료',
 
   'scan.inProgress': '스캔 중…',
   'scan.failed': (msg) => `스캔 실패: ${msg}`,
@@ -286,8 +286,9 @@ en['help.text'] = (fg, spore) => `{bold}Global{/}
 
 {bold}Detail panel{/}
   {${fg}-fg}↑↓{/}      Scroll
+  {${fg}-fg}Enter{/}   Resume (r in the sessions panel)
   {${fg}-fg}Esc{/}     Back to sessions
-  {${fg}-fg}a / e / y / r / x{/}  Same as sessions panel
+  {${fg}-fg}a / e / y / x{/}  Same as sessions panel
 
 Sessions linked by handoff show {${spore}-fg}↩{/}/{${spore}-fg}→{/} markers in the list and continuation links in detail.`;
 
@@ -325,8 +326,9 @@ ko['help.text'] = (fg, spore) => `{bold}전역{/}
 
 {bold}상세 패널{/}
   {${fg}-fg}↑↓{/}      스크롤
+  {${fg}-fg}Enter{/}   이어열기 (세션 패널의 r)
   {${fg}-fg}Esc{/}     세션 패널로
-  {${fg}-fg}a / e / y / r / x{/}  세션 패널과 동일
+  {${fg}-fg}a / e / y / x{/}  세션 패널과 동일
 
 핸드오프로 이어진 세션은 목록에 {${spore}-fg}↩{/}/{${spore}-fg}→{/} 마커, 상세에 이어받음/이어감 링크로 표시됩니다.`;
 

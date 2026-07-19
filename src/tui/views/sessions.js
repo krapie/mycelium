@@ -74,7 +74,10 @@ export function sessionsView(opts = {}) {
       const link = r.continuationOf ? `{${C.spore}-fg}↩{/}` : (r.continuedTo && r.continuedTo.length) ? `{${C.spore}-fg}→{/}` : ' ';
       const isNew = !r.folder ? `{${C.spore}-fg}[${t('sessions.newBadge')}]{/}` : '';
       const text = (r.title || r.summary || r.preview || t('common.noContent')).replace(/\s+/g, ' ').slice(0, 58);
-      return `${mark}${link}${src}  ${text} ${tags} ${isNew}`;
+      // A space after link is required, not cosmetic: ↩/→ are ambiguous-width
+      // glyphs that render wider than one column in most terminal fonts, so
+      // packing them directly against the agent name visually overlapped it.
+      return `${mark}${link} ${src}  ${text} ${tags} ${isNew}`;
     });
     listBox.setItems(items.length ? items : [`{gray-fg}${t('sessions.empty')}{/}`]);
     updateHeader();
@@ -491,7 +494,9 @@ export function sessionsView(opts = {}) {
         });
       };
       listBox.key('r', doResume);
-      detailBox.key('r', doResume);
+      // Detail panel uses Enter instead of r — it's the leaf level, so Enter
+      // (the drill-down/act key everywhere else in this view) is free here.
+      detailBox.key('enter', doResume);
 
       // Reuse: hand the current session off to another agent (seeded NEW session).
       listBox.key('h', () => {
