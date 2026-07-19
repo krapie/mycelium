@@ -11,7 +11,7 @@ import { buildHandoff } from '../../handoff.js';
 import { autoTagSession } from '../../learn.js';
 import { buildKnowledgeText, writeKnowledgeText } from '../../insight.js';
 import { assembleContext, injectAgentsMd } from '../../reuse.js';
-import { textView, digestReader, confirmText } from '../widgets/viewers.js';
+import { textView, digestReader, confirmText, helpModal } from '../widgets/viewers.js';
 import { textPrompt } from '../widgets/pickers.js';
 import { copyToClipboard } from '../clipboard.js';
 import { editSessionContent } from '../widgets/editor.js';
@@ -69,12 +69,11 @@ export function sessionsView(opts = {}) {
       // Readable colored agent label instead of a bare color dot.
       const name = r.source === 'codex' ? 'codex ' : 'claude';
       const src = `{${sourceColor(r.source)}-fg}${name}{/}`;
-      const human = r.organizedBy === 'human' ? `{${C.spore}-fg}[사람]{/}` : '';
       const mark = state.selected.has(r.id) ? `{${C.fox}-fg}✓{/}` : ' ';
       const tags = (r.tags || []).map((t) => `{${C.fox}-fg}#${t}{/}`).join(' ');
       const link = r.continuationOf ? `{${C.spore}-fg}↩{/}` : (r.continuedTo && r.continuedTo.length) ? `{${C.spore}-fg}→{/}` : ' ';
       const text = (r.title || r.summary || r.preview || '(내용 없음)').replace(/\s+/g, ' ').slice(0, 58);
-      return `${mark}${link}${src}  ${text} ${tags} ${human}`;
+      return `${mark}${link}${src}  ${text} ${tags}`;
     });
     listBox.setItems(items.length ? items : ['{gray-fg}세션 없음{/}']);
     updateHeader();
@@ -92,10 +91,7 @@ export function sessionsView(opts = {}) {
     const lines = [];
     const srcName = n.source === 'codex' ? 'codex' : 'claude';
     // Title as the headline, then metadata, then the description (summary).
-    if (n.extracted.title) {
-      const human = n.extracted.editedByHuman ? ` {${C.spore}-fg}[편집됨]{/}` : '';
-      lines.push(`{${C.fox}-fg}{bold}${n.extracted.title}{/}${human}`);
-    }
+    if (n.extracted.title) lines.push(`{${C.fox}-fg}{bold}${n.extracted.title}{/}`);
     lines.push(`{${sourceColor(n.source)}-fg}${srcName}{/}  {${C.dim}-fg}${(n.startedAt || '').slice(0, 16).replace('T', ' ')} · ${n.folder || '_inbox'}{/}`);
     lines.push('');
     if (n.extracted.summary) {
@@ -127,7 +123,7 @@ export function sessionsView(opts = {}) {
   }
 
   return {
-    help: '</>검색 <s>스캔+정리 <n>새세션 <r>이어열기 <h>핸드오프 <m>이동 <t>태그 <a>요약 <e>편집 <x>삭제 <d>다이제스트 <c>컨텍스트 <i>주입 <w>지식 <q>종료',
+    help: '? 전체 단축키   q 종료',
     async mount(a) {
       app = a;
       // Three columns side by side: Folders | Sessions | Detail. The focused
@@ -204,10 +200,12 @@ export function sessionsView(opts = {}) {
       const setLevel = (lvl) => {
         state.level = lvl;
         applyLayout(lvl);
+        // Full keymap lives in the ? modal now, not crammed into this line —
+        // just enough breadcrumb to know where you are and how to get help.
         const hints = {
-          folders: '{bold}폴더{/}: ↑↓  Enter 열기  <a>새폴더  <e>이름변경  <m>이동/중첩  <x>삭제  <w>지식  <s>스캔+정리  </>검색  <q>종료',
-          sessions: '{bold}세션{/}: ↑↓  Enter 상세  Esc 폴더로  <a>요약  <e>편집  <y>복사  <r>이어열기  <h>핸드오프  <m>이동  <t>태그  <x>삭제  <w>지식  <d>다이제스트  <s>스캔+정리  <Space>선택',
-          detail: '{bold}상세{/}: ↑↓ 스크롤  Esc 세션으로  <a>요약  <e>편집  <y>복사  <r>이어열기  <x>삭제  <s>스캔+정리',
+          folders: '{bold}폴더{/}  ·  Enter 열기  ·  ? 전체 단축키  ·  q 종료',
+          sessions: '{bold}세션{/}  ·  Enter 상세  ·  Esc 폴더로  ·  ? 전체 단축키  ·  q 종료',
+          detail: '{bold}상세{/}  ·  ↑↓ 스크롤  ·  Esc 세션으로  ·  ? 전체 단축키  ·  q 종료',
         };
         app.setStatus(' ' + (hints[lvl] || this.help));
       };
@@ -379,6 +377,9 @@ export function sessionsView(opts = {}) {
           app.render();
         });
       });
+
+      // ?: full keymap reference — status bar only shows a short breadcrumb now.
+      screenKey(app, ['?'], () => helpModal(app));
 
       // Which sessions an action targets: the multi-selection if any, else the row under the cursor.
       const targets = () => (state.selected.size ? [...state.selected] : currentRow() ? [currentRow().id] : []);

@@ -43,11 +43,12 @@ ${sessionExcerpt(neutral)}
  * surveyed tool does (they pattern-match on dir/name only). Existing tag
  * vocabulary is fed in to keep the vocabulary from diverging.
  *
- * Sticky rules, two independent ones:
- * - organizedBy:'human' → never overwrite tags (filing, set by move()/tag()).
- * - extracted.editedByHuman → never overwrite title/summary (content, set by
- *   organize.setContent()). decisions/todos still refresh either way — they're
- *   derived facts, not something this feature lets a person hand-edit.
+ * Only the title is sticky, and only once it's non-empty: it's the primary
+ * way a person finds a session again (in the list, in search results), so a
+ * re-run of `a` shouldn't quietly rename it out from under them — whether
+ * that title came from an earlier `a` or a hand-edit via `e` makes no
+ * difference. Everything else (tags/summary/decisions/todos) always refreshes
+ * to the latest LLM read, regardless of who touched it before.
  */
 export async function autoTagSession(sessionId, { existingTags } = {}) {
   const n = loadRaw(sessionId);
@@ -59,13 +60,13 @@ export async function autoTagSession(sessionId, { existingTags } = {}) {
   const parsed = parseJsonReply(reply);
   if (!parsed) return { ok: false, error: 'unparseable LLM reply' };
 
-  if (n.organizedBy !== 'human' && Array.isArray(parsed.tags)) {
+  if (!n.extracted.title && typeof parsed.title === 'string') {
+    n.extracted.title = parsed.title.trim();
+  }
+  if (Array.isArray(parsed.tags)) {
     n.extracted.tags = parsed.tags.filter((t) => typeof t === 'string' && t.trim()).slice(0, 5);
   }
-  if (!n.extracted.editedByHuman) {
-    if (typeof parsed.title === 'string') n.extracted.title = parsed.title.trim();
-    if (typeof parsed.summary === 'string') n.extracted.summary = parsed.summary;
-  }
+  if (typeof parsed.summary === 'string') n.extracted.summary = parsed.summary;
   if (Array.isArray(parsed.decisions)) n.extracted.decisions = parsed.decisions;
   if (Array.isArray(parsed.todos)) n.extracted.todos = parsed.todos;
   saveRaw(n);
