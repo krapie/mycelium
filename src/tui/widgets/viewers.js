@@ -167,6 +167,7 @@ const HELP_TEXT = `{bold}전역{/}
   {${C.fox}-fg}c{/}       상속 컨텍스트 보기
   {${C.fox}-fg}i{/}       AGENTS.md에 주입 — 미리보기 후 확인
   {${C.fox}-fg}Space{/}   다중 선택
+  {${C.fox}-fg}*{/}       현재 목록 전체 선택 (다시 누르면 전체 해제)
 
 {bold}상세 패널{/}
   {${C.fox}-fg}↑↓{/}      스크롤

@@ -5,12 +5,18 @@ import * as data from '../data.js';
 
 /**
  * Folder picker: choose an existing folder or create a new path. Returns the
- * chosen folder path (or null for unfiled/New) via cb.
+ * chosen folder path (or null for unfiled/New) via cb. _archive is hidden
+ * from the main folder panel (see tui/data.js) but still a valid, common move
+ * *target* — listed explicitly here rather than making you type it by hand.
  */
 export function pickFolder(app, cb) {
   const { list } = data.folders();
-  const CREATE = '{+}-fg 새 폴더 입력…';
-  const items = ['{gray-fg}New (미분류){/}', ...list, `{${C.spore}-fg}+ 새 폴더 입력…{/}`];
+  const entries = [
+    { label: '{gray-fg}New (미분류){/}', value: null },
+    ...list.map((f) => ({ label: f, value: f })),
+    { label: `{${C.faint}-fg}_archive{/}`, value: '_archive' },
+    { label: `{${C.spore}-fg}+ 새 폴더 입력…{/}`, value: '__create__' },
+  ];
   const box = blessed.list({
     parent: app.screen,
     top: 'center',
@@ -18,7 +24,7 @@ export function pickFolder(app, cb) {
     width: '60%',
     height: '60%',
     label: ' 폴더 선택 (Enter, Esc 취소) ',
-    items,
+    items: entries.map((e) => e.label),
     tags: true,
     keys: true,
     mouse: true,
@@ -37,16 +43,12 @@ export function pickFolder(app, cb) {
     cb(undefined);
   });
   box.on('select', (_, idx) => {
-    if (idx === 0) {
-      close();
-      cb(null);
-    } else if (idx === items.length - 1) {
-      close();
+    const val = entries[idx].value;
+    close();
+    if (val === '__create__') {
       textPrompt(app, '새 폴더 경로 (예: 회사/플랫폼/인증)', '', (v) => cb(v ? v.trim() : undefined));
     } else {
-      const folder = list[idx - 1];
-      close();
-      cb(folder);
+      cb(val);
     }
   });
 }
