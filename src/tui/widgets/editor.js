@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { foreground } from '../foreground.js';
 import { loadRaw } from '../../scanner.js';
 import { setContent } from '../../organize.js';
+import { t } from '../i18n.js';
 
 // blessed has no reliable multi-line text-input widget in this codebase (see
 // the prompt()/textPrompt() single-line helpers), and building one would
@@ -13,15 +14,16 @@ import { setContent } from '../../organize.js';
 // multi-line editing for free, reusing the suspend/resume dance already
 // proven for launching agents.
 function buildEditText(n) {
-  return `제목: ${n.extracted.title || ''}\n---\n${n.extracted.summary || ''}\n`;
+  return `${t('editor.titleMarker')} ${n.extracted.title || ''}\n---\n${n.extracted.summary || ''}\n`;
 }
 
 function parseEditText(text) {
+  const marker = t('editor.titleMarker');
   const lines = text.split('\n');
   let title = '';
   let sepIdx = -1;
   for (let i = 0; i < lines.length; i++) {
-    if (sepIdx === -1 && lines[i].startsWith('제목:')) title = lines[i].slice(lines[i].indexOf(':') + 1).trim();
+    if (sepIdx === -1 && lines[i].startsWith(marker)) title = lines[i].slice(lines[i].indexOf(':') + 1).trim();
     if (lines[i].trim() === '---') {
       sepIdx = i;
       break;
@@ -39,7 +41,7 @@ function parseEditText(text) {
 export function editSessionContent(app, sessionId, onDone) {
   const n = loadRaw(sessionId);
   if (!n) {
-    app.notify('세션을 찾을 수 없습니다', 3);
+    app.notify(t('editor.notFound'), 3);
     return onDone && onDone();
   }
 
@@ -57,7 +59,7 @@ export function editSessionContent(app, sessionId, onDone) {
     writeFileSync(file, buildEditText(n), 'utf8');
   } catch (err) {
     cleanup();
-    app.notify(`편집 준비 실패: ${err.message}`, 3);
+    app.notify(t('editor.prepFailed', err.message), 3);
     return onDone && onDone();
   }
 
@@ -70,13 +72,13 @@ export function editSessionContent(app, sessionId, onDone) {
       parsed = parseEditText(readFileSync(file, 'utf8'));
     } catch (err) {
       cleanup();
-      app.notify(`편집 결과 읽기 실패: ${err.message}`, 3);
+      app.notify(t('editor.readFailed', err.message), 3);
       return onDone && onDone();
     }
     cleanup();
 
     const res = setContent(sessionId, parsed);
-    app.notify(res.ok ? '제목/요약 저장됨 (Mycelium 전용, 원본 로그는 변경 없음)' : `저장 실패: ${res.error}`, res.ok ? 2 : 3);
+    app.notify(res.ok ? t('editor.saved') : t('editor.saveFailed', res.error), res.ok ? 2 : 3);
     if (onDone) onDone();
   });
 }
