@@ -77,9 +77,11 @@ export function sessionsView(opts = {}) {
   function reloadList() {
     rows = data.sessions({ folder: state.folder, query: state.query, tags: state.tags });
     const items = rows.map((r) => {
-      // Readable colored agent label instead of a bare color dot.
-      const name = r.source === 'codex' ? 'codex ' : 'claude';
-      const src = `{${sourceColor(r.source)}-fg}${name}{/}`;
+      // Agent name formatted as a hashtag, same visual language as tags —
+      // and now trails the title instead of leading it, so the title (the
+      // thing you're actually scanning for) reads first on the line.
+      const name = r.source === 'codex' ? 'codex' : 'claude';
+      const src = `{${sourceColor(r.source)}-fg}#${name}{/}`;
       // Same "source #idPrefix" shape as the continuation links in detail
       // (↩ 이어받음/→ 이어감), so you can match a row here to that label there.
       const idPrefix = `{${C.dim}-fg}#${r.id.slice(0, 8)}{/}`;
@@ -89,9 +91,8 @@ export function sessionsView(opts = {}) {
       const text = (r.title || r.summary || r.preview || t('common.noContent')).replace(/\s+/g, ' ').slice(0, 58);
       // A space after link is required, not cosmetic: ↩/→ are ambiguous-width
       // glyphs that render wider than one column in most terminal fonts, so
-      // packing them directly against the agent name visually overlapped it.
-      // Tags moved to the detail pane — this row was getting crowded.
-      return `${mark}${link} ${src} ${idPrefix} ${text} ${isNew}`;
+      // packing them directly against the next character visually overlapped it.
+      return `${mark}${link} ${text}  ${src} ${idPrefix} ${isNew}`;
     });
     listBox.setItems(items.length ? items : [`{gray-fg}${t('sessions.empty')}{/}`]);
     updateHeader();

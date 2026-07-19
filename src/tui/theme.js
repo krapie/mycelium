@@ -1,8 +1,9 @@
 // Foxfire palette — mycelium glows faint bioluminescent teal in dark humus.
 // blessed uses named/hex colors in style objects.
 export const C = {
-  fox: '#7fe0c4', // bioluminescent accent
+  fox: '#7fe0c4', // bioluminescent accent — reserved for titles/focus, not agent labels
   spore: '#d4a24e', // secondary (codex / warnings)
+  claude: '#8ab4d8', // claude-code agent label — was fox, same as the title color it sits next to
   text: '#e9e4d6',
   dim: '#8b8574',
   faint: '#5e594c',
@@ -11,9 +12,11 @@ export const C = {
   border: '#5a5442', // visible against the dark humus bg (was near-invisible #302e24)
 };
 
-// Source → accent color for the session dot / label.
+// Source → accent color for the session dot / label. Kept distinct from
+// C.fox (used for session titles) so the agent label never visually merges
+// with the title it's printed next to.
 export function sourceColor(source) {
-  return source === 'codex' ? C.spore : C.fox;
+  return source === 'codex' ? C.spore : C.claude;
 }
 
 export const box = {
