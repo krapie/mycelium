@@ -13,15 +13,25 @@ const PROVIDER = process.env.MYCELIUM_LLM || 'claude';
 const CLAUDE_MODEL = process.env.MYCELIUM_CLAUDE_MODEL || 'haiku';
 const CODEX_MODEL = process.env.MYCELIUM_CODEX_MODEL || 'gpt-5.5';
 
+// Every complete() call is Mycelium's own internal LLM call (tagging/digest/
+// knowledge), never a user request. The agent CLI stores the call itself as
+// a new session file under the launch cwd, which scanner.js must recognize
+// and drop — otherwise it comes back as a second, bogus "session" next to
+// whatever the human was actually doing. Detecting that from prompt wording
+// broke the moment a prompt got rewritten (it already did once); a fixed
+// marker on every call is the part that can't drift.
+export const META_MARKER = '​[mycelium:meta-call]​';
+
 export function complete(prompt, { timeoutMs = 240000 } = {}) {
+  const fullPrompt = `${META_MARKER}\n${prompt}`;
   return new Promise((resolve, reject) => {
     let cmd, args;
     if (PROVIDER === 'codex') {
       cmd = 'codex';
-      args = ['exec', prompt, '--sandbox', 'read-only', '--skip-git-repo-check', '-c', 'approval_policy=never', '-m', CODEX_MODEL];
+      args = ['exec', fullPrompt, '--sandbox', 'read-only', '--skip-git-repo-check', '-c', 'approval_policy=never', '-m', CODEX_MODEL];
     } else {
       cmd = 'claude';
-      args = ['-p', prompt, '--model', CLAUDE_MODEL, '--output-format', 'json'];
+      args = ['-p', fullPrompt, '--model', CLAUDE_MODEL, '--output-format', 'json'];
     }
 
     const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] });
