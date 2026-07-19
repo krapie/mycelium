@@ -17,6 +17,17 @@ import { copyToClipboard } from '../clipboard.js';
 import { editSessionContent } from '../widgets/editor.js';
 import { t } from '../i18n.js';
 
+// Break a summary paragraph into sentence-sized bullet points for the detail
+// pane. summary is stored as prose (learn.js asks the LLM for 2-3 sentences),
+// but a dense paragraph is harder to scan than the bullet list decisions/todos
+// already use — this is a display-only split, the stored string is untouched.
+function splitSentences(text) {
+  return text
+    .split(/(?<=[.!?])\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 // Plain-text rendering of a session for the clipboard (title, summary, and the
 // full transcript — everything you'd want to paste elsewhere).
 function sessionToText(n) {
@@ -73,14 +84,14 @@ export function sessionsView(opts = {}) {
       // (↩ 이어받음/→ 이어감), so you can match a row here to that label there.
       const idPrefix = `{${C.dim}-fg}#${r.id.slice(0, 8)}{/}`;
       const mark = state.selected.has(r.id) ? `{${C.fox}-fg}✓{/}` : ' ';
-      const tags = (r.tags || []).map((tg) => `{${C.fox}-fg}#${tg}{/}`).join(' ');
       const link = r.continuationOf ? `{${C.spore}-fg}↩{/}` : (r.continuedTo && r.continuedTo.length) ? `{${C.spore}-fg}→{/}` : ' ';
       const isNew = !r.folder ? `{${C.spore}-fg}[${t('sessions.newBadge')}]{/}` : '';
       const text = (r.title || r.summary || r.preview || t('common.noContent')).replace(/\s+/g, ' ').slice(0, 58);
       // A space after link is required, not cosmetic: ↩/→ are ambiguous-width
       // glyphs that render wider than one column in most terminal fonts, so
       // packing them directly against the agent name visually overlapped it.
-      return `${mark}${link} ${src} ${idPrefix}  ${text} ${tags} ${isNew}`;
+      // Tags moved to the detail pane — this row was getting crowded.
+      return `${mark}${link} ${src} ${idPrefix} ${text} ${isNew}`;
     });
     listBox.setItems(items.length ? items : [`{gray-fg}${t('sessions.empty')}{/}`]);
     updateHeader();
@@ -102,9 +113,14 @@ export function sessionsView(opts = {}) {
     lines.push(
       `{${sourceColor(n.source)}-fg}${srcName}{/}  {${C.dim}-fg}${(n.startedAt || '').slice(0, 16).replace('T', ' ')} · ${n.folder || t('sessions.newBadge')}{/}`,
     );
+    if (n.extracted.tags?.length) {
+      lines.push(`{${C.faint}-fg}${t('detail.tags')}{/} ` + n.extracted.tags.map((tg) => `{${C.fox}-fg}#${tg}{/}`).join(' '));
+    }
     lines.push('');
     if (n.extracted.summary) {
-      lines.push(`{${C.text}-fg}${n.extracted.summary}{/}`, '');
+      // Bullet points, not one prose paragraph — matches decisions/todos
+      // below and is much easier to scan than a dense block of sentences.
+      lines.push(...splitSentences(n.extracted.summary).map((s) => `{${C.text}-fg}  · ${s}{/}`), '');
     } else {
       lines.push(`{${C.faint}-fg}${t('detail.noSummary')}{/}`, '');
       const firstUser = n.turns.find((turn) => turn.role === 'user')?.text;
@@ -184,16 +200,22 @@ export function sessionsView(opts = {}) {
       reloadFolders();
       reloadList();
 
-      // Folder names are short, so the folder column is a FIXED-width sidebar
-      // (not a %, which would keep growing on wide terminals). The remaining
-      // width is split between sessions and detail — detail gets more (it holds
-      // the transcript), and whichever of the two is focused gets a bit more.
+      // Each column's fraction is of the FULL width, not "whatever's left
+      // after folders" — the old scheme capped folders at a fixed ~18-30
+      // columns no matter what, so it never actually grew when focused, and
+      // folder names (especially Korean, double-width per character) got cut
+      // off. Now the focused column gets meaningfully more room and the
+      // other two shrink to a still-readable minimum.
+      const LAYOUT_FRACS = {
+        folders: { folders: 0.3, sessions: 0.32 }, // detail gets the rest (~38%)
+        sessions: { folders: 0.16, sessions: 0.48 }, // detail gets the rest (~36%)
+        detail: { folders: 0.14, sessions: 0.26 }, // detail gets the rest (~60%)
+      };
       const applyLayout = (lvl) => {
         const W = app.screen.width || 120;
-        const foldersW = Math.min(30, Math.max(18, Math.round(W * 0.14)));
-        const rest = W - foldersW;
-        const sessionFrac = lvl === 'sessions' ? 0.5 : lvl === 'detail' ? 0.34 : 0.42;
-        const sessionsW = Math.max(22, Math.round(rest * sessionFrac));
+        const fracs = LAYOUT_FRACS[lvl] || LAYOUT_FRACS.folders;
+        const foldersW = Math.max(18, Math.round(W * fracs.folders));
+        const sessionsW = Math.max(22, Math.round(W * fracs.sessions));
         foldersBox.left = 0;
         foldersBox.width = foldersW;
         listBox.left = foldersW;
