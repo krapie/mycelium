@@ -1,23 +1,10 @@
 import { join } from 'node:path';
 import { basename } from 'node:path';
-import { mkdirSync, existsSync, readFileSync, writeFileSync, renameSync, rmSync, readdirSync } from 'node:fs';
+import { mkdirSync, existsSync, renameSync, rmSync, readdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { ensureDirs, TREE_DIR, CONFIG_PATH } from './paths.js';
-import { loadRaw, saveRaw, allRaw } from './scanner.js';
-
-function loadConfig() {
-  if (!existsSync(CONFIG_PATH)) return { cwdRules: [] };
-  try {
-    return JSON.parse(readFileSync(CONFIG_PATH, 'utf8'));
-  } catch {
-    return { cwdRules: [] };
-  }
-}
-
-function saveConfig(cfg) {
-  ensureDirs();
-  writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
-}
+import { ensureDirs, TREE_DIR } from './paths.js';
+import { loadRaw, saveRaw, allRaw, deleteRaw } from './scanner.js';
+import { loadConfig, saveConfig } from './config.js';
 
 /** Real directory for a tree path like "회사/플랫폼/인증". */
 function folderDir(folderPath) {
@@ -120,6 +107,26 @@ export function setContent(sessionId, { title, summary } = {}) {
   n.extracted.editedByHuman = true;
   saveRaw(n);
   return { ok: true, session: n };
+}
+
+/**
+ * Delete a session from Mycelium ONLY — removes it from raw/ (and therefore
+ * the derived sqlite index on next reindex), but never touches the original
+ * ~/.claude or ~/.codex session log, same boundary as setContent() above.
+ * That source file staying on disk means a plain rescan would just re-import
+ * the "deleted" session right back, so its id also goes on a persistent
+ * exclude list in config.json that scan() checks before re-capturing.
+ */
+export function deleteSession(sessionId) {
+  const n = loadRaw(sessionId);
+  if (!n) return { ok: false, error: `no session ${sessionId}` };
+  deleteRaw(sessionId);
+  const cfg = loadConfig();
+  const excluded = new Set(cfg.excludedSessionIds || []);
+  excluded.add(sessionId);
+  cfg.excludedSessionIds = [...excluded];
+  saveConfig(cfg);
+  return { ok: true, id: sessionId };
 }
 
 /**

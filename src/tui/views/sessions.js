@@ -2,7 +2,7 @@ import pkg from 'neo-blessed';
 const blessed = pkg.default || pkg;
 import { C, sourceColor } from '../theme.js';
 import * as data from '../data.js';
-import { move as organizeMove, tag as organizeTag, mkdir, renameFolder, deleteFolder } from '../../organize.js';
+import { move as organizeMove, tag as organizeTag, mkdir, renameFolder, deleteFolder, deleteSession } from '../../organize.js';
 import { pickFolder, editTags, menu } from '../widgets/pickers.js';
 import { basename } from 'node:path';
 import { launchAgent, resumeSession } from '../launch.js';
@@ -126,7 +126,7 @@ export function sessionsView(opts = {}) {
   }
 
   return {
-    help: '</>검색 <n>새세션 <r>이어열기 <h>핸드오프 <m>이동 <t>태그 <a>요약 <e>편집 <d>다이제스트 <c>컨텍스트 <i>주입 <w>지식 <q>종료',
+    help: '</>검색 <n>새세션 <r>이어열기 <h>핸드오프 <m>이동 <t>태그 <a>요약 <e>편집 <x>삭제 <d>다이제스트 <c>컨텍스트 <i>주입 <w>지식 <q>종료',
     async mount(a) {
       app = a;
       // Three columns side by side: Folders | Sessions | Detail. The focused
@@ -205,8 +205,8 @@ export function sessionsView(opts = {}) {
         applyLayout(lvl);
         const hints = {
           folders: '{bold}폴더{/}: ↑↓  Enter 열기  <a>새폴더  <e>이름변경  <m>이동/중첩  <x>삭제  <w>지식  </>검색  <q>종료',
-          sessions: '{bold}세션{/}: ↑↓  Enter 상세  Esc 폴더로  <a>요약  <e>편집  <y>복사  <r>이어열기  <h>핸드오프  <m>이동  <t>태그  <w>지식  <d>다이제스트  <Space>선택',
-          detail: '{bold}상세{/}: ↑↓ 스크롤  Esc 세션으로  <a>요약  <e>편집  <y>복사  <r>이어열기',
+          sessions: '{bold}세션{/}: ↑↓  Enter 상세  Esc 폴더로  <a>요약  <e>편집  <y>복사  <r>이어열기  <h>핸드오프  <m>이동  <t>태그  <x>삭제  <w>지식  <d>다이제스트  <Space>선택',
+          detail: '{bold}상세{/}: ↑↓ 스크롤  Esc 세션으로  <a>요약  <e>편집  <y>복사  <r>이어열기  <x>삭제',
         };
         app.setStatus(' ' + (hints[lvl] || this.help));
       };
@@ -390,6 +390,32 @@ export function sessionsView(opts = {}) {
           listBox.focus();
         });
       });
+
+      // Organize: delete (Mycelium's own record only — original agent log
+      // untouched; the id is excluded so a rescan won't re-import it). Works
+      // on the multi-selection if any, else the current row.
+      const doDelete = () => {
+        const ids = targets();
+        if (!ids.length) return;
+        menu(
+          app,
+          `${ids.length}개 세션 삭제? (Mycelium에서만 삭제, 원본 로그는 유지)`,
+          [
+            { label: '삭제', value: 'yes' },
+            { label: '취소', value: 'no' },
+          ],
+          (ans) => {
+            if (ans !== 'yes') return listBox.focus();
+            for (const id of ids) deleteSession(id);
+            app.notify(`${ids.length}개 세션 삭제됨`);
+            afterMutate();
+            listBox.focus();
+            setLevel('sessions');
+          },
+        );
+      };
+      listBox.key('x', doDelete);
+      detailBox.key('x', doDelete);
 
       // Capture: launch a new agent session in the current folder's context.
       listBox.key('n', () => {
