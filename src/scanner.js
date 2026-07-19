@@ -4,6 +4,7 @@ import { ensureDirs, RAW_DIR } from './paths.js';
 import * as claudeCode from './adapters/claude-code.js';
 import * as codex from './adapters/codex.js';
 import { META_MARKER } from './llm.js';
+import { loadConfig } from './config.js';
 
 const ADAPTERS = [claudeCode, codex];
 
@@ -49,6 +50,12 @@ export function saveRaw(neutral) {
   writeFileSync(rawPath(neutral.id), JSON.stringify(neutral, null, 2));
 }
 
+/** Remove a session from Mycelium's own store. The source agent log is untouched. */
+export function deleteRaw(id) {
+  const p = rawPath(id);
+  if (existsSync(p)) rmSync(p);
+}
+
 /**
  * Scan every adapter's session store, parse new/changed sessions into the
  * neutral schema, and write them to raw/. Preserves any `extracted`/`folder`/
@@ -78,6 +85,7 @@ export function purgeMeta() {
 export function scan({ onImport } = {}) {
   ensureDirs();
   purgeMeta();
+  const excluded = new Set(loadConfig().excludedSessionIds || []);
   let scanned = 0;
   let imported = 0;
   let skipped = 0;
@@ -94,6 +102,13 @@ export function scan({ onImport } = {}) {
 
     for (const ref of refs) {
       scanned++;
+      // A session the user explicitly deleted (organize.deleteSession) stays
+      // deleted even though its source log is still on disk — otherwise the
+      // very next scan would just re-import it.
+      if (excluded.has(ref.id)) {
+        skipped++;
+        continue;
+      }
       const existing = loadRaw(ref.id);
       // Skip if we already captured this session and the file hasn't changed.
       if (existing && existing._mtimeMs === ref.mtimeMs) {
