@@ -149,7 +149,7 @@ const HELP_TEXT = `{bold}전역{/}
   {${C.fox}-fg}a{/}       새 (하위)폴더
   {${C.fox}-fg}e{/}       이름 변경
   {${C.fox}-fg}m{/}       이동 / 중첩
-  {${C.fox}-fg}x{/}       삭제 (세션은 _inbox로)
+  {${C.fox}-fg}x{/}       삭제 (세션은 미분류로, All에서 New로 표시)
   {${C.fox}-fg}w{/}       폴더 지식(KNOWLEDGE.md) 추출 — 미리보기 후 확인
 
 {bold}세션 패널{/}

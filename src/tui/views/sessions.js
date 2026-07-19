@@ -21,7 +21,7 @@ import { editSessionContent } from '../widgets/editor.js';
 function sessionToText(n) {
   const L = [];
   if (n.extracted.title) L.push(`# ${n.extracted.title}`);
-  L.push(`${n.source} · ${(n.startedAt || '').slice(0, 16).replace('T', ' ')} · ${n.folder || '_inbox'}`, '');
+  L.push(`${n.source} · ${(n.startedAt || '').slice(0, 16).replace('T', ' ')} · ${n.folder || 'New'}`, '');
   if (n.extracted.summary) L.push('## 요약', n.extracted.summary, '');
   if (n.extracted.decisions?.length) L.push('## 결정', ...n.extracted.decisions.map((d) => `- ${d}`), '');
   if (n.extracted.todos?.length) L.push('## 할 일', ...n.extracted.todos.map((t) => `- ${t}`), '');
@@ -44,24 +44,17 @@ export function sessionsView(opts = {}) {
   let rows = [];
 
   function reloadFolders() {
-    const { list, counts, inbox, total } = data.folders();
-    const items = [`{${state.folder === null ? C.fox : C.dim}-fg}전체 (${total}){/}`];
+    const { list, counts, total } = data.folders();
+    const items = [`{${state.folder === null ? C.fox : C.dim}-fg}All (${total}){/}`];
     const keys = [null];
     for (const f of list) {
-      const depth = Math.min(f.split('/').length - 1, 4);
+      // +1: every real folder nests visually under "All", not flush with it.
+      const depth = Math.min(f.split('/').length - 1, 4) + 1;
       const indent = '  '.repeat(depth);
       const leaf = f.split('/').pop();
       const on = state.folder === f;
       items.push(`${indent}{${on ? C.fox : C.dim}-fg}${leaf} (${counts.get(f)}){/}`);
       keys.push(f);
-    }
-    // System/default pseudo-folders (_inbox — the unfiled catch-all) go after
-    // every real user-created folder, not mixed in near the top — they're
-    // where things land before you organize them, not something you'd
-    // deliberately file into.
-    if (inbox) {
-      items.push(`{${state.folder === '_inbox' ? C.fox : C.dim}-fg}_inbox (${inbox}){/}`);
-      keys.push('_inbox');
     }
     foldersBox._keys = keys;
     foldersBox.setItems(items);
@@ -76,15 +69,16 @@ export function sessionsView(opts = {}) {
       const mark = state.selected.has(r.id) ? `{${C.fox}-fg}✓{/}` : ' ';
       const tags = (r.tags || []).map((t) => `{${C.fox}-fg}#${t}{/}`).join(' ');
       const link = r.continuationOf ? `{${C.spore}-fg}↩{/}` : (r.continuedTo && r.continuedTo.length) ? `{${C.spore}-fg}→{/}` : ' ';
+      const isNew = !r.folder ? `{${C.spore}-fg}[New]{/}` : '';
       const text = (r.title || r.summary || r.preview || '(내용 없음)').replace(/\s+/g, ' ').slice(0, 58);
-      return `${mark}${link}${src}  ${text} ${tags}`;
+      return `${mark}${link}${src}  ${text} ${tags} ${isNew}`;
     });
     listBox.setItems(items.length ? items : ['{gray-fg}세션 없음{/}']);
     updateHeader();
   }
 
   function updateHeader() {
-    const crumb = state.folder || '전체';
+    const crumb = state.folder || 'All';
     const filt = [state.query && `/${state.query}`, ...state.tags.map((t) => `#${t}`)].filter(Boolean).join(' ');
     app.setHeader(`${crumb}${filt ? '  {' + C.spore + '-fg}' + filt + '{/}' : ''}`, `${rows.length} sessions`);
   }
@@ -96,7 +90,7 @@ export function sessionsView(opts = {}) {
     const srcName = n.source === 'codex' ? 'codex' : 'claude';
     // Title as the headline, then metadata, then the description (summary).
     if (n.extracted.title) lines.push(`{${C.fox}-fg}{bold}${n.extracted.title}{/}`);
-    lines.push(`{${sourceColor(n.source)}-fg}${srcName}{/}  {${C.dim}-fg}${(n.startedAt || '').slice(0, 16).replace('T', ' ')} · ${n.folder || '_inbox'}{/}`);
+    lines.push(`{${sourceColor(n.source)}-fg}${srcName}{/}  {${C.dim}-fg}${(n.startedAt || '').slice(0, 16).replace('T', ' ')} · ${n.folder || 'New'}{/}`);
     lines.push('');
     if (n.extracted.summary) {
       lines.push(`{${C.text}-fg}${n.extracted.summary}{/}`, '');
@@ -239,7 +233,8 @@ export function sessionsView(opts = {}) {
 
       // ── Folder management (only when the folders pane is focused) ──
       const curFolder = () => foldersBox._keys[foldersBox.selected];
-      const isRealFolder = (f) => f && f !== '_inbox';
+      // The only non-real entry in this panel now is "All" itself (key: null).
+      const isRealFolder = (f) => !!f;
       const refreshFolders = (selectPath) => {
         state.selected.clear();
         data.refresh();
@@ -270,7 +265,7 @@ export function sessionsView(opts = {}) {
       // e: rename the selected folder.
       foldersBox.key('e', () => {
         const f = curFolder();
-        if (!isRealFolder(f)) return app.notify('일반/_inbox는 이름을 바꿀 수 없습니다', 3);
+        if (!isRealFolder(f)) return app.notify('All은 이름을 바꿀 수 없습니다', 3);
         prompt(app, `이름 변경: ${f}`, f, (val) => {
           foldersBox.focus();
           if (!val || val.trim() === f) return;
@@ -283,7 +278,7 @@ export function sessionsView(opts = {}) {
       // m: move (re-nest) the selected folder into another folder.
       foldersBox.key('m', () => {
         const f = curFolder();
-        if (!isRealFolder(f)) return app.notify('일반/_inbox는 옮길 수 없습니다', 3);
+        if (!isRealFolder(f)) return app.notify('All은 옮길 수 없습니다', 3);
         pickFolder(app, (dest) => {
           foldersBox.focus();
           if (dest === undefined) return;
@@ -294,18 +289,18 @@ export function sessionsView(opts = {}) {
         });
       });
 
-      // x: delete the selected folder (sessions → _inbox).
+      // x: delete the selected folder (sessions → unfiled, shown as New in All).
       foldersBox.key('x', () => {
         const f = curFolder();
-        if (!isRealFolder(f)) return app.notify('일반/_inbox는 삭제할 수 없습니다', 3);
+        if (!isRealFolder(f)) return app.notify('All은 삭제할 수 없습니다', 3);
         menu(app, `"${f}" 삭제?`, [
-          { label: '삭제 (세션은 _inbox로)', value: 'yes' },
+          { label: '삭제 (세션은 미분류로, All에서 New로 표시)', value: 'yes' },
           { label: '취소', value: 'no' },
         ], (ans) => {
           foldersBox.focus();
           if (ans !== 'yes') return;
           const res = deleteFolder(f);
-          app.notify(res.ok ? `삭제됨 (세션 ${res.moved}개 → _inbox)` : res.error);
+          app.notify(res.ok ? `삭제됨 (세션 ${res.moved}개 → 미분류)` : res.error);
           state.folder = null;
           refreshFolders(null);
         });
@@ -399,7 +394,7 @@ export function sessionsView(opts = {}) {
         pickFolder(app, (folder) => {
           if (folder === undefined) return listBox.focus();
           for (const id of ids) organizeMove(id, folder);
-          app.notify(`${ids.length}개 세션 → ${folder || '_inbox'}`);
+          app.notify(`${ids.length}개 세션 → ${folder || 'New'}`);
           afterMutate();
           listBox.focus();
         });
@@ -545,7 +540,7 @@ export function sessionsView(opts = {}) {
       // human what it's about to write (it feeds AGENTS.md for every future
       // session in this folder), and only save on explicit confirm.
       const doKnowledge = async () => {
-        if (!state.folder || state.folder === '_inbox') return app.notify('폴더를 먼저 선택하세요', 3);
+        if (!state.folder) return app.notify('폴더를 먼저 선택하세요', 3);
         const refocus = () => (state.level === 'folders' ? foldersBox : listBox).focus();
         app.notify('지식 초안 생성 중…', 60);
         const gen = await buildKnowledgeText(state.folder);
@@ -572,7 +567,7 @@ export function sessionsView(opts = {}) {
         const r = currentRow();
         if (!r) return;
         const ctx = assembleContext(r.folder);
-        textView(app, `컨텍스트 · ${r.folder || '_inbox'}`, ctx || '(상속할 컨텍스트 없음)');
+        textView(app, `컨텍스트 · ${r.folder || 'New'}`, ctx || '(상속할 컨텍스트 없음)');
       });
       // i: inject the folder's KNOWLEDGE.md into a directory's AGENTS.md —
       // show exactly what will be written before touching that file.

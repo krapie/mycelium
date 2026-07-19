@@ -5,12 +5,12 @@ import * as data from '../data.js';
 
 /**
  * Folder picker: choose an existing folder or create a new path. Returns the
- * chosen folder path (or null for _inbox) via cb.
+ * chosen folder path (or null for unfiled/New) via cb.
  */
 export function pickFolder(app, cb) {
   const { list } = data.folders();
   const CREATE = '{+}-fg 새 폴더 입력…';
-  const items = ['{gray-fg}_inbox (미분류){/}', ...list, `{${C.spore}-fg}+ 새 폴더 입력…{/}`];
+  const items = ['{gray-fg}New (미분류){/}', ...list, `{${C.spore}-fg}+ 새 폴더 입력…{/}`];
   const box = blessed.list({
     parent: app.screen,
     top: 'center',
