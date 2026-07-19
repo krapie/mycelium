@@ -94,17 +94,16 @@ export function tag(sessionId, add = [], remove = []) {
  * Set title/summary MANUALLY — Mycelium's own record only, never the
  * original agent's log (see reuse.js/injectAgentsMd for the one place
  * Mycelium writes outside its own store, and note this is not that: nothing
- * here touches ~/.claude or ~/.codex). Marks editedByHuman so a later
- * autoTagSession() (learn.js) refreshes tags/decisions/todos but leaves this
- * title/summary alone — the same sticky principle as organizedBy, scoped to
- * content instead of filing.
+ * here touches ~/.claude or ~/.codex). A hand-set title sticks the same way
+ * an auto-generated one does — autoTagSession() (learn.js) only protects a
+ * non-empty title, it doesn't distinguish how that title got there. Summary
+ * always refreshes on the next `a`, same as if this had never run.
  */
 export function setContent(sessionId, { title, summary } = {}) {
   const n = loadRaw(sessionId);
   if (!n) return { ok: false, error: `no session ${sessionId}` };
   if (typeof title === 'string') n.extracted.title = title.trim() || null;
   if (typeof summary === 'string') n.extracted.summary = summary.trim() || null;
-  n.extracted.editedByHuman = true;
   saveRaw(n);
   return { ok: true, session: n };
 }

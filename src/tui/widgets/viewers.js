@@ -136,3 +136,70 @@ export function digestReader(app) {
     textView(app, files[idx], md);
   });
 }
+
+const HELP_TEXT = `{bold}전역{/}
+  {${C.fox}-fg}s{/}       스캔 + 자동배치 (mycelium scan && organize, CLI 없이)
+  {${C.fox}-fg}/{/}       전문 검색
+  {${C.fox}-fg}d{/}       다이제스트 보기 (열어서 n/w로 오늘/이번주 생성)
+  {${C.fox}-fg}?{/}       이 도움말
+  {${C.fox}-fg}q{/}       종료
+
+{bold}폴더 패널{/}
+  {${C.fox}-fg}Enter{/}   이 폴더의 세션 보기
+  {${C.fox}-fg}a{/}       새 (하위)폴더
+  {${C.fox}-fg}e{/}       이름 변경
+  {${C.fox}-fg}m{/}       이동 / 중첩
+  {${C.fox}-fg}x{/}       삭제 (세션은 _inbox로)
+  {${C.fox}-fg}w{/}       폴더 지식(KNOWLEDGE.md) 추출 — 미리보기 후 확인
+
+{bold}세션 패널{/}
+  {${C.fox}-fg}Enter{/}   상세 보기
+  {${C.fox}-fg}Esc{/}     폴더 패널로
+  {${C.fox}-fg}a{/}       요약·태그 생성 (LLM, 다중 선택 시 일괄)
+  {${C.fox}-fg}e{/}       제목·요약 직접 편집 ($EDITOR, Mycelium 저장소만)
+  {${C.fox}-fg}y{/}       클립보드로 복사
+  {${C.fox}-fg}r{/}       이어열기 (원래 에이전트로 resume)
+  {${C.fox}-fg}h{/}       핸드오프 (다른 에이전트로 새 세션 시작)
+  {${C.fox}-fg}n{/}       이 폴더 컨텍스트로 새 에이전트 세션
+  {${C.fox}-fg}m{/} / {${C.fox}-fg}t{/}   폴더 이동 / 태그 편집
+  {${C.fox}-fg}x{/}       세션 삭제 (Mycelium 저장소에서만, 원본 로그 유지)
+  {${C.fox}-fg}w{/}       폴더 지식 추출 — 미리보기 후 확인
+  {${C.fox}-fg}c{/}       상속 컨텍스트 보기
+  {${C.fox}-fg}i{/}       AGENTS.md에 주입 — 미리보기 후 확인
+  {${C.fox}-fg}Space{/}   다중 선택
+
+{bold}상세 패널{/}
+  {${C.fox}-fg}↑↓{/}      스크롤
+  {${C.fox}-fg}Esc{/}     세션 패널로
+  {${C.fox}-fg}a / e / y / r / x{/}  세션 패널과 동일
+
+핸드오프로 이어진 세션은 목록에 {${C.spore}-fg}↩{/}/{${C.spore}-fg}→{/} 마커, 상세에 이어받음/이어감 링크로 표시됩니다.`;
+
+/** Full keymap reference — bound to `?` from anywhere. */
+export function helpModal(app) {
+  const box = blessed.box({
+    parent: app.screen,
+    top: 'center',
+    left: 'center',
+    width: '70%',
+    height: '80%',
+    label: ' 단축키 도움말 (↑↓ 스크롤, Esc/? 닫기) ',
+    content: HELP_TEXT,
+    tags: true,
+    scrollable: true,
+    alwaysScroll: true,
+    keys: true,
+    mouse: true,
+    padding: { left: 1, right: 1 },
+    scrollbar: { ch: ' ', style: { bg: C.border } },
+    border: { type: 'line' },
+    style: { border: { fg: C.fox }, fg: C.text },
+  });
+  box.focus();
+  app.render();
+  box.key(['escape', 'q', '?'], () => {
+    box.destroy();
+    app.render();
+  });
+  return box;
+}
