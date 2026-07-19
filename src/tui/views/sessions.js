@@ -8,7 +8,7 @@ import { basename } from 'node:path';
 import { launchAgent, resumeSession } from '../launch.js';
 import { buildHandoff } from '../../handoff.js';
 import { autoTagSession } from '../../learn.js';
-import { generateDigest, extractKnowledge } from '../../insight.js';
+import { extractKnowledge } from '../../insight.js';
 import { assembleContext, injectAgentsMd } from '../../reuse.js';
 import { textView, digestReader } from '../widgets/viewers.js';
 import { textPrompt } from '../widgets/pickers.js';
@@ -122,7 +122,7 @@ export function sessionsView(opts = {}) {
   }
 
   return {
-    help: '</>검색 <n>새세션 <r>이어서열기 <h>핸드오프 <m>이동 <t>태그 <a>요약생성 <D>다이제스트 <c>컨텍스트 <i>주입 <K>지식 <q>종료',
+    help: '</>검색 <n>새세션 <r>이어열기 <h>핸드오프 <m>이동 <t>태그 <a>요약 <d>다이제스트 <c>컨텍스트 <i>주입 <w>지식 <q>종료',
     async mount(a) {
       app = a;
       // Three columns side by side: Folders | Sessions | Detail. The focused
@@ -200,9 +200,9 @@ export function sessionsView(opts = {}) {
         state.level = lvl;
         applyLayout(lvl);
         const hints = {
-          folders: '{bold}폴더{/}: ↑↓  Enter 열기  <a>새폴더  <R>이름변경  <m>이동/중첩  <D>삭제  </>검색  <q>종료',
-          sessions: '{bold}세션{/}: ↑↓  Enter 상세  Esc 폴더로  <a>요약생성  <y>복사  <r>이어서열기  <h>핸드오프  <m>이동  <t>태그  <Space>선택',
-          detail: '{bold}상세{/}: ↑↓ 스크롤  Esc 세션으로  <a>요약생성  <y>복사  <r>이어서열기',
+          folders: '{bold}폴더{/}: ↑↓  Enter 열기  <a>새폴더  <e>이름변경  <m>이동/중첩  <x>삭제  <w>지식  </>검색  <q>종료',
+          sessions: '{bold}세션{/}: ↑↓  Enter 상세  Esc 폴더로  <a>요약  <y>복사  <r>이어열기  <h>핸드오프  <m>이동  <t>태그  <w>지식  <d>다이제스트  <Space>선택',
+          detail: '{bold}상세{/}: ↑↓ 스크롤  Esc 세션으로  <a>요약  <y>복사  <r>이어열기',
         };
         app.setStatus(' ' + (hints[lvl] || this.help));
       };
@@ -260,8 +260,8 @@ export function sessionsView(opts = {}) {
         });
       });
 
-      // R: rename the selected folder.
-      foldersBox.key('R', () => {
+      // e: rename the selected folder.
+      foldersBox.key('e', () => {
         const f = curFolder();
         if (!isRealFolder(f)) return app.notify('일반/_inbox는 이름을 바꿀 수 없습니다', 3);
         prompt(app, `이름 변경: ${f}`, f, (val) => {
@@ -287,8 +287,8 @@ export function sessionsView(opts = {}) {
         });
       });
 
-      // D: delete the selected folder (sessions → _inbox).
-      foldersBox.key('D', () => {
+      // x: delete the selected folder (sessions → _inbox).
+      foldersBox.key('x', () => {
         const f = curFolder();
         if (!isRealFolder(f)) return app.notify('일반/_inbox는 삭제할 수 없습니다', 3);
         menu(app, `"${f}" 삭제?`, [
@@ -466,31 +466,17 @@ export function sessionsView(opts = {}) {
       listBox.key('y', doCopy);
       detailBox.key('y', doCopy);
 
-      // Learn: extract KNOWLEDGE.md for the current folder.
-      listBox.key('K', async () => {
+      // w: extract KNOWLEDGE.md for the current folder.
+      const doKnowledge = async () => {
         if (!state.folder || state.folder === '_inbox') return app.notify('폴더를 먼저 선택하세요', 3);
         app.notify('지식 추출 중…', 60);
         const res = await extractKnowledge(state.folder);
         app.notify(res.ok ? `KNOWLEDGE.md 생성: ${state.folder}` : res.error, 3);
-      });
+      };
+      listBox.key('w', doKnowledge);
+      foldersBox.key('w', doKnowledge);
 
-      // Learn: generate a digest (day, or `week`).
-      screenKey(app, ['D'], () => {
-        textPrompt(app, "다이제스트 기간 (빈칸=오늘, 'week'=이번주, 날짜 YYYY-MM-DD)", '', async (v) => {
-          listBox.focus();
-          const arg = (v || '').trim();
-          const period = arg === 'week' ? 'week' : 'day';
-          const date = /^\d{4}-\d{2}-\d{2}$/.test(arg) ? arg : undefined;
-          app.notify('다이제스트 생성 중…', 60);
-          const res = await generateDigest({ period, date });
-          if (res.ok) {
-            app.notify(`생성: ${res.keyed}`);
-            digestReader(app);
-          } else app.notify(res.error, 3);
-        });
-      });
-
-      // Learn/Reuse read-only: digest reader, context, inject.
+      // d: digest viewer (browse existing; generate new from inside via n/w).
       screenKey(app, ['d'], () => digestReader(app));
       listBox.key('c', () => {
         const r = currentRow();
