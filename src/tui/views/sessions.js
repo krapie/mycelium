@@ -2,7 +2,8 @@ import pkg from 'neo-blessed';
 const blessed = pkg.default || pkg;
 import { C, sourceColor } from '../theme.js';
 import * as data from '../data.js';
-import { move as organizeMove, tag as organizeTag, mkdir, renameFolder, deleteFolder, deleteSession } from '../../organize.js';
+import { move as organizeMove, tag as organizeTag, mkdir, renameFolder, deleteFolder, deleteSession, autoOrganize } from '../../organize.js';
+import { scan } from '../../scanner.js';
 import { pickFolder, editTags, menu } from '../widgets/pickers.js';
 import { basename } from 'node:path';
 import { launchAgent, resumeSession } from '../launch.js';
@@ -126,7 +127,7 @@ export function sessionsView(opts = {}) {
   }
 
   return {
-    help: '</>검색 <n>새세션 <r>이어열기 <h>핸드오프 <m>이동 <t>태그 <a>요약 <e>편집 <x>삭제 <d>다이제스트 <c>컨텍스트 <i>주입 <w>지식 <q>종료',
+    help: '</>검색 <s>스캔+정리 <n>새세션 <r>이어열기 <h>핸드오프 <m>이동 <t>태그 <a>요약 <e>편집 <x>삭제 <d>다이제스트 <c>컨텍스트 <i>주입 <w>지식 <q>종료',
     async mount(a) {
       app = a;
       // Three columns side by side: Folders | Sessions | Detail. The focused
@@ -204,9 +205,9 @@ export function sessionsView(opts = {}) {
         state.level = lvl;
         applyLayout(lvl);
         const hints = {
-          folders: '{bold}폴더{/}: ↑↓  Enter 열기  <a>새폴더  <e>이름변경  <m>이동/중첩  <x>삭제  <w>지식  </>검색  <q>종료',
-          sessions: '{bold}세션{/}: ↑↓  Enter 상세  Esc 폴더로  <a>요약  <e>편집  <y>복사  <r>이어열기  <h>핸드오프  <m>이동  <t>태그  <x>삭제  <w>지식  <d>다이제스트  <Space>선택',
-          detail: '{bold}상세{/}: ↑↓ 스크롤  Esc 세션으로  <a>요약  <e>편집  <y>복사  <r>이어열기  <x>삭제',
+          folders: '{bold}폴더{/}: ↑↓  Enter 열기  <a>새폴더  <e>이름변경  <m>이동/중첩  <x>삭제  <w>지식  <s>스캔+정리  </>검색  <q>종료',
+          sessions: '{bold}세션{/}: ↑↓  Enter 상세  Esc 폴더로  <a>요약  <e>편집  <y>복사  <r>이어열기  <h>핸드오프  <m>이동  <t>태그  <x>삭제  <w>지식  <d>다이제스트  <s>스캔+정리  <Space>선택',
+          detail: '{bold}상세{/}: ↑↓ 스크롤  Esc 세션으로  <a>요약  <e>편집  <y>복사  <r>이어열기  <x>삭제  <s>스캔+정리',
         };
         app.setStatus(' ' + (hints[lvl] || this.help));
       };
@@ -349,6 +350,32 @@ export function sessionsView(opts = {}) {
           state.query = (val || '').trim();
           reloadList();
           listBox.focus();
+          app.render();
+        });
+      });
+
+      // s: scan (capture new/changed sessions from every tab/terminal) +
+      // organize (auto-file by cwd rule, sticky — never touches sessions a
+      // human already filed) + reindex, all in one, without leaving the TUI.
+      // Mirrors `mycelium scan && mycelium organize`.
+      screenKey(app, ['s'], () => {
+        app.notify('스캔 중…', 30);
+        setImmediate(() => {
+          let s, o;
+          try {
+            s = scan();
+            o = autoOrganize();
+          } catch (err) {
+            app.notify(`스캔 실패: ${err.message}`, 4);
+            return;
+          }
+          data.refresh();
+          reloadFolders();
+          reloadList();
+          app.notify(
+            `스캔 +${s.imported} (총 ${s.scanned}, 건너뜀 ${s.skipped}${s.failed ? `, 실패 ${s.failed}` : ''}) · 자동배치 ${o.placed}개 (사람 정리 ${o.skippedHuman}개 보존)`,
+            5,
+          );
           app.render();
         });
       });
