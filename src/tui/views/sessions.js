@@ -85,17 +85,23 @@ export function sessionsView(opts = {}) {
       // Same "source #idPrefix" shape as the continuation links in detail
       // (↩ 이어받음/→ 이어감), so you can match a row here to that label there.
       const idPrefix = `{${C.dim}-fg}#${r.id.slice(0, 8)}{/}`;
-      const mark = state.selected.has(r.id) ? `{${C.fox}-fg}✓{/}` : ' ';
-      const link = r.continuationOf ? `{${C.spore}-fg}↩{/}` : (r.continuedTo && r.continuedTo.length) ? `{${C.spore}-fg}→{/}` : ' ';
-      const isNew = !r.folder ? `{${C.spore}-fg}[${t('sessions.newBadge')}]{/}` : '';
-      const text = (r.title || r.summary || r.preview || t('common.noContent')).replace(/\s+/g, ' ').slice(0, 58);
-      // A space after link is required, not cosmetic: ↩/→ are ambiguous-width
+      // No reserved gutter — the checkmark only takes space on rows you've
+      // actually selected, so the title starts flush-left the rest of the
+      // time instead of every row paying for a feature most rows don't use.
+      const mark = state.selected.has(r.id) ? `{${C.fox}-fg}✓{/} ` : '';
+      // Continuation markers moved into the right-hand metadata cluster —
+      // they're relationship metadata about the row, same category as
+      // agent/id, not something that belongs competing for the left edge.
+      // Trailing space is required, not cosmetic: ↩/→ are ambiguous-width
       // glyphs that render wider than one column in most terminal fonts, so
       // packing them directly against the next character visually overlapped it.
+      const link = r.continuationOf ? `{${C.spore}-fg}↩{/} ` : (r.continuedTo && r.continuedTo.length) ? `{${C.spore}-fg}→{/} ` : '';
+      const isNew = !r.folder ? `{${C.spore}-fg}[${t('sessions.newBadge')}]{/}` : '';
+      const text = (r.title || r.summary || r.preview || t('common.noContent')).replace(/\s+/g, ' ').slice(0, 58);
       // {|} is blessed's right-align pivot (same trick app.js uses for the
-      // header) — pins agent/id/New to the column's right edge instead of
-      // trailing directly off the title text.
-      return `${mark}${link} ${text}{|}${src} ${idPrefix} ${isNew}`;
+      // header) — pins the metadata cluster to the column's right edge
+      // instead of trailing directly off the title text.
+      return `${mark}${text}{|}${link}${src} ${idPrefix} ${isNew}`;
     });
     listBox.setItems(items.length ? items : [`{gray-fg}${t('sessions.empty')}{/}`]);
     updateHeader();
