@@ -41,6 +41,46 @@ export function textView(app, title, content) {
   return box;
 }
 
+/**
+ * Scrollable preview that requires an explicit yes/no before cb fires — for
+ * content the human should review before it's written (KNOWLEDGE.md,
+ * AGENTS.md injection). LLM output shouldn't land on disk unreviewed, and
+ * once it's in KNOWLEDGE.md it gets auto-injected into every future session
+ * in that folder, so this is the one checkpoint a person actually sees it.
+ */
+export function confirmText(app, title, content, cb) {
+  const box = blessed.box({
+    parent: app.screen,
+    top: 'center',
+    left: 'center',
+    width: '80%',
+    height: '80%',
+    label: ` ${title} (↑↓ 스크롤, y/Enter 저장, n/Esc 취소) `,
+    content: content || '(내용 없음)',
+    tags: false,
+    scrollable: true,
+    alwaysScroll: true,
+    keys: true,
+    mouse: true,
+    padding: { left: 1, right: 1 },
+    scrollbar: { ch: ' ', style: { bg: C.border } },
+    border: { type: 'line' },
+    style: { border: { fg: C.fox }, fg: C.text },
+  });
+  box.focus();
+  app.render();
+  let settled = false;
+  const finish = (ok) => {
+    if (settled) return;
+    settled = true;
+    box.destroy();
+    app.render();
+    cb(ok);
+  };
+  box.key(['y', 'enter'], () => finish(true));
+  box.key(['n', 'escape', 'q'], () => finish(false));
+}
+
 /** Digest picker → reader. Lists digests/*.md, opens the chosen one in a textView. */
 export function digestReader(app) {
   const listFiles = () => {
