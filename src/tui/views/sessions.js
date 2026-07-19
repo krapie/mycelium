@@ -69,6 +69,9 @@ export function sessionsView(opts = {}) {
       // Readable colored agent label instead of a bare color dot.
       const name = r.source === 'codex' ? 'codex ' : 'claude';
       const src = `{${sourceColor(r.source)}-fg}${name}{/}`;
+      // Same "source #idPrefix" shape as the continuation links in detail
+      // (↩ 이어받음/→ 이어감), so you can match a row here to that label there.
+      const idPrefix = `{${C.dim}-fg}#${r.id.slice(0, 8)}{/}`;
       const mark = state.selected.has(r.id) ? `{${C.fox}-fg}✓{/}` : ' ';
       const tags = (r.tags || []).map((tg) => `{${C.fox}-fg}#${tg}{/}`).join(' ');
       const link = r.continuationOf ? `{${C.spore}-fg}↩{/}` : (r.continuedTo && r.continuedTo.length) ? `{${C.spore}-fg}→{/}` : ' ';
@@ -77,7 +80,7 @@ export function sessionsView(opts = {}) {
       // A space after link is required, not cosmetic: ↩/→ are ambiguous-width
       // glyphs that render wider than one column in most terminal fonts, so
       // packing them directly against the agent name visually overlapped it.
-      return `${mark}${link} ${src}  ${text} ${tags} ${isNew}`;
+      return `${mark}${link} ${src} ${idPrefix}  ${text} ${tags} ${isNew}`;
     });
     listBox.setItems(items.length ? items : [`{gray-fg}${t('sessions.empty')}{/}`]);
     updateHeader();
