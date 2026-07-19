@@ -4,6 +4,7 @@ export const C = {
   fox: '#7fe0c4', // bioluminescent accent — reserved for titles/focus, not agent labels
   spore: '#d4a24e', // secondary (codex / warnings)
   claude: '#8ab4d8', // claude-code agent label — was fox, same as the title color it sits next to
+  tag: '#c9a3d9', // session tags — distinct from title (fox), claude, and spore/codex
   text: '#e9e4d6',
   dim: '#8b8574',
   faint: '#5e594c',
