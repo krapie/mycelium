@@ -138,7 +138,7 @@ export function digestReader(app) {
 }
 
 const HELP_TEXT = `{bold}전역{/}
-  {${C.fox}-fg}s{/}       스캔 + 자동배치 (mycelium scan && organize, CLI 없이)
+  {${C.fox}-fg}s{/}       스캔 (mycelium scan, CLI 없이 — 자동배치는 아직 CLI \`mycelium organize\`로)
   {${C.fox}-fg}/{/}       전문 검색
   {${C.fox}-fg}d{/}       다이제스트 보기 (열어서 n/w로 오늘/이번주 생성)
   {${C.fox}-fg}?{/}       이 도움말

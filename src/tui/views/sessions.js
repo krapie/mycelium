@@ -2,7 +2,7 @@ import pkg from 'neo-blessed';
 const blessed = pkg.default || pkg;
 import { C, sourceColor } from '../theme.js';
 import * as data from '../data.js';
-import { move as organizeMove, tag as organizeTag, mkdir, renameFolder, deleteFolder, deleteSession, autoOrganize } from '../../organize.js';
+import { move as organizeMove, tag as organizeTag, mkdir, renameFolder, deleteFolder, deleteSession } from '../../organize.js';
 import { scan } from '../../scanner.js';
 import { pickFolder, editTags, menu } from '../widgets/pickers.js';
 import { basename } from 'node:path';
@@ -352,17 +352,16 @@ export function sessionsView(opts = {}) {
         });
       });
 
-      // s: scan (capture new/changed sessions from every tab/terminal) +
-      // organize (auto-file by cwd rule, sticky — never touches sessions a
-      // human already filed) + reindex, all in one, without leaving the TUI.
-      // Mirrors `mycelium scan && mycelium organize`.
+      // s: scan only (capture new/changed sessions from every tab/terminal +
+      // reindex), without leaving the TUI. Mirrors `mycelium scan`. Does NOT
+      // auto-organize — that reassigns folders by cwd rule and isn't wired to
+      // any key here yet; run `mycelium organize` when you want that.
       screenKey(app, ['s'], () => {
         app.notify('스캔 중…', 30);
         setImmediate(() => {
-          let s, o;
+          let s;
           try {
             s = scan();
-            o = autoOrganize();
           } catch (err) {
             app.notify(`스캔 실패: ${err.message}`, 4);
             return;
@@ -370,10 +369,7 @@ export function sessionsView(opts = {}) {
           data.refresh();
           reloadFolders();
           reloadList();
-          app.notify(
-            `스캔 +${s.imported} (총 ${s.scanned}, 건너뜀 ${s.skipped}${s.failed ? `, 실패 ${s.failed}` : ''}) · 자동배치 ${o.placed}개 (사람 정리 ${o.skippedHuman}개 보존)`,
-            5,
-          );
+          app.notify(`스캔 +${s.imported} (총 ${s.scanned}, 건너뜀 ${s.skipped}${s.failed ? `, 실패 ${s.failed}` : ''})`, 4);
           app.render();
         });
       });

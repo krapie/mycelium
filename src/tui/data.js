@@ -5,11 +5,20 @@ import { listTreeDirs } from '../organize.js';
 // Thin data layer the TUI views read from — wraps the existing core so views
 // never touch sqlite/raw directly.
 
+// _archive (dead-cwd sessions, or anything manually filed there) is deliberately
+// hidden from the TUI by default — it's a bin for things you don't want in
+// your way, not a folder you browse. Still fully there on disk; reachable via
+// `mycelium list --folder _archive` / `mycelium search --folder _archive`.
+function isArchive(folder) {
+  return folder === '_archive' || (!!folder && folder.startsWith('_archive/'));
+}
+
 export function folders() {
   const counts = new Map();
   let inbox = 0;
   let total = 0;
   for (const n of allRaw()) {
+    if (isArchive(n.folder)) continue;
     total++;
     if (!n.folder) inbox++;
     else counts.set(n.folder, (counts.get(n.folder) || 0) + 1);
@@ -17,7 +26,10 @@ export function folders() {
   // Include real (possibly empty) tree directories, plus every ancestor path
   // of a session's folder, so nested/empty folders always appear and are
   // selectable for folder operations.
-  for (const dir of listTreeDirs()) if (!counts.has(dir)) counts.set(dir, 0);
+  for (const dir of listTreeDirs()) {
+    if (isArchive(dir)) continue;
+    if (!counts.has(dir)) counts.set(dir, 0);
+  }
   for (const f of [...counts.keys()]) {
     const parts = f.split('/');
     for (let i = 1; i < parts.length; i++) {
@@ -62,6 +74,7 @@ export function sessions({ folder, query, tags } = {}) {
   }
   if (folder === '_inbox') rows = rows.filter((r) => !r.folder);
   else if (folder) rows = rows.filter((r) => r.folder === folder || (r.folder && r.folder.startsWith(folder + '/')));
+  else rows = rows.filter((r) => !isArchive(r.folder)); // 전체(no folder) hides _archive by default
   return rows;
 }
 

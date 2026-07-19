@@ -44,6 +44,13 @@ mycelium                    # 인터랙티브 TUI 실행
 | `w` | 폴더 지식(KNOWLEDGE.md) 추출 |
 | `Enter` | 이 폴더의 세션 보기 |
 
+**`_archive` 폴더는 TUI에 기본적으로 안 보입니다** — 폴더 목록, "전체" 세션 뷰, 검색 결과 어디에도 안 뜹니다. 죽은 cwd 세션이 자동 정리 시(`autoOrganize`/`mycelium organize`) 여기로 모이고, `m`으로 아무 세션이나 `_archive`에 직접 옮겨도 됩니다 — 눈에 안 띄는 보관함입니다. 데이터는 그대로 있고 지워지지 않으니, 나중에 확인하려면:
+```sh
+mycelium list --folder _archive
+mycelium search "검색어" --folder _archive
+```
+한 번 `_archive`로 옮긴 세션은(수동이든 자동이든) 재스캔해도 다시 튀어나오지 않습니다 — `scan()`은 이미 배정된 폴더를 그대로 유지하고, TUI의 `s`는 스캔만 할 뿐 폴더를 재배정하지 않습니다.
+
 **세션 패널**
 | 키 | 동작 |
 |---|---|
@@ -57,7 +64,7 @@ mycelium                    # 인터랙티브 TUI 실행
 | `y` | 세션 내용(제목+요약+대화)을 클립보드로 복사 |
 | `Space` | 다중 선택 |
 | `/` | 전문 검색 |
-| `s` | **스캔 + 자동배치**를 TUI에서 바로 (`mycelium scan && mycelium organize`와 동일 — 여러 탭/터미널에서 켜둔 세션을 CLI 없이 그대로 불러와 정리) |
+| `s` | **스캔**을 TUI에서 바로 (`mycelium scan`과 동일 — 여러 탭/터미널에서 켜둔 세션을 CLI 없이 그대로 불러옴). 폴더 자동배치는 아직 안 함 — `mycelium organize`를 CLI에서 따로 |
 | `w` / `c` / `i` / `d` | 폴더 지식 추출(미리보기 후 확인) / 컨텍스트 보기 / AGENTS.md 주입(미리보기 후 확인) / 다이제스트 읽기 (안에서 `n`/`w`로 오늘/이번주 생성) |
 | `q` | 종료 |
 
@@ -105,7 +112,7 @@ Mycelium이 "자동으로 좋아진다"는 건 Claude Code의 `/write`, `/proofr
 | 단계 | `mycelium daemon` 실행 중 | 안 켜놨을 때 |
 |---|---|---|
 | Capture (스캔) | 5분마다 자동 | 수동 — `mycelium scan` 또는 TUI에서 `s` (TUI는 진입 시 자동 스캔하지 않음) |
-| Organize (자동 배정) | 자동 (사람이 정리한 세션은 보존) | 수동 — `mycelium organize` 또는 TUI에서 `s` (스캔과 함께 한 번에) |
+| Organize (자동 배정) | 자동 (사람이 정리한 세션은 보존) | 수동 — `mycelium organize` (CLI 전용, TUI `s`는 스캔만 함) |
 | Learn: 요약·태깅 (`a`) | 새로 들어온 세션에 자동 실행 | `a` 또는 `mycelium autotag` 수동 |
 | Learn: 폴더 지식 (`w`) | **자동 아님** | `w` 또는 `mycelium knowledge <폴더>` 수동 |
 | Reuse: AGENTS.md 주입 | 다음 에이전트 실행(`n`/`h`) 시 항상 자동 | 동일 — 데몬 여부와 무관 |
