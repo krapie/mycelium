@@ -80,14 +80,15 @@ ${blocks.join('\n')}
 }
 
 /**
- * Extract durable Project Knowledge for a folder from its sessions' summaries
- * and decisions, and write it to that folder's KNOWLEDGE.md. This is the file
- * that ancestor-path reuse later renders into AGENTS.md — closing the
- * self-improving loop (insight → agent memory). Follows ai-memory's
- * "compile-not-retrieve": a coherent page, not raw logs.
+ * Generate durable Project Knowledge for a folder from its sessions' summaries
+ * and decisions — an LLM call, but does NOT write anything to disk. Split from
+ * writeKnowledge() so the TUI can show the human the proposed KNOWLEDGE.md
+ * (which becomes AGENTS.md content for every future session in that folder)
+ * and let them confirm before it's saved, rather than trusting LLM output
+ * blindly. Follows ai-memory's "compile-not-retrieve": a coherent page, not
+ * raw logs.
  */
-export async function extractKnowledge(folder) {
-  ensureDirs();
+export async function buildKnowledgeText(folder) {
   const sessions = allRaw().filter((s) => {
     const f = s.folder || '_inbox';
     return f === folder || f.startsWith(folder + '/');
@@ -119,11 +120,30 @@ ${material}`;
     return { ok: false, error: `LLM 실패: ${err.message}` };
   }
 
+  const text = `# ${folder} — Project Knowledge\n\n${knowledge.trim()}\n`;
+  return { ok: true, folder, count: sessions.length, text };
+}
+
+/** Write already-generated (and, in the TUI, human-confirmed) knowledge text to disk. */
+export function writeKnowledgeText(folder, text) {
+  ensureDirs();
   const dir = join(TREE_DIR, ...folder.split('/'));
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   const path = join(dir, 'KNOWLEDGE.md');
-  writeFileSync(path, `# ${folder} — Project Knowledge\n\n${knowledge.trim()}\n`);
-  return { ok: true, path, folder, count: sessions.length };
+  writeFileSync(path, text);
+  return { ok: true, path, folder };
+}
+
+/**
+ * Generate + write in one call, no confirmation — used by the CLI
+ * (`mycelium knowledge <folder>`) and any non-interactive caller where
+ * there's no human to ask.
+ */
+export async function extractKnowledge(folder) {
+  const gen = await buildKnowledgeText(folder);
+  if (!gen.ok) return gen;
+  const w = writeKnowledgeText(folder, gen.text);
+  return { ok: true, path: w.path, folder, count: gen.count };
 }
 
 /** Every distinct folder that currently has sessions (for batch knowledge extraction). */

@@ -8,9 +8,9 @@ import { basename } from 'node:path';
 import { launchAgent, resumeSession } from '../launch.js';
 import { buildHandoff } from '../../handoff.js';
 import { autoTagSession } from '../../learn.js';
-import { extractKnowledge } from '../../insight.js';
+import { buildKnowledgeText, writeKnowledgeText } from '../../insight.js';
 import { assembleContext, injectAgentsMd } from '../../reuse.js';
-import { textView, digestReader } from '../widgets/viewers.js';
+import { textView, digestReader, confirmText } from '../widgets/viewers.js';
 import { textPrompt } from '../widgets/pickers.js';
 import { copyToClipboard } from '../clipboard.js';
 import { editSessionContent } from '../widgets/editor.js';
@@ -513,12 +513,27 @@ export function sessionsView(opts = {}) {
       listBox.key('y', doCopy);
       detailBox.key('y', doCopy);
 
-      // w: extract KNOWLEDGE.md for the current folder.
+      // w: extract KNOWLEDGE.md for the current folder — generate, show the
+      // human what it's about to write (it feeds AGENTS.md for every future
+      // session in this folder), and only save on explicit confirm.
       const doKnowledge = async () => {
         if (!state.folder || state.folder === '_inbox') return app.notify('폴더를 먼저 선택하세요', 3);
-        app.notify('지식 추출 중…', 60);
-        const res = await extractKnowledge(state.folder);
-        app.notify(res.ok ? `KNOWLEDGE.md 생성: ${state.folder}` : res.error, 3);
+        const refocus = () => (state.level === 'folders' ? foldersBox : listBox).focus();
+        app.notify('지식 초안 생성 중…', 60);
+        const gen = await buildKnowledgeText(state.folder);
+        if (!gen.ok) {
+          app.notify(gen.error, 3);
+          return refocus();
+        }
+        confirmText(app, `KNOWLEDGE.md 미리보기 · ${state.folder}`, gen.text, (ok) => {
+          if (!ok) {
+            app.notify('취소됨 — KNOWLEDGE.md 변경 없음', 2);
+            return refocus();
+          }
+          const w = writeKnowledgeText(state.folder, gen.text);
+          app.notify(w.ok ? `KNOWLEDGE.md 저장: ${state.folder}` : w.error, 3);
+          refocus();
+        });
       };
       listBox.key('w', doKnowledge);
       foldersBox.key('w', doKnowledge);
@@ -531,14 +546,27 @@ export function sessionsView(opts = {}) {
         const ctx = assembleContext(r.folder);
         textView(app, `컨텍스트 · ${r.folder || '_inbox'}`, ctx || '(상속할 컨텍스트 없음)');
       });
+      // i: inject the folder's KNOWLEDGE.md into a directory's AGENTS.md —
+      // show exactly what will be written before touching that file.
       listBox.key('i', () => {
         const r = currentRow();
         if (!r || !r.folder) return app.notify('폴더가 있는 세션에서만 가능합니다', 3);
         textPrompt(app, 'AGENTS.md를 주입할 디렉토리', process.cwd(), (dir) => {
-          listBox.focus();
-          if (!dir) return;
-          const res = injectAgentsMd(dir.trim(), r.folder);
-          app.notify(res.ok ? `AGENTS.md 주입: ${dir.trim()}` : res.error, 3);
+          if (!dir) return listBox.focus();
+          const ctx = assembleContext(r.folder);
+          if (!ctx) {
+            app.notify(`주입할 KNOWLEDGE.md가 없습니다: ${r.folder}`, 3);
+            return listBox.focus();
+          }
+          confirmText(app, `${dir.trim()}/AGENTS.md 에 주입할 내용`, ctx, (ok) => {
+            if (!ok) {
+              app.notify('취소됨 — AGENTS.md 변경 없음', 2);
+              return listBox.focus();
+            }
+            const res = injectAgentsMd(dir.trim(), r.folder);
+            app.notify(res.ok ? `AGENTS.md 주입: ${dir.trim()}` : res.error, 3);
+            listBox.focus();
+          });
         });
       });
 
