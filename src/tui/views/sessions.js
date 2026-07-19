@@ -47,10 +47,6 @@ export function sessionsView(opts = {}) {
     const { list, counts, inbox, total } = data.folders();
     const items = [`{${state.folder === null ? C.fox : C.dim}-fg}전체 (${total}){/}`];
     const keys = [null];
-    if (inbox) {
-      items.push(`{${state.folder === '_inbox' ? C.fox : C.dim}-fg}_inbox (${inbox}){/}`);
-      keys.push('_inbox');
-    }
     for (const f of list) {
       const depth = Math.min(f.split('/').length - 1, 4);
       const indent = '  '.repeat(depth);
@@ -58,6 +54,14 @@ export function sessionsView(opts = {}) {
       const on = state.folder === f;
       items.push(`${indent}{${on ? C.fox : C.dim}-fg}${leaf} (${counts.get(f)}){/}`);
       keys.push(f);
+    }
+    // System/default pseudo-folders (_inbox — the unfiled catch-all) go after
+    // every real user-created folder, not mixed in near the top — they're
+    // where things land before you organize them, not something you'd
+    // deliberately file into.
+    if (inbox) {
+      items.push(`{${state.folder === '_inbox' ? C.fox : C.dim}-fg}_inbox (${inbox}){/}`);
+      keys.push('_inbox');
     }
     foldersBox._keys = keys;
     foldersBox.setItems(items);
