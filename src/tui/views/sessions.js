@@ -44,11 +44,13 @@ export function sessionsView(opts = {}) {
   let rows = [];
 
   function reloadFolders() {
-    const { list, counts, total } = data.folders();
-    const items = [`{${state.folder === null ? C.fox : C.dim}-fg}All (${total}){/}`];
+    const { list, counts, inbox } = data.folders();
+    // Root's count is unfiled sessions only, matching what it actually shows
+    // now — not every session everywhere (those live in their own folder).
+    const items = [`{${state.folder === null ? C.fox : C.dim}-fg}Root (${inbox}){/}`];
     const keys = [null];
     for (const f of list) {
-      // +1: every real folder nests visually under "All", not flush with it.
+      // +1: every real folder nests visually under Root, not flush with it.
       const depth = Math.min(f.split('/').length - 1, 4) + 1;
       const indent = '  '.repeat(depth);
       const leaf = f.split('/').pop();
@@ -78,7 +80,7 @@ export function sessionsView(opts = {}) {
   }
 
   function updateHeader() {
-    const crumb = state.folder || 'All';
+    const crumb = state.folder || 'Root';
     const filt = [state.query && `/${state.query}`, ...state.tags.map((t) => `#${t}`)].filter(Boolean).join(' ');
     app.setHeader(`${crumb}${filt ? '  {' + C.spore + '-fg}' + filt + '{/}' : ''}`, `${rows.length} sessions`);
   }
@@ -233,7 +235,7 @@ export function sessionsView(opts = {}) {
 
       // ── Folder management (only when the folders pane is focused) ──
       const curFolder = () => foldersBox._keys[foldersBox.selected];
-      // The only non-real entry in this panel now is "All" itself (key: null).
+      // The only non-real entry in this panel now is "Root" itself (key: null).
       const isRealFolder = (f) => !!f;
       const refreshFolders = (selectPath) => {
         state.selected.clear();
@@ -265,7 +267,7 @@ export function sessionsView(opts = {}) {
       // e: rename the selected folder.
       foldersBox.key('e', () => {
         const f = curFolder();
-        if (!isRealFolder(f)) return app.notify('All은 이름을 바꿀 수 없습니다', 3);
+        if (!isRealFolder(f)) return app.notify('Root는 이름을 바꿀 수 없습니다', 3);
         prompt(app, `이름 변경: ${f}`, f, (val) => {
           foldersBox.focus();
           if (!val || val.trim() === f) return;
@@ -278,7 +280,7 @@ export function sessionsView(opts = {}) {
       // m: move (re-nest) the selected folder into another folder.
       foldersBox.key('m', () => {
         const f = curFolder();
-        if (!isRealFolder(f)) return app.notify('All은 옮길 수 없습니다', 3);
+        if (!isRealFolder(f)) return app.notify('Root는 옮길 수 없습니다', 3);
         pickFolder(app, (dest) => {
           foldersBox.focus();
           if (dest === undefined) return;
@@ -292,7 +294,7 @@ export function sessionsView(opts = {}) {
       // x: delete the selected folder (sessions → unfiled, shown as New in All).
       foldersBox.key('x', () => {
         const f = curFolder();
-        if (!isRealFolder(f)) return app.notify('All은 삭제할 수 없습니다', 3);
+        if (!isRealFolder(f)) return app.notify('Root는 삭제할 수 없습니다', 3);
         menu(app, `"${f}" 삭제?`, [
           { label: '삭제 (세션은 미분류로, All에서 New로 표시)', value: 'yes' },
           { label: '취소', value: 'no' },

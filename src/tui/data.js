@@ -41,9 +41,12 @@ export function folders() {
 }
 
 export function sessions({ folder, query, tags } = {}) {
+  const searching = !!(query || (tags && tags.length));
   let rows;
-  if (query || (tags && tags.length)) {
-    rows = search({ query, tags: tags || [], folder: folder && folder !== '_inbox' ? folder : undefined });
+  if (searching) {
+    // Search stays global regardless of folder — it's the one way to find
+    // something you already filed away without navigating to it first.
+    rows = search({ query, tags: tags || [], folder: folder || undefined });
     rows = rows.map((r) => ({
       id: r.id,
       source: r.source,
@@ -55,6 +58,7 @@ export function sessions({ folder, query, tags } = {}) {
       organizedBy: r.organized_by,
       tags: [],
     }));
+    if (folder) rows = rows.filter((r) => r.folder === folder || (r.folder && r.folder.startsWith(folder + '/')));
   } else {
     rows = allRaw()
       .map((n) => ({
@@ -71,10 +75,11 @@ export function sessions({ folder, query, tags } = {}) {
         continuedTo: n.continuedTo || [],
       }))
       .sort((a, b) => (b.startedAt || '').localeCompare(a.startedAt || ''));
+    if (folder) rows = rows.filter((r) => r.folder === folder || (r.folder && r.folder.startsWith(folder + '/')));
+    // Root (no folder selected) is the literal top level, not "everything" —
+    // sessions already filed into a folder live there, not at Root too.
+    else rows = rows.filter((r) => !r.folder);
   }
-  if (folder === '_inbox') rows = rows.filter((r) => !r.folder);
-  else if (folder) rows = rows.filter((r) => r.folder === folder || (r.folder && r.folder.startsWith(folder + '/')));
-  else rows = rows.filter((r) => !isArchive(r.folder)); // 전체(no folder) hides _archive by default
   return rows;
 }
 
