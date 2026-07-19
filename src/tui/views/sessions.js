@@ -92,7 +92,10 @@ export function sessionsView(opts = {}) {
       // A space after link is required, not cosmetic: ↩/→ are ambiguous-width
       // glyphs that render wider than one column in most terminal fonts, so
       // packing them directly against the next character visually overlapped it.
-      return `${mark}${link} ${text}  ${src} ${idPrefix} ${isNew}`;
+      // {|} is blessed's right-align pivot (same trick app.js uses for the
+      // header) — pins agent/id/New to the column's right edge instead of
+      // trailing directly off the title text.
+      return `${mark}${link} ${text}{|}${src} ${idPrefix} ${isNew}`;
     });
     listBox.setItems(items.length ? items : [`{gray-fg}${t('sessions.empty')}{/}`]);
     updateHeader();
@@ -110,25 +113,25 @@ export function sessionsView(opts = {}) {
     const lines = [];
     const srcName = n.source === 'codex' ? 'codex' : 'claude';
     // Title as the headline, then metadata, then the description (summary).
-    if (n.extracted.title) lines.push(`{${C.fox}-fg}{bold}${n.extracted.title}{/}`);
+    if (n.extracted.title) lines.push(`{${C.fox}-fg}{bold}${n.extracted.title}{/}`, '');
     lines.push(
       `{${sourceColor(n.source)}-fg}${srcName}{/}  {${C.dim}-fg}${(n.startedAt || '').slice(0, 16).replace('T', ' ')} · ${n.folder || t('sessions.newBadge')}{/}`,
     );
     if (n.extracted.tags?.length) {
-      lines.push(`{${C.faint}-fg}${t('detail.tags')}{/} ` + n.extracted.tags.map((tg) => `{${C.fox}-fg}#${tg}{/}`).join(' '));
+      lines.push(`{${C.faint}-fg}${t('detail.tags')}{/} ` + n.extracted.tags.map((tg) => `{${C.tag}-fg}#${tg}{/}`).join(' '));
     }
     lines.push('');
     if (n.extracted.summary) {
       // Bullet points, not one prose paragraph — matches decisions/todos
       // below and is much easier to scan than a dense block of sentences.
-      lines.push(...splitSentences(n.extracted.summary).map((s) => `{${C.text}-fg}  · ${s}{/}`), '');
+      lines.push(...splitSentences(n.extracted.summary).map((s) => `{${C.text}-fg}- ${s}{/}`), '');
     } else {
       lines.push(`{${C.faint}-fg}${t('detail.noSummary')}{/}`, '');
       const firstUser = n.turns.find((turn) => turn.role === 'user')?.text;
       if (firstUser) lines.push(`{${C.faint}-fg}${t('detail.firstRequest')}{/} ${firstUser.replace(/\s+/g, ' ').slice(0, 300)}`, '');
     }
-    if (n.extracted.decisions?.length) lines.push(`{${C.faint}-fg}${t('detail.decisions')}{/}`, ...n.extracted.decisions.map((d) => `  · ${d}`), '');
-    if (n.extracted.todos?.length) lines.push(`{${C.faint}-fg}${t('detail.todos')}{/}`, ...n.extracted.todos.map((td) => `  · ${td}`), '');
+    if (n.extracted.decisions?.length) lines.push(`{${C.faint}-fg}${t('detail.decisions')}{/}`, ...n.extracted.decisions.map((d) => `- ${d}`), '');
+    if (n.extracted.todos?.length) lines.push(`{${C.faint}-fg}${t('detail.todos')}{/}`, ...n.extracted.todos.map((td) => `- ${td}`), '');
     // Handoff continuation links (this is one flow across a model switch).
     if (n.continuationOf) {
       const p = data.detail(n.continuationOf);
