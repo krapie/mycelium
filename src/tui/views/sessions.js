@@ -343,6 +343,19 @@ export function sessionsView(opts = {}) {
         app.render();
       });
 
+      // *: select every session currently listed (this folder/search scope,
+      // not the whole store) — toggles off if everything's already selected.
+      listBox.key('*', () => {
+        if (!rows.length) return;
+        const allSelected = rows.every((r) => state.selected.has(r.id));
+        for (const r of rows) {
+          if (allSelected) state.selected.delete(r.id);
+          else state.selected.add(r.id);
+        }
+        reloadList();
+        app.render();
+      });
+
       // Live search.
       screenKey(app, ['/'], () => {
         prompt(app, '검색', state.query, (val) => {
