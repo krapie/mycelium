@@ -13,6 +13,7 @@ import { assembleContext, injectAgentsMd } from '../../reuse.js';
 import { textView, digestReader } from '../widgets/viewers.js';
 import { textPrompt } from '../widgets/pickers.js';
 import { copyToClipboard } from '../clipboard.js';
+import { editSessionContent } from '../widgets/editor.js';
 
 // Plain-text rendering of a session for the clipboard (title, summary, and the
 // full transcript — everything you'd want to paste elsewhere).
@@ -90,7 +91,10 @@ export function sessionsView(opts = {}) {
     const lines = [];
     const srcName = n.source === 'codex' ? 'codex' : 'claude';
     // Title as the headline, then metadata, then the description (summary).
-    if (n.extracted.title) lines.push(`{${C.fox}-fg}{bold}${n.extracted.title}{/}`);
+    if (n.extracted.title) {
+      const human = n.extracted.editedByHuman ? ` {${C.spore}-fg}[편집됨]{/}` : '';
+      lines.push(`{${C.fox}-fg}{bold}${n.extracted.title}{/}${human}`);
+    }
     lines.push(`{${sourceColor(n.source)}-fg}${srcName}{/}  {${C.dim}-fg}${(n.startedAt || '').slice(0, 16).replace('T', ' ')} · ${n.folder || '_inbox'}{/}`);
     lines.push('');
     if (n.extracted.summary) {
@@ -122,7 +126,7 @@ export function sessionsView(opts = {}) {
   }
 
   return {
-    help: '</>검색 <n>새세션 <r>이어열기 <h>핸드오프 <m>이동 <t>태그 <a>요약 <d>다이제스트 <c>컨텍스트 <i>주입 <w>지식 <q>종료',
+    help: '</>검색 <n>새세션 <r>이어열기 <h>핸드오프 <m>이동 <t>태그 <a>요약 <e>편집 <d>다이제스트 <c>컨텍스트 <i>주입 <w>지식 <q>종료',
     async mount(a) {
       app = a;
       // Three columns side by side: Folders | Sessions | Detail. The focused
@@ -201,8 +205,8 @@ export function sessionsView(opts = {}) {
         applyLayout(lvl);
         const hints = {
           folders: '{bold}폴더{/}: ↑↓  Enter 열기  <a>새폴더  <e>이름변경  <m>이동/중첩  <x>삭제  <w>지식  </>검색  <q>종료',
-          sessions: '{bold}세션{/}: ↑↓  Enter 상세  Esc 폴더로  <a>요약  <y>복사  <r>이어열기  <h>핸드오프  <m>이동  <t>태그  <w>지식  <d>다이제스트  <Space>선택',
-          detail: '{bold}상세{/}: ↑↓ 스크롤  Esc 세션으로  <a>요약  <y>복사  <r>이어열기',
+          sessions: '{bold}세션{/}: ↑↓  Enter 상세  Esc 폴더로  <a>요약  <e>편집  <y>복사  <r>이어열기  <h>핸드오프  <m>이동  <t>태그  <w>지식  <d>다이제스트  <Space>선택',
+          detail: '{bold}상세{/}: ↑↓ 스크롤  Esc 세션으로  <a>요약  <e>편집  <y>복사  <r>이어열기',
         };
         app.setStatus(' ' + (hints[lvl] || this.help));
       };
@@ -453,6 +457,23 @@ export function sessionsView(opts = {}) {
       };
       listBox.key('a', doAutoTag);
       detailBox.key('a', doAutoTag);
+
+      // e: hand-edit title + summary in $EDITOR (Mycelium's own record only —
+      // never the original agent's log). Sticks: a later auto-tag (a) will
+      // still refresh tags/decisions/todos but leaves this edit alone.
+      const doEditContent = () => {
+        const r = currentRow();
+        if (!r) return;
+        editSessionContent(app, r.id, () => {
+          data.refresh();
+          reloadFolders();
+          reloadList();
+          if (currentRow() && currentRow().id === r.id) showDetail(r.id);
+          app.render();
+        });
+      };
+      listBox.key('e', doEditContent);
+      detailBox.key('e', doEditContent);
 
       // Copy the current session (title + summary + full transcript) to clipboard.
       const doCopy = () => {

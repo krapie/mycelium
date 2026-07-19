@@ -13,7 +13,7 @@
  *   turns:        [ { role: "user"|"assistant", text } ],
  *   toolActivity: [ "Edit src/auth.ts", "Ran tests (3 passed)" ],
  *   artifacts:    { filesChanged: [], diffSummary: null },
- *   extracted:    { tags: [], summary: null, decisions: [], todos: [] },
+ *   extracted:    { title: null, tags: [], summary: null, decisions: [], todos: [], editedByHuman: false },
  *   organizedBy:  "auto" | "human",   // sticky flag — see organize step
  *   folder:       "회사/플랫폼/인증"    // tree path (null = _inbox)
  * }
@@ -30,7 +30,7 @@ export function emptyNeutral(id, source) {
     turns: [],
     toolActivity: [],
     artifacts: { filesChanged: [], diffSummary: null },
-    extracted: { title: null, tags: [], summary: null, decisions: [], todos: [] },
+    extracted: { title: null, tags: [], summary: null, decisions: [], todos: [], editedByHuman: false },
     organizedBy: 'auto',
     folder: null,
     continuationOf: null, // this session continues another (handoff parent id)

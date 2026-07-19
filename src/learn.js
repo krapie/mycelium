@@ -43,8 +43,11 @@ ${sessionExcerpt(neutral)}
  * surveyed tool does (they pattern-match on dir/name only). Existing tag
  * vocabulary is fed in to keep the vocabulary from diverging.
  *
- * Sticky rule: for a human-organized session we DO refresh summary/decisions/
- * todos (those are insights, not filing), but never overwrite the human's tags.
+ * Sticky rules, two independent ones:
+ * - organizedBy:'human' → never overwrite tags (filing, set by move()/tag()).
+ * - extracted.editedByHuman → never overwrite title/summary (content, set by
+ *   organize.setContent()). decisions/todos still refresh either way — they're
+ *   derived facts, not something this feature lets a person hand-edit.
  */
 export async function autoTagSession(sessionId, { existingTags } = {}) {
   const n = loadRaw(sessionId);
@@ -59,8 +62,10 @@ export async function autoTagSession(sessionId, { existingTags } = {}) {
   if (n.organizedBy !== 'human' && Array.isArray(parsed.tags)) {
     n.extracted.tags = parsed.tags.filter((t) => typeof t === 'string' && t.trim()).slice(0, 5);
   }
-  if (typeof parsed.title === 'string') n.extracted.title = parsed.title.trim();
-  if (typeof parsed.summary === 'string') n.extracted.summary = parsed.summary;
+  if (!n.extracted.editedByHuman) {
+    if (typeof parsed.title === 'string') n.extracted.title = parsed.title.trim();
+    if (typeof parsed.summary === 'string') n.extracted.summary = parsed.summary;
+  }
   if (Array.isArray(parsed.decisions)) n.extracted.decisions = parsed.decisions;
   if (Array.isArray(parsed.todos)) n.extracted.todos = parsed.todos;
   saveRaw(n);
