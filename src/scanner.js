@@ -3,6 +3,7 @@ import { writeFileSync, readFileSync, existsSync, readdirSync, rmSync } from 'no
 import { ensureDirs, RAW_DIR } from './paths.js';
 import * as claudeCode from './adapters/claude-code.js';
 import * as codex from './adapters/codex.js';
+import { META_MARKER } from './llm.js';
 
 const ADAPTERS = [claudeCode, codex];
 
@@ -13,17 +14,24 @@ function rawPath(id) {
 
 // Mycelium runs its own LLM calls via `claude -p` / `codex exec`, which the
 // agents then store as sessions — capturing those back would pollute the store
-// with the tagging/digest/knowledge prompts. Detect and skip them.
+// with the tagging/digest/knowledge prompts. llm.js now stamps every one of
+// its own prompts with META_MARKER, which is the reliable signal. The string
+// list below only exists to retroactively purge older prompt wordings (from
+// before the marker existed) that already got captured as real sessions —
+// don't rely on it for new detections, it drifts every time a prompt is
+// rewritten (it already has, twice).
 const META_SIGNATURES = [
   '실제로 수행된 작업(task) 관점에서',
   '다음은 AI 코딩/업무 세션의 대화 기록',
   '인수인계 메모처럼 서사형으로',
   '"프로젝트 지식"을 정리해라',
   '출력 형식:\n{"tags"',
+  '실질 내용(알맹이)',
+  '출력 형식:\n{"title"',
 ];
 function isMyceliumMeta(neutral) {
   const firstUser = neutral.turns.find((t) => t.role === 'user')?.text || '';
-  return META_SIGNATURES.some((sig) => firstUser.includes(sig));
+  return firstUser.includes(META_MARKER) || META_SIGNATURES.some((sig) => firstUser.includes(sig));
 }
 
 export function loadRaw(id) {
