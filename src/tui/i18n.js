@@ -60,11 +60,17 @@ const en = {
   'detail.continuationOf': (label) => `↩ continues: ${label}`,
   'detail.continuedTo': (label) => `→ continued by: ${label}`,
 
-  // sessions.js — status bar
+  // sessions.js — status bar (lifecycle bar: stage/key/arrow colors passed
+  // in by the caller, same pattern as help.text). Shown at every drill
+  // level — no free row anywhere to also show per-level nav hints, and this
+  // is the more useful thing to have visible at all times. Full keymap
+  // (including Enter/Esc nav) still lives in the ? modal.
+  'lifecycle.bar': (stage, key, arrow) =>
+    `{${stage}-fg}Capture{/}{${key}-fg}·s{/}  {${arrow}-fg}→{/}  ` +
+    `{${stage}-fg}Organize{/}{${key}-fg}·m/t/o{/}  {${arrow}-fg}→{/}  ` +
+    `{${stage}-fg}Learn{/}{${key}-fg}·a/w{/}  {${arrow}-fg}→{/}  ` +
+    `{${stage}-fg}Reuse{/}{${key}-fg}·n/h/r/i{/}`,
   'status.helpFallback': '? all shortcuts   q quit',
-  'status.folders': '{bold}Folders{/}  ·  Enter open  ·  ? all shortcuts  ·  q quit',
-  'status.sessions': '{bold}Sessions{/}  ·  Enter detail  ·  Esc to folders  ·  ? all shortcuts  ·  q quit',
-  'status.detail': '{bold}Detail{/}  ·  ↑↓ scroll  ·  Enter resume  ·  Esc to sessions  ·  ? all shortcuts  ·  q quit',
 
   // sessions.js — scan
   'scan.inProgress': 'Scanning…',
@@ -113,16 +119,14 @@ const en = {
   'picker.newPathPrompt': 'New folder path (e.g. company/platform/auth)',
   'picker.tagEditPrompt': (shown) => `Edit tags — current: ${shown}\n+add -remove (e.g. +urgent -miscategorized)`,
 
-  // editor.js
-  'editor.titleMarker': 'Title:',
+  // title-edit modal (sessions.js doEditTitle)
+  'editor.titlePrompt': 'Edit title',
   'editor.notFound': 'Session not found',
-  'editor.prepFailed': (msg) => `Couldn't prepare edit: ${msg}`,
-  'editor.readFailed': (msg) => `Couldn't read edit result: ${msg}`,
-  'editor.saved': 'Title/summary saved (Mycelium only — original log unchanged)',
+  'editor.saved': 'Title saved (Mycelium only — original log unchanged)',
   'editor.saveFailed': (err) => `Save failed: ${err}`,
 
   // launch.js
-  'launch.noAgents': 'No agent CLI installed (claude/codex)',
+  'launch.noAgents': 'No agent CLI installed (claude/codex/kiro-cli)',
   'launch.selectAgent': 'Choose agent',
   'launch.dirNotFound': "Directory doesn't exist",
   'launch.dirPrompt': (folder) => `Working directory${folder ? ` (${folder})` : ''}`,
@@ -135,6 +139,17 @@ const en = {
   'launch.captured': (note, n, folder) => `${note} ${n} → ${folder}`,
   'launch.noNewSessions': 'No new sessions from this directory',
   'launch.captureFailed': (msg) => `Capture failed: ${msg}`,
+
+  'resume.chooseAction': 'Resume session',
+  'resume.openHere': 'Open here',
+  'resume.copyCommand': 'Copy command (new tab)',
+  'resume.copied': 'Command copied to clipboard',
+  'resume.copyFailed': 'Copy failed (no clipboard tool found)',
+
+  'smart.running': 'Summarizing + classifying unfiled sessions…',
+  'smart.noMatches': 'No confident folder matches found',
+  'smart.noMatch': '(no match)',
+  'smart.previewTitle': 'Suggested placements',
 
   'help.text': null, // filled in below (large block)
 };
@@ -180,10 +195,13 @@ const ko = {
   'detail.continuationOf': (label) => `↩ 이어받음: ${label}`,
   'detail.continuedTo': (label) => `→ 이어감: ${label}`,
 
+  'lifecycle.bar': (stage, key, arrow) =>
+    `{${stage}-fg}생성{/}{${key}-fg}·s{/}  {${arrow}-fg}→{/}  ` +
+    `{${stage}-fg}조직화{/}{${key}-fg}·m/t/o{/}  {${arrow}-fg}→{/}  ` +
+    `{${stage}-fg}학습{/}{${key}-fg}·a/w{/}  {${arrow}-fg}→{/}  ` +
+    `{${stage}-fg}재사용{/}{${key}-fg}·n/h/r/i{/}`,
+
   'status.helpFallback': '? 전체 단축키   q 종료',
-  'status.folders': '{bold}폴더{/}  ·  Enter 열기  ·  ? 전체 단축키  ·  q 종료',
-  'status.sessions': '{bold}세션{/}  ·  Enter 상세  ·  Esc 폴더로  ·  ? 전체 단축키  ·  q 종료',
-  'status.detail': '{bold}상세{/}  ·  ↑↓ 스크롤  ·  Enter 이어열기  ·  Esc 세션으로  ·  ? 전체 단축키  ·  q 종료',
 
   'scan.inProgress': '스캔 중…',
   'scan.failed': (msg) => `스캔 실패: ${msg}`,
@@ -227,14 +245,12 @@ const ko = {
   'picker.newPathPrompt': '새 폴더 경로 (예: 회사/플랫폼/인증)',
   'picker.tagEditPrompt': (shown) => `태그 편집 — 현재: ${shown}\n+추가 -삭제 (예: +긴급 -오분류)`,
 
-  'editor.titleMarker': '제목:',
+  'editor.titlePrompt': '제목 수정',
   'editor.notFound': '세션을 찾을 수 없습니다',
-  'editor.prepFailed': (msg) => `편집 준비 실패: ${msg}`,
-  'editor.readFailed': (msg) => `편집 결과 읽기 실패: ${msg}`,
-  'editor.saved': '제목/요약 저장됨 (Mycelium 전용, 원본 로그는 변경 없음)',
+  'editor.saved': '제목 저장됨 (Mycelium 전용, 원본 로그는 변경 없음)',
   'editor.saveFailed': (err) => `저장 실패: ${err}`,
 
-  'launch.noAgents': '설치된 에이전트(claude/codex)가 없습니다',
+  'launch.noAgents': '설치된 에이전트(claude/codex/kiro-cli)가 없습니다',
   'launch.selectAgent': '에이전트 선택',
   'launch.dirNotFound': '디렉토리가 존재하지 않습니다',
   'launch.dirPrompt': (folder) => `작업 디렉토리${folder ? ` (${folder})` : ''}`,
@@ -248,6 +264,17 @@ const ko = {
   'launch.noNewSessions': '이 디렉토리의 새 세션 없음',
   'launch.captureFailed': (msg) => `캡처 실패: ${msg}`,
 
+  'resume.chooseAction': '세션 이어열기',
+  'resume.openHere': '여기서 열기',
+  'resume.copyCommand': '명령어 복사 (새 탭용)',
+  'resume.copied': '명령어가 클립보드에 복사됨',
+  'resume.copyFailed': '복사 실패 (클립보드 도구 없음)',
+
+  'smart.running': '미분류 세션 요약 + 폴더 분류 중…',
+  'smart.noMatches': '확실한 폴더 매칭을 찾지 못했습니다',
+  'smart.noMatch': '(매칭 없음)',
+  'smart.previewTitle': '제안된 폴더 배치',
+
   'help.text': null,
 };
 
@@ -255,7 +282,8 @@ const ko = {
 // from dozens of sub-keys — it's read as a single reference sheet, and
 // splitting it further would add ceremony without adding maintainability.
 en['help.text'] = (fg, spore) => `{bold}Global{/}
-  {${fg}-fg}s{/}       Scan (mycelium scan, no CLI needed — auto-file is still CLI \`mycelium organize\`)
+  {${fg}-fg}s{/}       Scan (mycelium scan, no CLI needed — cwd-rule auto-file is still CLI \`mycelium organize\`)
+  {${fg}-fg}o{/}       Smart organize — summarize + suggest folders for unfiled sessions by content, pick which to apply
   {${fg}-fg}/{/}       Full-text search
   {${fg}-fg}d{/}       View digests (open, then n/w to generate today/this week)
   {${fg}-fg}?{/}       This help
@@ -273,29 +301,30 @@ en['help.text'] = (fg, spore) => `{bold}Global{/}
   {${fg}-fg}Enter{/}   View detail
   {${fg}-fg}Esc{/}     Back to folders
   {${fg}-fg}a{/}       Generate summary + tags (LLM, batches over multi-select)
-  {${fg}-fg}e{/}       Hand-edit title/summary ($EDITOR, Mycelium record only)
+  {${fg}-fg}e{/}       Rename title (modal — summary/tags stay AI-generated)
   {${fg}-fg}y{/}       Copy to clipboard
-  {${fg}-fg}r{/}       Resume (reopen in the original agent)
+  {${fg}-fg}r{/}       Resume (reopen in the original agent, right here)
   {${fg}-fg}h{/}       Handoff (start a new session on a different agent)
   {${fg}-fg}n{/}       Launch a new agent session with this folder's context
   {${fg}-fg}m{/} / {${fg}-fg}t{/}   Move to folder / edit tags
   {${fg}-fg}x{/}       Delete session (Mycelium record only, original log kept)
   {${fg}-fg}w{/}       Extract folder knowledge — preview then confirm
   {${fg}-fg}c{/}       View inherited context
-  {${fg}-fg}i{/}       Inject into AGENTS.md — preview then confirm
+  {${fg}-fg}i{/}       Inject into AGENTS.md — preview then confirm (n/h do this automatically; use i to refresh a session opened outside Mycelium)
   {${fg}-fg}Space{/}   Multi-select
   {${fg}-fg}*{/}       Select everything currently listed (press again to clear)
 
 {bold}Detail panel{/}
   {${fg}-fg}↑↓{/}      Scroll
-  {${fg}-fg}Enter{/}   Resume (r in the sessions panel)
+  {${fg}-fg}Enter{/}   Resume — choose "open here" or "copy command" (r in the sessions panel always opens here)
   {${fg}-fg}Esc{/}     Back to sessions
   {${fg}-fg}a / e / y / x{/}  Same as sessions panel
 
 Sessions linked by handoff show {${spore}-fg}↩{/}/{${spore}-fg}→{/} markers in the list and continuation links in detail.`;
 
 ko['help.text'] = (fg, spore) => `{bold}전역{/}
-  {${fg}-fg}s{/}       스캔 (mycelium scan, CLI 없이 — 자동배치는 아직 CLI \`mycelium organize\`로)
+  {${fg}-fg}s{/}       스캔 (mycelium scan, CLI 없이 — cwd 규칙 자동배치는 아직 CLI \`mycelium organize\`로)
+  {${fg}-fg}o{/}       스마트 정리 — 미분류 세션 요약 후 내용 기준으로 폴더 제안, 적용할 것만 선택
   {${fg}-fg}/{/}       전문 검색
   {${fg}-fg}d{/}       다이제스트 보기 (열어서 n/w로 오늘/이번주 생성)
   {${fg}-fg}?{/}       이 도움말
@@ -313,22 +342,22 @@ ko['help.text'] = (fg, spore) => `{bold}전역{/}
   {${fg}-fg}Enter{/}   상세 보기
   {${fg}-fg}Esc{/}     폴더 패널로
   {${fg}-fg}a{/}       요약·태그 생성 (LLM, 다중 선택 시 일괄)
-  {${fg}-fg}e{/}       제목·요약 직접 편집 ($EDITOR, Mycelium 저장소만)
+  {${fg}-fg}e{/}       제목 수정 (모달 — 요약·태그는 AI 생성 그대로)
   {${fg}-fg}y{/}       클립보드로 복사
-  {${fg}-fg}r{/}       이어열기 (원래 에이전트로 resume)
+  {${fg}-fg}r{/}       이어열기 (원래 에이전트로, 바로 여기서)
   {${fg}-fg}h{/}       핸드오프 (다른 에이전트로 새 세션 시작)
   {${fg}-fg}n{/}       이 폴더 컨텍스트로 새 에이전트 세션
   {${fg}-fg}m{/} / {${fg}-fg}t{/}   폴더 이동 / 태그 편집
   {${fg}-fg}x{/}       세션 삭제 (Mycelium 저장소에서만, 원본 로그 유지)
   {${fg}-fg}w{/}       폴더 지식 추출 — 미리보기 후 확인
   {${fg}-fg}c{/}       상속 컨텍스트 보기
-  {${fg}-fg}i{/}       AGENTS.md에 주입 — 미리보기 후 확인
+  {${fg}-fg}i{/}       AGENTS.md에 주입 — 미리보기 후 확인 (n/h는 자동으로 함; Mycelium 밖에서 연 세션 새로고침용)
   {${fg}-fg}Space{/}   다중 선택
   {${fg}-fg}*{/}       현재 목록 전체 선택 (다시 누르면 전체 해제)
 
 {bold}상세 패널{/}
   {${fg}-fg}↑↓{/}      스크롤
-  {${fg}-fg}Enter{/}   이어열기 (세션 패널의 r)
+  {${fg}-fg}Enter{/}   이어열기 — "여기서 열기" 또는 "명령어 복사" 선택 (세션 패널의 r은 항상 바로 열기)
   {${fg}-fg}Esc{/}     세션 패널로
   {${fg}-fg}a / e / y / x{/}  세션 패널과 동일
 

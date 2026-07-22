@@ -2,11 +2,23 @@ import pkg from 'neo-blessed';
 const blessed = pkg.default || pkg;
 import { C, sourceColor } from '../theme.js';
 import * as data from '../data.js';
-import { move as organizeMove, tag as organizeTag, mkdir, renameFolder, deleteFolder, deleteSession } from '../../organize.js';
-import { scan } from '../../scanner.js';
-import { pickFolder, editTags, menu } from '../widgets/pickers.js';
+import {
+  move as organizeMove,
+  tag as organizeTag,
+  mkdir,
+  renameFolder,
+  deleteFolder,
+  deleteSession,
+  setContent,
+  suggestPlacements,
+  applyPlacements,
+  summarizeCandidates,
+} from '../../organize.js';
+import { scan, allRaw } from '../../scanner.js';
+import { pickFolder, editTags, menu, multiSelectList } from '../widgets/pickers.js';
 import { basename } from 'node:path';
 import { launchAgent, resumeSession } from '../launch.js';
+import { resumeCommandLine } from '../../agents.js';
 import { buildHandoff } from '../../handoff.js';
 import { autoTagSession } from '../../learn.js';
 import { buildKnowledgeText, writeKnowledgeText } from '../../insight.js';
@@ -14,7 +26,6 @@ import { assembleContext, injectAgentsMd } from '../../reuse.js';
 import { textView, digestReader, confirmText, helpModal } from '../widgets/viewers.js';
 import { textPrompt } from '../widgets/pickers.js';
 import { copyToClipboard } from '../clipboard.js';
-import { editSessionContent } from '../widgets/editor.js';
 import { t } from '../i18n.js';
 
 // Break a summary paragraph into sentence-sized bullet points for the detail
@@ -80,7 +91,7 @@ export function sessionsView(opts = {}) {
       // Agent name formatted as a hashtag, same visual language as tags —
       // and now trails the title instead of leading it, so the title (the
       // thing you're actually scanning for) reads first on the line.
-      const name = r.source === 'codex' ? 'codex' : 'claude';
+      const name = { codex: 'codex', kiro: 'kiro' }[r.source] ?? 'claude';
       const src = `{${sourceColor(r.source)}-fg}#${name}{/}`;
       // Same "source #idPrefix" shape as the continuation links in detail
       // (↩ 이어받음/→ 이어감), so you can match a row here to that label there.
@@ -117,7 +128,7 @@ export function sessionsView(opts = {}) {
     const n = data.detail(id);
     if (!n) return;
     const lines = [];
-    const srcName = n.source === 'codex' ? 'codex' : 'claude';
+    const srcName = { codex: 'codex', kiro: 'kiro' }[n.source] ?? 'claude';
     // Title as the headline, then metadata, then the description (summary).
     if (n.extracted.title) lines.push(`{${C.fox}-fg}{bold}${n.extracted.title}{/}`, '');
     lines.push(
@@ -159,7 +170,6 @@ export function sessionsView(opts = {}) {
   }
 
   return {
-    help: t('status.helpFallback'),
     async mount(a) {
       app = a;
       // Three columns side by side: Folders | Sessions | Detail. The focused
@@ -242,17 +252,14 @@ export function sessionsView(opts = {}) {
       });
 
       // ── k9s-style drill-down: Folders → Sessions → Detail, Enter=in, Esc=out ──
+      // Status bar shows the lifecycle bar (which keys belong to which stage)
+      // instead of per-level nav hints — no free row anywhere on screen to
+      // show both, and this is the more useful thing to have visible at all
+      // times. Full keymap (incl. Enter/Esc nav) still lives in the ? modal.
       const setLevel = (lvl) => {
         state.level = lvl;
         applyLayout(lvl);
-        // Full keymap lives in the ? modal now, not crammed into this line —
-        // just enough breadcrumb to know where you are and how to get help.
-        const hints = {
-          folders: t('status.folders'),
-          sessions: t('status.sessions'),
-          detail: t('status.detail'),
-        };
-        app.setStatus(' ' + (hints[lvl] || this.help));
+        app.setStatus(' ' + t('lifecycle.bar', C.text, C.faint, C.border) + '  ' + t('status.helpFallback'));
       };
 
       // Live-preview the highlighted folder's sessions as you move (no drill yet).
@@ -438,6 +445,48 @@ export function sessionsView(opts = {}) {
         });
       });
 
+      // o: smart organize — LLM content-based folder suggestions for sessions
+      // still unorganized, comparing them against the sessions already filed
+      // in each folder (see organize.js's suggestPlacements()). Always a
+      // preview-then-confirm flow (like w/i), and never run by the daemon —
+      // unlike `s`'s plain scan, this makes real LLM calls and moves things.
+      screenKey(app, ['o'], async () => {
+        // Only summarizes the sessions actually being classified below (still
+        // unorganized) — not the whole store's summary backlog. Calls the LLM
+        // once per such session lacking one, sequentially, so show real
+        // progress instead of one static toast that expires long before a
+        // multi-session batch finishes and makes it look hung.
+        const pending = allRaw().filter((n) => !n.folder && n.organizedBy !== 'human' && !n.extracted.summary).length;
+        let done = 0;
+        if (pending) app.notify(t('sessions.summarizing', 0, pending), 90);
+        await summarizeCandidates({
+          onProgress: () => {
+            done++;
+            app.notify(t('sessions.summarizing', done, pending), 90);
+          },
+        });
+        data.refresh();
+        app.notify(t('smart.running'), 60);
+        const res = await suggestPlacements();
+        if (!res.ok) return app.notify(res.error, 4);
+        const matches = res.placements.filter((p) => p.folder);
+        if (!matches.length) return app.notify(t('smart.noMatches'), 3);
+        // Cherry-pick which suggestions to actually apply — sessions left
+        // unchecked simply stay unorganized, same as if `o` had never run.
+        const items = matches.map((p) => ({
+          label: `${p.id.slice(0, 8)}  → {${C.fox}-fg}${p.folder}{/}${p.reason ? `  {${C.faint}-fg}(${p.reason}){/}` : ''}`,
+          value: p,
+        }));
+        multiSelectList(app, t('smart.previewTitle'), items, (chosen) => {
+          if (!chosen || !chosen.length) return;
+          applyPlacements(chosen);
+          data.refresh();
+          reloadFolders();
+          reloadList();
+          app.render();
+        });
+      });
+
       // ?: full keymap reference — status bar only shows a short breadcrumb now.
       screenKey(app, ['?'], () => helpModal(app));
 
@@ -533,7 +582,29 @@ export function sessionsView(opts = {}) {
       listBox.key('r', doResume);
       // Detail panel uses Enter instead of r — it's the leaf level, so Enter
       // (the drill-down/act key everywhere else in this view) is free here.
-      detailBox.key('enter', doResume);
+      // Unlike listBox's `r` (instant resume), Enter offers a choice: resume
+      // right here, or copy the equivalent shell command for a new tab.
+      detailBox.key('enter', () => {
+        const r = currentRow();
+        if (!r) return;
+        menu(
+          app,
+          t('resume.chooseAction'),
+          [
+            { label: t('resume.copyCommand'), value: 'copy' },
+            { label: t('resume.openHere'), value: 'here' },
+          ],
+          (choice) => {
+            if (choice === 'here') return doResume();
+            if (choice === 'copy') {
+              const n = data.detail(r.id);
+              const res = resumeCommandLine({ id: r.id, source: r.source, cwd: n?.cwd, projectDir: n?.projectDir });
+              if (!res.ok) return app.notify(res.error, 3);
+              app.notify(copyToClipboard(res.line) ? t('resume.copied') : t('resume.copyFailed'), 3);
+            }
+          },
+        );
+      });
 
       // Reuse: hand the current session off to another agent (seeded NEW session).
       listBox.key('h', () => {
@@ -586,13 +657,18 @@ export function sessionsView(opts = {}) {
       listBox.key('a', doAutoTag);
       detailBox.key('a', doAutoTag);
 
-      // e: hand-edit title + summary in $EDITOR (Mycelium's own record only —
-      // never the original agent's log). Sticks: a later auto-tag (a) will
-      // still refresh tags/decisions/todos but leaves this edit alone.
-      const doEditContent = () => {
+      // e: rename the title only (Mycelium's own record only — never the
+      // original agent's log). Summary/tags/decisions/todos stay purely
+      // AI-generated — a later auto-tag (a) still refreshes them, but never
+      // touches a title that's already been set (see learn.js).
+      const doEditTitle = () => {
         const r = currentRow();
         if (!r) return;
-        editSessionContent(app, r.id, () => {
+        const n = data.detail(r.id);
+        textPrompt(app, t('editor.titlePrompt'), n?.extracted.title || '', (val) => {
+          if (val === null) return; // Esc — cancelled
+          const res = setContent(r.id, { title: val });
+          app.notify(res.ok ? t('editor.saved') : t('editor.saveFailed', res.error), res.ok ? 2 : 3);
           data.refresh();
           reloadFolders();
           reloadList();
@@ -600,8 +676,8 @@ export function sessionsView(opts = {}) {
           app.render();
         });
       };
-      listBox.key('e', doEditContent);
-      detailBox.key('e', doEditContent);
+      listBox.key('e', doEditTitle);
+      detailBox.key('e', doEditTitle);
 
       // Copy the current session (title + summary + full transcript) to clipboard.
       const doCopy = () => {

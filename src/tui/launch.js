@@ -6,12 +6,7 @@ import { injectAgentsMd } from '../reuse.js';
 import { menu, textPrompt } from './widgets/pickers.js';
 import { foreground } from './foreground.js';
 import { t } from './i18n.js';
-
-// Which CLIs are actually installed → which agents we can offer.
-function which(cmd) {
-  const paths = (process.env.PATH || '').split(':');
-  return paths.some((p) => p && existsSync(`${p}/${cmd}`));
-}
+import { AGENTS, which, binFor, resumeArgsFor, workDirFor } from '../agents.js';
 
 /** Distinct existing working directories of the sessions in a folder subtree. */
 function dirsForFolder(folder) {
@@ -25,11 +20,6 @@ function dirsForFolder(folder) {
   }
   return [...set];
 }
-
-const AGENTS = {
-  claude: { label: 'Claude Code', bin: 'claude', args: (seed) => (seed ? [seed] : []) },
-  codex: { label: 'Codex', bin: 'codex', args: (seed) => (seed ? [seed] : []) },
-};
 
 /**
  * The cockpit's headline flow. Pick an agent, resolve the folder's working
@@ -96,20 +86,17 @@ function resolveDir(app, folder, cb) {
  * different agent with the context injected). Uses each CLI's native resume.
  */
 export function resumeSession(app, session, done) {
-  const bin = session.source === 'codex' ? 'codex' : 'claude';
+  const bin = binFor(session.source);
   if (!which(bin)) {
     app.notify(t('launch.binNotInstalled', bin), 3);
     return done && done();
   }
-  // The agent resolves --resume against the project dir it was launched from,
-  // not the cwd recorded in messages — so prefer projectDir.
-  const candidates = [session.projectDir, session.cwd].filter(Boolean);
-  const cwd = candidates.find((d) => existsSync(d));
+  const cwd = workDirFor(session);
   if (!cwd) {
     app.notify(t('launch.noWorkDir'), 4);
     return done && done();
   }
-  const args = session.source === 'codex' ? ['resume', session.id] : ['--resume', session.id];
+  const args = resumeArgsFor(session.source, session.id);
   foreground(app, bin, args, cwd, () => {
     // Resuming may extend the session; re-capture it.
     try {
@@ -138,7 +125,7 @@ function run(app, { agentKey, dir, folder, seed, parentId }, done) {
 
   // Hand the terminal to the agent in the foreground; capture on return.
   // (k9s "shell into a pod" pattern.)
-  foreground(app, agent.bin, agent.args(seed), dir, () => {
+  foreground(app, agent.bin, agent.newArgs(seed), dir, () => {
     // Back in the TUI: capture whatever the agent produced.
     try {
       scan();

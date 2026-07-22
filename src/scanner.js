@@ -3,10 +3,11 @@ import { writeFileSync, readFileSync, existsSync, readdirSync, rmSync } from 'no
 import { ensureDirs, RAW_DIR } from './paths.js';
 import * as claudeCode from './adapters/claude-code.js';
 import * as codex from './adapters/codex.js';
+import * as kiro from './adapters/kiro.js';
 import { META_MARKER } from './llm.js';
 import { loadConfig } from './config.js';
 
-const ADAPTERS = [claudeCode, codex];
+const ADAPTERS = [claudeCode, codex, kiro];
 
 function rawPath(id) {
   // session ids are uuids / safe filenames already, but guard anyway
@@ -161,4 +162,27 @@ export function allRaw() {
     }
   }
   return out;
+}
+
+/**
+ * Resolve a session by exact id or unique prefix — `list`/`search` only ever
+ * print the 8-char prefix, so CLI commands taking a session id need to accept
+ * that too, not just the full uuid.
+ */
+export function findSession(idOrPrefix) {
+  const exact = loadRaw(idOrPrefix);
+  if (exact) return { ok: true, session: exact };
+  const matches = allRaw().filter((n) => n.id.startsWith(idOrPrefix));
+  if (matches.length === 0) return { ok: false, error: `no session matching "${idOrPrefix}"` };
+  if (matches.length > 1) {
+    const hint = matches
+      .slice(0, 5)
+      .map((n) => n.id.slice(0, 8))
+      .join(', ');
+    return {
+      ok: false,
+      error: `ambiguous prefix "${idOrPrefix}" — ${matches.length} matches (${hint}${matches.length > 5 ? ', …' : ''}); use more characters`,
+    };
+  }
+  return { ok: true, session: matches[0] };
 }
