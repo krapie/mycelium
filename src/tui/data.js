@@ -1,17 +1,9 @@
 import { allRaw, loadRaw } from '../scanner.js';
 import { reindex, search, listTags } from '../index-db.js';
-import { listTreeDirs } from '../organize.js';
+import { listTreeDirs, isArchive } from '../organize.js';
 
 // Thin data layer the TUI views read from — wraps the existing core so views
 // never touch sqlite/raw directly.
-
-// _archive (dead-cwd sessions, or anything manually filed there) is deliberately
-// hidden from the TUI by default — it's a bin for things you don't want in
-// your way, not a folder you browse. Still fully there on disk; reachable via
-// `mycelium list --folder _archive` / `mycelium search --folder _archive`.
-function isArchive(folder) {
-  return folder === '_archive' || (!!folder && folder.startsWith('_archive/'));
-}
 
 export function folders() {
   const counts = new Map();

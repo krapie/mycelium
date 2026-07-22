@@ -1,13 +1,16 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
-import { scan, allRaw } from './scanner.js';
+import { spawn } from 'node:child_process';
+import { scan, allRaw, findSession } from './scanner.js';
 import { firstUserText } from './schema.js';
 import { reindex, search, listTags } from './index-db.js';
-import { mkdir, move, tag, autoOrganize, addRule } from './organize.js';
+import { mkdir, move, tag, autoOrganize, addRule, suggestPlacements, applyPlacements, summarizeCandidates } from './organize.js';
 import { autoTagSession, tagAll } from './learn.js';
 import { generateDigest, extractKnowledge, foldersWithSessions } from './insight.js';
 import { assembleContext, folderForCwd, injectAgentsMd, contextForSession } from './reuse.js';
 import { buildHandoff } from './handoff.js';
+import { resumeCommandLine } from './agents.js';
+import { copyToClipboard } from './tui/clipboard.js';
 
 function fail(msg) {
   console.error(msg);
@@ -77,9 +80,45 @@ async function main() {
       break;
     }
     case 'organize': {
-      const res = autoOrganize();
+      const { flags } = parseFlags(args);
+      if (!flags.smart) {
+        const res = autoOrganize();
+        reindex();
+        console.log(`auto-placed ${res.placed}, kept ${res.skippedHuman} human-organized sessions untouched`);
+        break;
+      }
+      // --smart: content-based, LLM-driven. Only summarizes the sessions
+      // actually being classified below (still unorganized) — not the whole
+      // store's summary backlog, which is `autotag`'s job. This first phase
+      // calls the LLM once per such session lacking one, sequentially — can
+      // be slow with a backlog, so report progress rather than going silent.
+      const pending = allRaw().filter((n) => !n.folder && n.organizedBy !== 'human' && !n.extracted.summary).length;
+      if (pending) console.log(`summarizing ${pending} session(s) first…`);
+      await summarizeCandidates({
+        onProgress: (s, err) => {
+          if (err) console.log(`  ! ${err.message}`);
+          else console.log(`  + ${s.id.slice(0, 8)}`);
+        },
+      });
       reindex();
-      console.log(`auto-placed ${res.placed}, kept ${res.skippedHuman} human-organized sessions untouched`);
+      console.log('classifying…');
+      const res = await suggestPlacements();
+      if (!res.ok) return fail(res.error);
+      if (!res.placements.length) {
+        console.log('no confident placements found');
+        break;
+      }
+      for (const p of res.placements) {
+        console.log(`${p.id.slice(0, 8)}  → ${p.folder || '(no match, stays in _inbox)'}${p.reason ? `  — ${p.reason}` : ''}`);
+      }
+      if (flags.apply) {
+        const applied = applyPlacements(res.placements);
+        reindex();
+        console.log(`\napplied ${applied} placements`);
+      } else {
+        const matched = res.placements.filter((p) => p.folder).length;
+        console.log(`\n${matched} suggested — re-run with --apply to file them`);
+      }
       break;
     }
     case 'mkdir': {
@@ -241,6 +280,41 @@ async function main() {
       console.log(res.prompt);
       break;
     }
+    case 'resume': {
+      const { flags, positional } = parseFlags(args);
+      const idOrPrefix = positional[0];
+      if (!idOrPrefix) return fail('Usage: mycelium resume <sessionId|prefix> [--copy] [--exec]');
+      const found = findSession(idOrPrefix);
+      if (!found.ok) return fail(found.error);
+      const { session } = found;
+
+      const cmd = resumeCommandLine(session);
+      if (!cmd.ok) return fail(cmd.error);
+
+      if (flags.exec) {
+        const child = spawn(cmd.bin, cmd.args, { cwd: cmd.cwd, stdio: 'inherit' });
+        child.on('exit', (code) => {
+          try {
+            scan();
+            reindex();
+          } catch {
+            /* ignore */
+          }
+          process.exit(code ?? 0);
+        });
+        return; // async exit above — don't fall through to main()'s implicit end
+      }
+
+      const folder = session.folder || '_inbox';
+      console.error(`${session.id.slice(0, 8)}  [${session.source}]  ${folder}`);
+      console.error(`          ${firstUserText(session).slice(0, 70)}`);
+      console.log(cmd.line);
+
+      if (flags.copy) {
+        if (!copyToClipboard(cmd.line)) console.error('copy failed (no clipboard tool found)');
+      }
+      break;
+    }
     case 'daemon': {
       const { runDaemon } = await import('./daemon.js');
       await runDaemon();
@@ -263,6 +337,7 @@ async function main() {
 
 Capture   scan                          세션 저장소 스캔 → 중립 스키마
 Organize  organize                      cwd 기반 자동 배치 (사람 결정은 보존)
+          organize --smart [--apply]    내용 기반 폴더 제안 (요약 먼저 채움, --apply 전엔 미리보기만)
           mkdir <folder>                폴더 생성
           mv <session> <folder>         세션 수동 이동
           tag <session> +t -t           태그 수동 편집
@@ -273,6 +348,7 @@ Learn     autotag [<session>] [--force] 내용 기반 자동 태깅 (소급 일�
 Reuse     context <session>|--folder|--cwd   조상 경로 컨텍스트 출력
           inject [--dir D] [--folder F] AGENTS.md에 지식 주입
           handoff <session>            다른 에이전트용 인수인계 프롬프트
+          resume <session|prefix> [--copy|--exec]  이어열기 명령어 출력(새 탭 붙여넣기용) / 클립보드 복사 / 즉시 실행
 Find      search <q> [--tag t] [--folder f]
           list [--folder f] / tags     (_archive는 기본 숨김 — list --folder _archive)
 Run       (인자 없음) 또는 tui          인터랙티브 TUI (콕핏)

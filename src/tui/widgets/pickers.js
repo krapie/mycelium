@@ -120,3 +120,56 @@ export function menu(app, label, choices, cb) {
     cb(choices[idx].value);
   });
 }
+
+/**
+ * Multi-select review list — for suggestions the human should cherry-pick
+ * from rather than accept-or-reject as a whole (e.g. smart-organize
+ * placements). Nothing starts selected: like the sessions list's own
+ * Space/* multi-select, you opt sessions IN rather than opt bad ones out.
+ * Enter applies only the checked items; Esc applies nothing.
+ */
+export function multiSelectList(app, label, items, cb) {
+  const selected = new Set();
+  const render = (it, i) => `${selected.has(i) ? `{${C.fox}-fg}✓{/} ` : '  '}${it.label}`;
+  const box = blessed.list({
+    parent: app.screen,
+    top: 'center',
+    left: 'center',
+    width: '70%',
+    height: Math.min(items.length + 4, 20),
+    label: ` ${label} — space select, * all, enter apply, esc cancel `,
+    tags: true,
+    keys: true,
+    mouse: true,
+    items: items.map(render),
+    border: { type: 'line' },
+    style: { border: { fg: C.fox }, selected: { bg: C.surface, fg: C.text }, fg: C.dim },
+  });
+  const refresh = () => {
+    items.forEach((it, i) => box.setItem(i, render(it, i)));
+    app.render();
+  };
+  box.focus();
+  app.render();
+  box.key(['space'], () => {
+    const i = box.selected;
+    if (selected.has(i)) selected.delete(i);
+    else selected.add(i);
+    refresh();
+  });
+  box.key(['*'], () => {
+    if (selected.size === items.length) selected.clear();
+    else items.forEach((_, i) => selected.add(i));
+    refresh();
+  });
+  box.key(['escape'], () => {
+    box.destroy();
+    app.render();
+    cb(null);
+  });
+  box.key(['enter'], () => {
+    box.destroy();
+    app.render();
+    cb(items.filter((_, i) => selected.has(i)).map((it) => it.value));
+  });
+}

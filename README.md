@@ -8,7 +8,7 @@ AI 협업에서 생성되는 컨텍스트를 **생성(Capture) → 조직화(Org
 
 - **Node.js ≥ 22** (내장 `node:sqlite` 사용)
 - **git**
-- (선택) **`claude` / `codex` CLI** — 설치 및 로그인되어 있으면 요약 생성·이어열기·핸드오프·에이전트 실행에 사용. 단순 탐색/검색만 할 거면 없어도 됩니다.
+- (선택) **`claude` / `codex` / `kiro-cli` CLI** — 설치 및 로그인되어 있으면 요약 생성·이어열기·핸드오프·에이전트 실행에 사용. 단순 탐색/검색만 할 거면 없어도 됩니다.
 
 ## 설치
 
@@ -22,19 +22,19 @@ npm link                    # (선택) 전역 `mycelium` 명령 등록
 ## 시작하기
 
 ```sh
-mycelium scan               # 이 머신의 Claude/Codex 세션을 가져오기(임포트)
+mycelium scan               # 이 머신의 Claude/Codex/Kiro 세션을 가져오기(임포트)
 mycelium                    # 인터랙티브 TUI 실행
 ```
 
 > 전역 등록(`npm link`)을 안 했으면 `node src/cli.js <명령>` 형태로 실행하세요.
 
-**머신별로 독립적입니다.** Mycelium은 그 컴퓨터의 로컬 세션(`~/.claude/projects/`, `~/.codex/sessions/`)만 읽고, 데이터도 그 컴퓨터의 `~/.mycelium/`에 저장합니다. 다른 컴퓨터의 세션이 자동으로 넘어오지 않습니다.
+**머신별로 독립적입니다.** Mycelium은 그 컴퓨터의 로컬 세션(`~/.claude/projects/`, `~/.codex/sessions/`, `~/.kiro/sessions/cli/` + kiro-cli의 SQLite DB)만 읽고, 데이터도 그 컴퓨터의 `~/.mycelium/`에 저장합니다. 다른 컴퓨터의 세션이 자동으로 넘어오지 않습니다.
 
 ## TUI (콕핏)
 
 `mycelium`을 인자 없이 실행하면 터미널 UI가 뜹니다. **폴더 | 세션 | 상세** 3-컬럼이고, k9s처럼 드릴다운합니다: 폴더에서 시작 → `Enter`로 세션 → `Enter`로 상세 → `Esc`로 뒤로. 포커스한 컬럼이 넓어집니다.
 
-하단 상태바는 짧은 breadcrumb만 보여줍니다 — 전체 단축키는 아무 화면에서나 **`?`**를 누르면 뜨는 도움말 모달에서 확인하세요.
+하단 상태바에는 **생성·s → 조직화·m/t/o → 학습·a/w → 재사용·n/h/r** 라이프사이클 바가 항상 떠 있습니다 — 어떤 키가 어느 단계에 속하는지 화면에서 바로 보이는 정적 참고선입니다(지금 어느 단계인지 실시간으로 강조하진 않습니다). 전체 단축키는 아무 화면에서나 **`?`**를 누르면 뜨는 도움말 모달에서 확인하세요.
 
 **표시 언어는 기본 영어**입니다. `mycelium lang ko`로 한국어로 바꿀 수 있고(다음 TUI 실행부터 적용), `mycelium lang en`으로 되돌릴 수 있습니다. TUI 안에서 바로 전환하는 키는 없습니다 — 실행 전에 CLI로 설정하는 방식입니다.
 
@@ -60,8 +60,9 @@ mycelium search "검색어" --folder _archive
 | 키 | 동작 |
 |---|---|
 | `a` | 내용 기반 요약·태그 생성 (LLM, 여러 개는 `Space` 후 일괄). **제목이 이미 있으면 제목은 건드리지 않고**, 요약·태그·결정·할일은 매번 최신 내용으로 다시 씁니다 |
-| `e` | 제목·요약을 `$EDITOR`로 직접 편집 (Mycelium 저장소만 수정 — 원본 claude/codex 세션 로그는 건드리지 않음). 여기서 정한 **제목은 이후 `a`를 다시 눌러도 유지**되지만, 요약은 `a`를 다시 돌리면 최신 내용으로 갱신됩니다 |
-| `r` | 원래 에이전트에서 그 세션 그대로 **이어열기** (resume). 상세 화면에서는 `r` 대신 `Enter` |
+| `e` | **제목만** 작은 모달로 수정 (Mycelium 저장소만 수정 — 원본 claude/codex/kiro 세션 로그는 건드리지 않음). 요약·태그·결정·할일은 항상 AI 생성 그대로이며 이 키로는 건드리지 않습니다. 여기서 정한 제목은 이후 `a`를 다시 눌러도 유지됩니다 |
+| `r` | 원래 에이전트에서 그 세션 그대로 **이어열기** (resume, 바로 여기서). 상세 화면에서는 `r` 대신 `Enter` — "여기서 열기" 또는 "명령어 복사"(새 탭 붙여넣기용) 중 선택 |
+| `o` | **스마트 정리** — 아직 폴더 없는 세션을 요약한 뒤, 이미 정리된 폴더들의 내용과 비교해 폴더를 제안. 제안 목록에서 `Space`로 원하는 것만 골라 `Enter`로 적용(체크 안 한 건 그대로 둠), `Esc`로 전체 취소 |
 | `h` | 다른 에이전트로 컨텍스트 넘겨 **새 세션 시작** (handoff) |
 | `n` | 이 폴더 컨텍스트로 새 에이전트 세션 띄우기 |
 | `m` / `t` | 폴더 이동 / 태그 편집 |
@@ -69,7 +70,7 @@ mycelium search "검색어" --folder _archive
 | `y` | 세션 내용(제목+요약+대화)을 클립보드로 복사 |
 | `Space` | 다중 선택 |
 | `/` | 전문 검색 |
-| `s` | **스캔**을 TUI에서 바로 (`mycelium scan`과 동일 — 여러 탭/터미널에서 켜둔 세션을 CLI 없이 그대로 불러옴). 폴더 자동배치는 아직 안 함 — `mycelium organize`를 CLI에서 따로 |
+| `s` | **스캔**을 TUI에서 바로 (`mycelium scan`과 동일 — 여러 탭/터미널에서 켜둔 세션을 CLI 없이 그대로 불러옴). cwd 규칙 기반 자동배치는 아직 CLI 전용 — `mycelium organize`. 내용 기반 스마트 정리는 위 `o` 참고 |
 | `w` / `c` / `i` / `d` | 폴더 지식 추출(미리보기 후 확인) / 컨텍스트 보기 / AGENTS.md 주입(미리보기 후 확인) / 다이제스트 읽기 (안에서 `n`/`w`로 오늘/이번주 생성) |
 | `q` | 종료 |
 
@@ -108,7 +109,7 @@ Mycelium이 "자동으로 좋아진다"는 건 Claude Code의 `/write`, `/proofr
      그 폴더의 과거 케이스들까지 함께 반영됩니다.
 5. **Reuse** — 다음에 같은 폴더에서 새 세션을 열면(`n`/`h`/`r`), Mycelium이
    그 시점의 `KNOWLEDGE.md`를 작업 디렉토리의 `AGENTS.md`에 자동
-   주입합니다. Claude Code/Codex는 세션을 시작하자마자 이 폴더에서 확정된
+   주입합니다. Claude Code/Codex/Kiro는 세션을 시작하자마자 이 폴더에서 확정된
    규칙을 이미 알고 있는 상태가 됩니다 — `/write`나 `/proofread`는 그대로
    쓰더라도, 그 위에 깔리는 배경 지식이 갱신돼 있으니 결과물이 달라집니다.
 
@@ -120,7 +121,19 @@ Mycelium이 "자동으로 좋아진다"는 건 Claude Code의 `/write`, `/proofr
 | Organize (자동 배정) | 자동 (사람이 정리한 세션은 보존) | 수동 — `mycelium organize` (CLI 전용, TUI `s`는 스캔만 함) |
 | Learn: 요약·태깅 (`a`) | 새로 들어온 세션에 자동 실행 | `a` 또는 `mycelium autotag` 수동 |
 | Learn: 폴더 지식 (`w`) | **자동 아님** | `w` 또는 `mycelium knowledge <폴더>` 수동 |
-| Reuse: AGENTS.md 주입 | 다음 에이전트 실행(`n`/`h`) 시 항상 자동 | 동일 — 데몬 여부와 무관 |
+| Reuse: AGENTS.md 주입 | `n`/`h`로 띄운 세션엔 항상 자동 | 동일 — 데몬 여부와 무관 |
+
+**"자동"은 `n`/`h`로 띄운 세션에 한합니다.** 터미널에서 그냥 `claude`/`codex`/`kiro-cli`를
+직접 치거나 스크립트로 여는 세션은 Mycelium을 거치지 않으므로 이 주입 트리거가
+걸리지 않습니다 — `AGENTS.md`는 그냥 디스크의 파일이라, 예전에 한 번이라도
+주입된 적이 있으면 그 스냅샷은 계속 읽히지만 **그 이후 `KNOWLEDGE.md`가 갱신된
+내용은 자동으로 안 따라갑니다.** Mycelium 밖에서 여는 세션에도 최신 지식을
+넣고 싶으면 그 직전에 TUI `i` 키 또는
+```sh
+mycelium inject --dir <프로젝트 경로> --folder <폴더>   # --folder 생략 시 cwd 규칙으로 자동 판단
+```
+를 실행하세요. Capture(스캔)·Learn(요약·태깅)은 세션을 어떻게 열었는지와 무관하게
+항상 적용됩니다 — 오직 이 "AGENTS.md 새로고침" 단계만 실행 경로를 탑니다.
 
 `w`(폴더 지식 추출)만 사람이 직접 눌러야 하는 지점입니다 — 의도적으로
 그렇게 두었습니다: 무엇이 "이 폴더에서 확정된 규칙"인지는 사람이 그 시점의
@@ -142,7 +155,7 @@ LLM이 생성한 `KNOWLEDGE.md` 내용이나 `AGENTS.md`에 주입될 내용을 
 
 ## 핸드오프 라이프사이클 (모델 간 이어가기)
 
-Claude Code와 Codex는 세션을 서로 다른 포맷으로 저장하기 때문에, 벤더를 바꾸는
+Claude Code, Codex, Kiro는 세션을 서로 다른 포맷으로 저장하기 때문에, 벤더를 바꾸는
 핸드오프(`h`)는 항상 **새 세션**을 만듭니다 — 버그가 아니라 의도된 동작입니다.
 같은 에이전트로 그대로 이어가려면 `r`(이어열기/resume)을 쓰세요: `r`은 원래
 세션 자체를 이어가고(같은 에이전트에서만 가능), `h`는 다른 에이전트로(필요하면
@@ -189,6 +202,7 @@ TUI 없이 개별 명령으로도 전부 됩니다:
 # Capture / Organize
 mycelium scan
 mycelium organize                              # cwd 기반 자동 배치(사람 정리분 보존)
+mycelium organize --smart [--apply]            # 내용 기반 폴더 제안(요약 먼저 채움, --apply 전엔 미리보기만)
 mycelium mkdir 회사/플랫폼/인증
 mycelium mv <session> 회사/플랫폼/인증
 mycelium tag <session> +긴급 -오분류
@@ -203,6 +217,7 @@ mycelium knowledge 회사/플랫폼/인증
 mycelium context <session>
 mycelium inject --dir <프로젝트> --folder <폴더> # AGENTS.md에 지식 주입
 mycelium handoff <session>                     # 인수인계 프롬프트 출력
+mycelium resume <session|prefix> [--copy|--exec] # 이어열기 명령어 출력/클립보드 복사/즉시 실행
 mycelium search "쿼터" --tag 인프라 --folder 회사
 mycelium list / tags / reindex
 
@@ -229,7 +244,7 @@ mycelium cleanup reset --yes # 전체 초기화: ~/.mycelium 통째로 삭제 �
 ```
 
 - **`tidy`(기본)와 `folders`/`index`는 안전**합니다 — 원본 세션(`raw/`)을 지우지 않습니다.
-- **`archive`**는 죽은 cwd 세션을 스토어에서 지웁니다. 원본 `~/.claude`/`~/.codex` 로그는 그대로라, 다시 `scan`하면 재유입됩니다(단 자동으로 다시 `_archive`로 감).
+- **`archive`**는 죽은 cwd 세션을 스토어에서 지웁니다. 원본 `~/.claude`/`~/.codex`/`~/.kiro` 로그는 그대로라, 다시 `scan`하면 재유입됩니다(단 자동으로 다시 `_archive`로 감).
 - **`reset --yes`는 되돌릴 수 없습니다** — `~/.mycelium`(정규화 세션·폴더·지식·인덱스)를 전부 삭제합니다. 그래도 원본 에이전트 세션 로그는 안 건드리므로, `mycelium scan`으로 처음부터 다시 만들 수 있습니다.
 
 깨끗하게 새로 시작하려면: `mycelium cleanup reset --yes && mycelium scan`.
@@ -259,4 +274,4 @@ mycelium cleanup reset --yes # 전체 초기화: ~/.mycelium 통째로 삭제 �
 
 ## 상태
 
-POC. 라이프사이클 4단계 전부 실제 로컬 세션(Claude Code + Codex)으로 동작 검증. TUI는 neo-blessed 기반이며 실제 터미널에서 사용 검증 중.
+POC. 라이프사이클 4단계 전부 실제 로컬 세션(Claude Code + Codex + Kiro)으로 동작 검증. TUI는 neo-blessed 기반이며 실제 터미널에서 사용 검증 중.

@@ -4,6 +4,7 @@ export const C = {
   fox: '#7fe0c4', // bioluminescent accent — reserved for titles/focus, not agent labels
   spore: '#d4a24e', // secondary (codex / warnings)
   claude: '#8ab4d8', // claude-code agent label — was fox, same as the title color it sits next to
+  kiro: '#e08fb0', // kiro agent label — distinct from fox/spore/claude/tag
   tag: '#c9a3d9', // session tags — distinct from title (fox), claude, and spore/codex
   text: '#e9e4d6',
   dim: '#8b8574',
@@ -17,7 +18,7 @@ export const C = {
 // C.fox (used for session titles) so the agent label never visually merges
 // with the title it's printed next to.
 export function sourceColor(source) {
-  return source === 'codex' ? C.spore : C.claude;
+  return { codex: C.spore, kiro: C.kiro }[source] ?? C.claude;
 }
 
 export const box = {
