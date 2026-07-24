@@ -111,7 +111,13 @@ export function sessionsView(opts = {}) {
       // packing them directly against the next character visually overlapped it.
       const link = r.continuationOf ? `{${C.spore}-fg}↩{/} ` : (r.continuedTo && r.continuedTo.length) ? `{${C.spore}-fg}→{/} ` : '';
       const isNew = !r.folder ? `{${C.spore}-fg}[${t('sessions.newBadge')}]{/}` : '';
-      const text = (r.title || r.summary || r.preview || t('common.noContent')).replace(/\s+/g, ' ').slice(0, 58);
+      // Under active search, lead with the FTS snippet — the row's row-reason.
+      // The default preview (first user message) hides matches deep in the
+      // conversation, which looked like false positives.
+      const base = r.snippet
+        ? `${r.title ? r.title + ' — ' : ''}${r.snippet}`
+        : r.title || r.summary || r.preview || t('common.noContent');
+      const text = base.replace(/\s+/g, ' ').slice(0, 58);
       // {|} is blessed's right-align pivot (same trick app.js uses for the
       // header) — pins the metadata cluster to the column's right edge
       // instead of trailing directly off the title text.
@@ -278,15 +284,18 @@ export function sessionsView(opts = {}) {
           setImmediate(previewFolder);
         }
       });
-      // Enter a folder → drill into its sessions.
-      foldersBox.key('enter', () => {
+      // Enter a folder → drill into its sessions. Right arrow mirrors Enter
+      // so the three columns can be walked with just the arrow keys.
+      const drillIntoSessions = () => {
         previewFolder();
         listBox.focus();
         listBox.select(0);
         if (rows[0]) showDetail(rows[0].id);
         setLevel('sessions');
         app.render();
-      });
+      };
+      foldersBox.key('enter', drillIntoSessions);
+      foldersBox.key('right', drillIntoSessions);
 
       // ── Folder management (only when the folders pane is focused) ──
       const curFolder = () => foldersBox._keys[foldersBox.selected];
@@ -377,21 +386,27 @@ export function sessionsView(opts = {}) {
           });
         }
       });
-      listBox.key('enter', () => {
+      const drillIntoDetail = () => {
         detailBox.focus();
         setLevel('detail');
         app.render();
-      });
-      listBox.key('escape', () => {
+      };
+      const backToFolders = () => {
         foldersBox.focus();
         setLevel('folders');
         app.render();
-      });
-      detailBox.key(['escape'], () => {
+      };
+      const backToSessions = () => {
         listBox.focus();
         setLevel('sessions');
         app.render();
-      });
+      };
+      listBox.key('enter', drillIntoDetail);
+      listBox.key('right', drillIntoDetail);
+      listBox.key('escape', backToFolders);
+      listBox.key('left', backToFolders);
+      detailBox.key(['escape'], backToSessions);
+      detailBox.key(['left'], backToSessions);
 
       // Multi-select toggle.
       listBox.key('space', () => {
