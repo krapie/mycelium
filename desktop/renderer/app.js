@@ -99,6 +99,13 @@ function createTab(ptyId, label) {
   paneEl.appendChild(termEl);
   panesEl.appendChild(paneEl);
 
+  tabs.set(ptyId, { title: label, term: null, fitAddon: null, el: tabEl, paneEl });
+  // Make the pane visible BEFORE opening the terminal into it — xterm.js
+  // measures its container at open() time, and a display:none container
+  // reports zero size, which it doesn't fully recover from even after a
+  // later fit() (this was the "too small" bug: it opened while hidden).
+  activateTab(ptyId);
+
   const term = new Terminal({
     theme: {
       background: '#14140f',
@@ -113,8 +120,26 @@ function createTab(ptyId, label) {
   term.open(termEl);
   term.onData((chunk) => pty.input(ptyId, chunk));
 
-  tabs.set(ptyId, { title: label, term, fitAddon, el: tabEl, paneEl });
-  activateTab(ptyId);
+  const entry = tabs.get(ptyId);
+  entry.term = term;
+  entry.fitAddon = fitAddon;
+
+  // ResizeObserver instead of a one-shot fit: reacts to the pane's *actual*
+  // box size (window resizes, sidebar changes, and this initial reveal) in
+  // one mechanism, rather than guessing when layout has settled.
+  const observer = new ResizeObserver(() => fitAndResize(ptyId));
+  observer.observe(paneEl);
+  entry.observer = observer;
+
+  fitAndResize(ptyId);
+  term.focus();
+}
+
+function fitAndResize(ptyId) {
+  const t = tabs.get(ptyId);
+  if (!t || !t.term || !t.paneEl.classList.contains('active')) return;
+  t.fitAddon.fit();
+  pty.resize(ptyId, t.term.cols, t.term.rows);
 }
 
 function activateTab(ptyId) {
@@ -124,14 +149,9 @@ function activateTab(ptyId) {
     t.paneEl.classList.toggle('active', id === ptyId);
   }
   const t = tabs.get(ptyId);
-  if (t) {
-    // fit + focus after the pane is actually visible (display:block), else
-    // xterm measures a zero-size container.
-    requestAnimationFrame(() => {
-      t.fitAddon.fit();
-      t.term.focus();
-      pty.resize(ptyId, t.term.cols, t.term.rows);
-    });
+  if (t && t.term) {
+    fitAndResize(ptyId);
+    t.term.focus();
   }
 }
 
@@ -139,6 +159,7 @@ function closeTab(ptyId) {
   pty.kill(ptyId);
   const t = tabs.get(ptyId);
   if (!t) return;
+  t.observer?.disconnect();
   t.el.remove();
   t.paneEl.remove();
   t.term.dispose();
@@ -159,13 +180,8 @@ pty.onExit((ptyId) => {
   loadSessions(); // pick up whatever got captured
 });
 
-window.addEventListener('resize', () => {
-  const t = tabs.get(activeTabId);
-  if (t) {
-    t.fitAddon.fit();
-    pty.resize(activeTabId, t.term.cols, t.term.rows);
-  }
-});
+// (Window resizes change #panes' box, which the active pane's ResizeObserver
+// already reacts to — see createTab — so no separate window listener needed.)
 
 // ── New session ──
 // Minimal picker for this first slice — a nicer modal is follow-up work
