@@ -292,7 +292,7 @@ en['help.text'] = (fg, spore) => `{bold}Global{/}
   {${fg}-fg}q{/}       Quit
 
 {bold}Folders panel{/}
-  {${fg}-fg}Enter{/}   View this folder's sessions
+  {${fg}-fg}Enter / →{/}   View this folder's sessions
   {${fg}-fg}a{/}       New (sub)folder
   {${fg}-fg}e{/}       Rename
   {${fg}-fg}m{/}       Move / nest
@@ -300,8 +300,8 @@ en['help.text'] = (fg, spore) => `{bold}Global{/}
   {${fg}-fg}w{/}       Extract folder knowledge (KNOWLEDGE.md) — preview then confirm
 
 {bold}Sessions panel{/}
-  {${fg}-fg}Enter{/}   View detail
-  {${fg}-fg}Esc{/}     Back to folders
+  {${fg}-fg}Enter / →{/}   View detail
+  {${fg}-fg}Esc / ←{/}     Back to folders
   {${fg}-fg}a{/}       Generate summary + tags (LLM, batches over multi-select)
   {${fg}-fg}e{/}       Rename title (modal — summary/tags stay AI-generated)
   {${fg}-fg}y{/}       Copy to clipboard
@@ -319,7 +319,7 @@ en['help.text'] = (fg, spore) => `{bold}Global{/}
 {bold}Detail panel{/}
   {${fg}-fg}↑↓{/}      Scroll
   {${fg}-fg}Enter{/}   Resume — choose "open here" or "copy command" (r in the sessions panel always opens here)
-  {${fg}-fg}Esc{/}     Back to sessions
+  {${fg}-fg}Esc / ←{/}     Back to sessions
   {${fg}-fg}a / e / y / x{/}  Same as sessions panel
 
 Sessions linked by handoff show {${spore}-fg}↩{/}/{${spore}-fg}→{/} markers in the list and continuation links in detail.`;
@@ -333,7 +333,7 @@ ko['help.text'] = (fg, spore) => `{bold}전역{/}
   {${fg}-fg}q{/}       종료
 
 {bold}폴더 패널{/}
-  {${fg}-fg}Enter{/}   이 폴더의 세션 보기
+  {${fg}-fg}Enter / →{/}   이 폴더의 세션 보기
   {${fg}-fg}a{/}       새 (하위)폴더
   {${fg}-fg}e{/}       이름 변경
   {${fg}-fg}m{/}       이동 / 중첩
@@ -341,8 +341,8 @@ ko['help.text'] = (fg, spore) => `{bold}전역{/}
   {${fg}-fg}w{/}       폴더 지식(KNOWLEDGE.md) 추출 — 미리보기 후 확인
 
 {bold}세션 패널{/}
-  {${fg}-fg}Enter{/}   상세 보기
-  {${fg}-fg}Esc{/}     폴더 패널로
+  {${fg}-fg}Enter / →{/}   상세 보기
+  {${fg}-fg}Esc / ←{/}     폴더 패널로
   {${fg}-fg}a{/}       요약·태그 생성 (LLM, 다중 선택 시 일괄)
   {${fg}-fg}e{/}       제목 수정 (모달 — 요약·태그는 AI 생성 그대로)
   {${fg}-fg}y{/}       클립보드로 복사
@@ -360,7 +360,7 @@ ko['help.text'] = (fg, spore) => `{bold}전역{/}
 {bold}상세 패널{/}
   {${fg}-fg}↑↓{/}      스크롤
   {${fg}-fg}Enter{/}   이어열기 — "여기서 열기" 또는 "명령어 복사" 선택 (세션 패널의 r은 항상 바로 열기)
-  {${fg}-fg}Esc{/}     세션 패널로
+  {${fg}-fg}Esc / ←{/}     세션 패널로
   {${fg}-fg}a / e / y / x{/}  세션 패널과 동일
 
 핸드오프로 이어진 세션은 목록에 {${spore}-fg}↩{/}/{${spore}-fg}→{/} 마커, 상세에 이어받음/이어감 링크로 표시됩니다.`;
