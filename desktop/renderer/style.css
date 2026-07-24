@@ -1,0 +1,168 @@
+/* Same foxfire palette as the TUI (src/tui/theme.js) — one visual identity
+   across CLI/TUI/desktop. */
+:root {
+  --fox: #7fe0c4;
+  --spore: #d4a24e;
+  --claude: #8ab4d8;
+  --kiro: #e08fb0;
+  --tag: #c9a3d9;
+  --text: #e9e4d6;
+  --dim: #8b8574;
+  --faint: #5e594c;
+  --bg: #14140f;
+  --surface: #1c1b15;
+  --border: #5a5442;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, 'Helvetica Neue', sans-serif;
+  font-size: 13px;
+}
+
+#app {
+  display: flex;
+  height: 100vh;
+}
+
+#sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+#folders {
+  border-bottom: 1px solid var(--border);
+  padding: 8px 0;
+}
+
+#sessions {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 0;
+}
+
+.folder-row,
+.session-row {
+  padding: 5px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.folder-row:hover,
+.session-row:hover {
+  background: var(--surface);
+}
+
+.folder-row.active {
+  color: var(--fox);
+}
+
+.session-row .title {
+  color: var(--text);
+}
+
+.session-row .meta {
+  color: var(--dim);
+  font-size: 11px;
+  margin-left: 4px;
+}
+
+#main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+#tabbar {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+
+.tab {
+  padding: 8px 14px;
+  border-right: 1px solid var(--border);
+  cursor: pointer;
+  color: var(--dim);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tab.active {
+  color: var(--fox);
+  background: var(--bg);
+}
+
+.tab .close {
+  color: var(--faint);
+}
+
+.tab .close:hover {
+  color: var(--text);
+}
+
+#new-tab-btn {
+  background: none;
+  border: none;
+  color: var(--dim);
+  font-size: 16px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+#new-tab-btn:hover {
+  color: var(--fox);
+}
+
+#panes {
+  flex: 1;
+  position: relative;
+  min-height: 0;
+}
+
+.error-toast {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  background: var(--surface);
+  border: 1px solid var(--spore);
+  color: var(--text);
+  padding: 8px 14px;
+  border-radius: 4px;
+  max-width: 360px;
+  z-index: 100;
+}
+
+.pane {
+  position: absolute;
+  inset: 0;
+  display: none;
+  padding: 6px;
+}
+
+.pane.active {
+  display: block;
+}
+
+.pane .term {
+  width: 100%;
+  height: 100%;
+}

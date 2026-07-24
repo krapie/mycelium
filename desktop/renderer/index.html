@@ -1,0 +1,26 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Mycelium</title>
+    <link rel="stylesheet" href="../node_modules/xterm/css/xterm.css" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <aside id="sidebar">
+        <div id="folders"></div>
+        <div id="sessions"></div>
+      </aside>
+      <main id="main">
+        <div id="tabbar">
+          <button id="new-tab-btn" title="New session">+</button>
+        </div>
+        <div id="panes"></div>
+      </main>
+    </div>
+    <script src="../node_modules/xterm/lib/xterm.js"></script>
+    <script src="../node_modules/xterm-addon-fit/lib/xterm-addon-fit.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
