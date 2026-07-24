@@ -76,6 +76,32 @@ mycelium search "검색어" --folder _archive
 
 핸드오프로 이어진 세션은 리스트에 `↩`/`→` 마커와 상세에 "이어받음/이어감" 링크로 표시됩니다.
 
+## Desktop (실험 단계, `desktop` 브랜치)
+
+TUI는 자신이 떠 있는 터미널 밖으로 나갈 수 없어서(탭을 직접 못 열고, 세션도
+요약+이어열기 명령만 보여줄 수 있음) 진짜 데스크톱 앱을 별도로 만들고
+있습니다 — Electron + `node-pty` + `xterm.js` (VS Code 통합 터미널과 같은
+조합). 세션을 클릭하면 요약을 거치지 않고 바로 새 탭에 실제 라이브
+터미널로 열립니다. 기존 백엔드(`scanner`/`organize`/`learn`/`daemon`/
+`agents` 등)는 전혀 안 건드리고 그대로 재사용합니다 — `neo-blessed` 의존이
+없는 순수 로직이라 새 프론트엔드를 얹기만 하면 됩니다. 아직 `main`에는
+없고 `desktop` 브랜치에만 있습니다; CLI/TUI는 영향 없이 그대로 동작합니다.
+자세한 설계는 `desktop.md` 참고.
+
+**실행 방법**:
+```sh
+git checkout desktop
+cd desktop
+npm install
+npx electron-rebuild -f -w node-pty   # node-pty를 Node용이 아니라 Electron ABI에 맞게 재빌드 — 필수
+npm start                             # 또는: node_modules/.bin/electron .
+```
+
+왼쪽 사이드바에 실제 `~/.mycelium` 폴더/세션이 뜨고, 세션을 클릭하면 바로
+새 탭에 라이브 터미널로 열립니다. 탭 상단 `+`로 새 세션(에이전트 선택 →
+작업 디렉토리 입력 — 아직 OS `prompt()` 팝업, 제대로 된 모달은 다음
+단계). 탭 닫기(×)는 프로세스를 종료하고 세션을 재캡처합니다.
+
 ## 학습·재사용 루프 (세션이 끝난 뒤 다음 세션에 반영되기)
 
 Mycelium이 "자동으로 좋아진다"는 건 Claude Code의 `/write`, `/proofread` 같은
