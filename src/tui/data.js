@@ -1,5 +1,5 @@
 import { loadRaw } from '../scanner.js';
-import { reindex, search, listTags, folderCounts, listSessions } from '../index-db.js';
+import { reindex, reindexOne, reindexMany, removeFromIndex, search, listTags, folderCounts, listSessions } from '../index-db.js';
 import { listTreeDirs, isArchive } from '../organize.js';
 
 // Thin data layer the TUI views read from. Folder tree and non-search session
@@ -74,6 +74,27 @@ export function tags() {
 
 export function refresh() {
   return reindex();
+}
+
+/** Targeted refresh for a single-session mutation (move/tag/resume/edit) —
+ * avoids reindex()'s full raw/ reparse + FTS rebuild for the extremely
+ * common case where only one session actually changed. */
+export function refreshOne(id) {
+  const n = loadRaw(id);
+  if (n) reindexOne(n);
+  else removeFromIndex(id); // raw file is gone — was deleted
+}
+
+/** Same, batched over a handful of ids (multi-select move/tag, a suggestion
+ * batch, etc.) — still avoids the full-store rebuild. */
+export function refreshMany(ids) {
+  const found = [];
+  for (const id of ids) {
+    const n = loadRaw(id);
+    if (n) found.push(n);
+    else removeFromIndex(id);
+  }
+  reindexMany(found);
 }
 
 function parseJsonArray(s) {

@@ -301,9 +301,13 @@ export function sessionsView(opts = {}) {
       const curFolder = () => foldersBox._keys[foldersBox.selected];
       // The only non-real entry in this panel now is Root itself (key: null).
       const isRealFolder = (f) => !!f;
-      const refreshFolders = (selectPath) => {
+      // `affectedIds`: only rename/move/delete-folder actually touch session
+      // records (rewriting `folder`) — pass the exact ids so this stays O(k)
+      // instead of reindex()'s full raw/ rebuild. Plain folder creation
+      // touches zero sessions, so it's fine (and correct) to pass none.
+      const refreshFolders = (selectPath, affectedIds) => {
         state.selected.clear();
-        data.refresh();
+        if (affectedIds && affectedIds.length) data.refreshMany(affectedIds);
         reloadFolders();
         // try to keep the cursor on a sensible folder
         if (selectPath) {
@@ -337,7 +341,7 @@ export function sessionsView(opts = {}) {
           if (!val || val.trim() === f) return;
           const res = renameFolder(f, val.trim().replace(/^\/+|\/+$/g, ''));
           app.notify(res.ok ? t('folders.renamed', res.to) : res.error, res.ok ? 2 : 3);
-          refreshFolders(res.ok ? res.to : f);
+          refreshFolders(res.ok ? res.to : f, res.ok ? res.affected.map((n) => n.id) : []);
         });
       });
 
@@ -351,7 +355,7 @@ export function sessionsView(opts = {}) {
           const target = (dest ? dest + '/' : '') + basename(f);
           const res = renameFolder(f, target);
           app.notify(res.ok ? t('folders.movedTo', res.to) : res.error, res.ok ? 2 : 3);
-          refreshFolders(res.ok ? res.to : f);
+          refreshFolders(res.ok ? res.to : f, res.ok ? res.affected.map((n) => n.id) : []);
         });
       });
 
@@ -372,7 +376,7 @@ export function sessionsView(opts = {}) {
             const res = deleteFolder(f);
             app.notify(res.ok ? t('folders.deleted', res.moved) : res.error);
             state.folder = null;
-            refreshFolders(null);
+            refreshFolders(null, res.ok ? res.affected.map((n) => n.id) : []);
           },
         );
       });
@@ -482,13 +486,18 @@ export function sessionsView(opts = {}) {
           // multi-session batch finishes and makes it look hung.
           const pending = allRaw().filter((n) => !n.folder && n.organizedBy !== 'human' && !n.extracted.summary).length;
           if (pending) app.notify(t('sessions.summarizing', 0, pending), 90);
+          const summarized = [];
           await summarizeCandidates({
             onProgress: (() => {
               let done = 0;
-              return () => app.notify(t('sessions.summarizing', ++done, pending), 90);
+              return (s) => {
+                if (s) summarized.push(s.id);
+                app.notify(t('sessions.summarizing', ++done, pending), 90);
+              };
             })(),
           });
-          data.refresh();
+          // Only the just-summarized sessions actually changed.
+          if (summarized.length) data.refreshMany(summarized);
           app.notify(t('smart.running'), 60);
           const res = await suggestPlacements({
             onProgress: (batch, total) => total > 1 && app.notify(`${t('smart.running')} (${batch}/${total})`, 60),
@@ -508,7 +517,9 @@ export function sessionsView(opts = {}) {
           if (chosen === null) return; // Esc — left queued, shows again next time
           applyPlacements(chosen);
           clearSuggestions(matches.map((p) => p.id)); // reviewed (applied or passed on) — stop nagging
-          data.refresh();
+          // Only the applied ones' `folder` actually changed — the rest just
+          // had suggestedFolder cleared, which isn't indexed at all.
+          data.refreshMany(chosen.map((p) => p.id));
           reloadFolders();
           reloadList();
           app.render();
@@ -521,9 +532,12 @@ export function sessionsView(opts = {}) {
       // Which sessions an action targets: the multi-selection if any, else the row under the cursor.
       const targets = () => (state.selected.size ? [...state.selected] : currentRow() ? [currentRow().id] : []);
 
-      const afterMutate = () => {
+      // `ids` are exactly what changed — refreshMany() upserts each (or drops
+      // it from the index if the raw file's gone, i.e. a delete) instead of
+      // reindex()'s full raw/ reparse + FTS rebuild for every mutation.
+      const afterMutate = (ids) => {
         state.selected.clear();
-        data.refresh();
+        data.refreshMany(ids);
         reloadFolders();
         reloadList();
         app.render();
@@ -537,7 +551,7 @@ export function sessionsView(opts = {}) {
           if (folder === undefined) return listBox.focus();
           for (const id of ids) organizeMove(id, folder);
           app.notify(t('sessions.movedTo', ids.length, folder || t('sessions.newBadge')));
-          afterMutate();
+          afterMutate(ids);
           listBox.focus();
         });
       });
@@ -551,7 +565,7 @@ export function sessionsView(opts = {}) {
           if (!edit) return listBox.focus();
           for (const id of ids) organizeTag(id, edit.add, edit.remove);
           app.notify(t('sessions.tagsUpdated', ids.length));
-          afterMutate();
+          afterMutate(ids);
           listBox.focus();
         });
       });
@@ -573,7 +587,7 @@ export function sessionsView(opts = {}) {
             if (ans !== 'yes') return listBox.focus();
             for (const id of ids) deleteSession(id);
             app.notify(t('sessions.deleted', ids.length));
-            afterMutate();
+            afterMutate(ids);
             listBox.focus();
             setLevel('sessions');
           },
@@ -584,8 +598,9 @@ export function sessionsView(opts = {}) {
 
       // Capture: launch a new agent session in the current folder's context.
       listBox.key('n', () => {
+        // launchAgent() (launch.js) already reindexes exactly what scan()
+        // captured internally — no need to also reindex the whole store here.
         launchAgent(app, { folder: state.folder }, () => {
-          data.refresh();
           reloadFolders();
           reloadList();
           listBox.focus();
@@ -598,8 +613,8 @@ export function sessionsView(opts = {}) {
         const r = currentRow();
         if (!r) return;
         const n = data.detail(r.id);
+        // resumeSession() (launch.js) already reindexes exactly what changed.
         resumeSession(app, { id: r.id, source: r.source, cwd: n?.cwd, projectDir: n?.projectDir }, () => {
-          data.refresh();
           reloadFolders();
           reloadList();
           listBox.focus();
@@ -640,8 +655,8 @@ export function sessionsView(opts = {}) {
         if (!r) return;
         const hb = buildHandoff(r.id);
         if (!hb.ok) return app.notify(hb.error, 3);
+        // launchAgent() (launch.js) already reindexes exactly what changed.
         launchAgent(app, { folder: r.folder, seed: hb.prompt, parentId: r.id }, () => {
-          data.refresh();
           reloadFolders();
           reloadList();
           listBox.focus();
@@ -674,7 +689,10 @@ export function sessionsView(opts = {}) {
             failed++;
             lastError = err.message;
           }
-          data.refresh();
+          // Only `id` changed this iteration — a full reindex() here would
+          // reparse the whole raw/ store once per selected session (an N×
+          // full-store rebuild for an N-session multi-select autotag).
+          data.refreshOne(id);
           reloadList();
           if (currentRow() && currentRow().id === id) showDetail(id);
         }
@@ -697,7 +715,7 @@ export function sessionsView(opts = {}) {
           if (val === null) return; // Esc — cancelled
           const res = setContent(r.id, { title: val });
           app.notify(res.ok ? t('editor.saved') : t('editor.saveFailed', res.error), res.ok ? 2 : 3);
-          data.refresh();
+          data.refreshOne(r.id);
           reloadFolders();
           reloadList();
           if (currentRow() && currentRow().id === r.id) showDetail(r.id);
