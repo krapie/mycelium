@@ -382,13 +382,16 @@ export function renameFolder(oldPath, newPath) {
   if (!oldPath || !newPath || oldPath === newPath) return { ok: false, error: '잘못된 경로' };
   if (newPath === oldPath || newPath.startsWith(oldPath + '/')) return { ok: false, error: '자기 자신/하위로는 옮길 수 없습니다' };
 
+  const affected = [];
   for (const n of allRaw()) {
     if (n.folder === oldPath) {
       n.folder = newPath;
       saveRaw(n);
+      affected.push(n);
     } else if (n.folder && n.folder.startsWith(oldPath + '/')) {
       n.folder = newPath + n.folder.slice(oldPath.length);
       saveRaw(n);
+      affected.push(n);
     }
   }
   updateRuleFolders((f) => (f === oldPath ? newPath : f && f.startsWith(oldPath + '/') ? newPath + f.slice(oldPath.length) : f));
@@ -415,24 +418,24 @@ export function renameFolder(oldPath, newPath) {
   } else {
     mkdir(newPath);
   }
-  return { ok: true, from: oldPath, to: newPath };
+  return { ok: true, from: oldPath, to: newPath, affected };
 }
 
 /** Delete a folder: reassign its sessions (default → _inbox) and remove the dir. */
 export function deleteFolder(folderPath, { reassignTo = null } = {}) {
   if (!folderPath) return { ok: false, error: '잘못된 경로' };
-  let moved = 0;
+  const affected = [];
   for (const n of allRaw()) {
     if (n.folder === folderPath || (n.folder && n.folder.startsWith(folderPath + '/'))) {
       n.folder = reassignTo;
       saveRaw(n);
-      moved++;
+      affected.push(n);
     }
   }
   updateRuleFolders((f) => (f === folderPath || (f && f.startsWith(folderPath + '/')) ? null : f));
   const dir = folderDir(folderPath);
   if (existsSync(dir)) rmSync(dir, { recursive: true, force: true });
-  return { ok: true, moved, reassignTo };
+  return { ok: true, moved: affected.length, reassignTo, affected };
 }
 
 /** Record that `childId` is a handoff continuation of `parentId` (links both ways). */

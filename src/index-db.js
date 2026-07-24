@@ -60,41 +60,77 @@ export function openDb() {
   return db;
 }
 
-/** Rebuild the entire index from raw/. Cheap at personal scale; always correct. */
+function prepareWriters(d) {
+  return {
+    insSession: d.prepare(
+      'INSERT OR REPLACE INTO sessions (id, source, folder, started_at, preview, title, summary, organized_by, continuation_of, continued_to, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    ),
+    insFts: d.prepare('INSERT INTO session_fts (id, body) VALUES (?, ?)'),
+    upsertTag: d.prepare('INSERT OR IGNORE INTO tags (name) VALUES (?)'),
+    getTag: d.prepare('SELECT id FROM tags WHERE name = ?'),
+    linkTag: d.prepare('INSERT OR IGNORE INTO session_tags (session_id, tag_id) VALUES (?, ?)'),
+  };
+}
+
+function writeSessionRow(w, n) {
+  w.insSession.run(
+    n.id,
+    n.source,
+    n.folder,
+    n.startedAt,
+    firstUserText(n),
+    n.extracted.title ?? null,
+    n.extracted.summary ?? null,
+    n.organizedBy,
+    n.continuationOf ?? null,
+    JSON.stringify(n.continuedTo || []),
+    JSON.stringify(n.extracted.tags || []),
+  );
+  w.insFts.run(n.id, searchableText(n));
+  for (const tag of n.extracted.tags || []) {
+    w.upsertTag.run(tag);
+    const row = w.getTag.get(tag);
+    if (row) w.linkTag.run(n.id, row.id);
+  }
+}
+
+/** Rebuild the entire index from raw/. O(total sessions) — use for genuinely
+ * store-wide changes (scan, bulk organize/tag). For a single/few-session
+ * mutation (move, tag, resume, ...), use reindexOne/reindexMany instead —
+ * this full rebuild pays for a full raw/ reparse + FTS rebuild every time,
+ * which gets slow once the store has hundreds/thousands of sessions. */
 export function reindex() {
   const d = openDb();
   d.exec('DELETE FROM sessions; DELETE FROM session_fts; DELETE FROM session_tags;');
-  const insSession = d.prepare(
-    'INSERT OR REPLACE INTO sessions (id, source, folder, started_at, preview, title, summary, organized_by, continuation_of, continued_to, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-  );
-  const insFts = d.prepare('INSERT INTO session_fts (id, body) VALUES (?, ?)');
-  const upsertTag = d.prepare('INSERT OR IGNORE INTO tags (name) VALUES (?)');
-  const getTag = d.prepare('SELECT id FROM tags WHERE name = ?');
-  const linkTag = d.prepare('INSERT OR IGNORE INTO session_tags (session_id, tag_id) VALUES (?, ?)');
-
+  const w = prepareWriters(d);
   const raws = allRaw();
-  for (const n of raws) {
-    insSession.run(
-      n.id,
-      n.source,
-      n.folder,
-      n.startedAt,
-      firstUserText(n),
-      n.extracted.title ?? null,
-      n.extracted.summary ?? null,
-      n.organizedBy,
-      n.continuationOf ?? null,
-      JSON.stringify(n.continuedTo || []),
-      JSON.stringify(n.extracted.tags || []),
-    );
-    insFts.run(n.id, searchableText(n));
-    for (const tag of n.extracted.tags || []) {
-      upsertTag.run(tag);
-      const row = getTag.get(tag);
-      if (row) linkTag.run(n.id, row.id);
-    }
-  }
+  for (const n of raws) writeSessionRow(w, n);
   return raws.length;
+}
+
+/** Incrementally update ONE session's row — O(1) instead of reindex()'s
+ * O(total sessions), for the common case where exactly one session changed. */
+export function reindexOne(n) {
+  const d = openDb();
+  d.prepare('DELETE FROM sessions WHERE id = ?').run(n.id);
+  d.prepare('DELETE FROM session_fts WHERE id = ?').run(n.id);
+  d.prepare('DELETE FROM session_tags WHERE session_id = ?').run(n.id);
+  writeSessionRow(prepareWriters(d), n);
+}
+
+/** Same as reindexOne, batched over a handful of sessions (one still-cheap
+ * statement round-trip per session, not a full-store rebuild). */
+export function reindexMany(sessions) {
+  for (const n of sessions) reindexOne(n);
+}
+
+/** Remove one session from the index (after a delete — there's no raw file
+ * left to reindexOne() from). */
+export function removeFromIndex(id) {
+  const d = openDb();
+  d.prepare('DELETE FROM sessions WHERE id = ?').run(id);
+  d.prepare('DELETE FROM session_fts WHERE id = ?').run(id);
+  d.prepare('DELETE FROM session_tags WHERE session_id = ?').run(id);
 }
 
 /** Session counts grouped by folder — for the TUI folder tree, without reading raw/. */

@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
-import { scan, allRaw } from '../scanner.js';
-import { reindex } from '../index-db.js';
+import { scan, allRaw, loadRaw } from '../scanner.js';
+import { reindexMany } from '../index-db.js';
 import { move, addRule, cwdForFolder, linkContinuation } from '../organize.js';
 import { injectAgentsMd } from '../reuse.js';
 import { menu, textPrompt } from './widgets/pickers.js';
@@ -98,10 +98,15 @@ export function resumeSession(app, session, done) {
   }
   const args = resumeArgsFor(session.source, session.id);
   foreground(app, bin, args, cwd, () => {
-    // Resuming may extend the session; re-capture it.
+    // Resuming may extend the session (or, rarely, other terminals may have
+    // captured sessions concurrently); re-capture and reindex only whatever
+    // scan() actually touched instead of a full-store reindex() — this runs
+    // on every single resume, so at a real session count that full rebuild
+    // adds up fast for what's normally exactly one changed session.
     try {
-      scan();
-      reindex();
+      const touched = [];
+      scan({ onImport: (n) => touched.push(n) });
+      if (touched.length) reindexMany(touched); // nothing touched → index is already accurate
     } catch {
       /* ignore */
     }
@@ -141,7 +146,13 @@ function run(app, { agentKey, dir, folder, seed, parentId }, done) {
       const mine = fresh.filter(inLaunchDir);
       if (folder) for (const n of mine) if (n.organizedBy !== 'human') move(n.id, folder);
       if (parentId) for (const n of mine) linkContinuation(n.id, parentId);
-      reindex();
+      // `fresh` already covers everything scan() actually captured this
+      // round (this launch's own session(s) plus anything concurrently
+      // captured elsewhere) — reindexing just those instead of the whole
+      // store avoids a full raw/ rebuild on every single agent launch.
+      // move()/linkContinuation() above already re-saved `mine`'s raw files,
+      // so re-read before indexing to pick up those changes.
+      if (fresh.length) reindexMany(fresh.map((n) => loadRaw(n.id) || n));
       const note = parentId ? t('launch.continuedSession') : t('launch.newSession');
       app.notify(mine.length ? t('launch.captured', note, mine.length, folder || t('sessions.newBadge')) : t('launch.noNewSessions'), 3);
     } catch (err) {
