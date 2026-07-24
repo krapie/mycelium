@@ -13,6 +13,9 @@ import {
   suggestPlacements,
   applyPlacements,
   summarizeCandidates,
+  pendingSuggestions,
+  queueSuggestions,
+  clearSuggestions,
 } from '../../organize.js';
 import { scan, allRaw } from '../../scanner.js';
 import { pickFolder, editTags, menu, multiSelectList } from '../widgets/pickers.js';
@@ -451,26 +454,35 @@ export function sessionsView(opts = {}) {
       // preview-then-confirm flow (like w/i), and never run by the daemon —
       // unlike `s`'s plain scan, this makes real LLM calls and moves things.
       screenKey(app, ['o'], async () => {
-        // Only summarizes the sessions actually being classified below (still
-        // unorganized) — not the whole store's summary backlog. Calls the LLM
-        // once per such session lacking one, sequentially, so show real
-        // progress instead of one static toast that expires long before a
-        // multi-session batch finishes and makes it look hung.
-        const pending = allRaw().filter((n) => !n.folder && n.organizedBy !== 'human' && !n.extracted.summary).length;
-        let done = 0;
-        if (pending) app.notify(t('sessions.summarizing', 0, pending), 90);
-        await summarizeCandidates({
-          onProgress: () => {
-            done++;
-            app.notify(t('sessions.summarizing', done, pending), 90);
-          },
-        });
-        data.refresh();
-        app.notify(t('smart.running'), 60);
-        const res = await suggestPlacements();
-        if (!res.ok) return app.notify(res.error, 4);
-        const matches = res.placements.filter((p) => p.folder);
-        if (!matches.length) return app.notify(t('smart.noMatches'), 3);
+        // Reuse whatever the daemon already queued (see organize.js's
+        // smartOrganizeCycle) instead of recomputing — makes `o` instant when
+        // the daemon's been doing the work in the background.
+        let matches = pendingSuggestions();
+        if (!matches.length) {
+          // Only summarizes the sessions actually being classified below
+          // (still unorganized) — not the whole store's summary backlog.
+          // Calls the LLM once per such session lacking one (in bounded
+          // concurrent chunks, see organize.js), so show real progress
+          // instead of one static toast that expires long before a
+          // multi-session batch finishes and makes it look hung.
+          const pending = allRaw().filter((n) => !n.folder && n.organizedBy !== 'human' && !n.extracted.summary).length;
+          if (pending) app.notify(t('sessions.summarizing', 0, pending), 90);
+          await summarizeCandidates({
+            onProgress: (() => {
+              let done = 0;
+              return () => app.notify(t('sessions.summarizing', ++done, pending), 90);
+            })(),
+          });
+          data.refresh();
+          app.notify(t('smart.running'), 60);
+          const res = await suggestPlacements({
+            onProgress: (batch, total) => total > 1 && app.notify(`${t('smart.running')} (${batch}/${total})`, 60),
+          });
+          if (!res.ok) return app.notify(res.error, 4);
+          matches = res.placements.filter((p) => p.folder);
+          if (!matches.length) return app.notify(t('smart.noMatches'), 3);
+          queueSuggestions(matches);
+        }
         // Cherry-pick which suggestions to actually apply — sessions left
         // unchecked simply stay unorganized, same as if `o` had never run.
         const items = matches.map((p) => ({
@@ -478,8 +490,9 @@ export function sessionsView(opts = {}) {
           value: p,
         }));
         multiSelectList(app, t('smart.previewTitle'), items, (chosen) => {
-          if (!chosen || !chosen.length) return;
+          if (chosen === null) return; // Esc — left queued, shows again next time
           applyPlacements(chosen);
+          clearSuggestions(matches.map((p) => p.id)); // reviewed (applied or passed on) — stop nagging
           data.refresh();
           reloadFolders();
           reloadList();

@@ -118,10 +118,22 @@ Mycelium이 "자동으로 좋아진다"는 건 Claude Code의 `/write`, `/proofr
 | 단계 | `mycelium daemon` 실행 중 | 안 켜놨을 때 |
 |---|---|---|
 | Capture (스캔) | 5분마다 자동 | 수동 — `mycelium scan` 또는 TUI에서 `s` (TUI는 진입 시 자동 스캔하지 않음) |
-| Organize (자동 배정) | 자동 (사람이 정리한 세션은 보존) | 수동 — `mycelium organize` (CLI 전용, TUI `s`는 스캔만 함) |
+| Organize (cwd 규칙 자동 배정) | 자동 (사람이 정리한 세션은 보존) | 수동 — `mycelium organize` (CLI 전용, TUI `s`는 스캔만 함) |
+| Organize: 스마트 정리 (`o`) | 30분마다 자동 계산 후 **대기열에 큐잉**(기본은 적용까지는 안 함) | `o` 또는 `mycelium organize --smart` 수동 |
 | Learn: 요약·태깅 (`a`) | 새로 들어온 세션에 자동 실행 | `a` 또는 `mycelium autotag` 수동 |
 | Learn: 폴더 지식 (`w`) | **자동 아님** | `w` 또는 `mycelium knowledge <폴더>` 수동 |
 | Reuse: AGENTS.md 주입 | `n`/`h`로 띄운 세션엔 항상 자동 | 동일 — 데몬 여부와 무관 |
+
+**스마트 정리(`o`)는 데몬이 켜져 있어도 자동으로 "적용"까지는 안 합니다** — cwd 규칙
+자동배정과 달리 LLM 추측이라 오분류 위험이 있어서, `w`/`i`와 같은 원칙(쓰기 전에
+항상 사람이 미리보기)을 따릅니다. 데몬은 30분마다(환경변수
+`MYCELIUM_SMART_ORGANIZE_MS`로 조절, 한 사이클당 최대 `MYCELIUM_SMART_ORGANIZE_LIMIT`개,
+기본 100개) 미분류 세션을 요약·분류해서 세션 자체에 제안을 큐잉해 둡니다. 다음에
+TUI를 열면 "N개 정리 제안 대기 중 — o로 확인" 알림이 뜨고, `o`를 누르면 **다시
+계산하지 않고** 바로 그 제안을 다중 선택 화면으로 보여줍니다 — 원하는 것만 체크해서
+`Enter`로 적용, 나머지는 그냥 대기열에서 빠집니다(다시 안 나타남). `Esc`로 전체
+취소하면 큐는 그대로 남아 다음에 또 뜹니다. 검토 없이 데몬이 바로 옮기게 하려면
+`~/.mycelium/config.json`의 `autoApproveSmartOrganize`를 `true`로 바꾸세요(기본 `false`).
 
 **"자동"은 `n`/`h`로 띄운 세션에 한합니다.** 터미널에서 그냥 `claude`/`codex`/`kiro-cli`를
 직접 치거나 스크립트로 여는 세션은 Mycelium을 거치지 않으므로 이 주입 트리거가
@@ -221,7 +233,7 @@ mycelium resume <session|prefix> [--copy|--exec] # 이어열기 명령어 출력
 mycelium search "쿼터" --tag 인프라 --folder 회사
 mycelium list / tags / reindex
 
-# 백그라운드 업키핑 (주기 스캔 + 일일 다이제스트, UI 없음)
+# 백그라운드 업키핑 (주기 스캔 + 일일 다이제스트 + 스마트 정리 큐잉, UI 없음)
 mycelium daemon
 
 # TUI 표시 언어 (기본 en) — 다음 TUI 실행부터 적용
@@ -229,6 +241,22 @@ mycelium lang        # 현재 설정 확인
 mycelium lang ko      # 한국어로 전환
 mycelium lang en      # 영어로 전환
 ```
+
+**`mycelium`(TUI)을 그냥 평소처럼 열면 백그라운드 데몬이 자동으로 같이 켜집니다** —
+따로 `mycelium daemon`이나 스크립트를 실행할 필요 없습니다. TUI가 시작할 때
+`~/.mycelium/daemon.pid`를 확인해서, 이미 떠 있으면 아무 일 안 하고, 없으면 detached로
+하나 띄웁니다 — **TUI를 닫아도 데몬은 계속 삽니다**(그래서 다음에 열 때 이미 정리돼
+있는 것처럼 보임). 이 자동 시작이 싫으면 `MYCELIUM_NO_AUTOSTART=1` 환경변수로 끌 수
+있습니다.
+
+수동으로 직접 제어하고 싶을 때(예: TUI를 한 번도 안 열고 헤드리스로만 쓰는 경우):
+```sh
+scripts/run.sh    # 이미 떠 있으면 아무 일 안 함(idempotent), 로그는 ~/.mycelium/daemon.log
+scripts/stop.sh    # 떠 있으면 정지, 없으면 아무 일 안 함
+```
+둘 다 TUI 자동 시작과 같은 `~/.mycelium/daemon.pid`를 쓰므로, 어느 쪽으로 띄웠든
+`scripts/stop.sh`로 멈출 수 있습니다. 재부팅 시 자동 시작 같은 건 없습니다 — 필요하면
+`scripts/run.sh`를 launchd/systemd/cron 등에 걸어 쓰세요.
 
 ## 정리 (실험 단계)
 
