@@ -15,7 +15,10 @@ CREATE TABLE IF NOT EXISTS sessions (
   preview TEXT,
   title TEXT,
   summary TEXT,
-  organized_by TEXT
+  organized_by TEXT,
+  continuation_of TEXT,
+  continued_to TEXT,
+  tags TEXT
 );
 CREATE VIRTUAL TABLE IF NOT EXISTS session_fts USING fts5(
   id UNINDEXED, body
@@ -47,6 +50,13 @@ export function openDb() {
   } catch (err) {
     if (!String(err.message).includes('duplicate column')) throw err;
   }
+  for (const col of ['continuation_of TEXT', 'continued_to TEXT', 'tags TEXT']) {
+    try {
+      db.exec(`ALTER TABLE sessions ADD COLUMN ${col}`);
+    } catch (err) {
+      if (!String(err.message).includes('duplicate column')) throw err;
+    }
+  }
   return db;
 }
 
@@ -55,7 +65,7 @@ export function reindex() {
   const d = openDb();
   d.exec('DELETE FROM sessions; DELETE FROM session_fts; DELETE FROM session_tags;');
   const insSession = d.prepare(
-    'INSERT OR REPLACE INTO sessions (id, source, folder, started_at, preview, title, summary, organized_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+    'INSERT OR REPLACE INTO sessions (id, source, folder, started_at, preview, title, summary, organized_by, continuation_of, continued_to, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
   );
   const insFts = d.prepare('INSERT INTO session_fts (id, body) VALUES (?, ?)');
   const upsertTag = d.prepare('INSERT OR IGNORE INTO tags (name) VALUES (?)');
@@ -64,7 +74,19 @@ export function reindex() {
 
   const raws = allRaw();
   for (const n of raws) {
-    insSession.run(n.id, n.source, n.folder, n.startedAt, firstUserText(n), n.extracted.title ?? null, n.extracted.summary ?? null, n.organizedBy);
+    insSession.run(
+      n.id,
+      n.source,
+      n.folder,
+      n.startedAt,
+      firstUserText(n),
+      n.extracted.title ?? null,
+      n.extracted.summary ?? null,
+      n.organizedBy,
+      n.continuationOf ?? null,
+      JSON.stringify(n.continuedTo || []),
+      JSON.stringify(n.extracted.tags || []),
+    );
     insFts.run(n.id, searchableText(n));
     for (const tag of n.extracted.tags || []) {
       upsertTag.run(tag);
@@ -75,6 +97,26 @@ export function reindex() {
   return raws.length;
 }
 
+/** Session counts grouped by folder — for the TUI folder tree, without reading raw/. */
+export function folderCounts() {
+  const d = openDb();
+  return d
+    .prepare("SELECT COALESCE(folder, '') AS folder, COUNT(*) AS n FROM sessions GROUP BY folder")
+    .all();
+}
+
+/**
+ * Non-search list feed: sessions ordered by started_at DESC.
+ * folder === null → only unfiled (Root); folder string → that subtree; undefined → everything.
+ */
+export function listSessions({ folder } = {}) {
+  const d = openDb();
+  const rows = d.prepare('SELECT * FROM sessions ORDER BY started_at DESC').all();
+  if (folder === undefined) return rows;
+  if (folder === null) return rows.filter((r) => !r.folder);
+  return rows.filter((r) => r.folder === folder || (r.folder && r.folder.startsWith(folder + '/')));
+}
+
 /**
  * Search sessions. `query` runs against FTS5 (optional); `tags` filters to
  * sessions carrying ALL of the given tags; `folder` restricts to a subtree.
@@ -83,10 +125,25 @@ export function reindex() {
 export function search({ query, tags = [], folder } = {}) {
   const d = openDb();
   let ids = null;
+  let rankOrder = null;
+  const snippets = new Map();
 
   if (query && query.trim()) {
-    const rows = d.prepare('SELECT id FROM session_fts WHERE session_fts MATCH ?').all(ftsQuery(query));
+    // snippet() column index 1 = FTS's `body` (id is column 0 and UNINDEXED).
+    // bm25 via `ORDER BY rank` puts relevance-scored hits first — otherwise
+    // the outer started_at DESC sort would drown out topically-strong matches
+    // with anything more recent.
+    const rows = d
+      .prepare(
+        "SELECT id, snippet(session_fts, 1, '', '', '…', 10) AS snip FROM session_fts WHERE session_fts MATCH ? ORDER BY rank",
+      )
+      .all(ftsQuery(query));
     ids = new Set(rows.map((r) => r.id));
+    rankOrder = new Map();
+    rows.forEach((r, i) => {
+      rankOrder.set(r.id, i);
+      if (r.snip) snippets.set(r.id, r.snip.replace(/\s+/g, ' ').trim());
+    });
   }
 
   for (const tag of tags) {
@@ -102,6 +159,10 @@ export function search({ query, tags = [], folder } = {}) {
   let sessions = d.prepare('SELECT * FROM sessions ORDER BY started_at DESC').all();
   if (ids !== null) sessions = sessions.filter((s) => ids.has(s.id));
   if (folder) sessions = sessions.filter((s) => s.folder && (s.folder === folder || s.folder.startsWith(folder + '/')));
+  if (rankOrder) {
+    for (const s of sessions) s.snippet = snippets.get(s.id) || null;
+    sessions.sort((a, b) => (rankOrder.get(a.id) ?? 1e9) - (rankOrder.get(b.id) ?? 1e9));
+  }
   return sessions;
 }
 
