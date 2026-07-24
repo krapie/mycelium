@@ -4,7 +4,19 @@ import { spawn } from 'node:child_process';
 import { scan, allRaw, findSession } from './scanner.js';
 import { firstUserText } from './schema.js';
 import { reindex, search, listTags } from './index-db.js';
-import { mkdir, move, tag, autoOrganize, addRule, suggestPlacements, applyPlacements, summarizeCandidates } from './organize.js';
+import {
+  mkdir,
+  move,
+  tag,
+  autoOrganize,
+  addRule,
+  suggestPlacements,
+  applyPlacements,
+  summarizeCandidates,
+  pendingSuggestions,
+  queueSuggestions,
+  clearSuggestions,
+} from './organize.js';
 import { autoTagSession, tagAll } from './learn.js';
 import { generateDigest, extractKnowledge, foldersWithSessions } from './insight.js';
 import { assembleContext, folderForCwd, injectAgentsMd, contextForSession } from './reuse.js';
@@ -87,36 +99,47 @@ async function main() {
         console.log(`auto-placed ${res.placed}, kept ${res.skippedHuman} human-organized sessions untouched`);
         break;
       }
-      // --smart: content-based, LLM-driven. Only summarizes the sessions
-      // actually being classified below (still unorganized) — not the whole
-      // store's summary backlog, which is `autotag`'s job. This first phase
-      // calls the LLM once per such session lacking one, sequentially — can
-      // be slow with a backlog, so report progress rather than going silent.
-      const pending = allRaw().filter((n) => !n.folder && n.organizedBy !== 'human' && !n.extracted.summary).length;
-      if (pending) console.log(`summarizing ${pending} session(s) first…`);
-      await summarizeCandidates({
-        onProgress: (s, err) => {
-          if (err) console.log(`  ! ${err.message}`);
-          else console.log(`  + ${s.id.slice(0, 8)}`);
-        },
-      });
-      reindex();
-      console.log('classifying…');
-      const res = await suggestPlacements();
-      if (!res.ok) return fail(res.error);
-      if (!res.placements.length) {
-        console.log('no confident placements found');
-        break;
+      // Reuse whatever the daemon already queued (smartOrganizeCycle in
+      // daemon.js) instead of recomputing — instant when the daemon's been
+      // doing the work in the background.
+      let placements = pendingSuggestions();
+      if (!placements.length) {
+        // Only summarizes the sessions actually being classified below
+        // (still unorganized) — not the whole store's summary backlog,
+        // which is `autotag`'s job. Bounded-concurrency (see organize.js),
+        // but can still take a while with a real backlog, so report
+        // progress rather than going silent.
+        const pending = allRaw().filter((n) => !n.folder && n.organizedBy !== 'human' && !n.extracted.summary).length;
+        if (pending) console.log(`summarizing ${pending} session(s) first…`);
+        await summarizeCandidates({
+          onProgress: (s, err) => {
+            if (err) console.log(`  ! ${err.message}`);
+            else console.log(`  + ${s.id.slice(0, 8)}`);
+          },
+        });
+        reindex();
+        console.log('classifying…');
+        const res = await suggestPlacements({
+          onProgress: (batch, total) => total > 1 && console.log(`  batch ${batch}/${total}`),
+        });
+        if (!res.ok) return fail(res.error);
+        if (!res.placements.length) {
+          console.log('no confident placements found');
+          break;
+        }
+        placements = res.placements;
+        queueSuggestions(placements); // persists even if this run doesn't --apply
       }
-      for (const p of res.placements) {
+      for (const p of placements) {
         console.log(`${p.id.slice(0, 8)}  → ${p.folder || '(no match, stays in _inbox)'}${p.reason ? `  — ${p.reason}` : ''}`);
       }
       if (flags.apply) {
-        const applied = applyPlacements(res.placements);
+        const applied = applyPlacements(placements);
+        clearSuggestions(placements.map((p) => p.id));
         reindex();
         console.log(`\napplied ${applied} placements`);
       } else {
-        const matched = res.placements.filter((p) => p.folder).length;
+        const matched = placements.filter((p) => p.folder).length;
         console.log(`\n${matched} suggested — re-run with --apply to file them`);
       }
       break;

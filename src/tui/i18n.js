@@ -150,6 +150,7 @@ const en = {
   'smart.noMatches': 'No confident folder matches found',
   'smart.noMatch': '(no match)',
   'smart.previewTitle': 'Suggested placements',
+  'smart.pendingOnOpen': (n) => `${n} suggestion${n === 1 ? '' : 's'} waiting — press o to review`,
 
   'help.text': null, // filled in below (large block)
 };
@@ -274,6 +275,7 @@ const ko = {
   'smart.noMatches': '확실한 폴더 매칭을 찾지 못했습니다',
   'smart.noMatch': '(매칭 없음)',
   'smart.previewTitle': '제안된 폴더 배치',
+  'smart.pendingOnOpen': (n) => `${n}개 정리 제안 대기 중 — o로 확인`,
 
   'help.text': null,
 };

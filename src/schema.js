@@ -16,6 +16,7 @@
  *   extracted:    { title: null, tags: [], summary: null, decisions: [], todos: [] },
  *   organizedBy:  "auto" | "human",   // sticky flag — see organize step
  *   folder:       "회사/플랫폼/인증"    // tree path (null = _inbox)
+ *   suggestedFolder, suggestedReason  // queued smart-organize guess, cleared on review
  * }
  */
 
@@ -35,6 +36,8 @@ export function emptyNeutral(id, source) {
     folder: null,
     continuationOf: null, // this session continues another (handoff parent id)
     continuedTo: [], // sessions that continued this one (handoff children)
+    suggestedFolder: null, // smart-organize's queued-but-unreviewed placement guess
+    suggestedReason: null, // short LLM-given reason for suggestedFolder
   };
 }
 

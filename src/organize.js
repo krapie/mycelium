@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { basename } from 'node:path';
-import { mkdirSync, existsSync, renameSync, rmSync, readdirSync } from 'node:fs';
+import { mkdirSync, existsSync, readFileSync, renameSync, rmSync, readdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { ensureDirs, TREE_DIR } from './paths.js';
 import { loadRaw, saveRaw, allRaw, deleteRaw } from './scanner.js';
@@ -175,13 +175,21 @@ function unorganizedCandidates() {
  * been summarized yet just contributes fewer/no profile examples below;
  * that backlog belongs to the regular `a`/autotag flow, not to a side effect
  * of classifying the handful of sessions actually still unorganized.
+ *
+ * Runs in `concurrency`-sized chunks rather than one at a time — at a real
+ * backlog's scale (hundreds/thousands of candidates), a strictly sequential
+ * loop makes the wall-clock time scale directly with candidate count. Each
+ * candidate writes to its own raw/<id>.json, so there's no file contention;
+ * the shared tag vocabulary Set can race harmlessly within a chunk (tag
+ * reuse is a quality nicety, not a correctness requirement).
  */
-export async function summarizeCandidates({ onProgress } = {}) {
+export async function summarizeCandidates({ onProgress, concurrency = 5 } = {}) {
   const targets = unorganizedCandidates().filter((n) => !n.extracted.summary);
   const vocab = new Set(allRaw().flatMap((n) => n.extracted.tags || []));
   let done = 0;
   let failed = 0;
-  for (const n of targets) {
+
+  const runOne = async (n) => {
     try {
       const res = await autoTagSession(n.id, { existingTags: [...vocab] });
       if (res.ok) {
@@ -196,42 +204,79 @@ export async function summarizeCandidates({ onProgress } = {}) {
       failed++;
       if (onProgress) onProgress(null, err);
     }
+  };
+
+  for (let i = 0; i < targets.length; i += concurrency) {
+    await Promise.all(targets.slice(i, i + concurrency).map(runOne));
   }
   return { done, failed, total: targets.length };
 }
 
-/** folder -> that folder's existing session summaries — the "reference corpus"
- * a candidate session gets compared against. */
+/**
+ * folder -> profile text a candidate session gets compared against. Prefers
+ * an existing KNOWLEDGE.md (already a human-reviewed, LLM-compressed digest
+ * of that folder — see insight.js's `w`) over concatenating every session
+ * summary in the folder: shorter prompts, and arguably better signal since
+ * it's already synthesized rather than a raw dump. Falls back to the most
+ * recent 15 summaries only when no KNOWLEDGE.md exists yet, capped so a
+ * folder with hundreds of sessions doesn't blow the prompt up on its own.
+ */
 function folderProfiles() {
   const byFolder = new Map();
   for (const n of allRaw()) {
     if (!n.folder || isArchive(n.folder) || !n.extracted.summary) continue;
     if (!byFolder.has(n.folder)) byFolder.set(n.folder, []);
-    byFolder.get(n.folder).push(n.extracted.summary);
+    byFolder.get(n.folder).push(n);
   }
-  return byFolder;
+  const profiles = new Map();
+  for (const [folder, sessions] of byFolder) {
+    const kPath = join(TREE_DIR, ...folder.split('/'), 'KNOWLEDGE.md');
+    if (existsSync(kPath)) {
+      profiles.set(folder, readFileSync(kPath, 'utf8').trim());
+    } else {
+      const recent = sessions
+        .sort((a, b) => (b.startedAt || '').localeCompare(a.startedAt || ''))
+        .slice(0, 15)
+        .map((n) => `- ${n.extracted.summary}`)
+        .join('\n');
+      profiles.set(folder, recent);
+    }
+  }
+  return profiles;
 }
 
 /**
  * Content-based folder suggestions for unorganized sessions — the LLM
- * alternative to autoFolderFor()'s cwd-prefix rules. One call classifies
- * every candidate against every folder's profile at once (the folder corpus
- * is the expensive part of the prompt and would otherwise repeat per
- * candidate). Pure suggestion — nothing is moved until applyPlacements().
- * Callers should run summarizeCandidates() first so the candidates actually
- * have summaries to compare; folders lacking summaries just yield thinner
- * profiles rather than blocking this call.
+ * alternative to autoFolderFor()'s cwd-prefix rules. Chunks candidates into
+ * `batchSize`-sized groups (one complete() call per chunk, folder-profile
+ * text built once and reused across chunks) instead of one call with every
+ * candidate — a single mega-prompt doesn't scale to a real backlog (the
+ * prompt grows without bound in candidate count). Pure suggestion — nothing
+ * is moved until applyPlacements(). Callers should run summarizeCandidates()
+ * first so the candidates actually have summaries to compare; folders
+ * lacking summaries just yield thinner profiles rather than blocking this.
+ * `limit` bounds how many candidates get considered in one call (oldest
+ * first), so a daemon cycle can chip away at a large backlog gradually
+ * instead of trying to classify all of it in one run.
  */
-export async function suggestPlacements() {
+export async function suggestPlacements({ onProgress, batchSize = 25, limit } = {}) {
   const profiles = folderProfiles();
-  const candidates = unorganizedCandidates().filter((n) => n.extracted.summary);
+  let candidates = unorganizedCandidates()
+    .filter((n) => n.extracted.summary)
+    .sort((a, b) => (a.startedAt || '').localeCompare(b.startedAt || ''));
+  if (limit) candidates = candidates.slice(0, limit);
   if (!profiles.size || !candidates.length) return { ok: true, placements: [] };
 
-  const folderBlock = [...profiles.entries()]
-    .map(([folder, summaries]) => `폴더: ${folder}\n${summaries.map((s) => `- ${s}`).join('\n')}`)
-    .join('\n\n');
-  const sessionBlock = candidates.map((n) => `- id:${n.id} 요약:${n.extracted.summary}`).join('\n');
-  const prompt = `아래는 이미 사람이 정리해 둔 폴더들과 그 안 세션 요약이다.
+  const folderBlock = [...profiles.entries()].map(([folder, text]) => `폴더: ${folder}\n${text}`).join('\n\n');
+  const known = new Set(profiles.keys());
+  const placements = [];
+  const chunks = [];
+  for (let i = 0; i < candidates.length; i += batchSize) chunks.push(candidates.slice(i, i + batchSize));
+
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    const sessionBlock = chunk.map((n) => `- id:${n.id} 요약:${n.extracted.summary}`).join('\n');
+    const prompt = `아래는 이미 사람이 정리해 둔 폴더들과 그 안 세션 요약이다.
 
 ${folderBlock}
 
@@ -242,18 +287,57 @@ ${sessionBlock}
 출력 형식(JSON만, 다른 설명 없이):
 {"placements":[{"id":"...", "folder":"..."|null, "reason":"짧은 이유"}]}`;
 
-  let reply;
-  try {
-    reply = await complete(prompt);
-  } catch (err) {
-    return { ok: false, error: `LLM failed: ${err.message}` };
+    let reply;
+    try {
+      reply = await complete(prompt);
+    } catch (err) {
+      return { ok: false, error: `LLM failed: ${err.message}` };
+    }
+    const parsed = parseJsonReply(reply);
+    for (const p of parsed?.placements || []) {
+      if (!chunk.some((c) => c.id === p.id)) continue;
+      placements.push({ id: p.id, folder: known.has(p.folder) ? p.folder : null, reason: p.reason || '' });
+    }
+    if (onProgress) onProgress(i + 1, chunks.length);
   }
-  const parsed = parseJsonReply(reply);
-  const known = new Set(profiles.keys());
-  const placements = (parsed?.placements || [])
-    .filter((p) => candidates.some((c) => c.id === p.id))
-    .map((p) => ({ id: p.id, folder: known.has(p.folder) ? p.folder : null, reason: p.reason || '' }));
   return { ok: true, placements };
+}
+
+/** Queue computed placements onto the session records themselves, so they
+ * survive across daemon cycles / process restarts — the TUI's `o` key and
+ * `mycelium organize --smart` both check this before recomputing. */
+export function queueSuggestions(placements) {
+  let queued = 0;
+  for (const p of placements) {
+    if (!p.folder) continue;
+    const n = loadRaw(p.id);
+    if (!n) continue;
+    n.suggestedFolder = p.folder;
+    n.suggestedReason = p.reason || '';
+    saveRaw(n);
+    queued++;
+  }
+  return queued;
+}
+
+/** Sessions with a queued-but-not-yet-reviewed suggestion, in the same shape
+ * suggestPlacements() returns. */
+export function pendingSuggestions() {
+  return allRaw()
+    .filter((n) => n.suggestedFolder)
+    .map((n) => ({ id: n.id, folder: n.suggestedFolder, reason: n.suggestedReason || '' }));
+}
+
+/** Clear queued suggestions after they've been reviewed (applied or
+ * explicitly passed on) — reviewed items shouldn't keep nagging. */
+export function clearSuggestions(ids) {
+  for (const id of ids) {
+    const n = loadRaw(id);
+    if (!n) continue;
+    n.suggestedFolder = null;
+    n.suggestedReason = null;
+    saveRaw(n);
+  }
 }
 
 /**

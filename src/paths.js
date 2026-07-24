@@ -13,6 +13,8 @@ export const DB_DIR = join(HOME, 'db');
 export const DB_PATH = join(DB_DIR, 'index.db');
 export const CONFIG_PATH = join(HOME, 'config.json');
 export const INBOX = join(TREE_DIR, '_inbox');
+export const DAEMON_PID_PATH = join(HOME, 'daemon.pid'); // same file scripts/run.sh writes
+export const DAEMON_LOG_PATH = join(HOME, 'daemon.log');
 
 export function ensureDirs() {
   for (const d of [HOME, RAW_DIR, TREE_DIR, DIGEST_DIR, DB_DIR, INBOX]) {
