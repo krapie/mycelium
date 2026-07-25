@@ -1,10 +1,10 @@
 {
-  "name": "@krapie/mycelium",
+  "name": "@krapi0314/mycelium",
   "version": "0.1.0",
   "description": "Context Lifecycle platform for AI collaboration — capture, organize, learn, reuse.",
   "type": "module",
   "bin": {
-    "mycelium": "./src/cli.js"
+    "mycelium": "src/cli.js"
   },
   "files": [
     "src",

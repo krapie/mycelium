@@ -14,7 +14,7 @@ AI 협업에서 생성되는 컨텍스트를 **생성(Capture) → 조직화(Org
 
 k9s처럼 한 번 설치하고 어디서든 `mycelium`만 치면 됩니다:
 ```sh
-npm install -g @krapie/mycelium
+npm install -g @krapi0314/mycelium
 ```
 
 직접 고쳐 쓰고 싶으면 git clone 방식도 됩니다:
