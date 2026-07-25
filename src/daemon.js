@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync, openSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, rmSync, openSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { scan } from './scanner.js';
 import { reindex } from './index-db.js';
@@ -110,19 +110,18 @@ function isAlive(pid) {
 }
 
 /**
- * Make sure a background daemon is running, spawning a detached one if not —
- * called from the TUI on launch so just opening `mycelium` normally is
- * enough to keep background upkeep alive, no separate `mycelium daemon` /
- * scripts/run.sh step required. Uses the same pidfile scripts/run.sh writes,
- * so `scripts/stop.sh` stops it either way, and running scripts/run.sh
- * separately is still a harmless no-op (same aliveness check).
+ * Spawn a detached daemon if one isn't already running (pidfile-based,
+ * idempotent) — the core of both `ensureDaemonRunning()` (silent, TUI
+ * auto-start) and `mycelium daemon --detach` (explicit, CLI). Same pidfile
+ * `scripts/run.sh`/`stop.sh` already use, so whichever one started it, any
+ * of the three stop paths (`scripts/stop.sh`, `mycelium daemon --stop`, or
+ * just letting the TUI's next `ensureDaemonRunning()` find it alive) agree.
  */
-export function ensureDaemonRunning() {
-  if (process.env.MYCELIUM_NO_AUTOSTART) return;
+export function spawnDetachedDaemon() {
   ensureDirs();
   if (existsSync(DAEMON_PID_PATH)) {
     const pid = Number(readFileSync(DAEMON_PID_PATH, 'utf8').trim());
-    if (pid && isAlive(pid)) return; // already running
+    if (pid && isAlive(pid)) return { started: false, pid };
   }
   const cliPath = fileURLToPath(new URL('./cli.js', import.meta.url));
   const log = openSync(DAEMON_LOG_PATH, 'a');
@@ -132,6 +131,29 @@ export function ensureDaemonRunning() {
   });
   child.unref();
   writeFileSync(DAEMON_PID_PATH, String(child.pid));
+  return { started: true, pid: child.pid };
+}
+
+/**
+ * Make sure a background daemon is running — called from the TUI on launch
+ * so just opening `mycelium` normally is enough to keep background upkeep
+ * alive, no separate `mycelium daemon --detach` step required. Silent/opt-out
+ * (MYCELIUM_NO_AUTOSTART) since this fires on every plain TUI launch; unlike
+ * spawnDetachedDaemon() itself, which an explicit `--detach` should always honor.
+ */
+export function ensureDaemonRunning() {
+  if (process.env.MYCELIUM_NO_AUTOSTART) return;
+  spawnDetachedDaemon();
+}
+
+/** Stop a daemon started via spawnDetachedDaemon()/scripts/run.sh, if running. */
+export function stopDetachedDaemon() {
+  if (!existsSync(DAEMON_PID_PATH)) return { stopped: false, reason: 'not running' };
+  const pid = Number(readFileSync(DAEMON_PID_PATH, 'utf8').trim());
+  const stopped = pid && isAlive(pid);
+  if (stopped) process.kill(pid);
+  rmSync(DAEMON_PID_PATH, { force: true });
+  return { stopped, pid };
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) runDaemon();

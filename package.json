@@ -1,15 +1,39 @@
 {
-  "name": "mycelium",
+  "name": "@krapie/mycelium",
   "version": "0.1.0",
   "description": "Context Lifecycle platform for AI collaboration — capture, organize, learn, reuse.",
   "type": "module",
   "bin": {
     "mycelium": "./src/cli.js"
   },
+  "files": [
+    "src",
+    "scripts",
+    "README.md",
+    "LICENSE"
+  ],
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.13.0"
   },
   "license": "MIT",
+  "author": "krapie",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/krapie/mycelium.git"
+  },
+  "homepage": "https://github.com/krapie/mycelium#readme",
+  "bugs": {
+    "url": "https://github.com/krapie/mycelium/issues"
+  },
+  "keywords": [
+    "cli",
+    "tui",
+    "claude-code",
+    "codex",
+    "ai-agent",
+    "context-management",
+    "k9s"
+  ],
   "dependencies": {
     "neo-blessed": "^0.2.0"
   }

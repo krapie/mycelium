@@ -6,14 +6,20 @@ AI 협업에서 생성되는 컨텍스트를 **생성(Capture) → 조직화(Org
 
 ## 요구사항
 
-- **Node.js ≥ 22** (내장 `node:sqlite` 사용)
+- **Node.js ≥ 22.13** (내장 `node:sqlite` 사용 — 22.13 미만은 `--experimental-sqlite` 플래그 없이는 안 됨)
 - **git**
 - (선택) **`claude` / `codex` / `kiro-cli` CLI** — 설치 및 로그인되어 있으면 요약 생성·이어열기·핸드오프·에이전트 실행에 사용. 단순 탐색/검색만 할 거면 없어도 됩니다.
 
 ## 설치
 
+k9s처럼 한 번 설치하고 어디서든 `mycelium`만 치면 됩니다:
 ```sh
-git clone <this-repo-url> mycelium
+npm install -g @krapie/mycelium
+```
+
+직접 고쳐 쓰고 싶으면 git clone 방식도 됩니다:
+```sh
+git clone https://github.com/krapie/mycelium.git
 cd mycelium
 npm install                 # 의존성은 neo-blessed(TUI) 하나뿐
 npm link                    # (선택) 전역 `mycelium` 명령 등록
@@ -26,7 +32,7 @@ mycelium scan               # 이 머신의 Claude/Codex/Kiro 세션을 가져�
 mycelium                    # 인터랙티브 TUI 실행
 ```
 
-> 전역 등록(`npm link`)을 안 했으면 `node src/cli.js <명령>` 형태로 실행하세요.
+> git clone 방식으로 설치했고 `npm link`을 안 했으면 `node src/cli.js <명령>` 형태로 실행하세요.
 
 **머신별로 독립적입니다.** Mycelium은 그 컴퓨터의 로컬 세션(`~/.claude/projects/`, `~/.codex/sessions/`, `~/.kiro/sessions/cli/` + kiro-cli의 SQLite DB)만 읽고, 데이터도 그 컴퓨터의 `~/.mycelium/`에 저장합니다. 다른 컴퓨터의 세션이 자동으로 넘어오지 않습니다.
 
@@ -234,7 +240,9 @@ mycelium search "쿼터" --tag 인프라 --folder 회사
 mycelium list / tags / reindex
 
 # 백그라운드 업키핑 (주기 스캔 + 일일 다이제스트 + 스마트 정리 큐잉, UI 없음)
-mycelium daemon
+mycelium daemon                 # 포그라운드로 실행
+mycelium daemon --detach        # 백그라운드로 분리 실행 (idempotent)
+mycelium daemon --stop          # 정지
 
 # TUI 표시 언어 (기본 en) — 다음 TUI 실행부터 적용
 mycelium lang        # 현재 설정 확인
@@ -251,12 +259,15 @@ mycelium lang en      # 영어로 전환
 
 수동으로 직접 제어하고 싶을 때(예: TUI를 한 번도 안 열고 헤드리스로만 쓰는 경우):
 ```sh
-scripts/run.sh    # 이미 떠 있으면 아무 일 안 함(idempotent), 로그는 ~/.mycelium/daemon.log
-scripts/stop.sh    # 떠 있으면 정지, 없으면 아무 일 안 함
+mycelium daemon --detach    # 이미 떠 있으면 아무 일 안 함(idempotent), 로그는 ~/.mycelium/daemon.log
+mycelium daemon --stop      # 떠 있으면 정지, 없으면 아무 일 안 함
 ```
-둘 다 TUI 자동 시작과 같은 `~/.mycelium/daemon.pid`를 쓰므로, 어느 쪽으로 띄웠든
-`scripts/stop.sh`로 멈출 수 있습니다. 재부팅 시 자동 시작 같은 건 없습니다 — 필요하면
-`scripts/run.sh`를 launchd/systemd/cron 등에 걸어 쓰세요.
+`npm install -g`로 설치했다면(git clone 없이) 이 두 명령이 기본입니다. git clone으로
+설치했다면 저장소 루트의 `scripts/run.sh`/`scripts/stop.sh`도 완전히 동일하게 동작합니다
+(내부적으로 같은 로직). 셋 다 같은 `~/.mycelium/daemon.pid`를 쓰므로, 어느 쪽으로
+띄웠든 아무 방법으로나 멈출 수 있습니다. 재부팅 시 자동 시작 같은 건 없습니다 —
+필요하면 `mycelium daemon --detach`(또는 `scripts/run.sh`)를 launchd/systemd/cron
+등에 걸어 쓰세요.
 
 ## 정리 (실험 단계)
 

@@ -339,6 +339,19 @@ async function main() {
       break;
     }
     case 'daemon': {
+      const { flags } = parseFlags(args);
+      if (flags.stop) {
+        const { stopDetachedDaemon } = await import('./daemon.js');
+        const res = stopDetachedDaemon();
+        console.log(res.stopped ? `daemon stopped (pid ${res.pid})` : 'daemon is not running');
+        break;
+      }
+      if (flags.detach) {
+        const { spawnDetachedDaemon } = await import('./daemon.js');
+        const res = spawnDetachedDaemon();
+        console.log(res.started ? `daemon started (pid ${res.pid})` : `daemon already running (pid ${res.pid})`);
+        break;
+      }
       const { runDaemon } = await import('./daemon.js');
       await runDaemon();
       break;
@@ -375,7 +388,8 @@ Reuse     context <session>|--folder|--cwd   조상 경로 컨텍스트 출력
 Find      search <q> [--tag t] [--folder f]
           list [--folder f] / tags     (_archive는 기본 숨김 — list --folder _archive)
 Run       (인자 없음) 또는 tui          인터랙티브 TUI (콕핏)
-          daemon                        백그라운드 스캔 폴링 + 다이제스트
+          daemon                        백그라운드 스캔 폴링 + 다이제스트 (포그라운드로 실행)
+          daemon --detach / --stop      백그라운드로 분리 실행 / 정지 (scripts/run.sh·stop.sh와 동일)
           lang [en|ko]                  TUI 표시 언어 설정/확인 (기본 en)
 Clean     cleanup [tidy]                메타세션 제거 + 빈 폴더 정리 + 인덱스 재생성
           cleanup folders|archive|index 부분 정리
