@@ -7,30 +7,42 @@ import { listTreeDirs, isArchive } from '../organize.js';
 // every render); detail() still loads a single raw file, which is fine.
 
 export function folders() {
-  const counts = new Map();
+  const direct = new Map(); // folder -> sessions filed directly in it (not descendants)
   let inbox = 0;
   let total = 0;
   for (const { folder, n } of folderCounts()) {
     if (isArchive(folder)) continue;
     total += n;
     if (!folder) inbox += n;
-    else counts.set(folder, (counts.get(folder) || 0) + n);
+    else direct.set(folder, (direct.get(folder) || 0) + n);
   }
-  // Include real (possibly empty) tree directories, plus every ancestor path
-  // of a session's folder, so nested/empty folders always appear and are
+  // Every folder path that should appear in the tree: every folder with
+  // direct sessions, every real (possibly empty) tree directory, plus every
+  // ancestor path of either — so nested/empty folders always appear and are
   // selectable for folder operations.
+  const paths = new Set(direct.keys());
   for (const dir of listTreeDirs()) {
-    if (isArchive(dir)) continue;
-    if (!counts.has(dir)) counts.set(dir, 0);
+    if (!isArchive(dir)) paths.add(dir);
   }
-  for (const f of [...counts.keys()]) {
+  for (const f of [...paths]) {
     const parts = f.split('/');
-    for (let i = 1; i < parts.length; i++) {
-      const anc = parts.slice(0, i).join('/');
-      if (!counts.has(anc)) counts.set(anc, 0);
-    }
+    for (let i = 1; i < parts.length; i++) paths.add(parts.slice(0, i).join('/'));
   }
-  return { list: [...counts.keys()].sort(), counts, inbox, total };
+  // Displayed count is the subtree total (itself + every descendant folder's
+  // sessions), not just what's filed directly in it — a parent folder like
+  // "Projects" should read as "everything under here", matching what
+  // actually shows up when you drill into it (sessions() already includes
+  // the whole subtree via startsWith(folder + '/')). Fine at personal scale
+  // (dozens/hundreds of folders) without a fancier trie-based rollup.
+  const counts = new Map();
+  for (const f of paths) {
+    let sum = direct.get(f) || 0;
+    for (const [other, n] of direct) {
+      if (other !== f && other.startsWith(f + '/')) sum += n;
+    }
+    counts.set(f, sum);
+  }
+  return { list: [...paths].sort(), counts, inbox, total };
 }
 
 function mapRow(r) {
