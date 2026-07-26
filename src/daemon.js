@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync, rmSync, openSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, rmSync, openSync, appendFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { scan } from './scanner.js';
 import { reindex } from './index-db.js';
@@ -20,22 +20,22 @@ const SMART_ORGANIZE_INTERVAL_MS = Number(process.env.MYCELIUM_SMART_ORGANIZE_MS
 // cycles instead of one run trying to classify everything at once.
 const SMART_ORGANIZE_BATCH_LIMIT = Number(process.env.MYCELIUM_SMART_ORGANIZE_LIMIT || 100);
 
-async function scanCycle() {
+async function scanCycle(log) {
   try {
     const res = scan();
     if (res.imported > 0) {
       autoOrganize();
       reindex();
-      console.log(`[scan] +${res.imported} (organized + reindexed)`);
+      log.log(`[scan] +${res.imported} (organized + reindexed)`);
       // Tag freshly imported sessions (skips those already summarized).
       const t = await tagAll();
       if (t.tagged > 0) {
         reindex();
-        console.log(`[tag] +${t.tagged}`);
+        log.log(`[tag] +${t.tagged}`);
       }
     }
   } catch (err) {
-    console.error(`[scan] ${err.message}`);
+    log.error(`[scan] ${err.message}`);
   }
 }
 
@@ -47,13 +47,13 @@ async function scanCycle() {
  * review (same trust model as w/i and the manual `o` key) — auto-applying is
  * opt-in via config.json's `autoApproveSmartOrganize`.
  */
-async function smartOrganizeCycle() {
+async function smartOrganizeCycle(log) {
   if (pendingSuggestions().length) return;
   try {
     await summarizeCandidates({ concurrency: 5 });
     const res = await suggestPlacements({ batchSize: 25, limit: SMART_ORGANIZE_BATCH_LIMIT });
     if (!res.ok) {
-      console.error(`[organize] ${res.error}`);
+      log.error(`[organize] ${res.error}`);
       return;
     }
     const matched = res.placements.filter((p) => p.folder);
@@ -61,18 +61,18 @@ async function smartOrganizeCycle() {
     if (loadConfig().autoApproveSmartOrganize) {
       const applied = applyPlacements(res.placements);
       reindex();
-      console.log(`[organize] auto-applied ${applied} smart placements`);
+      log.log(`[organize] auto-applied ${applied} smart placements`);
     } else {
       const queued = queueSuggestions(res.placements);
-      console.log(`[organize] queued ${queued} smart placement suggestions`);
+      log.log(`[organize] queued ${queued} smart placement suggestions`);
     }
   } catch (err) {
-    console.error(`[organize] ${err.message}`);
+    log.error(`[organize] ${err.message}`);
   }
 }
 
 let lastDigestDay = null;
-async function digestCycle() {
+async function digestCycle(log) {
   const today = new Date().toISOString().slice(0, 10);
   // Once per local day, generate yesterday's digest (the day is complete).
   if (lastDigestDay === today) return;
@@ -80,24 +80,32 @@ async function digestCycle() {
   const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
   try {
     const r = await generateDigest({ period: 'day', date: yesterday });
-    if (r.ok) console.log(`[digest] ${r.keyed} (${r.count} sessions)`);
+    if (r.ok) log.log(`[digest] ${r.keyed} (${r.count} sessions)`);
   } catch (err) {
-    console.error(`[digest] ${err.message}`);
+    log.error(`[digest] ${err.message}`);
   }
 }
 
-export async function runDaemon() {
-  console.log('Mycelium daemon starting (background upkeep: scan + digest + smart organize).');
-  console.log(`  scan interval: ${SCAN_INTERVAL_MS}ms`);
-  console.log(`  smart organize interval: ${SMART_ORGANIZE_INTERVAL_MS}ms (batch limit ${SMART_ORGANIZE_BATCH_LIMIT})`);
+/**
+ * The actual upkeep loop (scan → organize → tag, smart-organize, digest) on
+ * its three cadences. Used both by the standalone `mycelium daemon` process
+ * and by the TUI's own in-process routine (see startTuiRoutine()) — `log`
+ * defaults to the real console for the former; the TUI passes a file logger
+ * instead, since blessed owns the terminal and raw stdout writes would
+ * corrupt the screen.
+ */
+export async function runDaemon({ log = console } = {}) {
+  log.log('Mycelium daemon starting (background upkeep: scan + digest + smart organize).');
+  log.log(`  scan interval: ${SCAN_INTERVAL_MS}ms`);
+  log.log(`  smart organize interval: ${SMART_ORGANIZE_INTERVAL_MS}ms (batch limit ${SMART_ORGANIZE_BATCH_LIMIT})`);
 
-  await scanCycle();
-  await digestCycle();
-  await smartOrganizeCycle();
+  await scanCycle(log);
+  await digestCycle(log);
+  await smartOrganizeCycle(log);
 
-  setInterval(scanCycle, SCAN_INTERVAL_MS);
-  setInterval(digestCycle, 60 * 60 * 1000); // hourly check; fires once/day
-  setInterval(smartOrganizeCycle, SMART_ORGANIZE_INTERVAL_MS);
+  setInterval(() => scanCycle(log), SCAN_INTERVAL_MS);
+  setInterval(() => digestCycle(log), 60 * 60 * 1000); // hourly check; fires once/day
+  setInterval(() => smartOrganizeCycle(log), SMART_ORGANIZE_INTERVAL_MS);
 }
 
 function isAlive(pid) {
@@ -110,12 +118,37 @@ function isAlive(pid) {
 }
 
 /**
+ * Run the upkeep loop inside the TUI's own process instead of a separate
+ * detached one — called once from the TUI on launch. This replaced an
+ * earlier design that auto-spawned a long-lived detached `mycelium daemon`
+ * process on every TUI launch: that process kept running old in-memory code
+ * across TUI restarts, so code changes silently stopped taking effect until
+ * someone remembered to `mycelium daemon --stop` it (a real bug hit once).
+ * Running in-process means every `mycelium` launch always runs the current
+ * code, and upkeep naturally stops when the TUI exits — no separate process
+ * to leak or go stale. Output goes to DAEMON_LOG_PATH, not stdout — blessed
+ * owns the terminal, so raw console writes would corrupt the screen.
+ * Opt-out via MYCELIUM_NO_AUTOSTART (used by automated TUI smoke tests to
+ * avoid triggering real LLM calls in the background).
+ */
+export function startTuiRoutine() {
+  if (process.env.MYCELIUM_NO_AUTOSTART) return;
+  ensureDirs();
+  const fileLog = {
+    log: (...args) => appendFileSync(DAEMON_LOG_PATH, `[${new Date().toISOString()}] ${args.join(' ')}\n`),
+    error: (...args) => appendFileSync(DAEMON_LOG_PATH, `[${new Date().toISOString()}] ${args.join(' ')}\n`),
+  };
+  runDaemon({ log: fileLog });
+}
+
+/**
  * Spawn a detached daemon if one isn't already running (pidfile-based,
- * idempotent) — the core of both `ensureDaemonRunning()` (silent, TUI
- * auto-start) and `mycelium daemon --detach` (explicit, CLI). Same pidfile
- * `scripts/run.sh`/`stop.sh` already use, so whichever one started it, any
- * of the three stop paths (`scripts/stop.sh`, `mycelium daemon --stop`, or
- * just letting the TUI's next `ensureDaemonRunning()` find it alive) agree.
+ * idempotent) — for anyone who explicitly wants background upkeep to keep
+ * running even while the TUI itself is closed (`mycelium daemon --detach`,
+ * or scripts/run.sh). Not used by the TUI itself anymore — see
+ * startTuiRoutine() above. Same pidfile `scripts/run.sh`/`stop.sh` use, so
+ * `mycelium daemon --stop` / `scripts/stop.sh` both work on whichever one
+ * started it.
  */
 export function spawnDetachedDaemon() {
   ensureDirs();
@@ -132,18 +165,6 @@ export function spawnDetachedDaemon() {
   child.unref();
   writeFileSync(DAEMON_PID_PATH, String(child.pid));
   return { started: true, pid: child.pid };
-}
-
-/**
- * Make sure a background daemon is running — called from the TUI on launch
- * so just opening `mycelium` normally is enough to keep background upkeep
- * alive, no separate `mycelium daemon --detach` step required. Silent/opt-out
- * (MYCELIUM_NO_AUTOSTART) since this fires on every plain TUI launch; unlike
- * spawnDetachedDaemon() itself, which an explicit `--detach` should always honor.
- */
-export function ensureDaemonRunning() {
-  if (process.env.MYCELIUM_NO_AUTOSTART) return;
-  spawnDetachedDaemon();
 }
 
 /** Stop a daemon started via spawnDetachedDaemon()/scripts/run.sh, if running. */

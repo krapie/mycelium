@@ -1,6 +1,6 @@
 import pkg from 'neo-blessed';
 const blessed = pkg.default || pkg;
-import { C, sourceColor } from '../theme.js';
+import { C, sourceColor, sourceLabel } from '../theme.js';
 import * as data from '../data.js';
 import {
   move as organizeMove,
@@ -16,7 +16,9 @@ import {
   pendingSuggestions,
   queueSuggestions,
   clearSuggestions,
+  mergeSessions,
 } from '../../organize.js';
+import { suggestSplitBoundaries, applySplit } from '../../split.js';
 import { scan, allRaw } from '../../scanner.js';
 import { pickFolder, editTags, menu, multiSelectList } from '../widgets/pickers.js';
 import { createCalendarTab } from './calendar.js';
@@ -105,8 +107,7 @@ export function sessionsView(opts = {}) {
       // Agent name formatted as a hashtag, same visual language as tags —
       // and now trails the title instead of leading it, so the title (the
       // thing you're actually scanning for) reads first on the line.
-      const name = { codex: 'codex', kiro: 'kiro' }[r.source] ?? 'claude';
-      const src = `{${sourceColor(r.source)}-fg}#${name}{/}`;
+      const src = `{${sourceColor(r.source)}-fg}#${sourceLabel(r.source)}{/}`;
       // Same "source #idPrefix" shape as the continuation links in detail
       // (↩ 이어받음/→ 이어감), so you can match a row here to that label there.
       const idPrefix = `{${C.dim}-fg}#${r.id.slice(0, 8)}{/}`;
@@ -121,6 +122,19 @@ export function sessionsView(opts = {}) {
       // glyphs that render wider than one column in most terminal fonts, so
       // packing them directly against the next character visually overlapped it.
       const link = r.continuationOf ? `{${C.spore}-fg}↩{/} ` : (r.continuedTo && r.continuedTo.length) ? `{${C.spore}-fg}→{/} ` : '';
+      // Same marker language, different glyph: 🔀 merge product, ✂ split
+      // piece, ⤳ a session with related derived content elsewhere —
+      // supersededBy (merge original — hidden by default, so this case is
+      // mostly unreachable in practice) or splitInto (split original, which
+      // DOES stay visible, unlike a merge original, since none of its
+      // content actually moved anywhere).
+      const lineage = r.mergedFrom?.length
+        ? `{${C.merged}-fg}🔀{/} `
+        : r.splitFrom
+          ? `{${C.merged}-fg}✂{/} `
+          : r.supersededBy?.length || r.splitInto?.length
+            ? `{${C.faint}-fg}⤳{/} `
+            : '';
       const isNew = !r.folder ? `{${C.spore}-fg}[${t('sessions.newBadge')}]{/}` : '';
       // Under active search, lead with the FTS snippet — the row's row-reason.
       // The default preview (first user message) hides matches deep in the
@@ -132,7 +146,7 @@ export function sessionsView(opts = {}) {
       // {|} is blessed's right-align pivot (same trick app.js uses for the
       // header) — pins the metadata cluster to the column's right edge
       // instead of trailing directly off the title text.
-      return `${mark}${text}{|}${link}${src} ${idPrefix} ${isNew}`;
+      return `${mark}${text}{|}${lineage}${link}${src} ${idPrefix} ${isNew}`;
     });
     listBox.setItems(items.length ? items : [`{gray-fg}${t('sessions.empty')}{/}`]);
     updateHeader();
@@ -430,6 +444,53 @@ export function sessionsView(opts = {}) {
         app.render();
       });
 
+      // Shift+M: merge the multi-selected sessions into one new synthetic
+      // session — git-like (mergeSessions() never rewrites the originals'
+      // turns, just supersedes them; fully reversible via `mycelium
+      // unmerge`). Blessed reports Shift+letter as 'S-<letter>', not the
+      // literal uppercase character (confirmed in neo-blessed's program.js).
+      listBox.key('S-m', () => {
+        const ids = [...state.selected];
+        if (ids.length < 2) return app.notify(t('merge.needsTwo'), 3);
+        textPrompt(app, t('merge.titlePrompt'), '', (title) => {
+          if (title === null) return listBox.focus(); // Esc — cancelled
+          const res = mergeSessions(ids, { title: title.trim() || undefined });
+          if (!res.ok) return app.notify(res.error, 3);
+          state.selected.clear();
+          data.refreshMany([res.merged.id, ...ids]);
+          reloadFolders();
+          reloadList();
+          app.notify(t('merge.done', ids.length), 3);
+          listBox.focus();
+          app.render();
+        });
+      });
+
+      // Shift+S: LLM-suggested split — propose topic boundaries, human
+      // reviews via the same multiSelectList pattern smart-organize (`o`)
+      // uses, apply only the checked ranges (unchecked ranges simply stay
+      // part of the original — nothing is lost either way).
+      const doSplit = async () => {
+        const r = currentRow();
+        if (!r) return;
+        app.notify(t('split.suggesting'), 60);
+        const res = await suggestSplitBoundaries(r.id);
+        if (!res.ok) return app.notify(res.error, 3);
+        const items = res.ranges.map((rg) => ({ label: `턴 ${rg.from}-${rg.to}  "${rg.label}"`, value: rg }));
+        multiSelectList(app, t('split.reviewTitle'), items, (chosen) => {
+          if (!chosen?.length) return; // Esc or nothing checked — original untouched
+          const applied = applySplit(r.id, chosen);
+          if (!applied.ok) return app.notify(applied.error, 3);
+          data.refreshMany([r.id, ...applied.pieces.map((p) => p.id)]);
+          reloadFolders();
+          reloadList();
+          listBox.focus();
+          app.render();
+        });
+      };
+      listBox.key('S-s', doSplit);
+      detailBox.key('S-s', doSplit);
+
       // Live search.
       screenKey(app, ['/'], () => {
         prompt(app, t('common.searchPrompt'), state.query, (val) => {
@@ -626,11 +687,39 @@ export function sessionsView(opts = {}) {
         });
       });
 
+      // Reuse: hand the current session off to another agent (seeded NEW
+      // session). Factored out of the `h` binding so `r` can fall back to it
+      // for merge/split products (see doResume below) — same action either way.
+      const doHandoff = () => {
+        const r = currentRow();
+        if (!r) return;
+        const hb = buildHandoff(r.id);
+        if (!hb.ok) return app.notify(hb.error, 3);
+        // launchAgent() (launch.js) already reindexes exactly what changed.
+        launchAgent(app, { folder: r.folder, seed: hb.prompt, parentId: r.id }, () => {
+          reloadFolders();
+          reloadList();
+          listBox.focus();
+          app.render();
+        });
+      };
+      listBox.key('h', doHandoff);
+
       // Reuse: RESUME the exact session in its original agent (claude --resume / codex resume).
+      // Merge/split products have no real agent-native id to resume (a merge
+      // has no single "the conversation"; a split piece's id is Mycelium-only)
+      // — resuming their *original* would just reopen the un-focused/un-
+      // combined session, defeating the point of having split or merged in
+      // the first place. So `r` transparently falls back to handoff, seeded
+      // from THIS session's own (combined/sliced) content instead.
       const doResume = () => {
         const r = currentRow();
         if (!r) return;
         const n = data.detail(r.id);
+        if (n?.mergedFrom?.length || n?.splitFrom) {
+          app.notify(t('resume.fallbackNotice'), 3);
+          return doHandoff();
+        }
         // resumeSession() (launch.js) already reindexes exactly what changed.
         resumeSession(app, { id: r.id, source: r.source, cwd: n?.cwd, projectDir: n?.projectDir }, () => {
           reloadFolders();
@@ -652,8 +741,8 @@ export function sessionsView(opts = {}) {
           app,
           t('resume.chooseAction'),
           [
-            { label: t('resume.copyCommand'), value: 'copy' },
             { label: t('resume.openHere'), value: 'here' },
+            { label: t('resume.copyCommand'), value: 'copy' },
           ],
           (choice) => {
             if (choice === 'here') return doResume();
@@ -665,21 +754,6 @@ export function sessionsView(opts = {}) {
             }
           },
         );
-      });
-
-      // Reuse: hand the current session off to another agent (seeded NEW session).
-      listBox.key('h', () => {
-        const r = currentRow();
-        if (!r) return;
-        const hb = buildHandoff(r.id);
-        if (!hb.ok) return app.notify(hb.error, 3);
-        // launchAgent() (launch.js) already reindexes exactly what changed.
-        launchAgent(app, { folder: r.folder, seed: hb.prompt, parentId: r.id }, () => {
-          reloadFolders();
-          reloadList();
-          listBox.focus();
-          app.render();
-        });
       });
 
       // Learn: generate summary + tags (content-based). Works on the multi-

@@ -3,6 +3,7 @@ import { writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { complete } from './llm.js';
 import { allRaw } from './scanner.js';
 import { TREE_DIR, DIGEST_DIR, ensureDirs } from './paths.js';
+import { isSuperseded } from './organize.js';
 
 function dayOf(iso) {
   return iso ? iso.slice(0, 10) : null;
@@ -90,6 +91,7 @@ ${blocks.join('\n')}
  */
 export async function buildKnowledgeText(folder) {
   const sessions = allRaw().filter((s) => {
+    if (isSuperseded(s)) return false; // its content now lives in the merge/split product instead
     const f = s.folder || '_inbox';
     return f === folder || f.startsWith(folder + '/');
   });

@@ -131,13 +131,22 @@ export function scan({ onImport } = {}) {
         continue;
       }
 
-      // Carry forward downstream-owned fields on re-import.
+      // Carry forward downstream-owned fields on re-import. mergedFrom/
+      // splitFrom/supersededBy are split.js/organize.js's lineage flags —
+      // missing them here was a real bug: a session that's still actively
+      // growing (its own agent log keeps changing) gets rescanned on every
+      // scan cycle, and without this, each rescan silently reset supersededBy
+      // back to [], un-hiding an already-split/merged-away original.
       if (existing) {
         neutral.extracted = existing.extracted || neutral.extracted;
         neutral.folder = existing.folder ?? neutral.folder;
         neutral.organizedBy = existing.organizedBy || neutral.organizedBy;
         neutral.continuationOf = existing.continuationOf ?? neutral.continuationOf;
         neutral.continuedTo = existing.continuedTo ?? neutral.continuedTo;
+        neutral.mergedFrom = existing.mergedFrom?.length ? existing.mergedFrom : neutral.mergedFrom;
+        neutral.splitFrom = existing.splitFrom ?? neutral.splitFrom;
+        neutral.supersededBy = existing.supersededBy?.length ? existing.supersededBy : neutral.supersededBy;
+        neutral.splitInto = existing.splitInto?.length ? existing.splitInto : neutral.splitInto;
       }
       neutral._mtimeMs = ref.mtimeMs;
 

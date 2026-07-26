@@ -16,7 +16,9 @@ import {
   pendingSuggestions,
   queueSuggestions,
   clearSuggestions,
+  unmerge,
 } from './organize.js';
+import { unsplit } from './split.js';
 import { autoTagSession, tagAll } from './learn.js';
 import { generateDigest, extractKnowledge, foldersWithSessions } from './insight.js';
 import { assembleContext, folderForCwd, injectAgentsMd, contextForSession } from './reuse.js';
@@ -338,6 +340,30 @@ async function main() {
       }
       break;
     }
+    case 'unmerge': {
+      const { positional } = parseFlags(args);
+      const idOrPrefix = positional[0];
+      if (!idOrPrefix) return fail('Usage: mycelium unmerge <sessionId|prefix>');
+      const found = findSession(idOrPrefix);
+      if (!found.ok) return fail(found.error);
+      const res = unmerge(found.session.id);
+      if (!res.ok) return fail(res.error);
+      reindex();
+      console.log(`unmerged — restored ${res.restored.length} original session(s)`);
+      break;
+    }
+    case 'unsplit': {
+      const { positional } = parseFlags(args);
+      const idOrPrefix = positional[0];
+      if (!idOrPrefix) return fail('Usage: mycelium unsplit <sessionId|prefix>');
+      const found = findSession(idOrPrefix);
+      if (!found.ok) return fail(found.error);
+      const res = unsplit(found.session.id);
+      if (!res.ok) return fail(res.error);
+      reindex();
+      console.log(`unsplit — removed ${res.removed.length} split piece(s)`);
+      break;
+    }
     case 'daemon': {
       const { flags } = parseFlags(args);
       if (flags.stop) {
@@ -378,6 +404,8 @@ Organize  organize                      cwd 기반 자동 배치 (사람 결정�
           mv <session> <folder>         세션 수동 이동
           tag <session> +t -t           태그 수동 편집
           rule <cwd-prefix> <folder>    cwd→폴더 자동배치 규칙
+          unmerge <session>              TUI Shift+M 병합 되돌리기 (원본 세션들 복원)
+          unsplit <session>              TUI Shift+S 분할 되돌리기 (분할 조각 제거, 원본 복원)
 Learn     autotag [<session>] [--force] 내용 기반 자동 태깅 (소급 일괄)
           digest [week] [--date D]      일일/주간 서사 다이제스트
           knowledge [<folder>]          폴더별 KNOWLEDGE.md 추출
@@ -387,9 +415,9 @@ Reuse     context <session>|--folder|--cwd   조상 경로 컨텍스트 출력
           resume <session|prefix> [--copy|--exec]  이어열기 명령어 출력(새 탭 붙여넣기용) / 클립보드 복사 / 즉시 실행
 Find      search <q> [--tag t] [--folder f]
           list [--folder f] / tags     (_archive는 기본 숨김 — list --folder _archive)
-Run       (인자 없음) 또는 tui          인터랙티브 TUI (콕핏)
-          daemon                        백그라운드 스캔 폴링 + 다이제스트 (포그라운드로 실행)
-          daemon --detach / --stop      백그라운드로 분리 실행 / 정지 (scripts/run.sh·stop.sh와 동일)
+Run       (인자 없음) 또는 tui          인터랙티브 TUI (콕핏) — 켜져 있는 동안 스캔·정리·다이제스트를 자체적으로 수행
+          daemon                        (선택) TUI 없이 백그라운드 업킵만 필요할 때 (포그라운드로 실행)
+          daemon --detach / --stop      (선택) TUI가 꺼져 있을 때도 계속 돌리고 싶으면 — 분리 실행 / 정지 (scripts/run.sh·stop.sh와 동일)
           lang [en|ko]                  TUI 표시 언어 설정/확인 (기본 en)
 Clean     cleanup [tidy]                메타세션 제거 + 빈 폴더 정리 + 인덱스 재생성
           cleanup folders|archive|index 부분 정리

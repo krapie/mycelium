@@ -51,7 +51,7 @@ export function openDb() {
   } catch (err) {
     if (!String(err.message).includes('duplicate column')) throw err;
   }
-  for (const col of ['continuation_of TEXT', 'continued_to TEXT', 'tags TEXT']) {
+  for (const col of ['continuation_of TEXT', 'continued_to TEXT', 'tags TEXT', 'merged_from TEXT', 'split_from TEXT', 'superseded_by TEXT', 'split_into TEXT']) {
     try {
       db.exec(`ALTER TABLE sessions ADD COLUMN ${col}`);
     } catch (err) {
@@ -64,7 +64,7 @@ export function openDb() {
 function prepareWriters(d) {
   return {
     insSession: d.prepare(
-      'INSERT OR REPLACE INTO sessions (id, source, folder, started_at, preview, title, summary, organized_by, continuation_of, continued_to, tags) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT OR REPLACE INTO sessions (id, source, folder, started_at, preview, title, summary, organized_by, continuation_of, continued_to, tags, merged_from, split_from, superseded_by, split_into) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     ),
     insFts: d.prepare('INSERT INTO session_fts (id, body) VALUES (?, ?)'),
     upsertTag: d.prepare('INSERT OR IGNORE INTO tags (name) VALUES (?)'),
@@ -86,6 +86,10 @@ function writeSessionRow(w, n) {
     n.continuationOf ?? null,
     JSON.stringify(n.continuedTo || []),
     JSON.stringify(n.extracted.tags || []),
+    JSON.stringify(n.mergedFrom || []),
+    n.splitFrom ?? null,
+    JSON.stringify(n.supersededBy || []),
+    JSON.stringify(n.splitInto || []),
   );
   w.insFts.run(n.id, searchableText(n));
   for (const tag of n.extracted.tags || []) {
@@ -137,8 +141,14 @@ export function removeFromIndex(id) {
 /** Session counts grouped by folder — for the TUI folder tree, without reading raw/. */
 export function folderCounts() {
   const d = openDb();
+  // Sessions folded into a merge/split product don't count toward the
+  // folder tree's numbers either — same rule listSessions()/search() apply,
+  // otherwise a folder's badge count would disagree with what's actually in
+  // its session list once something in it gets merged/split away.
   return d
-    .prepare("SELECT COALESCE(folder, '') AS folder, COUNT(*) AS n FROM sessions GROUP BY folder")
+    .prepare(
+      "SELECT COALESCE(folder, '') AS folder, COUNT(*) AS n FROM sessions WHERE superseded_by IS NULL OR superseded_by = '[]' GROUP BY folder",
+    )
     .all();
 }
 
@@ -149,9 +159,21 @@ export function sessionCountsByDay(yearMonth /* 'YYYY-MM' */) {
   const d = openDb();
   return d
     .prepare(
-      "SELECT CAST(substr(started_at, 9, 2) AS INTEGER) AS day, COALESCE(folder, '') AS folder, COUNT(*) AS n FROM sessions WHERE substr(started_at, 1, 7) = ? GROUP BY day, folder",
+      "SELECT CAST(substr(started_at, 9, 2) AS INTEGER) AS day, COALESCE(folder, '') AS folder, COUNT(*) AS n FROM sessions WHERE substr(started_at, 1, 7) = ? AND (superseded_by IS NULL OR superseded_by = '[]') GROUP BY day, folder",
     )
     .all(yearMonth);
+}
+
+// A sqlite row's superseded_by is a JSON array string (mirrors continued_to's
+// shape) — non-empty means this session was folded into a merge/split product.
+function hasSupersededBy(row) {
+  if (!row.superseded_by) return false;
+  try {
+    const arr = JSON.parse(row.superseded_by);
+    return Array.isArray(arr) && arr.length > 0;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -160,13 +182,18 @@ export function sessionCountsByDay(yearMonth /* 'YYYY-MM' */) {
  * `date` ('YYYY-MM-DD'), if given, narrows to that single day (matches
  * folder's post-query filter style rather than a separate WHERE clause).
  */
-export function listSessions({ folder, date } = {}) {
+export function listSessions({ folder, date, includeSuperseded = false } = {}) {
   const d = openDb();
   let rows = d.prepare('SELECT * FROM sessions ORDER BY started_at DESC').all();
   if (date) rows = rows.filter((r) => r.started_at && r.started_at.slice(0, 10) === date);
   // _archive is hidden by default everywhere (same rule folderCounts()'s
   // callers apply) unless the caller is explicitly browsing into it.
   if (!isArchive(folder)) rows = rows.filter((r) => !isArchive(r.folder));
+  // Sessions folded into a merge/split product are hidden by default too —
+  // their content now lives in that product, so they'd otherwise duplicate
+  // rows in every list/search. loadRaw()/data.detail() (direct-by-id lookups,
+  // not a list scan) are unaffected — this only guards list-shaped queries.
+  if (!includeSuperseded) rows = rows.filter((r) => !hasSupersededBy(r));
   if (folder === undefined) return rows;
   if (folder === null) return rows.filter((r) => !r.folder);
   return rows.filter((r) => r.folder === folder || (r.folder && r.folder.startsWith(folder + '/')));
@@ -177,7 +204,7 @@ export function listSessions({ folder, date } = {}) {
  * sessions carrying ALL of the given tags; `folder` restricts to a subtree.
  * Combined tag + text filtering is the pi-session-manager pattern.
  */
-export function search({ query, tags = [], folder, date } = {}) {
+export function search({ query, tags = [], folder, date, includeSuperseded = false } = {}) {
   const d = openDb();
   let ids = null;
   let rankOrder = null;
@@ -217,6 +244,9 @@ export function search({ query, tags = [], folder, date } = {}) {
   // _archive is hidden by default from search too (see listSessions()) unless
   // explicitly browsed into via folder.
   if (!isArchive(folder)) sessions = sessions.filter((s) => !isArchive(s.folder));
+  // Same rule as listSessions() — merged/split-away originals stay out of
+  // search results by default.
+  if (!includeSuperseded) sessions = sessions.filter((s) => !hasSupersededBy(s));
   if (folder) sessions = sessions.filter((s) => s.folder && (s.folder === folder || s.folder.startsWith(folder + '/')));
   if (rankOrder) {
     for (const s of sessions) s.snippet = snippets.get(s.id) || null;

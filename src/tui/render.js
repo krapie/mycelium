@@ -1,4 +1,4 @@
-import { C, sourceColor } from './theme.js';
+import { C, sourceColor, sourceLabel } from './theme.js';
 import * as data from './data.js';
 import { t } from './i18n.js';
 
@@ -22,11 +22,10 @@ export function splitSentences(text) {
 export function formatSessionDetail(n) {
   if (!n) return [];
   const lines = [];
-  const srcName = { codex: 'codex', kiro: 'kiro' }[n.source] ?? 'claude';
   // Title as the headline, then metadata, then the description (summary).
   if (n.extracted.title) lines.push(`{${C.fox}-fg}{bold}${n.extracted.title}{/}`, '');
   lines.push(
-    `{${sourceColor(n.source)}-fg}${srcName}{/}  {${C.dim}-fg}${(n.startedAt || '').slice(0, 16).replace('T', ' ')} · ${n.folder || t('sessions.newBadge')}{/}`,
+    `{${sourceColor(n.source)}-fg}${sourceLabel(n.source)}{/}  {${C.dim}-fg}${(n.startedAt || '').slice(0, 16).replace('T', ' ')} · ${n.folder || t('sessions.newBadge')}{/}`,
   );
   if (n.extracted.tags?.length) {
     lines.push(n.extracted.tags.map((tg) => `{${C.tag}-fg}#${tg}{/}`).join(' '));
@@ -54,5 +53,27 @@ export function formatSessionDetail(n) {
     const label = c ? c.source + ' #' + cid.slice(0, 8) : '#' + cid.slice(0, 8);
     lines.push(`{${C.spore}-fg}${t('detail.continuedTo', label)}{/}`);
   }
+  // Split/merge lineage — same text-link style as the continuation links
+  // above, no new interactive-jump precedent needed.
+  if (n.mergedFrom?.length) {
+    const labels = n.mergedFrom.map((id) => refLabel(id)).join(', ');
+    lines.push('', `{${C.merged}-fg}${t('detail.mergedFrom', n.mergedFrom.length, labels)}{/}`);
+  }
+  if (n.splitFrom) {
+    lines.push('', `{${C.merged}-fg}${t('detail.splitFrom', refLabel(n.splitFrom))}{/}`);
+  }
+  if (n.supersededBy?.length) {
+    const labels = n.supersededBy.map((id) => refLabel(id)).join(', ');
+    lines.push('', `{${C.faint}-fg}${t('detail.superseded', labels)}{/}`);
+  }
+  if (n.splitInto?.length) {
+    const labels = n.splitInto.map((id) => refLabel(id)).join(', ');
+    lines.push('', `{${C.merged}-fg}${t('detail.splitInto', n.splitInto.length, labels)}{/}`);
+  }
   return lines;
+}
+
+function refLabel(id) {
+  const n = data.detail(id);
+  return (n ? sourceLabel(n.source) : '?') + ' #' + id.slice(0, 8);
 }

@@ -2,18 +2,18 @@ import { createApp } from './app.js';
 import { sessionsView } from './views/sessions.js';
 import { t } from './i18n.js';
 import { pendingSuggestions } from '../organize.js';
-import { ensureDaemonRunning } from '../daemon.js';
+import { startTuiRoutine } from '../daemon.js';
 
 export async function runTui() {
   if (!process.stdout.isTTY) {
     console.error(t('app.needsTty'));
     process.exit(1);
   }
-  // Opening the TUI is "using Mycelium" — that's enough to keep the
-  // background upkeep (scan/organize/digest) alive going forward, no
-  // separate `mycelium daemon` step to remember. No-ops if one's already
-  // running (see ensureDaemonRunning's pidfile check).
-  ensureDaemonRunning();
+  // Background upkeep (scan/organize/digest) runs inside this same process
+  // for as long as the TUI is open, on the same timers a standalone daemon
+  // would use — see daemon.js's startTuiRoutine() for why this replaced an
+  // auto-spawned separate process. Stops naturally when the TUI exits.
+  startTuiRoutine();
   const app = createApp();
   await app.show(sessionsView());
   app.render();

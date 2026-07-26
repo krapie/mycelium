@@ -1,6 +1,6 @@
 import pkg from 'neo-blessed';
 const blessed = pkg.default || pkg;
-import { C, sourceColor } from '../theme.js';
+import { C, sourceColor, sourceLabel } from '../theme.js';
 import * as data from '../data.js';
 import { t } from '../i18n.js';
 import { formatSessionDetail } from '../render.js';
@@ -98,8 +98,7 @@ export function createCalendarTab(app, { onBack }) {
     dayRows = data.sessions({ date });
     const items = dayRows.length
       ? dayRows.map((r) => {
-          const name = { codex: 'codex', kiro: 'kiro' }[r.source] ?? 'claude';
-          const src = `{${sourceColor(r.source)}-fg}#${name}{/}`;
+          const src = `{${sourceColor(r.source)}-fg}#${sourceLabel(r.source)}{/}`;
           const title = (r.title || r.summary || r.preview || t('common.noContent')).replace(/\s+/g, ' ').slice(0, 60);
           return `${title}{|}${src} {${C.dim}-fg}${r.folder || t('sessions.newBadge')}{/}`;
         })

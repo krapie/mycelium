@@ -68,6 +68,10 @@ function mapRow(r) {
     tags: parseJsonArray(r.tags),
     continuationOf: r.continuation_of,
     continuedTo: parseJsonArray(r.continued_to),
+    mergedFrom: parseJsonArray(r.merged_from),
+    splitFrom: r.split_from,
+    supersededBy: parseJsonArray(r.superseded_by),
+    splitInto: parseJsonArray(r.split_into),
     snippet: r.snippet || null,
   };
 }

@@ -59,6 +59,10 @@ const en = {
   'detail.todos': 'Action Items',
   'detail.continuationOf': (label) => `↩ continues: ${label}`,
   'detail.continuedTo': (label) => `→ continued by: ${label}`,
+  'detail.mergedFrom': (n, labels) => `🔀 merged from ${n}: ${labels}`,
+  'detail.splitFrom': (label) => `✂ split from: ${label}`,
+  'detail.superseded': (labels) => `⤳ superseded by: ${labels}`,
+  'detail.splitInto': (n, labels) => `⤳ split into ${n}: ${labels}`,
 
   // sessions.js — status bar (lifecycle bar: stage/key/arrow colors passed
   // in by the caller, same pattern as help.text). Shown at every drill
@@ -145,6 +149,14 @@ const en = {
   'resume.copyCommand': 'Copy command (new tab)',
   'resume.copied': 'Command copied to clipboard',
   'resume.copyFailed': 'Copy failed (no clipboard tool found)',
+  'resume.fallbackNotice': "Merged/split session — resuming isn't possible, continuing via a new handed-off session instead",
+
+  'merge.needsTwo': 'Select 2 or more sessions first (Space)',
+  'merge.titlePrompt': 'Title for the merged session (optional)',
+  'merge.done': (n) => `Merged ${n} sessions`,
+
+  'split.suggesting': 'Analyzing session for topic boundaries…',
+  'split.reviewTitle': 'Proposed split — space select, enter apply, esc cancel',
 
   'smart.running': 'Summarizing + classifying unfiled sessions…',
   'smart.noMatches': 'No confident folder matches found',
@@ -203,6 +215,10 @@ const ko = {
   'detail.todos': '실행 항목',
   'detail.continuationOf': (label) => `↩ 이어받음: ${label}`,
   'detail.continuedTo': (label) => `→ 이어감: ${label}`,
+  'detail.mergedFrom': (n, labels) => `🔀 ${n}개 병합됨: ${labels}`,
+  'detail.splitFrom': (label) => `✂ 분할됨 — 원본: ${label}`,
+  'detail.superseded': (labels) => `⤳ 대체됨: ${labels}`,
+  'detail.splitInto': (n, labels) => `⤳ ${n}개로 분할됨: ${labels}`,
 
   'lifecycle.bar': (stage, key, arrow) =>
     `{${stage}-fg}생성{/}{${key}-fg}·s{/}  {${arrow}-fg}→{/}  ` +
@@ -278,6 +294,14 @@ const ko = {
   'resume.copyCommand': '명령어 복사 (새 탭용)',
   'resume.copied': '명령어가 클립보드에 복사됨',
   'resume.copyFailed': '복사 실패 (클립보드 도구 없음)',
+  'resume.fallbackNotice': '병합/분할된 세션이라 이어열기 대신 새 세션으로 이어갑니다',
+
+  'merge.needsTwo': '먼저 세션을 2개 이상 선택하세요 (Space)',
+  'merge.titlePrompt': '병합된 세션의 제목 (선택 사항)',
+  'merge.done': (n) => `${n}개 세션 병합됨`,
+
+  'split.suggesting': '주제 경계 분석 중…',
+  'split.reviewTitle': '분할 제안 — space 선택, enter 실행, esc 취소',
 
   'smart.running': '미분류 세션 요약 + 폴더 분류 중…',
   'smart.noMatches': '확실한 폴더 매칭을 찾지 못했습니다',
@@ -322,7 +346,7 @@ en['help.text'] = (fg, spore) => `{bold}Global{/}
   {${fg}-fg}a{/}       Generate summary + tags (LLM, batches over multi-select)
   {${fg}-fg}e{/}       Rename title (modal — summary/tags stay AI-generated)
   {${fg}-fg}y{/}       Copy to clipboard
-  {${fg}-fg}r{/}       Resume (reopen in the original agent, right here)
+  {${fg}-fg}r{/}       Resume (reopen in the original agent, right here — merged/split sessions fall back to handoff instead, see h)
   {${fg}-fg}h{/}       Handoff (start a new session on a different agent)
   {${fg}-fg}n{/}       Launch a new agent session with this folder's context
   {${fg}-fg}m{/} / {${fg}-fg}t{/}   Move to folder / edit tags
@@ -332,6 +356,8 @@ en['help.text'] = (fg, spore) => `{bold}Global{/}
   {${fg}-fg}i{/}       Inject into AGENTS.md — preview then confirm (n/h do this automatically; use i to refresh a session opened outside Mycelium)
   {${fg}-fg}Space{/}   Multi-select
   {${fg}-fg}*{/}       Select everything currently listed (press again to clear)
+  {${fg}-fg}Shift+M{/} Merge 2+ selected sessions into one (git-like — originals kept, just hidden; mycelium unmerge undoes it)
+  {${fg}-fg}Shift+S{/} Split (LLM-suggested topic boundaries, review before applying — pieces land in the same folder, original stays visible; mycelium unsplit undoes it)
 
 {bold}Detail panel{/}
   {${fg}-fg}↑↓{/}      Scroll
@@ -364,7 +390,7 @@ ko['help.text'] = (fg, spore) => `{bold}전역{/}
   {${fg}-fg}a{/}       요약·태그 생성 (LLM, 다중 선택 시 일괄)
   {${fg}-fg}e{/}       제목 수정 (모달 — 요약·태그는 AI 생성 그대로)
   {${fg}-fg}y{/}       클립보드로 복사
-  {${fg}-fg}r{/}       이어열기 (원래 에이전트로, 바로 여기서)
+  {${fg}-fg}r{/}       이어열기 (원래 에이전트로, 바로 여기서 — 병합/분할 세션은 핸드오프로 대체, h 참고)
   {${fg}-fg}h{/}       핸드오프 (다른 에이전트로 새 세션 시작)
   {${fg}-fg}n{/}       이 폴더 컨텍스트로 새 에이전트 세션
   {${fg}-fg}m{/} / {${fg}-fg}t{/}   폴더 이동 / 태그 편집
@@ -374,6 +400,8 @@ ko['help.text'] = (fg, spore) => `{bold}전역{/}
   {${fg}-fg}i{/}       AGENTS.md에 주입 — 미리보기 후 확인 (n/h는 자동으로 함; Mycelium 밖에서 연 세션 새로고침용)
   {${fg}-fg}Space{/}   다중 선택
   {${fg}-fg}*{/}       현재 목록 전체 선택 (다시 누르면 전체 해제)
+  {${fg}-fg}Shift+M{/} 선택한 세션 2개 이상 병합 (git처럼 — 원본은 안 지워지고 숨겨질 뿐, mycelium unmerge로 되돌리기)
+  {${fg}-fg}Shift+S{/} 분할 (LLM이 주제 경계 제안, 검토 후 적용 — 조각은 원본과 같은 폴더에 생성, 원본은 그대로 목록에 남음; mycelium unsplit로 되돌리기)
 
 {bold}상세 패널{/}
   {${fg}-fg}↑↓{/}      스크롤

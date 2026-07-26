@@ -2,11 +2,13 @@ import { join } from 'node:path';
 import { basename } from 'node:path';
 import { mkdirSync, existsSync, readFileSync, renameSync, rmSync, readdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { ensureDirs, TREE_DIR } from './paths.js';
 import { loadRaw, saveRaw, allRaw, deleteRaw } from './scanner.js';
 import { loadConfig, saveConfig } from './config.js';
 import { complete, parseJsonReply } from './llm.js';
 import { autoTagSession } from './learn.js';
+import { emptyNeutral } from './schema.js';
 
 // _archive (dead-cwd sessions, or anything manually filed there) is deliberately
 // hidden from the TUI by default — it's a bin for things you don't want in
@@ -14,6 +16,12 @@ import { autoTagSession } from './learn.js';
 // `mycelium list --folder _archive` / `mycelium search --folder _archive`.
 export function isArchive(folder) {
   return folder === '_archive' || (!!folder && folder.startsWith('_archive/'));
+}
+
+// A session folded into a merge/split product is hidden the same way
+// _archive is — its content now lives in the product that superseded it.
+export function isSuperseded(n) {
+  return !!(n.supersededBy && n.supersededBy.length);
 }
 
 /** Real directory for a tree path like "회사/플랫폼/인증". */
@@ -224,7 +232,7 @@ export async function summarizeCandidates({ onProgress, concurrency = 5 } = {}) 
 function folderProfiles() {
   const byFolder = new Map();
   for (const n of allRaw()) {
-    if (!n.folder || isArchive(n.folder) || !n.extracted.summary) continue;
+    if (!n.folder || isArchive(n.folder) || isSuperseded(n) || !n.extracted.summary) continue;
     if (!byFolder.has(n.folder)) byFolder.set(n.folder, []);
     byFolder.get(n.folder).push(n);
   }
@@ -452,6 +460,62 @@ export function linkContinuation(childId, parentId) {
     if (!parent.continuedTo.includes(childId)) parent.continuedTo.push(childId);
     saveRaw(parent);
   }
+}
+
+/**
+ * Merge N sessions into one new synthetic session — the *only* place their
+ * turns are combined; the originals are never touched (see split.js's
+ * module doc for why: scan() only carries forward extracted/folder/
+ * organizedBy/continuation* on re-import, not turns, so rewriting an
+ * existing id's turns in place would be unrecoverable on the next scan).
+ * `mergedFrom` on the new record and `supersededBy` on each original are the
+ * only link — fully reversible via unmerge().
+ */
+export function mergeSessions(ids, { title } = {}) {
+  const uniqueIds = [...new Set(ids)];
+  if (uniqueIds.length < 2) return { ok: false, error: '병합하려면 세션을 2개 이상 선택하세요' };
+  const originals = uniqueIds.map(loadRaw).filter(Boolean);
+  if (originals.length < 2) return { ok: false, error: '유효한 세션을 찾을 수 없습니다' };
+  originals.sort((a, b) => (a.startedAt || '').localeCompare(b.startedAt || ''));
+
+  const merged = emptyNeutral(randomUUID(), 'merged');
+  merged.startedAt = originals[0].startedAt;
+  merged.endedAt = originals[originals.length - 1].endedAt;
+  merged.mergedFrom = originals.map((n) => n.id);
+  if (title) merged.extracted.title = title;
+  // Each block is preceded by a plain-text separator (role 'system' — not
+  // produced by any adapter, so it can't be mistaken for a real user turn by
+  // firstUserText()/handoff's turn lookups) noting provenance, same spirit
+  // as sessionToText()'s multi-section export.
+  merged.turns = originals.flatMap((n) => [
+    { role: 'system', text: `─── ${n.source} #${n.id.slice(0, 8)} · ${(n.startedAt || '').slice(0, 16).replace('T', ' ')} ───` },
+    ...n.turns,
+  ]);
+  merged.artifacts.filesChanged = [...new Set(originals.flatMap((n) => n.artifacts.filesChanged || []))];
+  saveRaw(merged);
+
+  for (const n of originals) {
+    n.supersededBy = [merged.id];
+    saveRaw(n);
+  }
+  return { ok: true, merged, originals };
+}
+
+/** Reverse of mergeSessions(): delete the synthetic record, restore the originals' visibility. */
+export function unmerge(mergedId) {
+  const merged = loadRaw(mergedId);
+  if (!merged) return { ok: false, error: `no session ${mergedId}` };
+  if (!merged.mergedFrom?.length) return { ok: false, error: '병합된 세션이 아닙니다' };
+  const restored = [];
+  for (const id of merged.mergedFrom) {
+    const n = loadRaw(id);
+    if (!n) continue;
+    n.supersededBy = (n.supersededBy || []).filter((x) => x !== mergedId);
+    saveRaw(n);
+    restored.push(n);
+  }
+  deleteRaw(mergedId);
+  return { ok: true, restored };
 }
 
 /** Reverse of a cwd rule: the working directory configured for a folder, if any. */

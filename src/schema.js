@@ -17,6 +17,7 @@
  *   organizedBy:  "auto" | "human",   // sticky flag — see organize step
  *   folder:       "회사/플랫폼/인증"    // tree path (null = _inbox)
  *   suggestedFolder, suggestedReason  // queued smart-organize guess, cleared on review
+ *   mergedFrom, splitFrom, supersededBy, splitInto  // split/merge lineage — see organize.js/split.js
  * }
  */
 
@@ -38,6 +39,10 @@ export function emptyNeutral(id, source) {
     continuedTo: [], // sessions that continued this one (handoff children)
     suggestedFolder: null, // smart-organize's queued-but-unreviewed placement guess
     suggestedReason: null, // short LLM-given reason for suggestedFolder
+    mergedFrom: [], // ids folded into this session (non-empty only on a merge product)
+    splitFrom: null, // id this session was sliced out of (non-null only on a split product)
+    supersededBy: [], // merge product that replaced this session — hidden by default, like _archive
+    splitInto: [], // pieces sliced out of this session — informational only, this session STAYS visible
   };
 }
 

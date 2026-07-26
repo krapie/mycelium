@@ -6,6 +6,7 @@ export const C = {
   claude: '#8ab4d8', // claude-code agent label — was fox, same as the title color it sits next to
   kiro: '#e08fb0', // kiro agent label — distinct from fox/spore/claude/tag
   tag: '#c9a3d9', // session tags — distinct from title (fox), claude, and spore/codex
+  merged: '#a8c25a', // merge-product pseudo-source — distinct from every agent color above
   text: '#e9e4d6',
   dim: '#8b8574',
   faint: '#5e594c',
@@ -18,7 +19,16 @@ export const C = {
 // C.fox (used for session titles) so the agent label never visually merges
 // with the title it's printed next to.
 export function sourceColor(source) {
-  return { codex: C.spore, kiro: C.kiro }[source] ?? C.claude;
+  return { codex: C.spore, kiro: C.kiro, merged: C.merged }[source] ?? C.claude;
+}
+
+// Source → display name for the #hashtag-style badge shown next to a
+// session's title. Not localized — these are literal tool names (plus
+// 'merged', the synthetic merge pseudo-source), same identifier either
+// language shows. Was duplicated three ways across sessions.js/calendar.js/
+// render.js; factored here so a new source only needs updating once.
+export function sourceLabel(source) {
+  return { codex: 'codex', kiro: 'kiro', merged: 'merged' }[source] ?? 'claude';
 }
 
 export const box = {
