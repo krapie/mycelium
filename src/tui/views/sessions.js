@@ -58,7 +58,8 @@ function sessionToText(n) {
  * added in later build steps.
  */
 export function sessionsView(opts = {}) {
-  let state = { folder: null, query: '', tags: [], selected: new Set() };
+  let state = { folder: null, query: '', tags: [], selected: new Set(), sortBy: 'recent' };
+  const SORT_CYCLE = ['recent', 'title', 'agent'];
   let app;
   let foldersBox, listBox, detailBox;
   let rows = [];
@@ -102,8 +103,27 @@ export function sessionsView(opts = {}) {
     foldersBox.setItems(items);
   }
 
+  // Recent is whatever order data.sessions() already returns (most-recent
+  // first, or FTS relevance while searching) — left untouched. Title/agent
+  // are re-sorted client-side; ties within the same agent fall back to
+  // recency so agent grouping doesn't otherwise scramble chronology.
+  function sortRows(list) {
+    if (state.sortBy === 'title') {
+      return [...list].sort((a, b) =>
+        (a.title || a.summary || a.preview || '').localeCompare(b.title || b.summary || b.preview || ''),
+      );
+    }
+    if (state.sortBy === 'agent') {
+      return [...list].sort((a, b) => {
+        const c = sourceLabel(a.source).localeCompare(sourceLabel(b.source));
+        return c !== 0 ? c : (b.startedAt || '').localeCompare(a.startedAt || '');
+      });
+    }
+    return list;
+  }
+
   function reloadList() {
-    rows = data.sessions({ folder: state.folder, query: state.query, tags: state.tags });
+    rows = sortRows(data.sessions({ folder: state.folder, query: state.query, tags: state.tags }));
     const items = rows.map((r) => {
       // Agent name formatted as a hashtag, same visual language as tags —
       // and now trails the title instead of leading it, so the title (the
@@ -156,7 +176,8 @@ export function sessionsView(opts = {}) {
   function updateHeader() {
     const crumb = state.folder || t('folders.root');
     const filt = [state.query && `/${state.query}`, ...state.tags.map((tg) => `#${tg}`)].filter(Boolean).join(' ');
-    app.setHeader(`${crumb}${filt ? '  {' + C.spore + '-fg}' + filt + '{/}' : ''}`, `${rows.length} sessions`);
+    const sortSuffix = state.sortBy === 'recent' ? '' : `  {${C.dim}-fg}${t('sessions.sortLabel_' + state.sortBy)}{/}`;
+    app.setHeader(`${crumb}${filt ? '  {' + C.spore + '-fg}' + filt + '{/}' : ''}`, `${rows.length} sessions${sortSuffix}`);
   }
 
   function showDetail(id) {
@@ -428,6 +449,16 @@ export function sessionsView(opts = {}) {
         if (!r) return;
         if (state.selected.has(r.id)) state.selected.delete(r.id);
         else state.selected.add(r.id);
+        reloadList();
+        app.render();
+      });
+
+      // Shift+O: cycle sort order — recent (default) → title A-Z → agent.
+      // Client-side only (sortRows() above), doesn't touch the index —
+      // "recent" is already how data.sessions()/search() order rows.
+      listBox.key('S-o', () => {
+        const i = SORT_CYCLE.indexOf(state.sortBy);
+        state.sortBy = SORT_CYCLE[(i + 1) % SORT_CYCLE.length];
         reloadList();
         app.render();
       });
