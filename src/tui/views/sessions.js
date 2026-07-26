@@ -665,9 +665,10 @@ export function sessionsView(opts = {}) {
           ],
           (ans) => {
             if (ans !== 'yes') return listBox.focus();
-            for (const id of ids) deleteSession(id);
+            const touched = new Set(ids);
+            for (const id of ids) for (const otherId of deleteSession(id).touchedIds || []) touched.add(otherId);
             app.notify(t('sessions.deleted', ids.length));
-            afterMutate(ids);
+            afterMutate([...touched]);
             listBox.focus();
             setLevel('sessions');
           },
@@ -708,7 +709,10 @@ export function sessionsView(opts = {}) {
           if (isDerived) {
             for (const n of mine || []) {
               const res = absorbIntoSession(r.id, n.id);
-              if (res.ok) data.refreshOne(n.id); // gone — reindex removes it
+              if (res.ok) {
+                data.refreshOne(n.id); // gone — reindex removes it
+                data.refreshMany(res.touchedIds || []); // their backlinks changed too
+              }
             }
             data.refreshOne(r.id); // now holds the absorbed turns
           }

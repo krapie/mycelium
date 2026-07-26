@@ -143,7 +143,39 @@ export function deleteSession(sessionId) {
   excluded.add(sessionId);
   cfg.excludedSessionIds = [...excluded];
   saveConfig(cfg);
-  return { ok: true, id: sessionId };
+  // Sweep other sessions' backlinks to the now-gone id — continuation/merge/
+  // split arrays render.js reads for the ↩/→/🔀/⤳ markers and detail links.
+  // A dangling entry doesn't crash anything (those lookups already degrade
+  // to just showing the bare id), but it's stale bookkeeping worth cleaning
+  // while we're already touching this id — same discipline unmerge()/
+  // unsplit()/absorbIntoSession() apply to their own fields.
+  const touchedIds = [];
+  for (const other of allRaw()) {
+    let touched = false;
+    if (other.continuedTo?.includes(sessionId)) {
+      other.continuedTo = other.continuedTo.filter((id) => id !== sessionId);
+      touched = true;
+    }
+    if (other.mergedFrom?.includes(sessionId)) {
+      other.mergedFrom = other.mergedFrom.filter((id) => id !== sessionId);
+      touched = true;
+    }
+    if (other.supersededBy?.includes(sessionId)) {
+      other.supersededBy = other.supersededBy.filter((id) => id !== sessionId);
+      touched = true;
+    }
+    if (other.splitInto?.includes(sessionId)) {
+      other.splitInto = other.splitInto.filter((id) => id !== sessionId);
+      touched = true;
+    }
+    if (touched) {
+      saveRaw(other);
+      touchedIds.push(other.id);
+    }
+  }
+  // Callers should reindex touchedIds too (e.g. via data.refreshMany), not
+  // just sessionId itself — their on-disk backlinks changed here as well.
+  return { ok: true, id: sessionId, touchedIds };
 }
 
 /**
@@ -493,8 +525,8 @@ export function absorbIntoSession(targetId, sourceId) {
   // added (source is about to stop existing as its own record).
   target.continuedTo = (target.continuedTo || []).filter((id) => id !== sourceId);
   saveRaw(target);
-  deleteSession(sourceId);
-  return { ok: true, target };
+  const del = deleteSession(sourceId);
+  return { ok: true, target, touchedIds: del.touchedIds || [] };
 }
 
 /**
