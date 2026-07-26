@@ -17,6 +17,7 @@ import {
   queueSuggestions,
   clearSuggestions,
   mergeSessions,
+  absorbIntoSession,
 } from '../../organize.js';
 import { suggestSplitBoundaries, applySplit } from '../../split.js';
 import { scan, allRaw } from '../../scanner.js';
@@ -695,8 +696,22 @@ export function sessionsView(opts = {}) {
         if (!r) return;
         const hb = buildHandoff(r.id);
         if (!hb.ok) return app.notify(hb.error, 3);
+        const isDerived = r.mergedFrom?.length || r.splitFrom;
         // launchAgent() (launch.js) already reindexes exactly what changed.
-        launchAgent(app, { folder: r.folder, seed: hb.prompt, parentId: r.id }, () => {
+        launchAgent(app, { folder: r.folder, seed: hb.prompt, parentId: r.id }, (mine) => {
+          // A merge/split product has no real agent-native id, so h/r always
+          // spawns a genuinely new session here — fold it straight back into
+          // the product it continued instead of leaving that product sitting
+          // unused next to the real ongoing work (see organize.js's
+          // absorbIntoSession doc). Doesn't apply to a normal session's
+          // handoff — that keeps making a new chain-linked session as usual.
+          if (isDerived) {
+            for (const n of mine || []) {
+              const res = absorbIntoSession(r.id, n.id);
+              if (res.ok) data.refreshOne(n.id); // gone — reindex removes it
+            }
+            data.refreshOne(r.id); // now holds the absorbed turns
+          }
           reloadFolders();
           reloadList();
           listBox.focus();

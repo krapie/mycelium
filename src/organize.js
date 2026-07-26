@@ -463,6 +463,41 @@ export function linkContinuation(childId, parentId) {
 }
 
 /**
+ * Fold a real handoff-spawned session's turns onto a merge/split product it
+ * continued (in place — unlike mergeSessions()/applySplit(), safe here
+ * because `targetId` is a Mycelium-synthetic id no adapter's listSessions()
+ * will ever produce, so scan() will never reimport and overwrite it).
+ * `sourceId` is then permanently excluded (deleteSession() — raw file gone,
+ * id added to excludedSessionIds) so its own external log doesn't get
+ * re-captured as a second, now-disconnected record on the next scan.
+ *
+ * Only meant for continuing FROM a derived (merge/split) session: handing
+ * off from a normal session should keep creating a new chain-linked session
+ * as usual (see README's handoff lifecycle) — this exists specifically
+ * because a merge/split product has no real agent-native id to truly
+ * "resume," so `r`/`h` on one always spawns a fresh real session, and
+ * without this that fresh session would be the only place further work
+ * actually lives while the product it came from just sits there unused.
+ */
+export function absorbIntoSession(targetId, sourceId) {
+  const target = loadRaw(targetId);
+  const source = loadRaw(sourceId);
+  if (!target || !source) return { ok: false, error: 'session not found' };
+  target.turns.push(
+    { role: 'system', text: `─── ${source.source} #${sourceId.slice(0, 8)} · ${(source.startedAt || '').slice(0, 16).replace('T', ' ')} ───` },
+    ...source.turns,
+  );
+  target.endedAt = source.endedAt || target.endedAt;
+  target.artifacts.filesChanged = [...new Set([...(target.artifacts.filesChanged || []), ...(source.artifacts.filesChanged || [])])];
+  // Drop the now-stale continuation link linkContinuation() would have just
+  // added (source is about to stop existing as its own record).
+  target.continuedTo = (target.continuedTo || []).filter((id) => id !== sourceId);
+  saveRaw(target);
+  deleteSession(sourceId);
+  return { ok: true, target };
+}
+
+/**
  * Merge N sessions into one new synthetic session — the *only* place their
  * turns are combined; the originals are never touched (see split.js's
  * module doc for why: scan() only carries forward extracted/folder/

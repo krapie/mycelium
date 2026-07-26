@@ -155,9 +155,10 @@ function run(app, { agentKey, dir, folder, seed, parentId }, done) {
       if (fresh.length) reindexMany(fresh.map((n) => loadRaw(n.id) || n));
       const note = parentId ? t('launch.continuedSession') : t('launch.newSession');
       app.notify(mine.length ? t('launch.captured', note, mine.length, folder || t('sessions.newBadge')) : t('launch.noNewSessions'), 3);
+      if (done) return done(mine);
     } catch (err) {
       app.notify(t('launch.captureFailed', err.message), 3);
     }
-    if (done) done();
+    if (done) done([]);
   });
 }

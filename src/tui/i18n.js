@@ -149,7 +149,7 @@ const en = {
   'resume.copyCommand': 'Copy command (new tab)',
   'resume.copied': 'Command copied to clipboard',
   'resume.copyFailed': 'Copy failed (no clipboard tool found)',
-  'resume.fallbackNotice': "Merged/split session — resuming isn't possible, continuing via a new handed-off session instead",
+  'resume.fallbackNotice': "Merged/split session — resuming isn't possible, continuing via handoff instead (folds back in automatically when you return)",
 
   'merge.needsTwo': 'Select 2 or more sessions first (Space)',
   'merge.titlePrompt': 'Title for the merged session (optional)',
@@ -294,7 +294,7 @@ const ko = {
   'resume.copyCommand': '명령어 복사 (새 탭용)',
   'resume.copied': '명령어가 클립보드에 복사됨',
   'resume.copyFailed': '복사 실패 (클립보드 도구 없음)',
-  'resume.fallbackNotice': '병합/분할된 세션이라 이어열기 대신 새 세션으로 이어갑니다',
+  'resume.fallbackNotice': '병합/분할된 세션이라 이어열기 대신 핸드오프로 이어갑니다 (돌아오면 자동으로 다시 합쳐짐)',
 
   'merge.needsTwo': '먼저 세션을 2개 이상 선택하세요 (Space)',
   'merge.titlePrompt': '병합된 세션의 제목 (선택 사항)',
