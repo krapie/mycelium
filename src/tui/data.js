@@ -1,5 +1,15 @@
 import { loadRaw } from '../scanner.js';
-import { reindex, reindexOne, reindexMany, removeFromIndex, search, listTags, folderCounts, listSessions } from '../index-db.js';
+import {
+  reindex,
+  reindexOne,
+  reindexMany,
+  removeFromIndex,
+  search,
+  listTags,
+  folderCounts,
+  listSessions,
+  sessionCountsByDay as dbSessionCountsByDay,
+} from '../index-db.js';
 import { listTreeDirs, isArchive } from '../organize.js';
 
 // Thin data layer the TUI views read from. Folder tree and non-search session
@@ -62,18 +72,31 @@ function mapRow(r) {
   };
 }
 
-export function sessions({ folder, query, tags } = {}) {
-  const searching = !!(query || (tags && tags.length));
+export function sessions({ folder, query, tags, date } = {}) {
+  const searching = !!(query || (tags && tags.length) || date);
   if (searching) {
-    // Search stays global regardless of folder — it's the one way to find
-    // something you already filed away without navigating to it first.
-    let rows = search({ query, tags: tags || [], folder: folder || undefined }).map(mapRow);
+    // Search (and the calendar's date filter, same rule) stays global
+    // regardless of folder — it's how you find something you already filed
+    // away without navigating to it first.
+    let rows = search({ query, tags: tags || [], folder: folder || undefined, date }).map(mapRow);
     if (folder) rows = rows.filter((r) => r.folder === folder || (r.folder && r.folder.startsWith(folder + '/')));
     return rows;
   }
   // Root (no folder selected) is the literal top level, not "everything" —
   // sessions already filed into a folder live there, not at Root too.
   return listSessions({ folder: folder ? folder : null }).map(mapRow);
+}
+
+/** Session counts per day for one calendar month, excluding _archive (same
+ * rule folders() already applies to folderCounts()). Map<dayOfMonth, count>. */
+export function sessionCountsByDay(year, month) {
+  const yearMonth = `${year}-${String(month).padStart(2, '0')}`;
+  const counts = new Map();
+  for (const { day, folder, n } of dbSessionCountsByDay(yearMonth)) {
+    if (isArchive(folder)) continue;
+    counts.set(day, (counts.get(day) || 0) + n);
+  }
+  return counts;
 }
 
 export function detail(id) {

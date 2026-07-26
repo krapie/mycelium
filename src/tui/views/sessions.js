@@ -19,6 +19,8 @@ import {
 } from '../../organize.js';
 import { scan, allRaw } from '../../scanner.js';
 import { pickFolder, editTags, menu, multiSelectList } from '../widgets/pickers.js';
+import { createCalendarTab } from './calendar.js';
+import { formatSessionDetail } from '../render.js';
 import { basename } from 'node:path';
 import { launchAgent, resumeSession } from '../launch.js';
 import { resumeCommandLine } from '../../agents.js';
@@ -30,17 +32,6 @@ import { textView, digestReader, confirmText, helpModal } from '../widgets/viewe
 import { textPrompt } from '../widgets/pickers.js';
 import { copyToClipboard } from '../clipboard.js';
 import { t } from '../i18n.js';
-
-// Break a summary paragraph into sentence-sized bullet points for the detail
-// pane. summary is stored as prose (learn.js asks the LLM for 2-3 sentences),
-// but a dense paragraph is harder to scan than the bullet list decisions/todos
-// already use — this is a display-only split, the stored string is untouched.
-function splitSentences(text) {
-  return text
-    .split(/(?<=[.!?])\s+/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
 
 // Plain-text rendering of a session for the clipboard (title, summary, and the
 // full transcript — everything you'd want to paste elsewhere).
@@ -68,6 +59,26 @@ export function sessionsView(opts = {}) {
   let app;
   let foldersBox, listBox, detailBox;
   let rows = [];
+  // Sessions ↔ Calendar toggle (`v`). Calendar is a second full-panel screen
+  // co-hosted in app.body, not a modal — see calendar.js's module doc for why
+  // it's show()/hide()'d rather than swapped via app.show(). Sessions-only
+  // global keys (screenKey below) must not fire while Calendar is active, or
+  // e.g. `/` would silently pop the search prompt behind it.
+  let activeTab = 'sessions';
+  let calTab = null;
+
+  // Attach a screen-level key without leaking across view swaps. Guarded by
+  // activeTab so e.g. `/` doesn't silently pop the search prompt while the
+  // Calendar tab is on screen — blessed's screen.key() listeners fire
+  // unconditionally regardless of which widget is focused, unlike widget-
+  // level .key() bindings. `v` itself passes alwaysActive since it's how you
+  // get back from Calendar in the first place.
+  function screenKey(app, keys, fn, opts = {}) {
+    app.screen.key(keys, (...args) => {
+      if (!opts.alwaysActive && activeTab !== 'sessions') return;
+      fn(...args);
+    });
+  }
 
   function reloadFolders() {
     const { list, counts, inbox } = data.folders();
@@ -136,40 +147,7 @@ export function sessionsView(opts = {}) {
   function showDetail(id) {
     const n = data.detail(id);
     if (!n) return;
-    const lines = [];
-    const srcName = { codex: 'codex', kiro: 'kiro' }[n.source] ?? 'claude';
-    // Title as the headline, then metadata, then the description (summary).
-    if (n.extracted.title) lines.push(`{${C.fox}-fg}{bold}${n.extracted.title}{/}`, '');
-    lines.push(
-      `{${sourceColor(n.source)}-fg}${srcName}{/}  {${C.dim}-fg}${(n.startedAt || '').slice(0, 16).replace('T', ' ')} · ${n.folder || t('sessions.newBadge')}{/}`,
-    );
-    if (n.extracted.tags?.length) {
-      lines.push(n.extracted.tags.map((tg) => `{${C.tag}-fg}#${tg}{/}`).join(' '));
-    }
-    lines.push('');
-    if (n.extracted.summary) {
-      // Bullet points, not one prose paragraph — matches decisions/todos
-      // below and is much easier to scan than a dense block of sentences.
-      lines.push(`{${C.faint}-fg}${t('detail.summary')}{/}`, ...splitSentences(n.extracted.summary).map((s) => `- ${s}`), '');
-    } else {
-      lines.push(`{${C.faint}-fg}${t('detail.noSummary')}{/}`, '');
-      const firstUser = n.turns.find((turn) => turn.role === 'user')?.text;
-      if (firstUser) lines.push(`{${C.faint}-fg}${t('detail.firstRequest')}{/} ${firstUser.replace(/\s+/g, ' ').slice(0, 300)}`, '');
-    }
-    if (n.extracted.decisions?.length) lines.push(`{${C.faint}-fg}${t('detail.decisions')}{/}`, ...n.extracted.decisions.map((d) => `- ${d}`), '');
-    if (n.extracted.todos?.length) lines.push(`{${C.faint}-fg}${t('detail.todos')}{/}`, ...n.extracted.todos.map((td) => `- ${td}`), '');
-    // Handoff continuation links (this is one flow across a model switch).
-    if (n.continuationOf) {
-      const p = data.detail(n.continuationOf);
-      const label = p ? p.source + ' #' + n.continuationOf.slice(0, 8) : '#' + n.continuationOf.slice(0, 8);
-      lines.push('', `{${C.spore}-fg}${t('detail.continuationOf', label)}{/}`);
-    }
-    for (const cid of n.continuedTo || []) {
-      const c = data.detail(cid);
-      const label = c ? c.source + ' #' + cid.slice(0, 8) : '#' + cid.slice(0, 8);
-      lines.push(`{${C.spore}-fg}${t('detail.continuedTo', label)}{/}`);
-    }
-    detailBox.setContent(lines.join('\n'));
+    detailBox.setContent(formatSessionDetail(n).join('\n'));
     detailBox.setScroll(0);
     app.render();
   }
@@ -269,6 +247,23 @@ export function sessionsView(opts = {}) {
         state.level = lvl;
         applyLayout(lvl);
         app.setStatus(' ' + t('lifecycle.bar', C.text, C.faint, C.border) + '  ' + t('status.helpFallback'));
+      };
+
+      // Back from the Calendar tab: re-show Sessions' own panels and restore
+      // whatever header/status/focus they had before `v` switched away —
+      // state.folder/query/tags were never touched, so the list is exactly
+      // as it was.
+      const showSessionsTab = () => {
+        if (calTab) calTab.deactivate();
+        activeTab = 'sessions';
+        foldersBox.show();
+        listBox.show();
+        detailBox.show();
+        updateHeader();
+        setLevel(state.level || 'folders');
+        const focusBox = state.level === 'detail' ? detailBox : state.level === 'sessions' ? listBox : foldersBox;
+        focusBox.focus();
+        app.render();
       };
 
       // Live-preview the highlighted folder's sessions as you move (no drill yet).
@@ -444,6 +439,29 @@ export function sessionsView(opts = {}) {
           app.render();
         });
       });
+
+      // v: toggle to the Calendar tab (a second full-panel screen, not a
+      // modal — see calendar.js). Doesn't touch state.folder/query/tags at
+      // all, so coming back leaves Sessions exactly as it was. Must stay
+      // active even while Calendar is focused (that's how `v` gets back),
+      // hence alwaysActive on an otherwise-guarded screenKey.
+      screenKey(
+        app,
+        ['v'],
+        () => {
+          if (activeTab === 'calendar') {
+            showSessionsTab();
+            return;
+          }
+          foldersBox.hide();
+          listBox.hide();
+          detailBox.hide();
+          activeTab = 'calendar';
+          if (!calTab) calTab = createCalendarTab(app, { onBack: showSessionsTab });
+          calTab.activate();
+        },
+        { alwaysActive: true },
+      );
 
       // s: scan only (capture new/changed sessions from every tab/terminal +
       // reindex), without leaving the TUI. Mirrors `mycelium scan`. Does NOT
@@ -830,10 +848,6 @@ export function sessionsView(opts = {}) {
 }
 
 // Attach a screen-level key without leaking across view swaps.
-function screenKey(app, keys, fn) {
-  app.screen.key(keys, fn);
-}
-
 // Simple modal text prompt. The question is shown inside via .input(); no
 // border label (setting both duplicates the title).
 export function prompt(app, label, initial, cb) {

@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { ensureDirs, DB_PATH } from './paths.js';
 import { allRaw } from './scanner.js';
 import { firstUserText, searchableText } from './schema.js';
+import { isArchive } from './organize.js';
 
 // The sqlite index is a DERIVED artifact — it can be dropped and rebuilt from
 // raw/ at any time (files are the source of truth). ai-memory validated that
@@ -141,13 +142,31 @@ export function folderCounts() {
     .all();
 }
 
+/** Session counts per day-of-month (also grouped by folder, so callers can
+ * exclude _archive the same way folderCounts()'s callers do) — for one
+ * calendar month's grid. */
+export function sessionCountsByDay(yearMonth /* 'YYYY-MM' */) {
+  const d = openDb();
+  return d
+    .prepare(
+      "SELECT CAST(substr(started_at, 9, 2) AS INTEGER) AS day, COALESCE(folder, '') AS folder, COUNT(*) AS n FROM sessions WHERE substr(started_at, 1, 7) = ? GROUP BY day, folder",
+    )
+    .all(yearMonth);
+}
+
 /**
  * Non-search list feed: sessions ordered by started_at DESC.
  * folder === null → only unfiled (Root); folder string → that subtree; undefined → everything.
+ * `date` ('YYYY-MM-DD'), if given, narrows to that single day (matches
+ * folder's post-query filter style rather than a separate WHERE clause).
  */
-export function listSessions({ folder } = {}) {
+export function listSessions({ folder, date } = {}) {
   const d = openDb();
-  const rows = d.prepare('SELECT * FROM sessions ORDER BY started_at DESC').all();
+  let rows = d.prepare('SELECT * FROM sessions ORDER BY started_at DESC').all();
+  if (date) rows = rows.filter((r) => r.started_at && r.started_at.slice(0, 10) === date);
+  // _archive is hidden by default everywhere (same rule folderCounts()'s
+  // callers apply) unless the caller is explicitly browsing into it.
+  if (!isArchive(folder)) rows = rows.filter((r) => !isArchive(r.folder));
   if (folder === undefined) return rows;
   if (folder === null) return rows.filter((r) => !r.folder);
   return rows.filter((r) => r.folder === folder || (r.folder && r.folder.startsWith(folder + '/')));
@@ -158,7 +177,7 @@ export function listSessions({ folder } = {}) {
  * sessions carrying ALL of the given tags; `folder` restricts to a subtree.
  * Combined tag + text filtering is the pi-session-manager pattern.
  */
-export function search({ query, tags = [], folder } = {}) {
+export function search({ query, tags = [], folder, date } = {}) {
   const d = openDb();
   let ids = null;
   let rankOrder = null;
@@ -194,6 +213,10 @@ export function search({ query, tags = [], folder } = {}) {
 
   let sessions = d.prepare('SELECT * FROM sessions ORDER BY started_at DESC').all();
   if (ids !== null) sessions = sessions.filter((s) => ids.has(s.id));
+  if (date) sessions = sessions.filter((s) => s.started_at && s.started_at.slice(0, 10) === date);
+  // _archive is hidden by default from search too (see listSessions()) unless
+  // explicitly browsed into via folder.
+  if (!isArchive(folder)) sessions = sessions.filter((s) => !isArchive(s.folder));
   if (folder) sessions = sessions.filter((s) => s.folder && (s.folder === folder || s.folder.startsWith(folder + '/')));
   if (rankOrder) {
     for (const s of sessions) s.snippet = snippets.get(s.id) || null;

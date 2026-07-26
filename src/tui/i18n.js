@@ -152,6 +152,14 @@ const en = {
   'smart.previewTitle': 'Suggested placements',
   'smart.pendingOnOpen': (n) => `${n} suggestion${n === 1 ? '' : 's'} waiting — press o to review`,
 
+  // calendar.js — Calendar tab (v key toggles Sessions ↔ Calendar)
+  'calendar.header': 'Calendar',
+  'calendar.gridLabel': ' Calendar (←→↑↓ day, PgUp/PgDn month, Enter →) ',
+  'calendar.sessionCount': (n) => `${n} session${n === 1 ? '' : 's'}`,
+  'calendar.dayListLabel': (date, n) => ` ${date} — ${n} session${n === 1 ? '' : 's'} `,
+  'calendar.detailLabel': ' Detail ',
+  'calendar.tabHint': '←→↑↓ move  PgUp/PgDn month  Enter/→ drill in  Esc/← back  v Sessions',
+
   'help.text': null, // filled in below (large block)
 };
 
@@ -277,6 +285,14 @@ const ko = {
   'smart.previewTitle': '제안된 폴더 배치',
   'smart.pendingOnOpen': (n) => `${n}개 정리 제안 대기 중 — o로 확인`,
 
+  // calendar.js — 캘린더 탭 (v 키로 세션 ↔ 캘린더 전환)
+  'calendar.header': '캘린더',
+  'calendar.gridLabel': ' 캘린더 (←→↑↓ 날짜, PgUp/PgDn 월 변경, Enter →) ',
+  'calendar.sessionCount': (n) => `${n}개 세션`,
+  'calendar.dayListLabel': (date, n) => ` ${date} — ${n}개 세션 `,
+  'calendar.detailLabel': ' 상세 ',
+  'calendar.tabHint': '←→↑↓ 이동  PgUp/PgDn 월 변경  Enter/→ 상세  Esc/← 뒤로  v 세션으로',
+
   'help.text': null,
 };
 
@@ -287,6 +303,7 @@ en['help.text'] = (fg, spore) => `{bold}Global{/}
   {${fg}-fg}s{/}       Scan (mycelium scan, no CLI needed — cwd-rule auto-file is still CLI \`mycelium organize\`)
   {${fg}-fg}o{/}       Smart organize — summarize + suggest folders for unfiled sessions by content, pick which to apply
   {${fg}-fg}/{/}       Full-text search
+  {${fg}-fg}v{/}       Toggle to the Calendar tab — full screen, browse by day (press v again to return)
   {${fg}-fg}d{/}       View digests (open, then n/w to generate today/this week)
   {${fg}-fg}?{/}       This help
   {${fg}-fg}q{/}       Quit
@@ -328,6 +345,7 @@ ko['help.text'] = (fg, spore) => `{bold}전역{/}
   {${fg}-fg}s{/}       스캔 (mycelium scan, CLI 없이 — cwd 규칙 자동배치는 아직 CLI \`mycelium organize\`로)
   {${fg}-fg}o{/}       스마트 정리 — 미분류 세션 요약 후 내용 기준으로 폴더 제안, 적용할 것만 선택
   {${fg}-fg}/{/}       전문 검색
+  {${fg}-fg}v{/}       캘린더 탭으로 전환 — 전체 화면, 날짜별로 탐색 (다시 v를 누르면 세션으로 복귀)
   {${fg}-fg}d{/}       다이제스트 보기 (열어서 n/w로 오늘/이번주 생성)
   {${fg}-fg}?{/}       이 도움말
   {${fg}-fg}q{/}       종료
