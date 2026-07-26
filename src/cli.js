@@ -312,6 +312,13 @@ async function main() {
       const found = findSession(idOrPrefix);
       if (!found.ok) return fail(found.error);
       const { session } = found;
+      // A merge/split product's id isn't a real agent-native session id —
+      // --resume <id> would fail once actually run. Point at handoff, the
+      // only thing that can actually continue one (see the TUI's `r` on a
+      // merge/split session, which does this same redirect automatically).
+      if (session.mergedFrom?.length || session.splitFrom) {
+        return fail(`${idOrPrefix}: merged/split session — not resumable. Use: mycelium handoff ${session.id}`);
+      }
 
       const cmd = resumeCommandLine(session);
       if (!cmd.ok) return fail(cmd.error);

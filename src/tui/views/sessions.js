@@ -17,7 +17,7 @@ import {
   queueSuggestions,
   clearSuggestions,
   mergeSessions,
-  absorbIntoSession,
+  foldProductIntoSession,
 } from '../../organize.js';
 import { suggestSplitBoundaries, applySplit } from '../../split.js';
 import { scan, allRaw } from '../../scanner.js';
@@ -483,6 +483,7 @@ export function sessionsView(opts = {}) {
           const applied = applySplit(r.id, chosen);
           if (!applied.ok) return app.notify(applied.error, 3);
           data.refreshMany([r.id, ...applied.pieces.map((p) => p.id)]);
+          app.notify(t('split.done', applied.pieces.length), 3);
           reloadFolders();
           reloadList();
           listBox.focus();
@@ -689,32 +690,47 @@ export function sessionsView(opts = {}) {
         });
       });
 
+      // Shared tail for any real resume.
+      const doActualResume = (session) => {
+        // resumeSession() (launch.js) already reindexes exactly what changed.
+        resumeSession(app, session, () => {
+          reloadFolders();
+          reloadList();
+          listBox.focus();
+          setLevel('sessions');
+          app.render();
+        });
+      };
+
       // Reuse: hand the current session off to another agent (seeded NEW
-      // session). Factored out of the `h` binding so `r` can fall back to it
-      // for merge/split products (see doResume below) — same action either way.
-      const doHandoff = () => {
+      // session). `fallback: true` means this handoff is doResume()'s
+      // substitute for a merge/split product that has no real agent-native
+      // id to resume — explain that in the agent-picker's own title instead
+      // of a separate app.notify() toast, which would just visibly overlap
+      // the picker (both are centered overlays and the picker opens in the
+      // same tick, before a timed toast has any time to be read).
+      const doHandoff = ({ fallback = false } = {}) => {
         const r = currentRow();
         if (!r) return;
         const hb = buildHandoff(r.id);
         if (!hb.ok) return app.notify(hb.error, 3);
         const isDerived = r.mergedFrom?.length || r.splitFrom;
-        // launchAgent() (launch.js) already reindexes exactly what changed.
-        launchAgent(app, { folder: r.folder, seed: hb.prompt, parentId: r.id }, (mine) => {
-          // A merge/split product has no real agent-native id, so h/r always
-          // spawns a genuinely new session here — fold it straight back into
-          // the product it continued instead of leaving that product sitting
-          // unused next to the real ongoing work (see organize.js's
-          // absorbIntoSession doc). Doesn't apply to a normal session's
-          // handoff — that keeps making a new chain-linked session as usual.
-          if (isDerived) {
-            for (const n of mine || []) {
-              const res = absorbIntoSession(r.id, n.id);
-              if (res.ok) {
-                data.refreshOne(n.id); // gone — reindex removes it
-                data.refreshMany(res.touchedIds || []); // their backlinks changed too
-              }
+        // launchAgent() (launch.js) already reindexes exactly what changed,
+        // and already linkContinuation()s the new session to r.id.
+        launchAgent(app, { folder: r.folder, seed: hb.prompt, parentId: r.id, title: fallback ? t('launch.selectAgentFallback') : undefined }, (mine) => {
+          // A merge/split product only ever existed to seed this handoff —
+          // once a real, directly-resumable session exists, fold the
+          // product's content into it and drop the product entirely, so
+          // there's one ordinary session left (not two rows, and no
+          // continued special-casing: from here on `r` on the new session
+          // is just a normal resume, see organize.js's foldProductIntoSession).
+          if (isDerived && mine?.[0]) {
+            const res = foldProductIntoSession(r.id, mine[0].id);
+            if (res.ok) {
+              data.refreshOne(r.id); // gone — reindex removes it
+              data.refreshOne(mine[0].id); // now holds the folded turns
+              data.refreshMany(res.touchedIds || []); // their backlinks changed too
             }
-            data.refreshOne(r.id); // now holds the absorbed turns
           }
           reloadFolders();
           reloadList();
@@ -722,31 +738,22 @@ export function sessionsView(opts = {}) {
           app.render();
         });
       };
-      listBox.key('h', doHandoff);
+      listBox.key('h', () => doHandoff());
 
       // Reuse: RESUME the exact session in its original agent (claude --resume / codex resume).
-      // Merge/split products have no real agent-native id to resume (a merge
-      // has no single "the conversation"; a split piece's id is Mycelium-only)
-      // — resuming their *original* would just reopen the un-focused/un-
-      // combined session, defeating the point of having split or merged in
-      // the first place. So `r` transparently falls back to handoff, seeded
-      // from THIS session's own (combined/sliced) content instead.
+      // A merge/split product has no real agent-native id to resume — `r`
+      // falls back to handoff, which folds the product into whatever real
+      // session that produces (see doHandoff above), so this only ever
+      // happens once per product: after that it's gone, replaced by an
+      // ordinary session `r` resumes normally.
       const doResume = () => {
         const r = currentRow();
         if (!r) return;
         const n = data.detail(r.id);
         if (n?.mergedFrom?.length || n?.splitFrom) {
-          app.notify(t('resume.fallbackNotice'), 3);
-          return doHandoff();
+          return doHandoff({ fallback: true });
         }
-        // resumeSession() (launch.js) already reindexes exactly what changed.
-        resumeSession(app, { id: r.id, source: r.source, cwd: n?.cwd, projectDir: n?.projectDir }, () => {
-          reloadFolders();
-          reloadList();
-          listBox.focus();
-          setLevel('sessions');
-          app.render();
-        });
+        doActualResume({ id: r.id, source: r.source, cwd: n?.cwd, projectDir: n?.projectDir });
       };
       listBox.key('r', doResume);
       // Detail panel uses Enter instead of r — it's the leaf level, so Enter
@@ -756,13 +763,18 @@ export function sessionsView(opts = {}) {
       detailBox.key('enter', () => {
         const r = currentRow();
         if (!r) return;
+        // "Copy command" pastes into a brand-new terminal outside the TUI —
+        // there's no way to auto-absorb through that path, and a merge/split
+        // product's id isn't a real agent-native session id to begin with,
+        // so the copied command would just fail with "session not found"
+        // when actually run. Only offer it for a real, truly resumable session.
+        const isDerived = r.mergedFrom?.length || r.splitFrom;
+        const choices = [{ label: t('resume.openHere'), value: 'here' }];
+        if (!isDerived) choices.push({ label: t('resume.copyCommand'), value: 'copy' });
         menu(
           app,
           t('resume.chooseAction'),
-          [
-            { label: t('resume.openHere'), value: 'here' },
-            { label: t('resume.copyCommand'), value: 'copy' },
-          ],
+          choices,
           (choice) => {
             if (choice === 'here') return doResume();
             if (choice === 'copy') {

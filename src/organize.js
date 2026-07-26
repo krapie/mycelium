@@ -148,7 +148,7 @@ export function deleteSession(sessionId) {
   // A dangling entry doesn't crash anything (those lookups already degrade
   // to just showing the bare id), but it's stale bookkeeping worth cleaning
   // while we're already touching this id — same discipline unmerge()/
-  // unsplit()/absorbIntoSession() apply to their own fields.
+  // unsplit() apply to their own fields.
   const touchedIds = [];
   for (const other of allRaw()) {
     let touched = false;
@@ -495,37 +495,32 @@ export function linkContinuation(childId, parentId) {
 }
 
 /**
- * Fold a real handoff-spawned session's turns onto a merge/split product it
- * continued (in place — unlike mergeSessions()/applySplit(), safe here
- * because `targetId` is a Mycelium-synthetic id no adapter's listSessions()
- * will ever produce, so scan() will never reimport and overwrite it).
- * `sourceId` is then permanently excluded (deleteSession() — raw file gone,
- * id added to excludedSessionIds) so its own external log doesn't get
- * re-captured as a second, now-disconnected record on the next scan.
- *
- * Only meant for continuing FROM a derived (merge/split) session: handing
- * off from a normal session should keep creating a new chain-linked session
- * as usual (see README's handoff lifecycle) — this exists specifically
- * because a merge/split product has no real agent-native id to truly
- * "resume," so `r`/`h` on one always spawns a fresh real session, and
- * without this that fresh session would be the only place further work
- * actually lives while the product it came from just sits there unused.
+ * Fold a merge/split product's content into a REAL session a handoff from
+ * it just produced, then delete the product. The product only ever existed
+ * to seed that real session in the first place — once a real, directly
+ * resumable session exists, there's no reason to keep a second row around
+ * for what's really one thread of work. `newId` keeps its own real
+ * agent-native id, so from here on it's a completely ordinary session (no
+ * special-casing needed — plain `r` just resumes it like anything else).
  */
-export function absorbIntoSession(targetId, sourceId) {
-  const target = loadRaw(targetId);
-  const source = loadRaw(sourceId);
-  if (!target || !source) return { ok: false, error: 'session not found' };
-  target.turns.push(
-    { role: 'system', text: `─── ${source.source} #${sourceId.slice(0, 8)} · ${(source.startedAt || '').slice(0, 16).replace('T', ' ')} ───` },
-    ...source.turns,
-  );
-  target.endedAt = source.endedAt || target.endedAt;
-  target.artifacts.filesChanged = [...new Set([...(target.artifacts.filesChanged || []), ...(source.artifacts.filesChanged || [])])];
-  // Drop the now-stale continuation link linkContinuation() would have just
-  // added (source is about to stop existing as its own record).
-  target.continuedTo = (target.continuedTo || []).filter((id) => id !== sourceId);
+export function foldProductIntoSession(productId, newId) {
+  const product = loadRaw(productId);
+  const target = loadRaw(newId);
+  if (!product || !target) return { ok: false, error: 'session not found' };
+  target.turns = [
+    { role: 'system', text: `─── ${product.source} #${productId.slice(0, 8)} · ${(product.startedAt || '').slice(0, 16).replace('T', ' ')} ───` },
+    ...product.turns,
+    ...target.turns,
+  ];
+  target.startedAt = product.startedAt || target.startedAt;
+  target.artifacts.filesChanged = [...new Set([...(product.artifacts.filesChanged || []), ...(target.artifacts.filesChanged || [])])];
+  // linkContinuation() just pointed the new session back at the product —
+  // clear it, since the product is about to stop existing as its own record
+  // and the new session is meant to look like a completely ordinary session
+  // from here on, not one with a dangling "continues: (gone)" marker.
+  if (target.continuationOf === productId) target.continuationOf = null;
   saveRaw(target);
-  const del = deleteSession(sourceId);
+  const del = deleteSession(productId);
   return { ok: true, target, touchedIds: del.touchedIds || [] };
 }
 

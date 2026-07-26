@@ -132,6 +132,7 @@ const en = {
   // launch.js
   'launch.noAgents': 'No agent CLI installed (claude/codex/kiro-cli)',
   'launch.selectAgent': 'Choose agent',
+  'launch.selectAgentFallback': "Can't resume (merged/split session) — choose agent; this will be replaced by the new session",
   'launch.dirNotFound': "Directory doesn't exist",
   'launch.dirPrompt': (folder) => `Working directory${folder ? ` (${folder})` : ''}`,
   'launch.typeManually': '+ Type one in…',
@@ -149,7 +150,6 @@ const en = {
   'resume.copyCommand': 'Copy command (new tab)',
   'resume.copied': 'Command copied to clipboard',
   'resume.copyFailed': 'Copy failed (no clipboard tool found)',
-  'resume.fallbackNotice': "Merged/split session — resuming isn't possible, continuing via handoff instead (folds back in automatically when you return)",
 
   'merge.needsTwo': 'Select 2 or more sessions first (Space)',
   'merge.titlePrompt': 'Title for the merged session (optional)',
@@ -157,6 +157,7 @@ const en = {
 
   'split.suggesting': 'Analyzing session for topic boundaries…',
   'split.reviewTitle': 'Proposed split — space select, enter apply, esc cancel',
+  'split.done': (n) => `Split into ${n} session${n === 1 ? '' : 's'}`,
 
   'smart.running': 'Summarizing + classifying unfiled sessions…',
   'smart.noMatches': 'No confident folder matches found',
@@ -277,6 +278,7 @@ const ko = {
 
   'launch.noAgents': '설치된 에이전트(claude/codex/kiro-cli)가 없습니다',
   'launch.selectAgent': '에이전트 선택',
+  'launch.selectAgentFallback': '이어열기 불가(병합/분할된 세션) — 에이전트 선택, 이 세션은 새 세션으로 대체됩니다',
   'launch.dirNotFound': '디렉토리가 존재하지 않습니다',
   'launch.dirPrompt': (folder) => `작업 디렉토리${folder ? ` (${folder})` : ''}`,
   'launch.typeManually': '+ 직접 입력…',
@@ -294,7 +296,6 @@ const ko = {
   'resume.copyCommand': '명령어 복사 (새 탭용)',
   'resume.copied': '명령어가 클립보드에 복사됨',
   'resume.copyFailed': '복사 실패 (클립보드 도구 없음)',
-  'resume.fallbackNotice': '병합/분할된 세션이라 이어열기 대신 핸드오프로 이어갑니다 (돌아오면 자동으로 다시 합쳐짐)',
 
   'merge.needsTwo': '먼저 세션을 2개 이상 선택하세요 (Space)',
   'merge.titlePrompt': '병합된 세션의 제목 (선택 사항)',
@@ -302,6 +303,7 @@ const ko = {
 
   'split.suggesting': '주제 경계 분석 중…',
   'split.reviewTitle': '분할 제안 — space 선택, enter 실행, esc 취소',
+  'split.done': (n) => `${n}개 세션으로 분할됨`,
 
   'smart.running': '미분류 세션 요약 + 폴더 분류 중…',
   'smart.noMatches': '확실한 폴더 매칭을 찾지 못했습니다',
@@ -346,7 +348,7 @@ en['help.text'] = (fg, spore) => `{bold}Global{/}
   {${fg}-fg}a{/}       Generate summary + tags (LLM, batches over multi-select)
   {${fg}-fg}e{/}       Rename title (modal — summary/tags stay AI-generated)
   {${fg}-fg}y{/}       Copy to clipboard
-  {${fg}-fg}r{/}       Resume (reopen in the original agent, right here — merged/split sessions fall back to handoff instead, see h)
+  {${fg}-fg}r{/}       Resume (reopen in the original agent, right here — merged/split sessions fall back to handoff instead, which replaces them with the real session it produces)
   {${fg}-fg}h{/}       Handoff (start a new session on a different agent)
   {${fg}-fg}n{/}       Launch a new agent session with this folder's context
   {${fg}-fg}m{/} / {${fg}-fg}t{/}   Move to folder / edit tags
@@ -390,7 +392,7 @@ ko['help.text'] = (fg, spore) => `{bold}전역{/}
   {${fg}-fg}a{/}       요약·태그 생성 (LLM, 다중 선택 시 일괄)
   {${fg}-fg}e{/}       제목 수정 (모달 — 요약·태그는 AI 생성 그대로)
   {${fg}-fg}y{/}       클립보드로 복사
-  {${fg}-fg}r{/}       이어열기 (원래 에이전트로, 바로 여기서 — 병합/분할 세션은 핸드오프로 대체, h 참고)
+  {${fg}-fg}r{/}       이어열기 (원래 에이전트로, 바로 여기서 — 병합/분할 세션은 핸드오프로 대체되고, 그렇게 생긴 실제 세션이 원래 자리를 대신함)
   {${fg}-fg}h{/}       핸드오프 (다른 에이전트로 새 세션 시작)
   {${fg}-fg}n{/}       이 폴더 컨텍스트로 새 에이전트 세션
   {${fg}-fg}m{/} / {${fg}-fg}t{/}   폴더 이동 / 태그 편집

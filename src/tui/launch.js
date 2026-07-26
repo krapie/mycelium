@@ -29,9 +29,15 @@ function dirsForFolder(folder) {
  * session into the folder automatically.
  *
  * `seed` (optional) pre-fills the agent's first prompt — used by handoff to
- * continue a prior session on a different agent.
+ * continue a prior session on a different agent. `title` overrides the
+ * agent-picker's label — used instead of a separate app.notify() toast when
+ * there's context to explain (e.g. "resuming a merged/split session isn't
+ * possible, picking an agent for a new one instead"): a toast shown right
+ * before this picker opens doesn't get time to be read and visibly overlaps
+ * it, since both are centered blessed overlays and the picker opens in the
+ * same tick.
  */
-export function launchAgent(app, { folder, seed, parentId } = {}, done) {
+export function launchAgent(app, { folder, seed, parentId, title } = {}, done) {
   const available = Object.entries(AGENTS).filter(([, a]) => which(a.bin));
   if (!available.length) {
     app.notify(t('launch.noAgents'), 3);
@@ -40,7 +46,7 @@ export function launchAgent(app, { folder, seed, parentId } = {}, done) {
 
   menu(
     app,
-    t('launch.selectAgent'),
+    title || t('launch.selectAgent'),
     available.map(([k, a]) => ({ label: a.label, value: k })),
     (agentKey) => {
       if (!agentKey) return done && done();
