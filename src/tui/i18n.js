@@ -54,6 +54,7 @@ const en = {
   'sessions.copyFailed': 'No clipboard tool found (pbcopy etc.)',
   'sessions.sortLabel_title': 'sort: title A-Z',
   'sessions.sortLabel_agent': 'sort: agent',
+  'sessions.unfiledHint': (n) => `${n} session(s) captured, no folders yet — press o to sort them by content`,
   'detail.noSummary': '(no summary yet — press a in the session to summarize/tag)',
   'detail.firstRequest': 'First request:',
   'detail.summary': 'Summary',
@@ -117,6 +118,8 @@ const en = {
   'digest.failed': (err) => ` Failed: ${err} `,
   'digest.readFailed': '(read failed)',
   'help.modalLabel': ' Keymap help (↑↓ scroll, Esc/? close) ',
+  'welcome.modalLabel': ' Welcome to Mycelium (Enter/Esc to start) ',
+  'welcome.body': null, // filled in below, function like help.text
 
   // pickers.js
   'picker.newLabel': '{gray-fg}New (unfiled){/}',
@@ -214,6 +217,7 @@ const ko = {
   'sessions.copyFailed': '복사 도구(pbcopy 등)를 찾지 못함',
   'sessions.sortLabel_title': '정렬: 제목순',
   'sessions.sortLabel_agent': '정렬: 에이전트순',
+  'sessions.unfiledHint': (n) => `${n}개 세션을 가져왔지만 아직 폴더가 없습니다 — o를 눌러 내용 기준으로 정리해보세요`,
   'detail.noSummary': '(요약 없음 — 세션에서 a를 눌러 요약·태깅 생성)',
   'detail.firstRequest': '첫 요청:',
   'detail.summary': '요약',
@@ -269,6 +273,8 @@ const ko = {
   'digest.failed': (err) => ` 실패: ${err} `,
   'digest.readFailed': '(읽기 실패)',
   'help.modalLabel': ' 단축키 도움말 (↑↓ 스크롤, Esc/? 닫기) ',
+  'welcome.modalLabel': ' Mycelium에 오신 것을 환영합니다 (Enter/Esc로 시작) ',
+  'welcome.body': null,
 
   'picker.newLabel': '{gray-fg}New (미분류){/}',
   'picker.folderLabel': ' 폴더 선택 (Enter, Esc 취소) ',
@@ -376,6 +382,26 @@ en['help.text'] = (fg, spore) => `{bold}Global{/}
 
 Sessions linked by handoff show {${spore}-fg}↩{/}/{${spore}-fg}→{/} markers in the list and continuation links in detail.`;
 
+en['welcome.body'] = (fg, spore) => `Mycelium keeps AI coding-agent sessions from getting lost —
+each one moves through 4 stages, all inside this screen:
+
+{${fg}-fg}Capture{/}   Sessions from Claude Code / Codex / Kiro get pulled in automatically
+              (every 5 min while this is open, or press {${fg}-fg}s{/} to do it now).
+              Nothing gets sorted into a folder yet at this point.
+
+{${fg}-fg}Organize{/}  Press {${fg}-fg}o{/} to have your captured sessions summarized and sorted
+              into folders by what they're actually about — review the
+              suggestions, keep the ones that look right.
+
+{${fg}-fg}Learn{/}     {${fg}-fg}a{/} (re)generates a summary/tags for a session; {${fg}-fg}w{/} distills a whole
+              folder's sessions into one KNOWLEDGE.md.
+
+{${fg}-fg}Reuse{/}     {${fg}-fg}n{/}/{${fg}-fg}h{/} launch a new agent session already knowing that folder's
+              KNOWLEDGE.md; {${fg}-fg}r{/} resumes an existing one.
+
+If you haven't run {${fg}-fg}mycelium scan{/} yet, nothing will be in the list —
+press {${fg}-fg}s{/} first. Full keymap anytime: {${fg}-fg}?{/}. This won't show again.`;
+
 ko['help.text'] = (fg, spore) => `{bold}전역{/}
   {${fg}-fg}s{/}       스캔 (mycelium scan, CLI 없이 — 새/변경된 세션 캡처만, 자동 배치는 안 함; 배치는 o 또는 mycelium organize로)
   {${fg}-fg}o{/}       스마트 정리 — 지금 보고 있는 범위로 한정(Root=미분류만, 폴더 안=그 폴더+하위만), 새 폴더 제안도 가능 — 전부 체크된 채로 떠서 Enter만으로 전체 적용, 잘못된 것만 Space로 해제
@@ -420,6 +446,25 @@ ko['help.text'] = (fg, spore) => `{bold}전역{/}
   {${fg}-fg}a / e / y / x{/}  세션 패널과 동일
 
 핸드오프로 이어진 세션은 목록에 {${spore}-fg}↩{/}/{${spore}-fg}→{/} 마커, 상세에 이어받음/이어감 링크로 표시됩니다.`;
+
+ko['welcome.body'] = (fg, spore) => `Mycelium은 AI 코딩 에이전트 세션이 흩어지지 않게 관리합니다 —
+이 화면 안에서 4단계를 거칩니다:
+
+{${fg}-fg}생성(Capture){/}   Claude Code/Codex/Kiro 세션을 자동으로 가져옵니다
+              (켜져 있는 동안 5분마다, 또는 {${fg}-fg}s{/}로 지금 바로).
+              이 시점엔 아직 어느 폴더에도 안 들어갑니다.
+
+{${fg}-fg}조직화(Organize){/}  {${fg}-fg}o{/}를 누르면 가져온 세션을 요약하고 내용 기준으로
+              폴더에 정리해 제안합니다 — 맞는 것만 골라서 적용하세요.
+
+{${fg}-fg}학습(Learn){/}     {${fg}-fg}a{/}는 세션 하나의 요약·태그를 (다시) 생성, {${fg}-fg}w{/}는 폴더
+              전체 세션을 KNOWLEDGE.md 하나로 압축합니다.
+
+{${fg}-fg}재사용(Reuse){/}    {${fg}-fg}n{/}/{${fg}-fg}h{/}는 그 폴더의 KNOWLEDGE.md를 이미 알고 있는 새
+              에이전트 세션을 띄우고, {${fg}-fg}r{/}은 기존 세션을 그대로 이어엽니다.
+
+아직 {${fg}-fg}mycelium scan{/}을 안 하셨다면 목록이 비어 있을 텐데,
+{${fg}-fg}s{/}를 먼저 눌러보세요. 전체 단축키는 언제든 {${fg}-fg}?{/}. 이 화면은 다시 안 뜹니다.`;
 
 const DICTS = { en, ko };
 

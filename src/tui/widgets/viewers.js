@@ -138,6 +138,43 @@ export function digestReader(app) {
   });
 }
 
+/**
+ * One-time first-run overlay — same shape as helpModal() below but shorter
+ * and specifically oriented at "what do I do right now", not a full
+ * reference. index.js shows this once (gated on config.json's `onboarded`
+ * flag) right after the sessions view mounts; `onDismiss` is where the
+ * caller persists that flag so it never shows again.
+ */
+export function welcomeModal(app, onDismiss) {
+  const box = blessed.box({
+    parent: app.screen,
+    top: 'center',
+    left: 'center',
+    width: '70%',
+    height: 'shrink',
+    label: t('welcome.modalLabel'),
+    content: t('welcome.body', C.fox, C.spore),
+    tags: true,
+    scrollable: true,
+    alwaysScroll: true,
+    keys: true,
+    mouse: true,
+    padding: { left: 1, right: 1 },
+    scrollbar: { ch: ' ', style: { bg: C.border } },
+    border: { type: 'line' },
+    style: { border: { fg: C.fox }, fg: C.text },
+  });
+  box.focus();
+  app.render();
+  const close = () => {
+    box.destroy();
+    app.render();
+    if (onDismiss) onDismiss();
+  };
+  box.key(['escape', 'enter', 'q'], close);
+  return box;
+}
+
 /** Full keymap reference — bound to `?` from anywhere. */
 export function helpModal(app) {
   const box = blessed.box({

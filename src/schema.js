@@ -52,9 +52,22 @@ export function emptyNeutral(id, source) {
   };
 }
 
+// Claude Code injects several synthetic "user"-role turns that nobody typed
+// — slash-command echoes (<command-name>/<command-message>), bash tool
+// output replayed as a turn (<bash-input>/<bash-stdout>/<bash-stderr>),
+// the <local-command-caveat>/<local-command-stdout> wrapper around local
+// command results, <system-reminder>, background-task notifications, etc.
+// All of them start with an XML-ish tag — a real person's first message
+// essentially never does — so skip past them when picking a turn to show
+// as the session's preview. Verified against real captured sessions this
+// covers at least: bash-input/-stdout/-stderr, command-args/-message/-name,
+// event, local-command-caveat/-stdout, note, output-file, result, status,
+// summary, system-reminder, task-id, task-notification, tool-use-id, usage.
+const SYNTHETIC_TURN = /^<[a-z][a-z-]*>/i;
+
 /** A short one-line preview used in lists / FTS fallback. */
 export function firstUserText(neutral) {
-  const t = neutral.turns.find((x) => x.role === 'user' && x.text?.trim());
+  const t = neutral.turns.find((x) => x.role === 'user' && x.text?.trim() && !SYNTHETIC_TURN.test(x.text.trim()));
   return t ? t.text.trim().slice(0, 200) : '';
 }
 

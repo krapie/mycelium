@@ -29,8 +29,12 @@ npm link                    # (선택) 전역 `mycelium` 명령 등록
 
 ```sh
 mycelium scan               # 이 머신의 Claude/Codex/Kiro 세션을 가져오기(임포트)
-mycelium                    # 인터랙티브 TUI 실행
+mycelium                    # 인터랙티브 TUI 실행 — 처음 켜면 짧은 안내가 한 번 뜹니다
 ```
+
+**캡처는 폴더를 자동으로 배정하지 않습니다** — 처음 스캔하면 전부 미분류
+상태로 들어옵니다. TUI에서 `o`(스마트 정리)를 누르거나 `mycelium organize`를
+실행해 내용 기준으로 정리하세요.
 
 > git clone 방식으로 설치했고 `npm link`을 안 했으면 `node src/cli.js <명령>` 형태로 실행하세요.
 

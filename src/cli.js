@@ -61,6 +61,7 @@ async function main() {
   }
   switch (cmd) {
     case 'scan': {
+      const wasEmpty = allRaw().length === 0;
       const res = scan({
         onImport: (n) => console.log(`  + ${n.id.slice(0, 8)}  ${firstUserText(n).slice(0, 60)}`),
       });
@@ -69,6 +70,15 @@ async function main() {
       );
       const n = reindex();
       console.log(`reindexed ${n} sessions`);
+      // First scan ever: capture doesn't file anything into a folder, so
+      // without this a new user's next step (mycelium organize / TUI's `o`)
+      // is invisible unless they already know it exists.
+      if (wasEmpty && res.imported > 0) {
+        console.log(
+          `\n${res.imported}개 세션을 가져왔습니다. 아직 폴더가 없습니다 — ` +
+            `mycelium organize 로 정리하거나, mycelium 으로 TUI를 열어 o를 눌러보세요.`,
+        );
+      }
       break;
     }
     case 'reindex': {

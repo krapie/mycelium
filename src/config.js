@@ -5,7 +5,7 @@ import { ensureDirs, CONFIG_PATH } from './paths.js';
 // both can depend on it without a circular import (scanner.js needs it to
 // skip deleted sessions on rescan; organize.js needs it for recording
 // deletions).
-const DEFAULTS = { excludedSessionIds: [], locale: 'en', autoApproveSmartOrganize: false };
+const DEFAULTS = { excludedSessionIds: [], locale: 'en', autoApproveSmartOrganize: false, onboarded: false };
 
 export function loadConfig() {
   if (!existsSync(CONFIG_PATH)) return { ...DEFAULTS };
