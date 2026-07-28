@@ -17,6 +17,9 @@
  *   organizedBy:  "auto" | "human",   // sticky flag — see organize step
  *   folder:       "회사/플랫폼/인증"    // tree path (null = _inbox)
  *   suggestedFolder, suggestedReason  // queued smart-organize guess, cleared on review
+ *   lastClassifiedAt  // ISO timestamp, last time suggestPlacements() evaluated this session (any outcome)
+ *   titleLocked       // true once a human sets the title (setContent) — autoTagSession() then never overwrites it
+ *   summarizedTurnCount  // turns.length as of the last autoTagSession() run — lets tagAll() re-summarize a session that grew instead of skipping it forever
  *   mergedFrom, splitFrom, supersededBy, splitInto  // split/merge lineage — see organize.js/split.js
  * }
  */
@@ -39,6 +42,9 @@ export function emptyNeutral(id, source) {
     continuedTo: [], // sessions that continued this one (handoff children)
     suggestedFolder: null, // smart-organize's queued-but-unreviewed placement guess
     suggestedReason: null, // short LLM-given reason for suggestedFolder
+    lastClassifiedAt: null, // suggestPlacements()'s last look at this session — avoids re-asking the LLM every cycle when nothing matched
+    titleLocked: false, // true once a human sets the title — protects it from autoTagSession() overwrites
+    summarizedTurnCount: null, // turns.length as of the last autoTagSession() run — null means "never tracked", see tagAll()
     mergedFrom: [], // ids folded into this session (non-empty only on a merge product)
     splitFrom: null, // id this session was sliced out of (non-null only on a split product)
     supersededBy: [], // merge product that replaced this session — hidden by default, like _archive

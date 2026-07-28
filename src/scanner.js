@@ -147,6 +147,20 @@ export function scan({ onImport } = {}) {
         neutral.splitFrom = existing.splitFrom ?? neutral.splitFrom;
         neutral.supersededBy = existing.supersededBy?.length ? existing.supersededBy : neutral.supersededBy;
         neutral.splitInto = existing.splitInto?.length ? existing.splitInto : neutral.splitInto;
+        // Also queued-suggestion + classification bookkeeping — without this,
+        // an actively-growing session (its own agent log keeps changing, so
+        // it gets reparsed on every scan cycle) would silently lose a
+        // not-yet-reviewed smart-organize suggestion, or forget it was
+        // already classified and get re-sent to the LLM every cycle.
+        neutral.suggestedFolder = existing.suggestedFolder ?? neutral.suggestedFolder;
+        neutral.suggestedReason = existing.suggestedReason ?? neutral.suggestedReason;
+        neutral.lastClassifiedAt = existing.lastClassifiedAt ?? neutral.lastClassifiedAt;
+        // Same reasoning — a title a human deliberately set (setContent())
+        // must survive re-scans, and losing summarizedTurnCount would make
+        // tagAll() treat an already-tracked session as never-tracked again
+        // (harmless — see tagAll()'s doc comment — but still wrong state).
+        neutral.titleLocked = existing.titleLocked ?? neutral.titleLocked;
+        neutral.summarizedTurnCount = existing.summarizedTurnCount ?? neutral.summarizedTurnCount;
       }
       neutral._mtimeMs = ref.mtimeMs;
 

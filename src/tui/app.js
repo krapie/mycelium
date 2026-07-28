@@ -113,6 +113,15 @@ export function createApp() {
     notify(msg, seconds = 2) {
       toast.display(msg, seconds, () => {});
     },
+    // Dismiss a long-duration progress toast (e.g. notify(msg, 60)) right
+    // before opening a modal — blessed.message's own auto-hide timer doesn't
+    // fire early, so without this a toast still mid-countdown visibly
+    // overlaps whatever opens next (both are centered overlays). See
+    // launch.js's launchAgent() `title` param for the same class of bug.
+    dismissNotify() {
+      toast.hide();
+      screen.render();
+    },
     async show(view) {
       if (app._view && app._view.unmount) app._view.unmount();
       body.children.slice().forEach((c) => c.detach());

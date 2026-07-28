@@ -1,7 +1,6 @@
 import { join } from 'node:path';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { TREE_DIR } from './paths.js';
-import { autoFolderFor } from './organize.js';
 import { loadRaw } from './scanner.js';
 
 const BEGIN = '<!-- mycelium:begin -->';
@@ -25,11 +24,6 @@ export function assembleContext(folderPath) {
     }
   }
   return blocks.join('\n\n');
-}
-
-/** Map a real working directory to its Mycelium folder (via the same cwd rules as capture). */
-export function folderForCwd(cwd) {
-  return autoFolderFor({ cwd });
 }
 
 /**

@@ -124,12 +124,17 @@ export function menu(app, label, choices, cb) {
 /**
  * Multi-select review list — for suggestions the human should cherry-pick
  * from rather than accept-or-reject as a whole (e.g. smart-organize
- * placements). Nothing starts selected: like the sessions list's own
- * Space/* multi-select, you opt sessions IN rather than opt bad ones out.
- * Enter applies only the checked items; Esc applies nothing.
+ * placements, split review). By default nothing starts selected: like the
+ * sessions list's own Space/* multi-select, you opt items IN rather than
+ * opt bad ones out. Pass `defaultAll: true` for the opposite shape — every
+ * item pre-checked, so Enter alone accepts everything and Space is only
+ * needed to opt individual bad ones OUT (smart-organize's placements: the
+ * LLM already did the picking, this is a chance to catch a wrong one, not
+ * to select good ones one at a time). Enter applies the checked items;
+ * Esc applies nothing.
  */
-export function multiSelectList(app, label, items, cb) {
-  const selected = new Set();
+export function multiSelectList(app, label, items, cb, { defaultAll = false } = {}) {
+  const selected = new Set(defaultAll ? items.map((_, i) => i) : []);
   const render = (it, i) => `${selected.has(i) ? `{${C.fox}-fg}✓{/} ` : '  '}${it.label}`;
   const box = blessed.list({
     parent: app.screen,
@@ -137,7 +142,9 @@ export function multiSelectList(app, label, items, cb) {
     left: 'center',
     width: '70%',
     height: Math.min(items.length + 4, 20),
-    label: ` ${label} — space select, * all, enter apply, esc cancel `,
+    label: defaultAll
+      ? ` ${label} — all checked, space to uncheck, enter apply, esc cancel `
+      : ` ${label} — space select, * all, enter apply, esc cancel `,
     tags: true,
     keys: true,
     mouse: true,

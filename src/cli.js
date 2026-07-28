@@ -8,20 +8,20 @@ import {
   mkdir,
   move,
   tag,
-  autoOrganize,
-  addRule,
   suggestPlacements,
   applyPlacements,
   summarizeCandidates,
   pendingSuggestions,
   queueSuggestions,
   clearSuggestions,
+  classificationCandidates,
+  listTreeDirs,
   unmerge,
 } from './organize.js';
 import { unsplit } from './split.js';
 import { autoTagSession, tagAll } from './learn.js';
 import { generateDigest, extractKnowledge, foldersWithSessions } from './insight.js';
-import { assembleContext, folderForCwd, injectAgentsMd, contextForSession } from './reuse.js';
+import { assembleContext, injectAgentsMd, contextForSession } from './reuse.js';
 import { buildHandoff } from './handoff.js';
 import { resumeCommandLine } from './agents.js';
 import { copyToClipboard } from './tui/clipboard.js';
@@ -94,26 +94,28 @@ async function main() {
       break;
     }
     case 'organize': {
+      // Always content-based classification; `--smart` is still accepted
+      // (harmlessly ignored) for anyone with it in a saved script.
       const { flags } = parseFlags(args);
-      if (!flags.smart) {
-        const res = autoOrganize();
-        reindex();
-        console.log(`auto-placed ${res.placed}, kept ${res.skippedHuman} human-organized sessions untouched`);
-        break;
-      }
       // Reuse whatever the daemon already queued (smartOrganizeCycle in
       // daemon.js) instead of recomputing — instant when the daemon's been
       // doing the work in the background.
-      let placements = pendingSuggestions();
+      let placements = pendingSuggestions({ folder: flags.folder || undefined });
       if (!placements.length) {
-        // Only summarizes the sessions actually being classified below
-        // (still unorganized) — not the whole store's summary backlog,
-        // which is `autotag`'s job. Bounded-concurrency (see organize.js),
-        // but can still take a while with a real backlog, so report
-        // progress rather than going silent.
-        const pending = allRaw().filter((n) => !n.folder && n.organizedBy !== 'human' && !n.extracted.summary).length;
+        // cooldownMs: 0 bypasses the daemon's "don't re-ask too soon"
+        // throttle, since a human explicitly asked for this right now. Same
+        // review-before-move safety net either way — nothing moves until
+        // --apply.
+        const limit = flags.limit ? Number(flags.limit) : 200;
+        // --folder scopes to that subtree (same as `list`/`search --folder`);
+        // omitted means the whole store, matching this command's existing
+        // default. There's no CLI equivalent of the TUI's "Root" yet — pass
+        // a real folder to narrow.
+        const folder = flags.folder || undefined;
+        const pending = classificationCandidates({ cooldownMs: 0, folder }).filter((n) => !n.extracted.summary).length;
         if (pending) console.log(`summarizing ${pending} session(s) first…`);
         await summarizeCandidates({
+          folder,
           onProgress: (s, err) => {
             if (err) console.log(`  ! ${err.message}`);
             else console.log(`  + ${s.id.slice(0, 8)}`);
@@ -122,6 +124,9 @@ async function main() {
         reindex();
         console.log('classifying…');
         const res = await suggestPlacements({
+          cooldownMs: 0,
+          folder,
+          limit,
           onProgress: (batch, total) => total > 1 && console.log(`  batch ${batch}/${total}`),
         });
         if (!res.ok) return fail(res.error);
@@ -132,8 +137,10 @@ async function main() {
         placements = res.placements;
         queueSuggestions(placements); // persists even if this run doesn't --apply
       }
+      const existingDirs = new Set(listTreeDirs());
       for (const p of placements) {
-        console.log(`${p.id.slice(0, 8)}  → ${p.folder || '(no match, stays in _inbox)'}${p.reason ? `  — ${p.reason}` : ''}`);
+        const badge = p.folder && !existingDirs.has(p.folder) ? ' (new folder)' : '';
+        console.log(`${p.id.slice(0, 8)}  → ${p.folder || '(no match, stays in _inbox)'}${badge}${p.reason ? `  — ${p.reason}` : ''}`);
       }
       if (flags.apply) {
         const applied = applyPlacements(placements);
@@ -170,13 +177,6 @@ async function main() {
       if (!res.ok) return fail(res.error);
       reindex();
       console.log(`${sessionId.slice(0, 8)} tags: ${res.session.extracted.tags.join(', ') || '(none)'} (human)`);
-      break;
-    }
-    case 'rule': {
-      const [prefix, folder] = args;
-      if (!prefix || !folder) return fail('Usage: mycelium rule <cwd-prefix> <folder-path>');
-      addRule(prefix, folder);
-      console.log(`rule added: ${prefix} → ${folder}`);
       break;
     }
     case 'autotag': {
@@ -250,15 +250,13 @@ async function main() {
         console.log(res.context || '(상속할 컨텍스트 없음)');
       } else if (flags.folder) {
         console.log(assembleContext(flags.folder) || '(상속할 컨텍스트 없음)');
-      } else if (flags.cwd) {
-        console.log(assembleContext(folderForCwd(flags.cwd)) || '(상속할 컨텍스트 없음)');
-      } else fail('Usage: mycelium context <sessionId> | --folder <path> | --cwd <dir>');
+      } else fail('Usage: mycelium context <sessionId> | --folder <path>');
       break;
     }
     case 'inject': {
       const { flags } = parseFlags(args);
       const targetDir = flags.dir || process.cwd();
-      const folder = flags.folder || folderForCwd(targetDir);
+      const folder = flags.folder;
       if (!folder) return fail('대상 폴더를 결정할 수 없습니다 (--folder 로 지정하세요)');
       const res = injectAgentsMd(targetDir, folder);
       if (!res.ok) return fail(res.error);
@@ -404,20 +402,18 @@ async function main() {
     default:
       console.log(`Mycelium — AI 협업 컨텍스트 라이프사이클
 
-Capture   scan                          세션 저장소 스캔 → 중립 스키마
-Organize  organize                      cwd 기반 자동 배치 (사람 결정은 보존)
-          organize --smart [--apply]    내용 기반 폴더 제안 (요약 먼저 채움, --apply 전엔 미리보기만)
+Capture   scan                          세션 저장소 스캔 → 중립 스키마 (자동 폴더 배정 없음 — 새 세션은 미분류로 시작)
+Organize  organize [--apply] [--limit N] [--folder <경로>]   내용 기반 폴더 제안(요약 먼저 채움) — --folder로 특정 폴더(하위 포함)만 좁히기, --apply 전엔 미리보기만
           mkdir <folder>                폴더 생성
           mv <session> <folder>         세션 수동 이동
           tag <session> +t -t           태그 수동 편집
-          rule <cwd-prefix> <folder>    cwd→폴더 자동배치 규칙
           unmerge <session>              TUI Shift+M 병합 되돌리기 (원본 세션들 복원)
           unsplit <session>              TUI Shift+S 분할 되돌리기 (분할 조각 제거, 원본 복원)
 Learn     autotag [<session>] [--force] 내용 기반 자동 태깅 (소급 일괄)
           digest [week] [--date D]      일일/주간 서사 다이제스트
           knowledge [<folder>]          폴더별 KNOWLEDGE.md 추출
-Reuse     context <session>|--folder|--cwd   조상 경로 컨텍스트 출력
-          inject [--dir D] [--folder F] AGENTS.md에 지식 주입
+Reuse     context <session>|--folder    조상 경로 컨텍스트 출력
+          inject [--dir D] --folder F   AGENTS.md에 지식 주입
           handoff <session>            다른 에이전트용 인수인계 프롬프트
           resume <session|prefix> [--copy|--exec]  이어열기 명령어 출력(새 탭 붙여넣기용) / 클립보드 복사 / 즉시 실행
 Find      search <q> [--tag t] [--folder f]

@@ -3,9 +3,9 @@ import { ensureDirs, CONFIG_PATH } from './paths.js';
 
 // Shared config.json read/write. Lives outside organize.js and scanner.js so
 // both can depend on it without a circular import (scanner.js needs it to
-// skip deleted sessions on rescan; organize.js needs it for cwd rules and
-// recording deletions).
-const DEFAULTS = { cwdRules: [], excludedSessionIds: [], locale: 'en', autoApproveSmartOrganize: false };
+// skip deleted sessions on rescan; organize.js needs it for recording
+// deletions).
+const DEFAULTS = { excludedSessionIds: [], locale: 'en', autoApproveSmartOrganize: false };
 
 export function loadConfig() {
   if (!existsSync(CONFIG_PATH)) return { ...DEFAULTS };

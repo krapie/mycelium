@@ -161,9 +161,10 @@ const en = {
   'split.reviewTitle': 'Proposed split — space select, enter apply, esc cancel',
   'split.done': (n) => `Split into ${n} session${n === 1 ? '' : 's'}`,
 
-  'smart.running': 'Summarizing + classifying unfiled sessions…',
+  'smart.running': 'Summarizing + classifying sessions…',
   'smart.noMatches': 'No confident folder matches found',
   'smart.noMatch': '(no match)',
+  'smart.newFolder': 'new folder',
   'smart.previewTitle': 'Suggested placements',
   'smart.pendingOnOpen': (n) => `${n} suggestion${n === 1 ? '' : 's'} waiting — press o to review`,
 
@@ -309,9 +310,10 @@ const ko = {
   'split.reviewTitle': '분할 제안 — space 선택, enter 실행, esc 취소',
   'split.done': (n) => `${n}개 세션으로 분할됨`,
 
-  'smart.running': '미분류 세션 요약 + 폴더 분류 중…',
+  'smart.running': '세션 요약 + 폴더 분류 중…',
   'smart.noMatches': '확실한 폴더 매칭을 찾지 못했습니다',
   'smart.noMatch': '(매칭 없음)',
+  'smart.newFolder': '신규 폴더',
   'smart.previewTitle': '제안된 폴더 배치',
   'smart.pendingOnOpen': (n) => `${n}개 정리 제안 대기 중 — o로 확인`,
 
@@ -330,8 +332,8 @@ const ko = {
 // from dozens of sub-keys — it's read as a single reference sheet, and
 // splitting it further would add ceremony without adding maintainability.
 en['help.text'] = (fg, spore) => `{bold}Global{/}
-  {${fg}-fg}s{/}       Scan (mycelium scan, no CLI needed — cwd-rule auto-file is still CLI \`mycelium organize\`)
-  {${fg}-fg}o{/}       Smart organize — summarize + suggest folders for unfiled sessions by content, pick which to apply
+  {${fg}-fg}s{/}       Scan (mycelium scan, no CLI needed — captures new/changed sessions, no auto-filing; use \`o\` or \`mycelium organize\` to file them)
+  {${fg}-fg}o{/}       Smart organize — scoped to wherever you're browsing (Root = unfiled only, a folder = itself + subfolders); suggests folders by content, may propose new folders too — all pre-checked, Enter applies everything, Space to uncheck any
   {${fg}-fg}/{/}       Full-text search
   {${fg}-fg}v{/}       Toggle to the Calendar tab — full screen, browse by day (press v again to return)
   {${fg}-fg}d{/}       View digests (open, then n/w to generate today/this week)
@@ -375,8 +377,8 @@ en['help.text'] = (fg, spore) => `{bold}Global{/}
 Sessions linked by handoff show {${spore}-fg}↩{/}/{${spore}-fg}→{/} markers in the list and continuation links in detail.`;
 
 ko['help.text'] = (fg, spore) => `{bold}전역{/}
-  {${fg}-fg}s{/}       스캔 (mycelium scan, CLI 없이 — cwd 규칙 자동배치는 아직 CLI \`mycelium organize\`로)
-  {${fg}-fg}o{/}       스마트 정리 — 미분류 세션 요약 후 내용 기준으로 폴더 제안, 적용할 것만 선택
+  {${fg}-fg}s{/}       스캔 (mycelium scan, CLI 없이 — 새/변경된 세션 캡처만, 자동 배치는 안 함; 배치는 o 또는 mycelium organize로)
+  {${fg}-fg}o{/}       스마트 정리 — 지금 보고 있는 범위로 한정(Root=미분류만, 폴더 안=그 폴더+하위만), 새 폴더 제안도 가능 — 전부 체크된 채로 떠서 Enter만으로 전체 적용, 잘못된 것만 Space로 해제
   {${fg}-fg}/{/}       전문 검색
   {${fg}-fg}v{/}       캘린더 탭으로 전환 — 전체 화면, 날짜별로 탐색 (다시 v를 누르면 세션으로 복귀)
   {${fg}-fg}d{/}       다이제스트 보기 (열어서 n/w로 오늘/이번주 생성)

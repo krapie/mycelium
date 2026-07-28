@@ -16,11 +16,13 @@ import {
   pendingSuggestions,
   queueSuggestions,
   clearSuggestions,
+  classificationCandidates,
+  listTreeDirs,
   mergeSessions,
   foldProductIntoSession,
 } from '../../organize.js';
 import { suggestSplitBoundaries, applySplit } from '../../split.js';
-import { scan, allRaw } from '../../scanner.js';
+import { scan } from '../../scanner.js';
 import { pickFolder, editTags, menu, multiSelectList } from '../widgets/pickers.js';
 import { createCalendarTab } from './calendar.js';
 import { formatSessionDetail } from '../render.js';
@@ -558,9 +560,8 @@ export function sessionsView(opts = {}) {
       );
 
       // s: scan only (capture new/changed sessions from every tab/terminal +
-      // reindex), without leaving the TUI. Mirrors `mycelium scan`. Does NOT
-      // auto-organize — that reassigns folders by cwd rule and isn't wired to
-      // any key here yet; run `mycelium organize` when you want that.
+      // reindex), without leaving the TUI. Mirrors `mycelium scan`. Captured
+      // sessions land unfiled — use `o` (or `mycelium organize`) to place them.
       screenKey(app, ['s'], () => {
         app.notify(t('scan.inProgress'), 30);
         setImmediate(() => {
@@ -579,27 +580,37 @@ export function sessionsView(opts = {}) {
         });
       });
 
-      // o: smart organize — LLM content-based folder suggestions for sessions
-      // still unorganized, comparing them against the sessions already filed
-      // in each folder (see organize.js's suggestPlacements()). Always a
-      // preview-then-confirm flow (like w/i), and never run by the daemon —
-      // unlike `s`'s plain scan, this makes real LLM calls and moves things.
+      // o: smart organize — LLM content-based folder suggestions, comparing
+      // candidates against the sessions already filed in each folder (see
+      // organize.js's suggestPlacements()). Scoped to wherever you're
+      // currently browsing (state.folder — Root = only genuinely-unfiled,
+      // a folder = itself + subtree), same subtree semantics data.sessions()
+      // already uses — so reviewing "this folder" doesn't drag in the whole
+      // store. Always a preview-then-confirm flow (like w/i), and never run
+      // automatically by the daemon — unlike `s`'s plain scan, this makes
+      // real LLM calls and moves things.
       screenKey(app, ['o'], async () => {
         // Reuse whatever the daemon already queued (see organize.js's
         // smartOrganizeCycle) instead of recomputing — makes `o` instant when
-        // the daemon's been doing the work in the background.
-        let matches = pendingSuggestions();
+        // the daemon's been doing the work in the background. Scoped the
+        // same way fresh computation below is, so a global daemon-queued
+        // suggestion for a session outside the current folder doesn't show
+        // up here — pressing `o` again after navigating there will.
+        let matches = pendingSuggestions({ folder: state.folder });
         if (!matches.length) {
-          // Only summarizes the sessions actually being classified below
-          // (still unorganized) — not the whole store's summary backlog.
-          // Calls the LLM once per such session lacking one (in bounded
-          // concurrent chunks, see organize.js), so show real progress
-          // instead of one static toast that expires long before a
-          // multi-session batch finishes and makes it look hung.
-          const pending = allRaw().filter((n) => !n.folder && n.organizedBy !== 'human' && !n.extracted.summary).length;
+          // Only summarizes the sessions actually being classified below —
+          // not the whole store's summary backlog. Calls the LLM once per
+          // such session lacking one (in bounded concurrent chunks, see
+          // organize.js), so show real progress instead of one static toast
+          // that expires long before a multi-session batch finishes and
+          // makes it look hung.
+          const pending = classificationCandidates({ cooldownMs: 0, folder: state.folder }).filter(
+            (n) => !n.extracted.summary,
+          ).length;
           if (pending) app.notify(t('sessions.summarizing', 0, pending), 90);
           const summarized = [];
           await summarizeCandidates({
+            folder: state.folder,
             onProgress: (() => {
               let done = 0;
               return (s) => {
@@ -612,6 +623,12 @@ export function sessionsView(opts = {}) {
           if (summarized.length) data.refreshMany(summarized);
           app.notify(t('smart.running'), 60);
           const res = await suggestPlacements({
+            cooldownMs: 0,
+            folder: state.folder,
+            // Same reasoning as daemon.js's SMART_ORGANIZE_BATCH_LIMIT — a
+            // large backlog could otherwise mean hundreds of LLM calls in
+            // one `o` press.
+            limit: 200,
             onProgress: (batch, total) => total > 1 && app.notify(`${t('smart.running')} (${batch}/${total})`, 60),
           });
           if (!res.ok) return app.notify(res.error, 4);
@@ -619,23 +636,38 @@ export function sessionsView(opts = {}) {
           if (!matches.length) return app.notify(t('smart.noMatches'), 3);
           queueSuggestions(matches);
         }
-        // Cherry-pick which suggestions to actually apply — sessions left
-        // unchecked simply stay unorganized, same as if `o` had never run.
+        // Dismiss the still-counting-down "summarizing/classifying" toast —
+        // its own timer (60-90s) doesn't fire early, so without this it's
+        // still on screen, visibly overlapping the review modal opening
+        // right below (both are centered blessed overlays).
+        app.dismissNotify();
+        // Cherry-pick which suggestions to actually apply — every suggestion
+        // starts checked (LLM already did the picking; this is a chance to
+        // catch a bad one, not to opt in one at a time) — Enter alone applies
+        // everything, Space toggles off whichever ones look wrong.
+        const existingDirs = new Set(listTreeDirs());
         const items = matches.map((p) => ({
-          label: `${p.id.slice(0, 8)}  → {${C.fox}-fg}${p.folder}{/}${p.reason ? `  {${C.faint}-fg}(${p.reason}){/}` : ''}`,
+          label: `${p.id.slice(0, 8)}  → {${C.fox}-fg}${p.folder}{/}${
+            existingDirs.has(p.folder) ? '' : `  {${C.spore}-fg}(${t('smart.newFolder')}){/}`
+          }${p.reason ? `  {${C.faint}-fg}(${p.reason}){/}` : ''}`,
           value: p,
         }));
         multiSelectList(app, t('smart.previewTitle'), items, (chosen) => {
-          if (chosen === null) return; // Esc — left queued, shows again next time
-          applyPlacements(chosen);
-          clearSuggestions(matches.map((p) => p.id)); // reviewed (applied or passed on) — stop nagging
-          // Only the applied ones' `folder` actually changed — the rest just
-          // had suggestedFolder cleared, which isn't indexed at all.
-          data.refreshMany(chosen.map((p) => p.id));
+          // Esc means what its own "esc cancel" label says — dismiss this
+          // batch. Reviewed (Esc or Enter, applied or passed on) either way,
+          // so it's cleared from the queue and won't keep reappearing next
+          // `o` — re-pressing `o` later recomputes fresh candidates instead.
+          clearSuggestions(matches.map((p) => p.id));
+          if (chosen) {
+            applyPlacements(chosen);
+            // Only the applied ones' `folder` actually changed — the rest
+            // just had suggestedFolder cleared, which isn't indexed at all.
+            data.refreshMany(chosen.map((p) => p.id));
+          }
           reloadFolders();
           reloadList();
           app.render();
-        });
+        }, { defaultAll: true });
       });
 
       // ?: full keymap reference — status bar only shows a short breadcrumb now.

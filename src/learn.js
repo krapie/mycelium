@@ -43,12 +43,16 @@ ${sessionExcerpt(neutral)}
  * surveyed tool does (they pattern-match on dir/name only). Existing tag
  * vocabulary is fed in to keep the vocabulary from diverging.
  *
- * Only the title is sticky, and only once it's non-empty: it's the primary
- * way a person finds a session again (in the list, in search results), so a
- * re-run of `a` shouldn't quietly rename it out from under them — whether
- * that title came from an earlier `a` or a hand-edit via `e` makes no
- * difference. Everything else (tags/summary/decisions/todos) always refreshes
- * to the latest LLM read, regardless of who touched it before.
+ * The title is sticky only once a human has explicitly set it (`e`,
+ * setContent() → titleLocked). An LLM-generated title is deliberately NOT
+ * sticky — a session captured early (e.g. right after a bare `/clear` or a
+ * `!`-command with no real conversation yet) gets a near-useless title from
+ * that thin content, and without this it would stay wrong forever even once
+ * the same session grows into a real conversation. tags/summary/decisions/
+ * todos always refresh to the latest LLM read regardless.
+ *
+ * `summarizedTurnCount` records how many turns existed at this run — see
+ * tagAll()'s doc comment for what that's for.
  */
 export async function autoTagSession(sessionId, { existingTags } = {}) {
   const n = loadRaw(sessionId);
@@ -68,7 +72,7 @@ export async function autoTagSession(sessionId, { existingTags } = {}) {
   const parsed = parseJsonReply(reply);
   if (!parsed) return { ok: false, error: 'unparseable LLM reply' };
 
-  if (!n.extracted.title && typeof parsed.title === 'string') {
+  if (!n.titleLocked && typeof parsed.title === 'string') {
     n.extracted.title = parsed.title.trim();
   }
   if (Array.isArray(parsed.tags)) {
@@ -77,15 +81,22 @@ export async function autoTagSession(sessionId, { existingTags } = {}) {
   if (typeof parsed.summary === 'string') n.extracted.summary = parsed.summary;
   if (Array.isArray(parsed.decisions)) n.extracted.decisions = parsed.decisions;
   if (Array.isArray(parsed.todos)) n.extracted.todos = parsed.todos;
+  n.summarizedTurnCount = n.turns.length;
   saveRaw(n);
   return { ok: true, session: n };
 }
 
 /**
- * Retroactive batch tagging. `force` re-tags everything; otherwise only
- * sessions with no summary yet (so a re-run is cheap and resumable). Tags
- * accumulate into the shared vocabulary as we go, so later sessions reuse
- * earlier sessions' tags instead of inventing parallel ones.
+ * Retroactive batch tagging. `force` re-tags everything; otherwise skips a
+ * session only if it already has a summary AND hasn't grown since
+ * (`summarizedTurnCount === turns.length`) — a session with no baseline yet
+ * (`summarizedTurnCount: null`, i.e. everything that predates this field)
+ * still gets skipped-if-summarized, same as before, so shipping this doesn't
+ * suddenly re-tag the entire existing store in one cycle. Once a session
+ * does get (re)tagged, its baseline is recorded and growth-detection kicks
+ * in for it from then on. Tags accumulate into the shared vocabulary as we
+ * go, so later sessions reuse earlier sessions' tags instead of inventing
+ * parallel ones.
  */
 export async function tagAll({ force = false, onProgress } = {}) {
   const vocab = new Set(listTags().map((t) => t.name));
@@ -94,7 +105,8 @@ export async function tagAll({ force = false, onProgress } = {}) {
   let failed = 0;
 
   for (const n of allRaw()) {
-    if (!force && n.extracted.summary) {
+    const upToDate = n.extracted.summary && (!n.summarizedTurnCount || n.summarizedTurnCount === n.turns.length);
+    if (!force && upToDate) {
       skipped++;
       continue;
     }

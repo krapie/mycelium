@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { scan, allRaw, loadRaw } from '../scanner.js';
 import { reindexMany } from '../index-db.js';
-import { move, addRule, cwdForFolder, linkContinuation } from '../organize.js';
+import { move, linkContinuation } from '../organize.js';
 import { injectAgentsMd } from '../reuse.js';
 import { menu, textPrompt } from './widgets/pickers.js';
 import { foreground } from './foreground.js';
@@ -59,7 +59,6 @@ export function launchAgent(app, { folder, seed, parentId, title } = {}, done) {
 }
 
 function resolveDir(app, folder, cb) {
-  const known = folder ? cwdForFolder(folder) : null;
   const finish = (dir) => {
     if (!dir) return cb(null);
     dir = dir.trim();
@@ -67,15 +66,14 @@ function resolveDir(app, folder, cb) {
       app.notify(t('launch.dirNotFound'), 3);
       return cb(null);
     }
-    if (folder && dir !== known) addRule(dir, folder); // remember dir↔folder
     cb(dir);
   };
-  const typePrompt = () => textPrompt(app, t('launch.dirPrompt', folder), known || process.cwd(), finish);
+  const typePrompt = () => textPrompt(app, t('launch.dirPrompt', folder), process.cwd(), finish);
 
-  // Offer the directories this folder's sessions already used — no need to
-  // retype long paths.
+  // Offer the directories this folder's sessions already used — derived live
+  // from actual session data (dirsForFolder()), not a remembered rule — no
+  // need to retype long paths.
   const dirs = dirsForFolder(folder);
-  if (known && !dirs.includes(known) && existsSync(known)) dirs.unshift(known);
   if (dirs.length === 0) return typePrompt();
 
   const choices = [...dirs.map((d) => ({ label: d, value: d })), { label: t('launch.typeManually'), value: '__type__' }];

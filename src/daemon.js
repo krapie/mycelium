@@ -3,7 +3,7 @@ import { existsSync, readFileSync, writeFileSync, rmSync, openSync, appendFileSy
 import { fileURLToPath } from 'node:url';
 import { scan } from './scanner.js';
 import { reindex } from './index-db.js';
-import { autoOrganize, summarizeCandidates, suggestPlacements, applyPlacements, queueSuggestions, pendingSuggestions } from './organize.js';
+import { summarizeCandidates, suggestPlacements, applyPlacements, queueSuggestions, pendingSuggestions } from './organize.js';
 import { tagAll } from './learn.js';
 import { generateDigest } from './insight.js';
 import { loadConfig } from './config.js';
@@ -19,14 +19,20 @@ const SMART_ORGANIZE_INTERVAL_MS = Number(process.env.MYCELIUM_SMART_ORGANIZE_MS
 // Bounds one cycle's work so a large backlog drains gradually across many
 // cycles instead of one run trying to classify everything at once.
 const SMART_ORGANIZE_BATCH_LIMIT = Number(process.env.MYCELIUM_SMART_ORGANIZE_LIMIT || 100);
+// A session the LLM couldn't confidently place stays unresolved — without a
+// cooldown it would get re-sent to the LLM every single cycle forever (real
+// cost, no resolution). See organize.js's classificationCandidates().
+const SMART_ORGANIZE_COOLDOWN_MS = Number(process.env.MYCELIUM_SMART_ORGANIZE_COOLDOWN_MS || 24 * 60 * 60 * 1000);
 
 async function scanCycle(log) {
   try {
     const res = scan();
     if (res.imported > 0) {
-      autoOrganize();
+      // Captured sessions stay unfiled (Root) until smart-organize (below),
+      // a manual move, or a launch into a folder deliberately places them.
+      // Just reindex + tag.
       reindex();
-      log.log(`[scan] +${res.imported} (organized + reindexed)`);
+      log.log(`[scan] +${res.imported} (reindexed)`);
       // Tag freshly imported sessions (skips those already summarized).
       const t = await tagAll();
       if (t.tagged > 0) {
@@ -40,18 +46,22 @@ async function scanCycle(log) {
 }
 
 /**
- * Content-based folder suggestions for sessions the cwd-rule pass couldn't
- * place. Never runs while there's already a queued-but-unreviewed batch —
- * piling up a second round of guesses on top of an unreviewed one would just
- * make the eventual review screen confusing. Default: queue for the human to
- * review (same trust model as w/i and the manual `o` key) — auto-applying is
- * opt-in via config.json's `autoApproveSmartOrganize`.
+ * Content-based folder suggestions for whatever still needs one. Never runs
+ * while there's already a queued-but-unreviewed batch — piling up a second
+ * round of guesses on top of an unreviewed one would just make the eventual
+ * review screen confusing. Default: queue for the human to review (same
+ * trust model as w/i and the manual `o` key) — auto-applying is opt-in via
+ * config.json's `autoApproveSmartOrganize`.
  */
 async function smartOrganizeCycle(log) {
   if (pendingSuggestions().length) return;
   try {
     await summarizeCandidates({ concurrency: 5 });
-    const res = await suggestPlacements({ batchSize: 25, limit: SMART_ORGANIZE_BATCH_LIMIT });
+    const res = await suggestPlacements({
+      batchSize: 25,
+      limit: SMART_ORGANIZE_BATCH_LIMIT,
+      cooldownMs: SMART_ORGANIZE_COOLDOWN_MS,
+    });
     if (!res.ok) {
       log.error(`[organize] ${res.error}`);
       return;
@@ -97,7 +107,9 @@ async function digestCycle(log) {
 export async function runDaemon({ log = console } = {}) {
   log.log('Mycelium daemon starting (background upkeep: scan + digest + smart organize).');
   log.log(`  scan interval: ${SCAN_INTERVAL_MS}ms`);
-  log.log(`  smart organize interval: ${SMART_ORGANIZE_INTERVAL_MS}ms (batch limit ${SMART_ORGANIZE_BATCH_LIMIT})`);
+  log.log(
+    `  smart organize interval: ${SMART_ORGANIZE_INTERVAL_MS}ms (batch limit ${SMART_ORGANIZE_BATCH_LIMIT}, cooldown ${SMART_ORGANIZE_COOLDOWN_MS}ms)`,
+  );
 
   await scanCycle(log);
   await digestCycle(log);
