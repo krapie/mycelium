@@ -33,7 +33,7 @@ import { buildHandoff } from '../../handoff.js';
 import { autoTagSession } from '../../learn.js';
 import { buildKnowledgeText, writeKnowledgeText } from '../../insight.js';
 import { assembleContext, injectAgentsMd } from '../../reuse.js';
-import { textView, digestReader, confirmText, helpModal } from '../widgets/viewers.js';
+import { textView, digestReader, confirmText, helpModal, welcomeModal } from '../widgets/viewers.js';
 import { textPrompt } from '../widgets/pickers.js';
 import { copyToClipboard } from '../clipboard.js';
 import { t } from '../i18n.js';
@@ -672,6 +672,11 @@ export function sessionsView(opts = {}) {
 
       // ?: full keymap reference — status bar only shows a short breadcrumb now.
       screenKey(app, ['?'], () => helpModal(app));
+
+      // g: re-show the first-run getting-started guide on demand — index.js
+      // only shows it automatically once (config.json's `onboarded` flag),
+      // this is how to pull it back up any time after that.
+      screenKey(app, ['g'], () => welcomeModal(app));
 
       // Which sessions an action targets: the multi-selection if any, else the row under the cursor.
       const targets = () => (state.selected.size ? [...state.selected] : currentRow() ? [currentRow().id] : []);

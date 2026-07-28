@@ -344,6 +344,7 @@ en['help.text'] = (fg, spore) => `{bold}Global{/}
   {${fg}-fg}v{/}       Toggle to the Calendar tab — full screen, browse by day (press v again to return)
   {${fg}-fg}d{/}       View digests (open, then n/w to generate today/this week)
   {${fg}-fg}?{/}       This help
+  {${fg}-fg}g{/}       Getting-started guide (shown once automatically on first launch)
   {${fg}-fg}q{/}       Quit
 
 {bold}Folders panel{/}
@@ -400,7 +401,8 @@ each one moves through 4 stages, all inside this screen:
               KNOWLEDGE.md; {${fg}-fg}r{/} resumes an existing one.
 
 If you haven't run {${fg}-fg}mycelium scan{/} yet, nothing will be in the list —
-press {${fg}-fg}s{/} first. Full keymap anytime: {${fg}-fg}?{/}. This won't show again.`;
+press {${fg}-fg}s{/} first. Full keymap anytime: {${fg}-fg}?{/}. This won't pop up again on
+its own — press {${fg}-fg}g{/} whenever you want to see it again.`;
 
 ko['help.text'] = (fg, spore) => `{bold}전역{/}
   {${fg}-fg}s{/}       스캔 (mycelium scan, CLI 없이 — 새/변경된 세션 캡처만, 자동 배치는 안 함; 배치는 o 또는 mycelium organize로)
@@ -409,6 +411,7 @@ ko['help.text'] = (fg, spore) => `{bold}전역{/}
   {${fg}-fg}v{/}       캘린더 탭으로 전환 — 전체 화면, 날짜별로 탐색 (다시 v를 누르면 세션으로 복귀)
   {${fg}-fg}d{/}       다이제스트 보기 (열어서 n/w로 오늘/이번주 생성)
   {${fg}-fg}?{/}       이 도움말
+  {${fg}-fg}g{/}       시작 안내 다시 보기 (처음 실행 시 자동으로 한 번 뜸)
   {${fg}-fg}q{/}       종료
 
 {bold}폴더 패널{/}
@@ -464,7 +467,8 @@ ko['welcome.body'] = (fg, spore) => `Mycelium은 AI 코딩 에이전트 세션�
               에이전트 세션을 띄우고, {${fg}-fg}r{/}은 기존 세션을 그대로 이어엽니다.
 
 아직 {${fg}-fg}mycelium scan{/}을 안 하셨다면 목록이 비어 있을 텐데,
-{${fg}-fg}s{/}를 먼저 눌러보세요. 전체 단축키는 언제든 {${fg}-fg}?{/}. 이 화면은 다시 안 뜹니다.`;
+{${fg}-fg}s{/}를 먼저 눌러보세요. 전체 단축키는 언제든 {${fg}-fg}?{/}. 이 화면은 자동으로
+다시 뜨진 않지만, 다시 보고 싶으면 언제든 {${fg}-fg}g{/}를 누르세요.`;
 
 const DICTS = { en, ko };
 
