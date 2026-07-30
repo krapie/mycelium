@@ -51,7 +51,7 @@ export function openDb() {
   } catch (err) {
     if (!String(err.message).includes('duplicate column')) throw err;
   }
-  for (const col of ['continuation_of TEXT', 'continued_to TEXT', 'tags TEXT', 'merged_from TEXT', 'split_from TEXT', 'superseded_by TEXT', 'split_into TEXT']) {
+  for (const col of ['continuation_of TEXT', 'continued_to TEXT', 'tags TEXT', 'merged_from TEXT', 'split_from TEXT', 'superseded_by TEXT', 'split_into TEXT', 'ended_at TEXT']) {
     try {
       db.exec(`ALTER TABLE sessions ADD COLUMN ${col}`);
     } catch (err) {
@@ -64,7 +64,7 @@ export function openDb() {
 function prepareWriters(d) {
   return {
     insSession: d.prepare(
-      'INSERT OR REPLACE INTO sessions (id, source, folder, started_at, preview, title, summary, organized_by, continuation_of, continued_to, tags, merged_from, split_from, superseded_by, split_into) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT OR REPLACE INTO sessions (id, source, folder, started_at, ended_at, preview, title, summary, organized_by, continuation_of, continued_to, tags, merged_from, split_from, superseded_by, split_into) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     ),
     insFts: d.prepare('INSERT INTO session_fts (id, body) VALUES (?, ?)'),
     upsertTag: d.prepare('INSERT OR IGNORE INTO tags (name) VALUES (?)'),
@@ -79,6 +79,7 @@ function writeSessionRow(w, n) {
     n.source,
     n.folder,
     n.startedAt,
+    n.endedAt,
     firstUserText(n),
     n.extracted.title ?? null,
     n.extracted.summary ?? null,
@@ -154,12 +155,16 @@ export function folderCounts() {
 
 /** Session counts per day-of-month (also grouped by folder, so callers can
  * exclude _archive the same way folderCounts()'s callers do) — for one
- * calendar month's grid. */
+ * calendar month's grid. Grouped by `ended_at` (falls back to `started_at`
+ * for the rare row missing it) — a session's last activity, not when it was
+ * first created, is what should decide which day it shows up on: a session
+ * started on day 1 but actively worked on through day 5 belongs on day 5's
+ * count, not buried back on day 1. */
 export function sessionCountsByDay(yearMonth /* 'YYYY-MM' */) {
   const d = openDb();
   return d
     .prepare(
-      "SELECT CAST(substr(started_at, 9, 2) AS INTEGER) AS day, COALESCE(folder, '') AS folder, COUNT(*) AS n FROM sessions WHERE substr(started_at, 1, 7) = ? AND (superseded_by IS NULL OR superseded_by = '[]') GROUP BY day, folder",
+      "SELECT CAST(substr(COALESCE(ended_at, started_at), 9, 2) AS INTEGER) AS day, COALESCE(folder, '') AS folder, COUNT(*) AS n FROM sessions WHERE substr(COALESCE(ended_at, started_at), 1, 7) = ? AND (superseded_by IS NULL OR superseded_by = '[]') GROUP BY day, folder",
     )
     .all(yearMonth);
 }
@@ -185,7 +190,9 @@ function hasSupersededBy(row) {
 export function listSessions({ folder, date, includeSuperseded = false } = {}) {
   const d = openDb();
   let rows = d.prepare('SELECT * FROM sessions ORDER BY started_at DESC').all();
-  if (date) rows = rows.filter((r) => r.started_at && r.started_at.slice(0, 10) === date);
+  // Matches sessionCountsByDay()'s grouping — a day's session list should be
+  // "sessions active that day", same basis as what the calendar grid counted.
+  if (date) rows = rows.filter((r) => (r.ended_at || r.started_at || '').slice(0, 10) === date);
   // _archive is hidden by default everywhere (same rule folderCounts()'s
   // callers apply) unless the caller is explicitly browsing into it.
   if (!isArchive(folder)) rows = rows.filter((r) => !isArchive(r.folder));
@@ -240,7 +247,9 @@ export function search({ query, tags = [], folder, date, includeSuperseded = fal
 
   let sessions = d.prepare('SELECT * FROM sessions ORDER BY started_at DESC').all();
   if (ids !== null) sessions = sessions.filter((s) => ids.has(s.id));
-  if (date) sessions = sessions.filter((s) => s.started_at && s.started_at.slice(0, 10) === date);
+  // Same ended_at-first basis as listSessions()/sessionCountsByDay() — the
+  // calendar's date filter goes through here too when combined with a search.
+  if (date) sessions = sessions.filter((s) => (s.ended_at || s.started_at || '').slice(0, 10) === date);
   // _archive is hidden by default from search too (see listSessions()) unless
   // explicitly browsed into via folder.
   if (!isArchive(folder)) sessions = sessions.filter((s) => !isArchive(s.folder));
