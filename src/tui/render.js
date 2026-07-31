@@ -24,8 +24,19 @@ export function formatSessionDetail(n) {
   const lines = [];
   // Title as the headline, then metadata, then the description (summary).
   if (n.extracted.title) lines.push(`{${C.fox}-fg}{bold}${n.extracted.title}{/}`, '');
+  // The calendar groups a session by its LAST activity, not when it started
+  // (see index-db.js's sessionCountsByDay) — a session begun days ago but
+  // still active today shows up on today's date there. Surface that same
+  // span here so "why does this show up on that calendar day" is never a
+  // mystery: only bother with the extra date when it actually differs from
+  // the start day (the common case — start and end the same session, minutes
+  // apart — stays exactly as compact as before).
+  const started = (n.startedAt || '').slice(0, 16).replace('T', ' ');
+  const ended = (n.endedAt || '').slice(0, 16).replace('T', ' ');
+  const spansDays = n.startedAt && n.endedAt && n.startedAt.slice(0, 10) !== n.endedAt.slice(0, 10);
+  const when = spansDays ? `${started} → ${t('detail.lastActive')} ${ended}` : started;
   lines.push(
-    `{${sourceColor(n.source)}-fg}${sourceLabel(n.source)}{/}  {${C.dim}-fg}${(n.startedAt || '').slice(0, 16).replace('T', ' ')} · ${n.folder || t('sessions.newBadge')}{/}`,
+    `{${sourceColor(n.source)}-fg}${sourceLabel(n.source)}{/}  {${C.dim}-fg}${when} · ${n.folder || t('sessions.newBadge')}{/}`,
   );
   if (n.extracted.tags?.length) {
     lines.push(n.extracted.tags.map((tg) => `{${C.tag}-fg}#${tg}{/}`).join(' '));

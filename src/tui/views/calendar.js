@@ -72,8 +72,16 @@ export function createCalendarTab(app, { onBack }) {
       const n = counts.get(d) || 0;
       const isCursor = d === day;
       let cell = pad2(d);
-      if (isCursor) cell = `{${C.fox}-bg}{${C.bg}-fg}${cell}{/}`;
+      // A day with no sessions never gets the filled "highlighted" look, even
+      // when it's the cursor (e.g. today, right after opening the calendar,
+      // before it has anything in it yet) — that read as "this day has a
+      // session" at a glance, which it didn't. The cursor still needs SOME
+      // marker so you don't lose your place navigating through empty days,
+      // just a much quieter one: an underline (no width change, unlike
+      // brackets, so the 7-column grid stays aligned) instead of a fill.
+      if (isCursor && n > 0) cell = `{${C.fox}-bg}{${C.bg}-fg}${cell}{/}`;
       else if (n > 0) cell = `{${C.spore}-fg}{bold}${cell}{/}`;
+      else if (isCursor) cell = `{${C.faint}-fg}{underline}${cell}{/underline}{/}`;
       else cell = `{${C.faint}-fg}${cell}{/}`;
       row += cell + ' ';
       col++;

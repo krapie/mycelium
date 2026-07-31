@@ -582,21 +582,25 @@ export function sessionsView(opts = {}) {
 
       // o: smart organize — LLM content-based folder suggestions, comparing
       // candidates against the sessions already filed in each folder (see
-      // organize.js's suggestPlacements()). Scoped to wherever you're
-      // currently browsing (state.folder — Root = only genuinely-unfiled,
-      // a folder = itself + subtree), same subtree semantics data.sessions()
-      // already uses — so reviewing "this folder" doesn't drag in the whole
-      // store. Always a preview-then-confirm flow (like w/i), and never run
-      // automatically by the daemon — unlike `s`'s plain scan, this makes
-      // real LLM calls and moves things.
+      // organize.js's suggestPlacements()). Computing FRESH candidates is
+      // scoped to wherever you're currently browsing (state.folder — Root =
+      // only genuinely-unfiled, a folder = itself + subtree), same subtree
+      // semantics data.sessions() already uses — so reviewing "this folder"
+      // doesn't drag in the whole store. Always a preview-then-confirm flow
+      // (like w/i), and never run automatically by the daemon — unlike `s`'s
+      // plain scan, this makes real LLM calls and moves things.
       screenKey(app, ['o'], async () => {
         // Reuse whatever the daemon already queued (see organize.js's
         // smartOrganizeCycle) instead of recomputing — makes `o` instant when
-        // the daemon's been doing the work in the background. Scoped the
-        // same way fresh computation below is, so a global daemon-queued
-        // suggestion for a session outside the current folder doesn't show
-        // up here — pressing `o` again after navigating there will.
-        let matches = pendingSuggestions({ folder: state.folder });
+        // the daemon's been doing the work in the background. Deliberately
+        // UNSCOPED (not filtered to state.folder) — this is already-computed
+        // work, not a fresh classification run, so there's no reason to
+        // throw it away just because you're not standing in the matching
+        // folder right now. Scoping this too was an earlier attempt that
+        // backfired: pressing `o` outside the exact folder silently ignored
+        // a real pending suggestion and fell through to recomputing it from
+        // scratch (a wasted LLM call for something already sitting there).
+        let matches = pendingSuggestions();
         if (!matches.length) {
           // Only summarizes the sessions actually being classified below —
           // not the whole store's summary backlog. Calls the LLM once per
