@@ -214,9 +214,12 @@ export function classificationCandidates({ cooldownMs = 0, folder } = {}) {
  * loop makes the wall-clock time scale directly with candidate count. Each
  * candidate writes to its own raw/<id>.json, so there's no file contention;
  * the shared tag vocabulary Set can race harmlessly within a chunk (tag
- * reuse is a quality nicety, not a correctness requirement).
+ * reuse is a quality nicety, not a correctness requirement). Default kept
+ * modest (not higher) — each one spawns a real `claude`/`codex` subprocess,
+ * and piling up too many at once is exactly what issue #3 was (looked like
+ * runaway console windows on Windows).
  */
-export async function summarizeCandidates({ onProgress, concurrency = 5, folder } = {}) {
+export async function summarizeCandidates({ onProgress, concurrency = 3, folder } = {}) {
   const targets = classificationCandidates({ folder }).filter((n) => !n.extracted.summary);
   const vocab = new Set(allRaw().flatMap((n) => n.extracted.tags || []));
   let done = 0;

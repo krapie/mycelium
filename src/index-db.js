@@ -208,8 +208,10 @@ export function listSessions({ folder, date, includeSuperseded = false } = {}) {
 
 /**
  * Search sessions. `query` runs against FTS5 (optional); `tags` filters to
- * sessions carrying ALL of the given tags; `folder` restricts to a subtree.
- * Combined tag + text filtering is the pi-session-manager pattern.
+ * sessions carrying ALL of the given tags; `folder` restricts the same way
+ * listSessions() does (undefined = everything, null = only unfiled, a path =
+ * that subtree). Combined tag + text filtering is the pi-session-manager
+ * pattern.
  */
 export function search({ query, tags = [], folder, date, includeSuperseded = false } = {}) {
   const d = openDb();
@@ -256,7 +258,11 @@ export function search({ query, tags = [], folder, date, includeSuperseded = fal
   // Same rule as listSessions() — merged/split-away originals stay out of
   // search results by default.
   if (!includeSuperseded) sessions = sessions.filter((s) => !hasSupersededBy(s));
-  if (folder) sessions = sessions.filter((s) => s.folder && (s.folder === folder || s.folder.startsWith(folder + '/')));
+  // Same three-way folder meaning as listSessions(): undefined = no
+  // restriction, null = only genuinely unfiled (searching from the New
+  // pseudo-folder), a path = that subtree.
+  if (folder === null) sessions = sessions.filter((s) => !s.folder);
+  else if (folder) sessions = sessions.filter((s) => s.folder && (s.folder === folder || s.folder.startsWith(folder + '/')));
   if (rankOrder) {
     for (const s of sessions) s.snippet = snippets.get(s.id) || null;
     sessions.sort((a, b) => (rankOrder.get(a.id) ?? 1e9) - (rankOrder.get(b.id) ?? 1e9));

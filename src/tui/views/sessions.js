@@ -60,7 +60,12 @@ function sessionToText(n) {
  * added in later build steps.
  */
 export function sessionsView(opts = {}) {
-  let state = { folder: null, query: '', tags: [], selected: new Set(), sortBy: 'recent' };
+  // state.folder's three sentinels match data.sessions()/organize.js's own
+  // folder-scoping contract exactly, so they pass straight through with no
+  // translation anywhere they're used: undefined = Root (everything), null =
+  // the New pseudo-folder (genuinely unfiled only), a path = that folder's
+  // subtree.
+  let state = { folder: undefined, query: '', tags: [], selected: new Set(), sortBy: 'recent' };
   const SORT_CYCLE = ['recent', 'title', 'agent'];
   let app;
   let foldersBox, listBox, detailBox;
@@ -87,11 +92,16 @@ export function sessionsView(opts = {}) {
   }
 
   function reloadFolders() {
-    const { list, counts, inbox } = data.folders();
-    // Root's count is unfiled sessions only, matching what it actually shows
-    // now — not every session everywhere (those live in their own folder).
-    const items = [`{${state.folder === null ? C.fox : C.dim}-fg}${t('folders.root')} (${inbox}){/}`];
-    const keys = [null];
+    const { list, counts, inbox, total } = data.folders();
+    // Root shows the grand total (everything, same as drilling into it) —
+    // the New pseudo-folder right below it is where the old "Root = unfiled
+    // only" behavior moved to, so nothing that used to be visible at Root is
+    // hidden, it's just one level down under an explicit, countable name
+    // instead of silently being what Root happened to show.
+    const items = [`{${state.folder === undefined ? C.fox : C.dim}-fg}${t('folders.root')} (${total}){/}`];
+    const keys = [undefined];
+    items.push(`  {${state.folder === null ? C.fox : C.dim}-fg}${t('folders.new')} (${inbox}){/}`);
+    keys.push(null);
     for (const f of list) {
       // +1: every real folder nests visually under Root, not flush with it.
       const depth = Math.min(f.split('/').length - 1, 4) + 1;
@@ -176,7 +186,10 @@ export function sessionsView(opts = {}) {
   }
 
   function updateHeader() {
-    const crumb = state.folder || t('folders.root');
+    // state.folder is falsy for both Root (undefined) and New (null) — the
+    // generic `|| t('folders.root')` fallback below would label New as Root
+    // too, so catch it explicitly first.
+    const crumb = state.folder === null ? t('folders.new') : state.folder || t('folders.root');
     const filt = [state.query && `/${state.query}`, ...state.tags.map((tg) => `#${tg}`)].filter(Boolean).join(' ');
     const sortSuffix = state.sortBy === 'recent' ? '' : `  {${C.dim}-fg}${t('sessions.sortLabel_' + state.sortBy)}{/}`;
     app.setHeader(`${crumb}${filt ? '  {' + C.spore + '-fg}' + filt + '{/}' : ''}`, `${rows.length} sessions${sortSuffix}`);
@@ -332,7 +345,10 @@ export function sessionsView(opts = {}) {
 
       // ── Folder management (only when the folders pane is focused) ──
       const curFolder = () => foldersBox._keys[foldersBox.selected];
-      // The only non-real entry in this panel now is Root itself (key: null).
+      // The two non-real entries in this panel are Root (key: undefined) and
+      // the New pseudo-folder (key: null) — both falsy, so this one check
+      // already keeps rename/move/delete/knowledge-extract off both without
+      // needing to know about either sentinel specifically.
       const isRealFolder = (f) => !!f;
       // `affectedIds`: only rename/move/delete-folder actually touch session
       // records (rewriting `folder`) — pass the exact ids so this stays O(k)
@@ -392,7 +408,7 @@ export function sessionsView(opts = {}) {
         });
       });
 
-      // x: delete the selected folder (sessions → unfiled, shown as New in Root).
+      // x: delete the selected folder (sessions → unfiled, shown under New).
       foldersBox.key('x', () => {
         const f = curFolder();
         if (!isRealFolder(f)) return app.notify(t('folders.cannotDeleteRoot'), 3);
@@ -400,7 +416,7 @@ export function sessionsView(opts = {}) {
           app,
           t('folders.deleteConfirmTitle', f),
           [
-            { label: t('folders.deleteConfirmYes', t('folders.root')), value: 'yes' },
+            { label: t('folders.deleteConfirmYes', t('folders.new')), value: 'yes' },
             { label: t('common.cancel'), value: 'no' },
           ],
           (ans) => {
@@ -408,8 +424,8 @@ export function sessionsView(opts = {}) {
             if (ans !== 'yes') return;
             const res = deleteFolder(f);
             app.notify(res.ok ? t('folders.deleted', res.moved) : res.error);
-            state.folder = null;
-            refreshFolders(null, res.ok ? res.affected.map((n) => n.id) : []);
+            state.folder = undefined;
+            refreshFolders(undefined, res.ok ? res.affected.map((n) => n.id) : []);
           },
         );
       });
@@ -584,9 +600,10 @@ export function sessionsView(opts = {}) {
       // candidates against the sessions already filed in each folder (see
       // organize.js's suggestPlacements()). Computing FRESH candidates is
       // scoped to wherever you're currently browsing (state.folder — Root =
-      // only genuinely-unfiled, a folder = itself + subtree), same subtree
-      // semantics data.sessions() already uses — so reviewing "this folder"
-      // doesn't drag in the whole store. Always a preview-then-confirm flow
+      // everything, New = only genuinely-unfiled, a folder = itself +
+      // subtree), same three-way semantics data.sessions() already uses —
+      // so reviewing "this folder" doesn't drag in the whole store unless
+      // you're actually standing at Root. Always a preview-then-confirm flow
       // (like w/i), and never run automatically by the daemon — unlike `s`'s
       // plain scan, this makes real LLM calls and moves things.
       screenKey(app, ['o'], async () => {

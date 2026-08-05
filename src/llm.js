@@ -34,7 +34,12 @@ export function complete(prompt, { timeoutMs = 240000 } = {}) {
       args = ['-p', fullPrompt, '--model', CLAUDE_MODEL, '--output-format', 'json'];
     }
 
-    const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'] });
+    // windowsHide: on Windows, spawn() opens a real visible console window
+    // for a console-subsystem child by default (Node's own windowsHide
+    // default is false) — with dozens of these calls firing in the
+    // background, that's what looked like "Claude DOS windows keep
+    // appearing" in practice (issue #3). No-op on macOS/Linux.
+    const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
     let out = '';
     let err = '';
     const timer = setTimeout(() => {

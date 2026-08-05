@@ -97,19 +97,31 @@ export async function autoTagSession(sessionId, { existingTags } = {}) {
  * in for it from then on. Tags accumulate into the shared vocabulary as we
  * go, so later sessions reuse earlier sessions' tags instead of inventing
  * parallel ones.
+ *
+ * `limit` bounds how many actually get processed in this call (oldest
+ * first, same ordering suggestPlacements() uses) — without it, a big
+ * backlog (e.g. the very first scan importing hundreds of historical
+ * sessions) makes one call run long enough that the daemon's 5-minute scan
+ * timer fires again before it finishes, piling up overlapping LLM calls
+ * (see issue #3). The rest just wait for the next call instead of all
+ * being attempted at once.
  */
-export async function tagAll({ force = false, onProgress } = {}) {
+export async function tagAll({ force = false, onProgress, limit } = {}) {
   const vocab = new Set(listTags().map((t) => t.name));
   let tagged = 0;
   let skipped = 0;
   let failed = 0;
 
-  for (const n of allRaw()) {
+  let targets = allRaw().filter((n) => {
     const upToDate = n.extracted.summary && (!n.summarizedTurnCount || n.summarizedTurnCount === n.turns.length);
-    if (!force && upToDate) {
-      skipped++;
-      continue;
-    }
+    if (force || !upToDate) return true;
+    skipped++;
+    return false;
+  });
+  targets.sort((a, b) => (a.startedAt || '').localeCompare(b.startedAt || ''));
+  if (limit) targets = targets.slice(0, limit);
+
+  for (const n of targets) {
     try {
       const res = await autoTagSession(n.id, { existingTags: [...vocab] });
       if (res.ok) {

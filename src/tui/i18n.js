@@ -25,6 +25,7 @@ const en = {
   'common.noContent': '(no content)',
   'common.searchPrompt': 'Search',
   'folders.root': 'Root',
+  'folders.new': 'New',
   'sessions.newBadge': 'New',
 
   // sessions.js — folders panel
@@ -37,7 +38,7 @@ const en = {
   'folders.movedTo': (to) => `Moved: ${to}`,
   'folders.cannotDeleteRoot': "Root can't be deleted",
   'folders.deleteConfirmTitle': (f) => `Delete "${f}"?`,
-  'folders.deleteConfirmYes': (rootLabel) => `Delete (sessions become unfiled, shown as New in ${rootLabel})`,
+  'folders.deleteConfirmYes': (newLabel) => `Delete (sessions become unfiled, shown under ${newLabel})`,
   'folders.deleted': (moved) => `Deleted (${moved} session(s) → unfiled)`,
   'folders.selectFirst': 'Select a folder first',
 
@@ -191,6 +192,7 @@ const ko = {
   'common.noContent': '(내용 없음)',
   'common.searchPrompt': '검색',
   'folders.root': 'Root',
+  'folders.new': 'New',
   'sessions.newBadge': 'New',
 
   'folders.newPrompt': (parent) => `새 폴더 이름${parent ? ` (${parent} 아래)` : ' (루트)'}`,
@@ -202,7 +204,7 @@ const ko = {
   'folders.movedTo': (to) => `이동: ${to}`,
   'folders.cannotDeleteRoot': 'Root는 삭제할 수 없습니다',
   'folders.deleteConfirmTitle': (f) => `"${f}" 삭제?`,
-  'folders.deleteConfirmYes': (rootLabel) => `삭제 (세션은 미분류로, ${rootLabel}에서 New로 표시)`,
+  'folders.deleteConfirmYes': (newLabel) => `삭제 (세션은 미분류로, ${newLabel}에 표시)`,
   'folders.deleted': (moved) => `삭제됨 (세션 ${moved}개 → 미분류)`,
   'folders.selectFirst': '폴더를 먼저 선택하세요',
 

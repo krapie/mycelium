@@ -23,8 +23,29 @@ const SMART_ORGANIZE_BATCH_LIMIT = Number(process.env.MYCELIUM_SMART_ORGANIZE_LI
 // cooldown it would get re-sent to the LLM every single cycle forever (real
 // cost, no resolution). See organize.js's classificationCandidates().
 const SMART_ORGANIZE_COOLDOWN_MS = Number(process.env.MYCELIUM_SMART_ORGANIZE_COOLDOWN_MS || 24 * 60 * 60 * 1000);
+// Same "gradual drain" reasoning as SMART_ORGANIZE_BATCH_LIMIT, applied to
+// tagAll()'s auto-summarize pass — a big backlog (e.g. the very first scan)
+// no longer gets attempted all in one scanCycle() call.
+const TAG_BATCH_LIMIT = Number(process.env.MYCELIUM_TAG_BATCH_LIMIT || 20);
+// How many `claude`/`codex` subprocesses summarizeCandidates() runs at once
+// during the unattended smart-organize cycle. Kept low by default — see
+// issue #3 (looked like runaway Claude console windows on Windows; the real
+// cause was many of these piling up concurrently).
+const SUMMARIZE_CONCURRENCY = Number(process.env.MYCELIUM_SUMMARIZE_CONCURRENCY || 3);
+
+// setInterval doesn't wait for a previous async callback to finish before
+// scheduling the next one — on a large backlog, a single scanCycle()/
+// smartOrganizeCycle() call can easily outlast its own interval, and
+// without these guards the next tick starts a second, overlapping run on
+// top of it. Left unchecked over time this is exactly how issue #3's 20+
+// concurrent `claude -p` processes piled up. Each cycle just skips its own
+// tick (logged) if the previous one is still in flight.
+let scanRunning = false;
+let organizeRunning = false;
 
 async function scanCycle(log) {
+  if (scanRunning) return log.log('[scan] skip — previous cycle still running');
+  scanRunning = true;
   try {
     const res = scan();
     if (res.imported > 0) {
@@ -34,7 +55,7 @@ async function scanCycle(log) {
       reindex();
       log.log(`[scan] +${res.imported} (reindexed)`);
       // Tag freshly imported sessions (skips those already summarized).
-      const t = await tagAll();
+      const t = await tagAll({ limit: TAG_BATCH_LIMIT });
       if (t.tagged > 0) {
         reindex();
         log.log(`[tag] +${t.tagged}`);
@@ -42,6 +63,8 @@ async function scanCycle(log) {
     }
   } catch (err) {
     log.error(`[scan] ${err.message}`);
+  } finally {
+    scanRunning = false;
   }
 }
 
@@ -55,8 +78,10 @@ async function scanCycle(log) {
  */
 async function smartOrganizeCycle(log) {
   if (pendingSuggestions().length) return;
+  if (organizeRunning) return log.log('[organize] skip — previous cycle still running');
+  organizeRunning = true;
   try {
-    await summarizeCandidates({ concurrency: 5 });
+    await summarizeCandidates({ concurrency: SUMMARIZE_CONCURRENCY });
     const res = await suggestPlacements({
       batchSize: 25,
       limit: SMART_ORGANIZE_BATCH_LIMIT,
@@ -78,6 +103,8 @@ async function smartOrganizeCycle(log) {
     }
   } catch (err) {
     log.error(`[organize] ${err.message}`);
+  } finally {
+    organizeRunning = false;
   }
 }
 
@@ -106,9 +133,9 @@ async function digestCycle(log) {
  */
 export async function runDaemon({ log = console } = {}) {
   log.log('Mycelium daemon starting (background upkeep: scan + digest + smart organize).');
-  log.log(`  scan interval: ${SCAN_INTERVAL_MS}ms`);
+  log.log(`  scan interval: ${SCAN_INTERVAL_MS}ms (tag batch limit ${TAG_BATCH_LIMIT})`);
   log.log(
-    `  smart organize interval: ${SMART_ORGANIZE_INTERVAL_MS}ms (batch limit ${SMART_ORGANIZE_BATCH_LIMIT}, cooldown ${SMART_ORGANIZE_COOLDOWN_MS}ms)`,
+    `  smart organize interval: ${SMART_ORGANIZE_INTERVAL_MS}ms (batch limit ${SMART_ORGANIZE_BATCH_LIMIT}, cooldown ${SMART_ORGANIZE_COOLDOWN_MS}ms, concurrency ${SUMMARIZE_CONCURRENCY})`,
   );
 
   await scanCycle(log);
