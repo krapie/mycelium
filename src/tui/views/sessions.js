@@ -203,6 +203,14 @@ export function sessionsView(opts = {}) {
     app.render();
   }
 
+  // Callers only ever called showDetail(rows[0].id) when a row existed,
+  // leaving whatever the panel last showed (e.g. a since-deleted tutorial
+  // mock session) on screen once a folder/list goes empty instead.
+  function clearDetail() {
+    detailBox.setContent('');
+    detailBox.setScroll(0);
+  }
+
   function currentRow() {
     return rows[listBox.selected];
   }
@@ -323,6 +331,7 @@ export function sessionsView(opts = {}) {
         reloadFolders();
         reloadList();
         if (rows[0]) showDetail(rows[0].id);
+        else clearDetail();
         app.render();
       };
       foldersBox.on('keypress', (ch, key) => {
@@ -333,10 +342,9 @@ export function sessionsView(opts = {}) {
       // Enter a folder → drill into its sessions. Right arrow mirrors Enter
       // so the three columns can be walked with just the arrow keys.
       const drillIntoSessions = () => {
-        previewFolder();
+        previewFolder(); // already shows/clears detail for rows[0]
         listBox.focus();
         listBox.select(0);
-        if (rows[0]) showDetail(rows[0].id);
         setLevel('sessions');
         app.render();
       };
@@ -955,8 +963,14 @@ export function sessionsView(opts = {}) {
       const doKnowledge = async () => {
         if (!state.folder) return app.notify(t('folders.selectFirst'), 3);
         const refocus = () => (state.level === 'folders' ? foldersBox : listBox).focus();
-        app.notify(t('knowledge.generating'), 60);
+        app.notify(t('knowledge.generating'), 90);
         const gen = await buildKnowledgeText(state.folder);
+        // Dismiss the still-counting-down "drafting" toast — its own timer
+        // doesn't fire early, so without this it's still on screen right as
+        // the preview opens right below (both centered overlays), and on a
+        // slow/large folder the LLM call can outlast the toast's own fixed
+        // duration entirely, leaving it looking finished well before it is.
+        app.dismissNotify();
         if (!gen.ok) {
           app.notify(gen.error, 3);
           return refocus();
@@ -1022,6 +1036,24 @@ export function sessionsView(opts = {}) {
           data.refresh();
           reloadFolders();
           reloadList();
+          app.render();
+        },
+        // Same reset mount()'s own tail does (Root, folders pane focused,
+        // fresh data) — for callers that need to drop back to a clean
+        // baseline (e.g. the tutorial ending) WITHOUT a second app.show()/
+        // mount() call. Re-mounting this view was tried first and re-ran
+        // every screenKey()/resize registration on top of the still-live
+        // ones from the first mount (unmount() never tore anything down),
+        // which left stale closures capturing already-detached boxes and
+        // crashed later (Cannot read properties of null (reading 'height'))
+        // the next time a real handler like drillIntoDetail fired.
+        resetToRoot() {
+          data.refresh();
+          state.selected.clear();
+          foldersBox.select(0);
+          previewFolder();
+          foldersBox.focus();
+          setLevel('folders');
           app.render();
         },
         listBox,

@@ -29,12 +29,17 @@ npm link                    # (선택) 전역 `mycelium` 명령 등록
 
 ```sh
 mycelium scan               # 이 머신의 Claude/Codex/Kiro 세션을 가져오기(임포트)
-mycelium                    # 인터랙티브 TUI 실행 — 처음 켜면 짧은 안내가 한 번 뜹니다
+mycelium                    # 인터랙티브 TUI 실행 — 처음 켜면 3분 튜토리얼을 해볼지 물어봅니다
 ```
 
 **캡처는 폴더를 자동으로 배정하지 않습니다** — 처음 스캔하면 전부 미분류
 상태로 들어옵니다. TUI에서 `o`(스마트 정리)를 누르거나 `mycelium organize`를
 실행해 내용 기준으로 정리하세요.
+
+**튜토리얼을 다시 보고 싶거나 데모용으로 쓰고 싶으면 언제든:**
+```sh
+mycelium demo                # 가짜 세션으로 인터랙티브 튜토리얼 실행 — 완전히 별도 스토어(~/.mycelium-demo)라 실제 데이터는 전혀 안 건드림
+```
 
 > git clone 방식으로 설치했고 `npm link`을 안 했으면 `node src/cli.js <명령>` 형태로 실행하세요.
 
@@ -283,6 +288,9 @@ mycelium list / tags / reindex
 mycelium daemon                 # 포그라운드로 실행
 mycelium daemon --detach        # 백그라운드로 분리 실행 (idempotent)
 mycelium daemon --stop          # 정지
+
+# 가짜 세션으로 인터랙티브 튜토리얼(3분 데모용, 별도 스토어 ~/.mycelium-demo)
+mycelium demo
 
 # TUI 표시 언어 (기본 en) — 다음 TUI 실행부터 적용
 mycelium lang        # 현재 설정 확인

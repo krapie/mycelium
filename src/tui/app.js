@@ -1,6 +1,7 @@
 import pkg from 'neo-blessed';
 const blessed = pkg.default || pkg;
 import { C } from './theme.js';
+import { t } from './i18n.js';
 
 // blessed mis-compiles some xterm-256color capabilities (notably `Setulc`,
 // set-underline-color) into JS with a syntax error, then dumps the generated
@@ -136,10 +137,52 @@ export function createApp() {
       screen.destroy();
       process.exit(0);
     },
+    // Lets a caller (the tutorial, for its own confirm-before-finishing
+    // step) intercept the global q/C-c quit below instead of it instantly
+    // killing the process out from under them. Set to a function that
+    // returns true to swallow the keypress and handle it yourself; leave
+    // null (the default, restored once done) for the normal one-press quit
+    // every other screen in the app already relies on.
+    quitGuard: null,
+  };
+
+  // A single stray q/C-c used to kill the whole session instantly, real
+  // data and all — same "one accidental keypress ends everything" problem
+  // the tutorial's own end-of-demo confirm exists to prevent, so it gets
+  // the same treatment here: q again confirms, anything else cancels.
+  let quitConfirmBox = null;
+  const confirmQuit = () => {
+    if (quitConfirmBox) return; // already showing — a second q while it's up is the confirm itself, handled below
+    quitConfirmBox = blessed.box({
+      parent: screen,
+      top: 'center',
+      left: 'center',
+      width: '50%',
+      height: 'shrink',
+      tags: true,
+      padding: { left: 1, right: 1 },
+      border: { type: 'line' },
+      style: { border: { fg: C.fox }, fg: C.text },
+      label: ` ${t('app.confirmQuitTitle')} `,
+    });
+    quitConfirmBox.setContent(t('app.confirmQuitHint', C.fox));
+    screen.render();
+    const onKey = (ch, key) => {
+      if (!key || key.name === 'return') return;
+      screen.removeListener('keypress', onKey);
+      quitConfirmBox.destroy();
+      quitConfirmBox = null;
+      screen.render();
+      if (key.name === 'q') app.quit();
+    };
+    screen.on('keypress', onKey);
   };
 
   // Global keys. View-local keys are attached by each view on its own widgets.
-  screen.key(['q', 'C-c'], () => app.quit());
+  screen.key(['q', 'C-c'], () => {
+    if (app.quitGuard && app.quitGuard()) return;
+    confirmQuit();
+  });
 
   return app;
 }

@@ -54,10 +54,12 @@ function parseFlags(args) {
 
 async function main() {
   const [, , cmd, ...args] = process.argv;
-  // No command (or `tui`) → launch the interactive cockpit.
+  // No command (or `tui`) → launch the interactive cockpit. `--tutorial`
+  // is internal — only `demo` (below) passes it, to skip straight into
+  // the tutorial instead of the normal first-run yes/no prompt.
   if (!cmd || cmd === 'tui') {
     const { runTui } = await import('./tui/index.js');
-    return runTui();
+    return runTui({ forceTutorial: args.includes('--tutorial') });
   }
   switch (cmd) {
     case 'scan': {
@@ -397,6 +399,30 @@ async function main() {
       await runDaemon();
       break;
     }
+    case 'demo': {
+      // Runs the tutorial against a completely separate store — never the
+      // real ~/.mycelium — so it's safe to fire in the middle of a live
+      // demo without exposing personal projects. Only child_process.spawn()
+      // guarantees this: MYCELIUM_HOME is read once, at module load, by
+      // paths.js, and this file's own imports (already evaluated by the
+      // time this line runs) are far too late to change that for THIS
+      // process — same reasoning as daemon.js's spawnDetachedDaemon().
+      const { join } = await import('node:path');
+      const { homedir } = await import('node:os');
+      const { existsSync, rmSync } = await import('node:fs');
+      const demoHome = join(homedir(), '.mycelium-demo');
+      if (existsSync(demoHome)) rmSync(demoHome, { recursive: true, force: true });
+      const child = spawn(process.execPath, [process.argv[1], 'tui', '--tutorial'], {
+        env: { ...process.env, MYCELIUM_HOME: demoHome },
+        stdio: 'inherit',
+      });
+      return new Promise((resolve) => {
+        child.on('exit', (code) => {
+          process.exitCode = code ?? 0;
+          resolve();
+        });
+      });
+    }
     case 'lang': {
       const { getLocale, setLocale } = await import('./tui/i18n.js');
       const [locale] = args;
@@ -431,6 +457,7 @@ Find      search <q> [--tag t] [--folder f]
 Run       (인자 없음) 또는 tui          인터랙티브 TUI (콕핏) — 켜져 있는 동안 스캔·정리·다이제스트를 자체적으로 수행
           daemon                        (선택) TUI 없이 백그라운드 업킵만 필요할 때 (포그라운드로 실행)
           daemon --detach / --stop      (선택) TUI가 꺼져 있을 때도 계속 돌리고 싶으면 — 분리 실행 / 정지 (scripts/run.sh·stop.sh와 동일)
+          demo                          가짜 세션으로 인터랙티브 튜토리얼 실행(별도 스토어, 실제 데이터 안 건드림) — 3분 데모용
           lang [en|ko]                  TUI 표시 언어 설정/확인 (기본 en)
 Clean     cleanup [tidy]                메타세션 제거 + 빈 폴더 정리 + 인덱스 재생성
           cleanup folders|archive|index 부분 정리

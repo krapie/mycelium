@@ -19,6 +19,8 @@ export function setLocale(l) {
 
 const en = {
   'app.needsTty': 'Run the Mycelium TUI in a real terminal (TTY).',
+  'app.confirmQuitTitle': 'Quit?',
+  'app.confirmQuitHint': (fg) => `Press {${fg}-fg}q{/} again to confirm, or any other key to cancel.`,
   'common.cancel': 'Cancel',
   'common.delete': 'Delete',
   'common.none': '(none)',
@@ -123,6 +125,40 @@ const en = {
   'welcome.modalLabel': ' Welcome to Mycelium (Enter/Esc to start) ',
   'welcome.body': null, // filled in below, function like help.text
 
+  // First-run tutorial (tutorial.js) — mock sessions, real o/w LLM calls.
+  // Body strings are (fg) => `...` functions (same style as help.text/
+  // welcome.body) so the key they're waiting for can be highlighted inline.
+  'tutorial.promptTitle': 'First time here! Want a 3-minute interactive tour?',
+  'tutorial.promptYes': 'Start the tutorial',
+  'tutorial.promptNo': 'Skip, just show me around',
+  'tutorial.exitHint': 'Esc: exit tutorial',
+  'tutorial.confirmFinishTitle': 'Finish the tutorial?',
+  'tutorial.confirmFinishHint': (fg) => `Press {${fg}-fg}q{/} again to confirm, or any other key to keep exploring.`,
+  'tutorial.step1Title': 'Step 1/7 — Organize',
+  'tutorial.step1Body': (fg) => `6 fresh, unfiled sessions are sitting below. Press {${fg}-fg}o{/} to have Mycelium read them and suggest folders.`,
+  'tutorial.step2Title': 'Step 2/7',
+  'tutorial.step2Body': (fg) => `Review the suggested folders, then press {${fg}-fg}Enter{/} to apply them.`,
+  'tutorial.step3Title': 'Step 3/7',
+  'tutorial.step3Body': (fg) => `Folders were created automatically and your sessions are sorted. Press {${fg}-fg}↓{/} to look at the new folders.`,
+  'tutorial.step4Title': 'Step 4/7 — Learn',
+  'tutorial.step4Body': (fg) => `Pick a folder and press {${fg}-fg}w{/} — Mycelium distills everything in it into one KNOWLEDGE.md.`,
+  'tutorial.step5Title': 'Step 5/7 — Reuse',
+  'tutorial.step5Body': (fg) =>
+    `Review the knowledge draft, then press {${fg}-fg}Enter{/} to save it — it auto-injects next time you launch a session here with {${fg}-fg}n{/}/{${fg}-fg}h{/} (we won't actually launch an agent in this tutorial).`,
+  'tutorial.step6Title': 'Step 6/7',
+  'tutorial.step6Body': (fg) => `You can also search everything with {${fg}-fg}/{/} or browse by date with {${fg}-fg}v{/}. Press {${fg}-fg}Enter{/} to continue.`,
+  'tutorial.step7Title': 'Tutorial complete!',
+  'tutorial.step7Body': (fg) =>
+    `That's the core loop. Press {${fg}-fg}q{/} when you're done — the mock sessions get cleaned up and you're back to your own, existing data.`,
+  // Interim text shown while a real o/w LLM call is in flight — the narrator
+  // waits for the actual review modal to open/close (see tutorial.js's
+  // isModalOpen polling) rather than trusting the raw keypress alone, so
+  // these can be on screen anywhere from under a second to 10+ seconds.
+  'tutorial.waitingOrganize': 'Reading sessions and drafting folder suggestions… (real LLM call, a few seconds)',
+  'tutorial.waitingApply': 'Applying…',
+  'tutorial.waitingKnowledge': "Distilling this folder's sessions into a knowledge draft… (real LLM call, a few seconds)",
+  'tutorial.waitingSave': 'Saving…',
+
   // pickers.js
   'picker.newLabel': '{gray-fg}New (unfiled){/}',
   'picker.folderLabel': ' Choose folder (Enter, Esc cancel) ',
@@ -186,6 +222,8 @@ const en = {
 
 const ko = {
   'app.needsTty': 'Mycelium TUI는 실제 터미널(TTY)에서 실행하세요.',
+  'app.confirmQuitTitle': '종료할까요?',
+  'app.confirmQuitHint': (fg) => `{${fg}-fg}q{/}를 한 번 더 누르면 종료, 다른 키를 누르면 취소합니다.`,
   'common.cancel': '취소',
   'common.delete': '삭제',
   'common.none': '(없음)',
@@ -279,6 +317,33 @@ const ko = {
   'help.modalLabel': ' 단축키 도움말 (↑↓ 스크롤, Esc/? 닫기) ',
   'welcome.modalLabel': ' Mycelium에 오신 것을 환영합니다 (Enter/Esc로 시작) ',
   'welcome.body': null,
+
+  'tutorial.promptTitle': '처음 오셨네요! 3분짜리 인터랙티브 튜토리얼 보시겠어요?',
+  'tutorial.promptYes': '튜토리얼 시작하기',
+  'tutorial.promptNo': '건너뛰고 바로 시작하기',
+  'tutorial.exitHint': 'Esc: 튜토리얼 종료',
+  'tutorial.confirmFinishTitle': '튜토리얼을 끝낼까요?',
+  'tutorial.confirmFinishHint': (fg) => `{${fg}-fg}q{/}를 한 번 더 누르면 확정, 다른 키를 누르면 계속 둘러봅니다.`,
+  'tutorial.step1Title': '1/7단계 — 조직화',
+  'tutorial.step1Body': (fg) => `아직 정리 안 된 세션 6개가 아래에 있습니다. {${fg}-fg}o{/}를 눌러 Mycelium이 내용을 읽고 폴더를 제안하게 해보세요.`,
+  'tutorial.step2Title': '2/7단계',
+  'tutorial.step2Body': (fg) => `제안된 폴더를 확인하고 {${fg}-fg}Enter{/}로 적용해보세요.`,
+  'tutorial.step3Title': '3/7단계',
+  'tutorial.step3Body': (fg) => `폴더가 자동으로 생성되고 세션들이 정리됐습니다. {${fg}-fg}↓{/}를 눌러 새로 생긴 폴더를 확인해보세요.`,
+  'tutorial.step4Title': '4/7단계 — 학습',
+  'tutorial.step4Body': (fg) => `폴더 하나를 고르고 {${fg}-fg}w{/}를 눌러보세요 — 그 폴더의 모든 세션을 하나의 KNOWLEDGE.md로 압축합니다.`,
+  'tutorial.step5Title': '5/7단계 — 재사용',
+  'tutorial.step5Body': (fg) =>
+    `지식 초안을 확인하고 {${fg}-fg}Enter{/}로 저장하세요 — 다음에 {${fg}-fg}n{/}/{${fg}-fg}h{/}로 이 폴더에서 세션을 열 때 자동으로 주입됩니다 (이 튜토리얼에서는 실제로 에이전트를 실행하지 않습니다).`,
+  'tutorial.step6Title': '6/7단계',
+  'tutorial.step6Body': (fg) => `{${fg}-fg}/{/}로 전체 검색, {${fg}-fg}v{/}로 날짜별 캘린더 보기도 가능합니다. {${fg}-fg}Enter{/}로 계속하세요.`,
+  'tutorial.step7Title': '튜토리얼 완료!',
+  'tutorial.step7Body': (fg) =>
+    `핵심 흐름은 여기까지입니다. 다 보셨으면 {${fg}-fg}q{/}를 누르세요 — 데모 세션이 정리되고 원래(기존) 데이터로 돌아갑니다.`,
+  'tutorial.waitingOrganize': '세션을 읽고 폴더를 제안하는 중… (실제 LLM 호출, 몇 초 정도 걸립니다)',
+  'tutorial.waitingApply': '적용하는 중…',
+  'tutorial.waitingKnowledge': '이 폴더의 세션들을 지식 초안으로 압축하는 중… (실제 LLM 호출, 몇 초 정도 걸립니다)',
+  'tutorial.waitingSave': '저장하는 중…',
 
   'picker.newLabel': '{gray-fg}New (미분류){/}',
   'picker.folderLabel': ' 폴더 선택 (Enter, Esc 취소) ',
