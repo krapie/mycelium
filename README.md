@@ -109,3 +109,11 @@ For a clean start: `mycelium cleanup reset --yes && mycelium scan`.
 
 See [`CONTRIBUTING.md`](./CONTRIBUTING.md) — includes the dev setup, how to
 run lint/tests, and how to add support for a new AI agent CLI.
+
+## Working in this Repo with an AI Agent
+
+If you're using Claude Code, Codex, Cursor, or a similar coding agent to
+work on Mycelium itself, point it at [`AGENT.md`](./AGENT.md) first — it's
+a dense, agent-oriented reference covering the tool's purpose, repo layout,
+code/docs/test conventions, key bindings, and the contributing workflow, so
+the agent can orient itself without reading the whole codebase first.
