@@ -13,7 +13,14 @@ function decodeProjectDir(sessionFilePath) {
   return decoded;
 }
 
-export const name = 'claude-code';
+// Was 'claude-code' — changed to match the AGENTS/binFor/sourceColor key
+// ('claude') the rest of the app already used for this source, which only
+// ever worked by accident via their `?? 'claude'` fallbacks.
+export const name = 'claude';
+export const label = 'Claude Code';
+export const bin = 'claude';
+export const newArgs = (seed) => (seed ? [seed] : []);
+export const resumeArgs = (sessionId) => ['--resume', sessionId];
 
 // Claude Code stores one dir per encoded cwd under ~/.claude/projects/, each
 // containing <sessionId>.jsonl transcripts. Verified against the real layout.
@@ -33,7 +40,7 @@ export function listSessions() {
     for (const f of entries) {
       if (!f.endsWith('.jsonl')) continue;
       const path = join(full, f);
-      let mtimeMs = 0;
+      let mtimeMs;
       try {
         mtimeMs = statSync(path).mtimeMs;
       } catch {

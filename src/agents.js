@@ -1,15 +1,15 @@
 import { existsSync } from 'node:fs';
+import { ADAPTERS, getAdapter } from './adapters/index.js';
 
 /**
  * Per-agent CLI wiring, shared by the TUI (src/tui/launch.js) and the plain
  * CLI (`mycelium resume`) so both resolve the same bin/args for a given
- * session source instead of maintaining two copies.
+ * session source instead of maintaining two copies. Derived from
+ * adapters/index.js — each adapter now owns its own label/bin/newArgs/
+ * resumeArgs alongside session parsing, so this is just a source-keyed view
+ * of the same registry, not a second copy of the data.
  */
-export const AGENTS = {
-  claude: { label: 'Claude Code', bin: 'claude', newArgs: (seed) => (seed ? [seed] : []) },
-  codex: { label: 'Codex', bin: 'codex', newArgs: (seed) => (seed ? [seed] : []) },
-  kiro: { label: 'Kiro', bin: 'kiro-cli', newArgs: (seed) => ['chat', ...(seed ? [seed] : [])] },
-};
+export const AGENTS = Object.fromEntries(ADAPTERS.map((a) => [a.name, a]));
 
 /** Which CLIs are actually installed → which agents we can offer. */
 export function which(cmd) {
@@ -18,11 +18,11 @@ export function which(cmd) {
 }
 
 export function binFor(source) {
-  return { codex: 'codex', kiro: 'kiro-cli' }[source] ?? 'claude';
+  return getAdapter(source)?.bin ?? 'claude';
 }
 
 export function resumeArgsFor(source, sessionId) {
-  return { codex: ['resume', sessionId], kiro: ['chat', '--resume-id', sessionId] }[source] ?? ['--resume', sessionId];
+  return getAdapter(source)?.resumeArgs(sessionId) ?? ['--resume', sessionId];
 }
 
 /**

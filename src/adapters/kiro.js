@@ -5,6 +5,10 @@ import { DatabaseSync } from 'node:sqlite';
 import { emptyNeutral } from '../schema.js';
 
 export const name = 'kiro';
+export const label = 'Kiro';
+export const bin = 'kiro-cli';
+export const newArgs = (seed) => ['chat', ...(seed ? [seed] : [])];
+export const resumeArgs = (sessionId) => ['chat', '--resume-id', sessionId];
 
 // Kiro CLI has three on-disk formats, verified directly against a real
 // installed kiro-cli (v2.13.0) on this machine — not just docs:
@@ -43,7 +47,7 @@ function listJsonlSessions() {
       continue;
     }
     const jsonlPath = metaPath.replace(/\.json$/, '.jsonl');
-    let mtimeMs = 0;
+    let mtimeMs;
     try {
       mtimeMs = statSync(jsonlPath).mtimeMs;
     } catch {

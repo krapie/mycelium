@@ -1,13 +1,9 @@
 import { join } from 'node:path';
 import { writeFileSync, readFileSync, existsSync, readdirSync, rmSync } from 'node:fs';
 import { ensureDirs, RAW_DIR } from './paths.js';
-import * as claudeCode from './adapters/claude-code.js';
-import * as codex from './adapters/codex.js';
-import * as kiro from './adapters/kiro.js';
+import { ADAPTERS } from './adapters/index.js';
 import { META_MARKER } from './llm.js';
 import { loadConfig } from './config.js';
-
-const ADAPTERS = [claudeCode, codex, kiro];
 
 function rawPath(id) {
   // session ids are uuids / safe filenames already, but guard anyway
@@ -111,6 +107,17 @@ export function scan({ onImport } = {}) {
         continue;
       }
       const existing = loadRaw(ref.id);
+      // One-time migration: the claude-code adapter's `name` (and every
+      // session's `source`) used to be 'claude-code', renamed to 'claude' to
+      // match what AGENTS/binFor/sourceColor always keyed on. Sessions
+      // captured before that rename would otherwise keep the stale value
+      // forever — the skip-if-unchanged check right below means their
+      // underlying transcript never gets re-parsed. Cheap field rewrite, not
+      // a re-parse, and a no-op after the first pass on a given session.
+      if (existing?.source === 'claude-code') {
+        existing.source = 'claude';
+        writeFileSync(rawPath(existing.id), JSON.stringify(existing, null, 2));
+      }
       // Skip if we already captured this session and the file hasn't changed.
       if (existing && existing._mtimeMs === ref.mtimeMs) {
         skipped++;

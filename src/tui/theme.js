@@ -1,3 +1,5 @@
+import { getAdapter } from '../adapters/index.js';
+
 // Foxfire palette — mycelium glows faint bioluminescent teal in dark humus.
 // blessed uses named/hex colors in style objects.
 export const C = {
@@ -17,7 +19,10 @@ export const C = {
 
 // Source → accent color for the session dot / label. Kept distinct from
 // C.fox (used for session titles) so the agent label never visually merges
-// with the title it's printed next to.
+// with the title it's printed next to. Intentionally hardcoded rather than
+// pulled from adapters/index.js — color is a presentation choice a human
+// still has to make for any new agent, and adapters (data layer) staying
+// free of any tui/ import is worth the one extra line per new source.
 export function sourceColor(source) {
   return { codex: C.spore, kiro: C.kiro, merged: C.merged }[source] ?? C.claude;
 }
@@ -25,10 +30,12 @@ export function sourceColor(source) {
 // Source → display name for the #hashtag-style badge shown next to a
 // session's title. Not localized — these are literal tool names (plus
 // 'merged', the synthetic merge pseudo-source), same identifier either
-// language shows. Was duplicated three ways across sessions.js/calendar.js/
-// render.js; factored here so a new source only needs updating once.
+// language shows. Derived from the adapter registry (adapters/index.js) —
+// a source string IS an adapter's `name` by contract, so there's nothing
+// left to duplicate here beyond the 'merged' pseudo-source special case.
 export function sourceLabel(source) {
-  return { codex: 'codex', kiro: 'kiro', merged: 'merged' }[source] ?? 'claude';
+  if (source === 'merged') return 'merged';
+  return getAdapter(source)?.name ?? source;
 }
 
 export const box = {

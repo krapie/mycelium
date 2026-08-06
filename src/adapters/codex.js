@@ -4,6 +4,10 @@ import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs';
 import { emptyNeutral } from '../schema.js';
 
 export const name = 'codex';
+export const label = 'Codex';
+export const bin = 'codex';
+export const newArgs = (seed) => (seed ? [seed] : []);
+export const resumeArgs = (sessionId) => ['resume', sessionId];
 
 // Codex stores rollouts under ~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl.
 // Verified against the real on-disk format (session_meta + event_msg lines).
@@ -32,7 +36,7 @@ export function listSessions() {
     // Session id is the uuid embedded in the filename: rollout-<ts>-<uuid>.jsonl
     const m = path.match(/rollout-.*?-([0-9a-f-]{36})\.jsonl$/);
     const id = m ? m[1] : path;
-    let mtimeMs = 0;
+    let mtimeMs;
     try {
       mtimeMs = statSync(path).mtimeMs;
     } catch {
