@@ -530,8 +530,9 @@ export function sessionsView(opts = {}) {
       const doSplit = async () => {
         const r = currentRow();
         if (!r) return;
-        app.notify(t('split.suggesting'), 60);
+        const spin = app.startSpinner(t('split.suggesting'));
         const res = await suggestSplitBoundaries(r.id);
+        spin.stop();
         if (!res.ok) return app.notify(res.error, 3);
         const items = res.ranges.map((rg) => ({ label: `턴 ${rg.from}-${rg.to}  "${rg.label}"`, value: rg }));
         multiSelectList(app, t('split.reviewTitle'), items, (chosen) => {
@@ -629,27 +630,29 @@ export function sessionsView(opts = {}) {
           // Only summarizes the sessions actually being classified below —
           // not the whole store's summary backlog. Calls the LLM once per
           // such session lacking one (in bounded concurrent chunks, see
-          // organize.js), so show real progress instead of one static toast
-          // that expires long before a multi-session batch finishes and
-          // makes it look hung.
+          // organize.js). startSpinner() (app.js) both animates the wait and
+          // — since it re-displays on its own 120ms timer, independent of
+          // how often onProgress actually fires — keeps the toast alive even
+          // if every concurrent lane happens to be stalled on a slow call at
+          // once; the old plain notify() could expire mid-batch and make a
+          // still-running classification look hung.
           const pending = classificationCandidates({ cooldownMs: 0, folder: state.folder }).filter(
             (n) => !n.extracted.summary,
           ).length;
-          if (pending) app.notify(t('sessions.summarizing', 0, pending), 90);
+          const summarizeSpin = pending ? app.startSpinner(t('sessions.summarizing', 0, pending)) : null;
           const summarized = [];
+          let summarizedDone = 0;
           await summarizeCandidates({
             folder: state.folder,
-            onProgress: (() => {
-              let done = 0;
-              return (s) => {
-                if (s) summarized.push(s.id);
-                app.notify(t('sessions.summarizing', ++done, pending), 90);
-              };
-            })(),
+            onProgress: (s) => {
+              if (s) summarized.push(s.id);
+              summarizeSpin?.update(t('sessions.summarizing', ++summarizedDone, pending));
+            },
           });
+          summarizeSpin?.stop();
           // Only the just-summarized sessions actually changed.
           if (summarized.length) data.refreshMany(summarized);
-          app.notify(t('smart.running'), 60);
+          const placeSpin = app.startSpinner(t('smart.running'));
           const res = await suggestPlacements({
             cooldownMs: 0,
             folder: state.folder,
@@ -657,18 +660,14 @@ export function sessionsView(opts = {}) {
             // large backlog could otherwise mean hundreds of LLM calls in
             // one `o` press.
             limit: 200,
-            onProgress: (batch, total) => total > 1 && app.notify(`${t('smart.running')} (${batch}/${total})`, 60),
+            onProgress: (batch, total) => total > 1 && placeSpin.update(`${t('smart.running')} (${batch}/${total})`),
           });
+          placeSpin.stop();
           if (!res.ok) return app.notify(res.error, 4);
           matches = res.placements.filter((p) => p.folder);
           if (!matches.length) return app.notify(t('smart.noMatches'), 3);
           queueSuggestions(matches);
         }
-        // Dismiss the still-counting-down "summarizing/classifying" toast —
-        // its own timer (60-90s) doesn't fire early, so without this it's
-        // still on screen, visibly overlapping the review modal opening
-        // right below (both are centered blessed overlays).
-        app.dismissNotify();
         // Cherry-pick which suggestions to actually apply — every suggestion
         // starts checked (LLM already did the picking; this is a chance to
         // catch a bad one, not to opt in one at a time) — Enter alone applies
@@ -825,6 +824,13 @@ export function sessionsView(opts = {}) {
         let done = 0;
         let failed = 0;
         let lastError = null;
+        // startSpinner() (app.js) keeps this alive and animated for however
+        // long the whole batch actually takes — a plain notify(msg, 90)
+        // could expire mid-batch if every concurrent lane happened to be on
+        // a slow call at once, well before 3 of 3 concurrent selections
+        // simultaneously stalling was actually unlikely, but a real
+        // possibility on a slow connection.
+        const spin = app.startSpinner(t('sessions.summarizing', 0, ids.length));
         await mapConcurrent(ids, 3, async (id) => {
           try {
             const res = await autoTagSession(id);
@@ -840,7 +846,7 @@ export function sessionsView(opts = {}) {
             failed++;
             lastError = err.message;
           }
-          app.notify(t('sessions.summarizing', done + failed, ids.length), 90);
+          spin.update(t('sessions.summarizing', done + failed, ids.length));
           // Only `id` changed this iteration — a full reindex() here would
           // reparse the whole raw/ store once per selected session (an N×
           // full-store rebuild for an N-session multi-select autotag).
@@ -848,6 +854,7 @@ export function sessionsView(opts = {}) {
           reloadList();
           if (currentRow() && currentRow().id === id) showDetail(id);
         });
+        spin.stop();
         state.selected.clear();
         reloadList();
         app.notify(t('sessions.summarizeDone', done, failed, lastError), failed ? 6 : 3);
@@ -895,14 +902,15 @@ export function sessionsView(opts = {}) {
       const doKnowledge = async () => {
         if (!state.folder) return app.notify(t('folders.selectFirst'), 3);
         const refocus = () => (state.level === 'folders' ? foldersBox : listBox).focus();
-        app.notify(t('knowledge.generating'), 90);
+        // startSpinner() (app.js) both animates the wait and keeps the toast
+        // alive for however long buildKnowledgeText() actually takes — it
+        // used to be a fixed-duration notify() that could expire mid-call on
+        // a slow/large folder, leaving nothing on screen well before the
+        // call actually finished. stop() dismisses it explicitly either way,
+        // same as the old dismissNotify() call did before the preview opens.
+        const spin = app.startSpinner(t('knowledge.generating'));
         const gen = await buildKnowledgeText(state.folder);
-        // Dismiss the still-counting-down "drafting" toast — its own timer
-        // doesn't fire early, so without this it's still on screen right as
-        // the preview opens right below (both centered overlays), and on a
-        // slow/large folder the LLM call can outlast the toast's own fixed
-        // duration entirely, leaving it looking finished well before it is.
-        app.dismissNotify();
+        spin.stop();
         if (!gen.ok) {
           app.notify(gen.error, 3);
           return refocus();

@@ -123,6 +123,38 @@ export function createApp() {
       toast.hide();
       screen.render();
     },
+    // Animated wait indicator for LLM-bound calls — re-displays the toast
+    // every 120ms with a cycling braille spinner frame (same family npm/
+    // yarn/ora use; the screen is created with fullUnicode: true so this is
+    // safe to render). Re-displaying on a fixed timer, independent of any
+    // real progress, is deliberate: blessed.message's own auto-hide timer
+    // (the `seconds` argument to notify()/display()) doesn't extend itself,
+    // so a call that runs longer than the toast's fixed duration (60-90s,
+    // vs. llm.js's own 240s default timeout) used to make the toast vanish
+    // while the LLM call was still genuinely in flight — indistinguishable
+    // from a hang. Ticking re-arms that timer continuously, so the toast now
+    // only ever goes away via stop() (or dismissNotify()), never on its own.
+    // update(msg) lets a caller with real progress (a batch count, a
+    // completed-item count) change the label without restarting the spinner
+    // itself — see sessions.js's summarize/smart-organize progress toasts.
+    startSpinner(msg) {
+      const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+      let i = 0;
+      let label = msg;
+      const tick = () => toast.display(`${frames[(i = (i + 1) % frames.length)]} ${label}`, 60, () => {});
+      tick();
+      const timer = setInterval(tick, 120);
+      return {
+        update(newMsg) {
+          label = newMsg;
+        },
+        stop() {
+          clearInterval(timer);
+          toast.hide();
+          screen.render();
+        },
+      };
+    },
     async show(view) {
       if (app._view && app._view.unmount) app._view.unmount();
       body.children.slice().forEach((c) => c.detach());
