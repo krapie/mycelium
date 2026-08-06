@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { extractText, parseJsonReply, __setTestProvider, __clearTestProvider, complete } from '../src/llm.js';
+import { extractText, parseJsonReply, __setTestProvider, __clearTestProvider, complete, mapConcurrent } from '../src/llm.js';
 
 // Pure functions + the test-provider seam — no subprocess, no MYCELIUM_HOME
 // involvement, so plain static imports are fine here.
@@ -88,4 +88,74 @@ test('__clearTestProvider() restores no-override state', async () => {
   } finally {
     __clearTestProvider();
   }
+});
+
+test('mapConcurrent() returns results in input order regardless of completion order', async () => {
+  // Item 0 finishes last (longest delay), item 2 finishes first — the
+  // results array must still line up with the input array's order.
+  const delays = [30, 10, 0];
+  const results = await mapConcurrent(delays, 3, async (ms, idx) => {
+    await new Promise((r) => setTimeout(r, ms));
+    return idx;
+  });
+  assert.deepEqual(results, [0, 1, 2]);
+});
+
+test('mapConcurrent() never runs more than `concurrency` workers at once', async () => {
+  let inFlight = 0;
+  let maxInFlight = 0;
+  const items = Array.from({ length: 9 }, (_, i) => i);
+  await mapConcurrent(items, 3, async () => {
+    inFlight++;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    await new Promise((r) => setTimeout(r, 5));
+    inFlight--;
+  });
+  assert.ok(maxInFlight <= 3, `expected at most 3 concurrent, saw ${maxInFlight}`);
+  assert.ok(maxInFlight >= 2, `expected real concurrency (>=2), saw ${maxInFlight}`); // sanity: not accidentally sequential
+});
+
+test('mapConcurrent() with concurrency=1 behaves like a plain sequential loop', async () => {
+  let maxInFlight = 0;
+  let inFlight = 0;
+  const order = [];
+  await mapConcurrent([1, 2, 3], 1, async (n) => {
+    inFlight++;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    order.push(n);
+    await new Promise((r) => setTimeout(r, 1));
+    inFlight--;
+  });
+  assert.equal(maxInFlight, 1);
+  assert.deepEqual(order, [1, 2, 3]);
+});
+
+test('mapConcurrent() propagates a worker rejection', async () => {
+  await assert.rejects(
+    () =>
+      mapConcurrent([1, 2, 3], 2, async (n) => {
+        if (n === 2) throw new Error('boom');
+        return n;
+      }),
+    /boom/,
+  );
+});
+
+test('mapConcurrent() handles an empty items array', async () => {
+  const results = await mapConcurrent([], 3, async () => {
+    throw new Error('should never be called');
+  });
+  assert.deepEqual(results, []);
+});
+
+test('mapConcurrent() caps concurrency at the item count when concurrency is larger', async () => {
+  let maxInFlight = 0;
+  let inFlight = 0;
+  await mapConcurrent([1, 2], 10, async () => {
+    inFlight++;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    await new Promise((r) => setTimeout(r, 5));
+    inFlight--;
+  });
+  assert.equal(maxInFlight, 2);
 });

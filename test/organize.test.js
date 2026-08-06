@@ -344,6 +344,47 @@ test('suggestPlacements() returns no-op immediately with no LLM call when there 
   assert.equal(called, false);
 });
 
+test('suggestPlacements() runs multiple chunks concurrently (bounded by concurrency)', async () => {
+  for (let i = 0; i < 6; i++) {
+    seed(`sp-conc-${i}`, { folder: null, organizedBy: 'auto', extracted: { title: 'x', tags: [], summary: `summary ${i}`, decisions: [], todos: [] } });
+  }
+  let inFlight = 0;
+  let maxInFlight = 0;
+  __setTestProvider(async () => {
+    inFlight++;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    await new Promise((r) => setTimeout(r, 10));
+    inFlight--;
+    return JSON.stringify({ placements: [] });
+  });
+
+  // batchSize:1 -> 6 candidates matching "sp-conc-" become 6 chunks; scope
+  // via folder:null keeps this to just the sessions this test seeded.
+  const res = await suggestPlacements({ folder: null, batchSize: 1, concurrency: 3 });
+
+  assert.equal(res.ok, true);
+  assert.ok(maxInFlight >= 2, `expected real concurrency (>=2), saw ${maxInFlight}`);
+  assert.ok(maxInFlight <= 3, `expected at most concurrency=3, saw ${maxInFlight}`);
+  for (let i = 0; i < 6; i++) assert.ok(loadRaw(`sp-conc-${i}`).lastClassifiedAt);
+});
+
+test('suggestPlacements() surfaces a chunk failure but still finishes/stamps chunks that were already in flight', async () => {
+  seed('sp-fail-a', { folder: null, organizedBy: 'auto', extracted: { title: 'x', tags: [], summary: 'fail-a summary', decisions: [], todos: [] } });
+  seed('sp-fail-b', { folder: null, organizedBy: 'auto', extracted: { title: 'x', tags: [], summary: 'fail-b summary', decisions: [], todos: [] } });
+  __setTestProvider(async (prompt) => {
+    if (prompt.includes('fail-a summary')) throw new Error('llm down for this chunk');
+    return JSON.stringify({ placements: [] });
+  });
+
+  const res = await suggestPlacements({ folder: null, batchSize: 1, concurrency: 2 });
+
+  assert.equal(res.ok, false);
+  assert.match(res.error, /llm down for this chunk/);
+  // The other chunk was already in flight concurrently — its work isn't
+  // thrown away just because a sibling chunk failed.
+  assert.ok(loadRaw('sp-fail-b').lastClassifiedAt);
+});
+
 test('queueSuggestions()/pendingSuggestions()/clearSuggestions() round-trip without any LLM involvement', () => {
   seed('qs-1', { folder: null, organizedBy: 'auto' });
 

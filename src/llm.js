@@ -98,6 +98,29 @@ export function extractText(stdout) {
   return last ?? stdout.trim();
 }
 
+/**
+ * Run `worker` over `items` with at most `concurrency` in flight at once —
+ * the one place every LLM-bound batch caller (summarizeCandidates,
+ * suggestPlacements, tagAll, the TUI's multi-select auto-tag) gets its
+ * "how many claude/codex subprocesses may run at once" behavior from, so
+ * the issue #3 lesson (unbounded concurrency piling up subprocesses) stays
+ * enforced in exactly one place. A lane pool, not a chunk-and-Promise.all
+ * loop: a new item starts the instant any lane frees up, instead of the
+ * whole next chunk waiting on the slowest item in the current one.
+ */
+export async function mapConcurrent(items, concurrency, worker) {
+  const results = new Array(items.length);
+  let i = 0;
+  async function lane() {
+    while (i < items.length) {
+      const idx = i++;
+      results[idx] = await worker(items[idx], idx);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, lane));
+  return results;
+}
+
 /** Parse the first JSON object found in an LLM reply (they often wrap it in prose/fences). */
 export function parseJsonReply(text) {
   const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);

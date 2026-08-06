@@ -175,3 +175,42 @@ test('tagAll() accumulates newly-seen tags into the shared vocabulary passed to 
   assert.equal(seenPrompts.length, 2);
   assert.match(seenPrompts[1], /freshly-coined-tag/);
 });
+
+test('tagAll({concurrency}) actually runs multiple autoTagSession() calls in flight at once', async () => {
+  seed('conc-1', { startedAt: '2026-02-01T00:00:00.000Z', turns: [{ role: 'user', text: 'session one' }] });
+  seed('conc-2', { startedAt: '2026-02-02T00:00:00.000Z', turns: [{ role: 'user', text: 'session two' }] });
+  seed('conc-3', { startedAt: '2026-02-03T00:00:00.000Z', turns: [{ role: 'user', text: 'session three' }] });
+  let inFlight = 0;
+  let maxInFlight = 0;
+  __setTestProvider(async () => {
+    inFlight++;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    await new Promise((r) => setTimeout(r, 10));
+    inFlight--;
+    return mockReply();
+  });
+
+  const res = await tagAll({ concurrency: 3 });
+
+  assert.ok(res.tagged >= 3);
+  assert.ok(maxInFlight >= 2, `expected real concurrency (>=2), saw ${maxInFlight}`);
+  assert.ok(maxInFlight <= 3, `expected at most concurrency=3, saw ${maxInFlight}`);
+});
+
+test('tagAll() with no concurrency option stays sequential (default unchanged for existing callers)', async () => {
+  seed('seq-1', { startedAt: '2026-03-01T00:00:00.000Z', turns: [{ role: 'user', text: 'seq one' }] });
+  seed('seq-2', { startedAt: '2026-03-02T00:00:00.000Z', turns: [{ role: 'user', text: 'seq two' }] });
+  let inFlight = 0;
+  let maxInFlight = 0;
+  __setTestProvider(async () => {
+    inFlight++;
+    maxInFlight = Math.max(maxInFlight, inFlight);
+    await new Promise((r) => setTimeout(r, 5));
+    inFlight--;
+    return mockReply();
+  });
+
+  await tagAll();
+
+  assert.equal(maxInFlight, 1);
+});

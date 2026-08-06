@@ -2,7 +2,8 @@ import { join } from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
 import { TREE_DIR } from '../paths.js';
 import { loadRaw, saveRaw, allRaw } from '../scanner.js';
-import { complete, parseJsonReply } from '../llm.js';
+import { listTags } from '../index-db.js';
+import { complete, parseJsonReply, mapConcurrent } from '../llm.js';
 import { autoTagSession } from '../learn.js';
 import { isArchive, isSuperseded, listTreeDirs, isInSubtree } from './folders.js';
 import { move } from './lineage.js';
@@ -36,10 +37,16 @@ function isSafeFolderPath(folderPath) {
  * null = only genuinely-unfiled, a path = itself + descendants). This is
  * what lets a TUI review scoped to "wherever I'm currently browsing" (Root
  * or a specific folder) instead of always sweeping the entire store.
+ *
+ * `sessions` lets a caller that already loaded allRaw() for its own purposes
+ * (suggestPlacements()'s folderProfiles(), for instance) pass that array in
+ * instead of this function doing its own redundant full-store scan — every
+ * other caller (pendingSuggestions(), the TUI, tests) omits it and gets the
+ * previous behavior unchanged.
  */
-export function classificationCandidates({ cooldownMs = 0, folder } = {}) {
+export function classificationCandidates({ cooldownMs = 0, folder, sessions } = {}) {
   const now = Date.now();
-  return allRaw().filter(
+  return (sessions || allRaw()).filter(
     (n) =>
       n.organizedBy !== 'human' &&
       (!n.lastClassifiedAt || now - Date.parse(n.lastClassifiedAt) >= cooldownMs) &&
@@ -55,23 +62,27 @@ export function classificationCandidates({ cooldownMs = 0, folder } = {}) {
  * that backlog belongs to the regular `a`/autotag flow, not to a side effect
  * of classifying the handful of sessions actually still unorganized.
  *
- * Runs in `concurrency`-sized chunks rather than one at a time — at a real
- * backlog's scale (hundreds/thousands of candidates), a strictly sequential
- * loop makes the wall-clock time scale directly with candidate count. Each
- * candidate writes to its own raw/<id>.json, so there's no file contention;
- * the shared tag vocabulary Set can race harmlessly within a chunk (tag
- * reuse is a quality nicety, not a correctness requirement). Default kept
- * modest (not higher) — each one spawns a real `claude`/`codex` subprocess,
- * and piling up too many at once is exactly what issue #3 was (looked like
- * runaway console windows on Windows).
+ * Runs up to `concurrency` at once via mapConcurrent() (llm.js) rather than
+ * one at a time — at a real backlog's scale (hundreds/thousands of
+ * candidates), a strictly sequential loop makes the wall-clock time scale
+ * directly with candidate count. Each candidate writes to its own
+ * raw/<id>.json, so there's no file contention; the shared tag vocabulary
+ * Set can race harmlessly across concurrent lanes (tag reuse is a quality
+ * nicety, not a correctness requirement). Default kept modest (not higher)
+ * — each one spawns a real `claude`/`codex` subprocess, and piling up too
+ * many at once is exactly what issue #3 was (looked like runaway console
+ * windows on Windows).
  */
 export async function summarizeCandidates({ onProgress, concurrency = 3, folder } = {}) {
   const targets = classificationCandidates({ folder }).filter((n) => !n.extracted.summary);
-  const vocab = new Set(allRaw().flatMap((n) => n.extracted.tags || []));
+  // listTags() is sqlite-backed (cheap) — avoids a second full raw/ scan
+  // just to derive the same vocabulary classificationCandidates() already
+  // paid for once above.
+  const vocab = new Set(listTags().map((t) => t.name));
   let done = 0;
   let failed = 0;
 
-  const runOne = async (n) => {
+  await mapConcurrent(targets, concurrency, async (n) => {
     try {
       const res = await autoTagSession(n.id, { existingTags: [...vocab] });
       if (res.ok) {
@@ -86,11 +97,7 @@ export async function summarizeCandidates({ onProgress, concurrency = 3, folder 
       failed++;
       if (onProgress) onProgress(null, err);
     }
-  };
-
-  for (let i = 0; i < targets.length; i += concurrency) {
-    await Promise.all(targets.slice(i, i + concurrency).map(runOne));
-  }
+  });
   return { done, failed, total: targets.length };
 }
 
@@ -102,10 +109,15 @@ export async function summarizeCandidates({ onProgress, concurrency = 3, folder 
  * it's already synthesized rather than a raw dump. Falls back to the most
  * recent 15 summaries only when no KNOWLEDGE.md exists yet, capped so a
  * folder with hundreds of sessions doesn't blow the prompt up on its own.
+ *
+ * Takes the already-loaded session array rather than calling allRaw()
+ * itself — suggestPlacements() (its only caller) loads the store once and
+ * shares it with classificationCandidates() too, instead of two independent
+ * full raw/ scans before any LLM call happens.
  */
-function folderProfiles() {
+function folderProfiles(sessions) {
   const byFolder = new Map();
-  for (const n of allRaw()) {
+  for (const n of sessions) {
     if (!n.folder || isArchive(n.folder) || isSuperseded(n) || !n.extracted.summary) continue;
     if (!byFolder.has(n.folder)) byFolder.set(n.folder, []);
     byFolder.get(n.folder).push(n);
@@ -155,10 +167,23 @@ function folderProfiles() {
  * subtree semantics) — the comparison set of existing folders (folderProfiles()
  * below) is always the whole store regardless, since a session scoped to one
  * folder can still legitimately belong somewhere else entirely.
+ *
+ * Chunks now run through mapConcurrent() (llm.js) — up to `concurrency`
+ * chunks' complete() calls in flight at once (default 3, same governing
+ * ceiling as summarizeCandidates()/tagAll(), so peak concurrent
+ * `claude`/`codex` subprocesses stays the same regardless of which call
+ * site triggered it). Each chunk still batches up to `batchSize` sessions
+ * into one prompt, so concurrency bounds chunks in flight, not raw session
+ * count. On any chunk's LLM failure, the error is surfaced (same
+ * `{ok:false}` shape as before) but — unlike the old strictly-sequential
+ * version — other chunks that were already in flight still finish and get
+ * stamped/collected, since aborting work that's concurrently running would
+ * throw away real progress for no benefit.
  */
-export async function suggestPlacements({ onProgress, batchSize = 25, limit, cooldownMs = 0, folder } = {}) {
-  const profiles = folderProfiles();
-  let candidates = classificationCandidates({ cooldownMs, folder })
+export async function suggestPlacements({ onProgress, batchSize = 25, limit, cooldownMs = 0, folder, concurrency = 3 } = {}) {
+  const allSessions = allRaw();
+  const profiles = folderProfiles(allSessions);
+  let candidates = classificationCandidates({ cooldownMs, folder, sessions: allSessions })
     .filter((n) => n.extracted.summary)
     .sort((a, b) => (a.startedAt || '').localeCompare(b.startedAt || ''));
   if (limit) candidates = candidates.slice(0, limit);
@@ -173,8 +198,9 @@ export async function suggestPlacements({ onProgress, batchSize = 25, limit, coo
   const chunks = [];
   for (let i = 0; i < candidates.length; i += batchSize) chunks.push(candidates.slice(i, i + batchSize));
 
-  for (let i = 0; i < chunks.length; i++) {
-    const chunk = chunks[i];
+  let firstError = null;
+  let completedChunks = 0;
+  await mapConcurrent(chunks, concurrency, async (chunk) => {
     // 현재 폴더(있다면)를 힌트로 같이 준다 — 이미 어딘가 들어가 있는
     // 세션이라도 그 폴더의 하위 주제일 수 있으니 참고만 하라는 뜻.
     const sessionBlock = chunk
@@ -198,7 +224,8 @@ ${sessionBlock}
     try {
       reply = await complete(prompt);
     } catch (err) {
-      return { ok: false, error: `LLM failed: ${err.message}` };
+      if (!firstError) firstError = `LLM failed: ${err.message}`;
+      return;
     }
     const parsed = parseJsonReply(reply);
     for (const p of parsed?.placements || []) {
@@ -214,8 +241,10 @@ ${sessionBlock}
       n.lastClassifiedAt = now;
       saveRaw(n);
     }
-    if (onProgress) onProgress(i + 1, chunks.length);
-  }
+    completedChunks++;
+    if (onProgress) onProgress(completedChunks, chunks.length);
+  });
+  if (firstError) return { ok: false, error: firstError };
   return { ok: true, placements };
 }
 
