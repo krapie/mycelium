@@ -50,7 +50,10 @@ export async function scanCycle(log) {
       reindex();
       log.log(`[scan] +${res.imported} (reindexed)`);
       // Tag freshly imported sessions (skips those already summarized).
-      const t = await tagAll({ limit: TAG_BATCH_LIMIT });
+      // Shares SUMMARIZE_CONCURRENCY with smartOrganizeCycle below — one
+      // governing concurrency ceiling for every daemon-triggered batch of
+      // LLM calls, not a second independent knob.
+      const t = await tagAll({ limit: TAG_BATCH_LIMIT, concurrency: SUMMARIZE_CONCURRENCY });
       if (t.tagged > 0) {
         reindex();
         log.log(`[tag] +${t.tagged}`);

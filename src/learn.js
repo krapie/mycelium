@@ -1,4 +1,4 @@
-import { complete, parseJsonReply } from './llm.js';
+import { complete, parseJsonReply, mapConcurrent } from './llm.js';
 import { loadRaw, saveRaw, allRaw } from './scanner.js';
 import { listTags } from './index-db.js';
 
@@ -105,8 +105,18 @@ export async function autoTagSession(sessionId, { existingTags } = {}) {
  * timer fires again before it finishes, piling up overlapping LLM calls
  * (see issue #3). The rest just wait for the next call instead of all
  * being attempted at once.
+ *
+ * `concurrency` (default 1, i.e. sequential — unchanged for any existing
+ * caller that doesn't pass it) runs up to that many autoTagSession() calls
+ * at once via mapConcurrent() (llm.js), the same bounded-concurrency
+ * pattern organize.js's summarizeCandidates()/suggestPlacements() already
+ * use. Vocab accumulation stays correct across concurrent lanes for the
+ * same reason it does there: each lane fully awaits its own
+ * autoTagSession() before touching the shared Set, so a race only ever
+ * means "this lane didn't see a tag another lane just added," a quality
+ * nicety, not a correctness requirement.
  */
-export async function tagAll({ force = false, onProgress, limit } = {}) {
+export async function tagAll({ force = false, onProgress, limit, concurrency = 1 } = {}) {
   const vocab = new Set(listTags().map((t) => t.name));
   let tagged = 0;
   let skipped = 0;
@@ -121,7 +131,7 @@ export async function tagAll({ force = false, onProgress, limit } = {}) {
   targets.sort((a, b) => (a.startedAt || '').localeCompare(b.startedAt || ''));
   if (limit) targets = targets.slice(0, limit);
 
-  for (const n of targets) {
+  await mapConcurrent(targets, concurrency, async (n) => {
     try {
       const res = await autoTagSession(n.id, { existingTags: [...vocab] });
       if (res.ok) {
@@ -135,6 +145,6 @@ export async function tagAll({ force = false, onProgress, limit } = {}) {
       failed++;
       if (onProgress) onProgress(null, err);
     }
-  }
+  });
   return { tagged, skipped, failed };
 }

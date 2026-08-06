@@ -28,6 +28,7 @@ import { formatSessionDetail } from '../render.js';
 import { basename } from 'node:path';
 import { launchAgent } from '../launch.js';
 import { autoTagSession } from '../../learn.js';
+import { mapConcurrent } from '../../llm.js';
 import { buildKnowledgeText, writeKnowledgeText } from '../../insight.js';
 import { assembleContext, injectAgentsMd } from '../../reuse.js';
 import { textView, digestReader, confirmText, helpModal, welcomeModal } from '../widgets/viewers.js';
@@ -811,14 +812,20 @@ export function sessionsView(opts = {}) {
       // Learn: generate summary + tags (content-based). Works on the multi-
       // selection if any, else the current row. This is how a session gets its
       // summary — the LLM reads the session and writes the task summary + tags.
+      // Runs up to 3 at once via mapConcurrent() (llm.js) instead of one at a
+      // time — same bounded-concurrency pattern organize.js's
+      // summarizeCandidates()/suggestPlacements() and learn.js's tagAll()
+      // use, so this (the most directly felt slow path — a human watching a
+      // progress toast crawl through a multi-select) gets the same speedup.
+      // The progress toast now advances on each COMPLETION rather than each
+      // start, since completion order no longer matches selection order.
       const doAutoTag = async () => {
         const ids = state.selected.size ? [...state.selected] : currentRow() ? [currentRow().id] : [];
         if (!ids.length) return;
         let done = 0;
         let failed = 0;
         let lastError = null;
-        for (const id of ids) {
-          app.notify(t('sessions.summarizing', done + 1, ids.length), 90);
+        await mapConcurrent(ids, 3, async (id) => {
           try {
             const res = await autoTagSession(id);
             if (res.ok) done++;
@@ -833,13 +840,14 @@ export function sessionsView(opts = {}) {
             failed++;
             lastError = err.message;
           }
+          app.notify(t('sessions.summarizing', done + failed, ids.length), 90);
           // Only `id` changed this iteration — a full reindex() here would
           // reparse the whole raw/ store once per selected session (an N×
           // full-store rebuild for an N-session multi-select autotag).
           data.refreshOne(id);
           reloadList();
           if (currentRow() && currentRow().id === id) showDetail(id);
-        }
+        });
         state.selected.clear();
         reloadList();
         app.notify(t('sessions.summarizeDone', done, failed, lastError), failed ? 6 : 3);
