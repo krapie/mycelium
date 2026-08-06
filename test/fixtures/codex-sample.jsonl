@@ -1,0 +1,3 @@
+{"type":"session_meta","timestamp":"2024-01-01T00:00:00.000Z","payload":{"id":"codex-abc-123","cwd":"/tmp/proj"}}
+{"type":"event_msg","timestamp":"2024-01-01T00:00:01.000Z","payload":{"type":"user_message","message":"hello, can you fix the login bug?"}}
+{"type":"event_msg","timestamp":"2024-01-01T00:00:02.000Z","payload":{"type":"agent_message","message":"Sure, let me take a look."}}

@@ -1,0 +1,2 @@
+{"type":"user","timestamp":"2024-01-01T00:00:00.000Z","cwd":"/tmp/proj","message":{"content":"hello, can you fix the login bug?"}}
+{"type":"assistant","timestamp":"2024-01-01T00:00:05.000Z","message":{"content":[{"type":"text","text":"Sure, let me take a look."},{"type":"tool_use","name":"Edit","input":{"file_path":"src/auth.ts"}}]}}

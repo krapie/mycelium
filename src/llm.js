@@ -22,7 +22,21 @@ const CODEX_MODEL = process.env.MYCELIUM_CODEX_MODEL || 'gpt-5.5';
 // marker on every call is the part that can't drift.
 export const META_MARKER = '​[mycelium:meta-call]​';
 
+// Test-only injection point — every LLM-dependent module (learn.js,
+// insight.js, organize.js's classification, split.js) calls complete()
+// rather than spawning directly, so overriding it here is the one seam
+// needed to unit-test all of them without a real claude/codex subprocess.
+// Production callers never touch this; it's undefined unless a test sets it.
+let _testProvider = null;
+export function __setTestProvider(fn) {
+  _testProvider = fn;
+}
+export function __clearTestProvider() {
+  _testProvider = null;
+}
+
 export function complete(prompt, { timeoutMs = 240000 } = {}) {
+  if (_testProvider) return Promise.resolve(_testProvider(prompt, { timeoutMs }));
   const fullPrompt = `${META_MARKER}\n${prompt}`;
   return new Promise((resolve, reject) => {
     let cmd, args;
@@ -61,7 +75,7 @@ export function complete(prompt, { timeoutMs = 240000 } = {}) {
   });
 }
 
-function extractText(stdout) {
+export function extractText(stdout) {
   // Claude Code --output-format json wraps the reply in { result: "..." }.
   try {
     const j = JSON.parse(stdout);
