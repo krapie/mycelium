@@ -116,9 +116,21 @@ export function digestReader(app) {
     app.render();
   };
   const generate = async (period) => {
-    box.setLabel(t('digest.generating'));
-    app.render();
+    // Small local spinner on the box's own label — this widget has no
+    // shared toast to drive (unlike app.js's startSpinner(), which animates
+    // the notify() toast other LLM-bound actions use), so just tick the
+    // label directly. Same braille frame set as startSpinner(), not worth
+    // sharing for this one differently-shaped call site.
+    const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+    let i = 0;
+    const tick = () => {
+      box.setLabel(`${frames[(i = (i + 1) % frames.length)]} ${t('digest.generating')}`);
+      app.render();
+    };
+    tick();
+    const timer = setInterval(tick, 120);
     const res = await generateDigest({ period });
+    clearInterval(timer);
     box.setLabel(res.ok ? t('digest.generated', res.keyed) : t('digest.failed', res.error));
     refresh();
   };
