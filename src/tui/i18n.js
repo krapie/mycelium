@@ -452,7 +452,7 @@ en['help.text'] = (fg, spore) => `{bold}Global{/}
 
 Sessions linked by handoff show {${spore}-fg}↩{/}/{${spore}-fg}→{/} markers in the list and continuation links in detail.`;
 
-en['welcome.body'] = (fg, spore) => `Mycelium keeps AI coding-agent sessions from getting lost —
+en['welcome.body'] = (fg) => `Mycelium keeps AI coding-agent sessions from getting lost —
 each one moves through 4 stages, all inside this screen:
 
 {${fg}-fg}Capture{/}   Sessions from Claude Code / Codex / Kiro get pulled in automatically
@@ -519,7 +519,7 @@ ko['help.text'] = (fg, spore) => `{bold}전역{/}
 
 핸드오프로 이어진 세션은 목록에 {${spore}-fg}↩{/}/{${spore}-fg}→{/} 마커, 상세에 이어받음/이어감 링크로 표시됩니다.`;
 
-ko['welcome.body'] = (fg, spore) => `Mycelium은 AI 코딩 에이전트 세션이 흩어지지 않게 관리합니다 —
+ko['welcome.body'] = (fg) => `Mycelium은 AI 코딩 에이전트 세션이 흩어지지 않게 관리합니다 —
 이 화면 안에서 4단계를 거칩니다:
 
 {${fg}-fg}생성(Capture){/}   Claude Code/Codex/Kiro 세션을 자동으로 가져옵니다

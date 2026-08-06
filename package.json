@@ -6,9 +6,13 @@
   "bin": {
     "mycelium": "src/cli.js"
   },
+  "scripts": {
+    "lint": "eslint .",
+    "test": "node --test"
+  },
   "files": [
     "src",
-    "scripts",
+    "docs",
     "README.md",
     "LICENSE"
   ],
@@ -36,5 +40,9 @@
   ],
   "dependencies": {
     "neo-blessed": "^0.2.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.8.0"
   }
 }
