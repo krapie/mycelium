@@ -48,6 +48,30 @@ too** — no process is left behind, so the next launch always starts fresh
 with whatever code is currently installed. Turn this auto-upkeep off with
 the `MYCELIUM_NO_AUTOSTART=1` environment variable if you don't want it.
 
+## Cleanup (experimental stage)
+
+```sh
+mycelium cleanup            # (= tidy) safe: removes Mycelium's own LLM-call sessions
+                            #  + empty folders + rebuilds the index. Safe to run any time.
+mycelium cleanup folders    # remove empty folders only
+mycelium cleanup archive    # delete sessions filed under _archive from the store
+mycelium cleanup index      # rebuild just the sqlite index (if search looks off)
+mycelium cleanup reset --yes # full reset: delete ~/.mycelium entirely → re-scan
+```
+
+- **`tidy` (default), `folders`, and `index` are safe** — they never delete
+  original sessions (`raw/`).
+- **`archive`** deletes sessions filed under `_archive` from the store. The
+  original `~/.claude`/`~/.codex`/`~/.kiro` logs are untouched, so a
+  re-`scan` brings them back — but this time unfiled (they don't
+  auto-return to `_archive`; that's manual-placement only).
+- **`reset --yes` cannot be undone** — it deletes all of `~/.mycelium`
+  (normalized sessions, folders, knowledge, index). It still doesn't touch
+  the original agent session logs, so `mycelium scan` rebuilds it from
+  scratch.
+
+For a clean start: `mycelium cleanup reset --yes && mycelium scan`.
+
 ## Background-only, no TUI (optional)
 
 If you want scanning/organizing/digests to keep running without keeping the

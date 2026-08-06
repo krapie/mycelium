@@ -15,105 +15,68 @@ sessions (Claude Code + Codex + Kiro).
 
 ## Requirements
 
-- **Node.js ≥ 22.13** (uses the built-in `node:sqlite` — below 22.13 it's
-  not available without the `--experimental-sqlite` flag)
-- **git**
-- (optional) the **`claude` / `codex` / `kiro-cli` CLIs** — installed and
-  logged in, used for generating summaries, resuming, handoff, and launching
-  agents. Not needed if you only want to browse/search.
+- Node.js ≥ 22.13, git
+- AI agents: `claude` / `codex` / `kiro-cli`
 
 ## Install
 
-Like k9s: install once, then just run `mycelium` from anywhere:
 ```sh
-npm install -g @krapi0314/mycelium
+npm install -g @krapi0314/mycelium   # then run `mycelium` from anywhere, like k9s
 ```
 
-To hack on it directly, clone instead:
+To hack on it, clone instead:
 ```sh
 git clone https://github.com/krapie/mycelium.git
-cd mycelium
-npm install                 # one dependency: neo-blessed (the TUI)
-npm link                    # (optional) registers the global `mycelium` command
+cd mycelium && npm install && npm link
 ```
 
 ## Getting Started
 
 ```sh
-mycelium scan               # import Claude/Codex/Kiro sessions from this machine
-mycelium                    # launch the interactive TUI — first run offers a 3-minute tutorial
+mycelium scan   # import Claude/Codex/Kiro sessions from this machine
+mycelium        # launch the TUI — first run offers a 3-minute tutorial
 ```
 
-**Capture never auto-assigns a folder** — everything lands unfiled after the
-first scan. Press `o` (smart organize) in the TUI, or run
-`mycelium organize`, to sort by content.
+Capture never auto-assigns a folder — press `o` (smart organize) in the TUI,
+or run `mycelium organize`, to sort new sessions by content.
 
-**Want to see the tutorial again, or use it for a demo? Run it any time:**
-```sh
-mycelium demo                # interactive tutorial with fake sessions — a completely separate store (~/.mycelium-demo), your real data is never touched
-```
+Re-run the tutorial (or use it as a demo) any time with `mycelium demo` — a
+separate `~/.mycelium-demo` store, your real data is never touched.
 
-> If you installed via `git clone` and skipped `npm link`, run
-> `node src/cli.js <command>` instead.
+> Skipped `npm link`? Use `node src/cli.js <command>` instead.
 
-**Everything is per-machine.** Mycelium only reads local sessions on the
-machine it runs on (`~/.claude/projects/`, `~/.codex/sessions/`,
-`~/.kiro/sessions/cli/` + kiro-cli's SQLite DB) and stores its own data in
-that machine's `~/.mycelium/`. Sessions from other machines never show up
-automatically.
+Everything is per-machine: Mycelium only reads sessions on the machine it
+runs on and stores its own data in that machine's `~/.mycelium/`.
 
 ## Learn More
 
-The full guide lives in [`docs/`](./docs):
+Full guide in [`docs/`](./docs):
 
-- [**TUI (the cockpit)**](./docs/tui.md) — the 3-column interface, folders
-  panel, sessions panel, and every keyboard shortcut
-- [**Learn/Reuse loop**](./docs/learn-reuse.md) — how a finished session's
-  knowledge reaches the next one, and what's automatic vs. manual
-- [**Handoff lifecycle**](./docs/handoff.md) — continuing work across
-  different agent CLIs
-- [**CLI reference**](./docs/cli.md) — every `mycelium` subcommand, for
-  scripting or running without the TUI
-- [**Data location, design principles, and status**](./docs/architecture.md)
-- [**Feature catalog**](./docs/features.md) — every capability as a user
-  story, with its invariants and test-coverage status
+- [**TUI**](./docs/tui.md) — the 3-column interface + every keyboard shortcut
+- [**Learn/Reuse loop**](./docs/learn-reuse.md) — how sessions pass knowledge forward
+- [**Handoff**](./docs/handoff.md) — continuing work across agent CLIs
+- [**CLI reference**](./docs/cli.md) — every subcommand, for scripting
+- [**Architecture**](./docs/architecture.md) — data location, design principles, status
+- [**Feature catalog**](./docs/features.md) — every capability, with test-coverage status
 
 ## Cleanup (experimental stage)
 
-Still experimental, so sessions/folders can get messy while testing. Clean
-up with `cleanup`:
-
 ```sh
-mycelium cleanup            # (= tidy) safe cleanup: removes Mycelium's own LLM-call sessions
-                            #  + empty folders + rebuilds the index. Safe to run any time.
-mycelium cleanup folders    # remove empty folders only
-mycelium cleanup archive    # delete sessions filed under _archive from the store
-mycelium cleanup index      # rebuild just the sqlite index (if search looks off)
-mycelium cleanup reset --yes # full reset: delete ~/.mycelium entirely → re-scan
+mycelium cleanup            # safe: removes Mycelium's own LLM-call sessions + empty folders, rebuilds the index
+mycelium cleanup reset --yes # irreversible: wipes ~/.mycelium entirely
 ```
 
-- **`tidy` (default), `folders`, and `index` are safe** — they never delete
-  original sessions (`raw/`).
-- **`archive`** deletes sessions filed under `_archive` from the store. The
-  original `~/.claude`/`~/.codex`/`~/.kiro` logs are untouched, so a
-  re-`scan` brings them back — but this time unfiled (they don't
-  auto-return to `_archive`; that's manual-placement only).
-- **`reset --yes` cannot be undone** — it deletes all of `~/.mycelium`
-  (normalized sessions, folders, knowledge, index). It still doesn't touch
-  the original agent session logs, so `mycelium scan` rebuilds it from
-  scratch.
-
-For a clean start: `mycelium cleanup reset --yes && mycelium scan`.
+`tidy`/`folders`/`archive`/`index`/`reset` never touch your original agent
+logs, so `mycelium scan` can always rebuild — see
+[`docs/cli.md`](./docs/cli.md) for the full breakdown.
 
 ## Contributing
 
-See [`CONTRIBUTING.md`](./CONTRIBUTING.md) — includes the dev setup, how to
-run lint/tests, and how to add support for a new AI agent CLI.
+See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for dev setup, lint/test, and how
+to add a new AI agent CLI.
 
 ## Working in this Repo with an AI Agent
 
-If you're using Claude Code, Codex, Cursor, or a similar coding agent to
-work on Mycelium itself, point it at [`AGENT.md`](./AGENT.md) first — it's
-a dense, agent-oriented reference covering the tool's purpose, repo layout,
-code/docs/test conventions, key bindings, and the contributing workflow, so
-the agent can orient itself without reading the whole codebase first.
+Using Claude Code, Codex, Cursor, or similar on Mycelium itself? Point it at
+[`AGENT.md`](./AGENT.md) first — a dense reference covering conventions, key
+bindings, and the contributing workflow.
