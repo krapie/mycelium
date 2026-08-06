@@ -1,0 +1,80 @@
+**[← Back to README](../README.md)**
+
+# CLI (for scripting)
+
+Everything works as individual commands without the TUI:
+
+```sh
+# Capture / Organize
+mycelium scan                                  # capture only, no folder assignment
+mycelium organize [--apply] [--limit N] [--folder <path>]  # content-based folder suggestions (summarizes first, can suggest new folders, --folder narrows to one folder+subfolders, preview-only until --apply, 200 per run by default)
+mycelium mkdir company/platform/auth
+mycelium mv <session> company/platform/auth
+mycelium tag <session> +urgent -miscategorized
+mycelium unmerge <session>                     # undo a TUI Shift+M merge
+mycelium unsplit <session>                     # undo a TUI Shift+S split
+
+# Learn
+mycelium autotag                               # retroactively summarize/tag past sessions in bulk
+mycelium digest [week] [--date YYYY-MM-DD]
+mycelium knowledge company/platform/auth
+
+# Reuse / Find
+mycelium context <session>
+mycelium inject --dir <project> --folder <folder> # inject knowledge into AGENTS.md
+mycelium handoff <session>                     # print a handoff prompt
+mycelium resume <session|prefix> [--copy|--exec] # print/copy/immediately run the resume command
+mycelium search "query" --tag infra --folder company
+mycelium list / tags / reindex
+
+# (optional) keep background upkeep running without the TUI
+mycelium daemon                 # run in the foreground
+mycelium daemon --detach        # run detached in the background (idempotent)
+mycelium daemon --stop          # stop it
+
+# interactive tutorial with fake sessions (3-minute demo, separate ~/.mycelium-demo store)
+mycelium demo
+
+# TUI display language (default en) — takes effect on the next TUI launch
+mycelium lang        # check current setting
+mycelium lang ko      # switch to Korean
+mycelium lang en      # switch to English
+```
+
+**Opening `mycelium` (the TUI) normally already runs background upkeep
+(scan/organize/digest) inside the TUI process itself** — no need to run
+`mycelium daemon` or any script separately. **Closing the TUI stops upkeep
+too** — no process is left behind, so the next launch always starts fresh
+with whatever code is currently installed. Turn this auto-upkeep off with
+the `MYCELIUM_NO_AUTOSTART=1` environment variable if you don't want it.
+
+## Background-only, no TUI (optional)
+
+If you want scanning/organizing/digests to keep running without keeping the
+TUI open (headless use, always-on on a server), start a detached daemon
+process explicitly:
+```sh
+mycelium daemon --detach    # no-op if already running (idempotent); logs to ~/.mycelium/daemon.log
+mycelium daemon --stop      # stops it if running, no-op otherwise
+```
+Works the same way whether you installed with `npm install -g` or via
+`git clone` (use `node src/cli.js daemon --detach` in the latter case if you
+skipped `npm link`). There's no auto-start on reboot — wire
+`mycelium daemon --detach` into launchd/systemd/cron yourself if you want
+that. **A daemon started this way keeps running whatever code was current
+when it started — after updating mycelium, `mycelium daemon --stop` then
+`--detach` again to pick up the new code.**
+
+Background upkeep's intervals and limits are all environment-variable
+tunable (the defaults are conservative on purpose, so a large backlog
+doesn't pile up LLM processes all at once — that pile-up is exactly what
+caused Claude's console window to keep popping up on Windows, [#3](https://github.com/krapie/mycelium/issues/3)):
+
+| Env var | Default | Meaning |
+|---|---|---|
+| `MYCELIUM_SCAN_MS` | 5 min | Scan (capture) interval |
+| `MYCELIUM_TAG_BATCH_LIMIT` | 20 | Max sessions auto-summarized/tagged per scan cycle (oldest first, rest next cycle) |
+| `MYCELIUM_SMART_ORGANIZE_MS` | 30 min | Smart-organize auto-compute interval |
+| `MYCELIUM_SMART_ORGANIZE_LIMIT` | 100 | Max sessions classified per smart-organize cycle |
+| `MYCELIUM_SMART_ORGANIZE_COOLDOWN_MS` | 24 h | Wait time before retrying an unmatched session |
+| `MYCELIUM_SUMMARIZE_CONCURRENCY` | 3 | Concurrent `claude`/`codex` processes the auto smart-organize cycle spawns |

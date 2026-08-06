@@ -1,381 +1,111 @@
 # Mycelium
 
-AI 협업에서 생성되는 컨텍스트를 **생성(Capture) → 조직화(Organize) → 학습(Learn) → 재사용(Reuse)**까지 관리하는 Context Lifecycle 플랫폼. 모델(Claude Code, Codex 등)·시간·공간의 경계로 컨텍스트가 단절되는 문제를 해결합니다.
+[![npm version](https://img.shields.io/npm/v/@krapi0314/mycelium)](https://www.npmjs.com/package/@krapi0314/mycelium)
+[![CI](https://github.com/krapie/mycelium/actions/workflows/ci.yml/badge.svg)](https://github.com/krapie/mycelium/actions/workflows/ci.yml)
+[![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![node](https://img.shields.io/badge/node-%3E%3D22.13-brightgreen)](https://nodejs.org)
 
-개념과 배경은 [`PROJECT_OVERVIEW.md`](./PROJECT_OVERVIEW.md), 설계는 [`PLAN.md`](./PLAN.md) / [`TUI_PLAN.md`](./TUI_PLAN.md) 참고.
+A Context Lifecycle platform that manages context produced by AI
+collaboration through **Capture → Organize → Learn → Reuse**. It solves
+context loss across model boundaries (Claude Code, Codex, ...), time, and
+space.
 
-## 요구사항
+POC stage — all four lifecycle stages are verified against real local
+sessions (Claude Code + Codex + Kiro).
 
-- **Node.js ≥ 22.13** (내장 `node:sqlite` 사용 — 22.13 미만은 `--experimental-sqlite` 플래그 없이는 안 됨)
+## Requirements
+
+- **Node.js ≥ 22.13** (uses the built-in `node:sqlite` — below 22.13 it's
+  not available without the `--experimental-sqlite` flag)
 - **git**
-- (선택) **`claude` / `codex` / `kiro-cli` CLI** — 설치 및 로그인되어 있으면 요약 생성·이어열기·핸드오프·에이전트 실행에 사용. 단순 탐색/검색만 할 거면 없어도 됩니다.
+- (optional) the **`claude` / `codex` / `kiro-cli` CLIs** — installed and
+  logged in, used for generating summaries, resuming, handoff, and launching
+  agents. Not needed if you only want to browse/search.
 
-## 설치
+## Install
 
-k9s처럼 한 번 설치하고 어디서든 `mycelium`만 치면 됩니다:
+Like k9s: install once, then just run `mycelium` from anywhere:
 ```sh
 npm install -g @krapi0314/mycelium
 ```
 
-직접 고쳐 쓰고 싶으면 git clone 방식도 됩니다:
+To hack on it directly, clone instead:
 ```sh
 git clone https://github.com/krapie/mycelium.git
 cd mycelium
-npm install                 # 의존성은 neo-blessed(TUI) 하나뿐
-npm link                    # (선택) 전역 `mycelium` 명령 등록
+npm install                 # one dependency: neo-blessed (the TUI)
+npm link                    # (optional) registers the global `mycelium` command
 ```
 
-## 시작하기
+## Getting Started
 
 ```sh
-mycelium scan               # 이 머신의 Claude/Codex/Kiro 세션을 가져오기(임포트)
-mycelium                    # 인터랙티브 TUI 실행 — 처음 켜면 3분 튜토리얼을 해볼지 물어봅니다
+mycelium scan               # import Claude/Codex/Kiro sessions from this machine
+mycelium                    # launch the interactive TUI — first run offers a 3-minute tutorial
 ```
 
-**캡처는 폴더를 자동으로 배정하지 않습니다** — 처음 스캔하면 전부 미분류
-상태로 들어옵니다. TUI에서 `o`(스마트 정리)를 누르거나 `mycelium organize`를
-실행해 내용 기준으로 정리하세요.
+**Capture never auto-assigns a folder** — everything lands unfiled after the
+first scan. Press `o` (smart organize) in the TUI, or run
+`mycelium organize`, to sort by content.
 
-**튜토리얼을 다시 보고 싶거나 데모용으로 쓰고 싶으면 언제든:**
+**Want to see the tutorial again, or use it for a demo? Run it any time:**
 ```sh
-mycelium demo                # 가짜 세션으로 인터랙티브 튜토리얼 실행 — 완전히 별도 스토어(~/.mycelium-demo)라 실제 데이터는 전혀 안 건드림
+mycelium demo                # interactive tutorial with fake sessions — a completely separate store (~/.mycelium-demo), your real data is never touched
 ```
 
-> git clone 방식으로 설치했고 `npm link`을 안 했으면 `node src/cli.js <명령>` 형태로 실행하세요.
+> If you installed via `git clone` and skipped `npm link`, run
+> `node src/cli.js <command>` instead.
 
-**머신별로 독립적입니다.** Mycelium은 그 컴퓨터의 로컬 세션(`~/.claude/projects/`, `~/.codex/sessions/`, `~/.kiro/sessions/cli/` + kiro-cli의 SQLite DB)만 읽고, 데이터도 그 컴퓨터의 `~/.mycelium/`에 저장합니다. 다른 컴퓨터의 세션이 자동으로 넘어오지 않습니다.
+**Everything is per-machine.** Mycelium only reads local sessions on the
+machine it runs on (`~/.claude/projects/`, `~/.codex/sessions/`,
+`~/.kiro/sessions/cli/` + kiro-cli's SQLite DB) and stores its own data in
+that machine's `~/.mycelium/`. Sessions from other machines never show up
+automatically.
 
-## TUI (콕핏)
+## Learn More
 
-`mycelium`을 인자 없이 실행하면 터미널 UI가 뜹니다. **폴더 | 세션 | 상세** 3-컬럼이고, k9s처럼 드릴다운합니다: 폴더에서 시작 → `Enter`로 세션 → `Enter`로 상세 → `Esc`로 뒤로. 포커스한 컬럼이 넓어집니다.
+The full guide lives in [`docs/`](./docs):
 
-하단 상태바에는 **생성·s → 조직화·m/t/o → 학습·a/w → 재사용·n/h/r** 라이프사이클 바가 항상 떠 있습니다 — 어떤 키가 어느 단계에 속하는지 화면에서 바로 보이는 정적 참고선입니다(지금 어느 단계인지 실시간으로 강조하진 않습니다). 전체 단축키는 아무 화면에서나 **`?`**를 누르면 뜨는 도움말 모달에서 확인하세요.
+- [**TUI (the cockpit)**](./docs/tui.md) — the 3-column interface, folders
+  panel, sessions panel, and every keyboard shortcut
+- [**Learn/Reuse loop**](./docs/learn-reuse.md) — how a finished session's
+  knowledge reaches the next one, and what's automatic vs. manual
+- [**Handoff lifecycle**](./docs/handoff.md) — continuing work across
+  different agent CLIs
+- [**CLI reference**](./docs/cli.md) — every `mycelium` subcommand, for
+  scripting or running without the TUI
+- [**Data location, design principles, and status**](./docs/architecture.md)
+- [**Feature catalog**](./docs/features.md) — every capability as a user
+  story, with its invariants and test-coverage status
 
-**표시 언어는 기본 영어**입니다. `mycelium lang ko`로 한국어로 바꿀 수 있고(다음 TUI 실행부터 적용), `mycelium lang en`으로 되돌릴 수 있습니다. TUI 안에서 바로 전환하는 키는 없습니다 — 실행 전에 CLI로 설정하는 방식입니다.
+## Cleanup (experimental stage)
 
-**폴더 패널**
-
-맨 위 **`Root`**는 트리의 최상위(고정, 이름변경/이동/삭제 불가)이고, **store 전체 세션을 다 보여줍니다**(이미 폴더에 정리된 것까지 전부 — 어느 한 폴더에 들어가야만 사라지는 게 아니라, 문자 그대로 전체 합계입니다). 바로 그 아래, 실제 폴더들과 같은 자리에 **`New`**라는 특수 항목이 하나 있는데, 이게 **아직 어느 폴더에도 배정되지 않은 세션만** 모아 보여줍니다(`Root`와 마찬가지로 이름변경/이동/삭제/지식추출은 안 됨 — 진짜 폴더가 아니라 미분류 세션을 위한 뷰일 뿐). 사용자가 만든 실제 폴더들은 `New` 아래(같은 들여쓰기 단)에 표시됩니다. 제목/요약 옆에는 **`[New]`** 표시가 붙습니다 — 어디서 보든(Root 포함) 아직 미분류라는 뜻이고, `m`으로 원하는 폴더로 옮기면 사라집니다. `/` 검색은 `Root`에서 하면 전체 대상, `New`에서 하면 미분류만 대상, 실제 폴더 안에서 하면 그 폴더(+하위)로 범위가 좁혀집니다 — 다른 실제 폴더와 동일한 규칙입니다.
-
-| 키 | 동작 |
-|---|---|
-| `a` | 새 (하위)폴더 |
-| `e` / `m` / `x` | 이름변경 / 이동·중첩 / 삭제 |
-| `w` | 폴더 지식(KNOWLEDGE.md) 추출 |
-| `Enter` | 이 폴더의 세션 보기 |
-
-**`_archive` 폴더는 TUI에 기본적으로 안 보입니다** — 폴더 목록, `Root` 뷰, 검색 결과 어디에도 안 뜹니다. `m`으로 아무 세션이나(예: 더는 안 쓰는 죽은 워크트리의 세션) `_archive`에 직접 옮기면 눈에 안 띄는 보관함으로 치워집니다. 데이터는 그대로 있고 지워지지 않으니, 나중에 확인하려면:
-```sh
-mycelium list --folder _archive
-mycelium search "검색어" --folder _archive
-```
-한 번 `_archive`로 옮긴 세션은 재스캔해도 다시 튀어나오지 않습니다 — `scan()`은 이미 배정된 폴더를 그대로 유지합니다.
-
-**세션 패널**
-| 키 | 동작 |
-|---|---|
-| `a` | 내용 기반 요약·태그 생성 (LLM, 여러 개는 `Space` 후 일괄). **`e`로 직접 정한 제목이 아니면** 매번 최신 내용으로 제목도 새로 씁니다 — 요약·태그·결정·할일은 항상 최신으로 다시 씀 |
-| `e` | **제목만** 작은 모달로 수정 (Mycelium 저장소만 수정 — 원본 claude/codex/kiro 세션 로그는 건드리지 않음). 요약·태그·결정·할일은 항상 AI 생성 그대로이며 이 키로는 건드리지 않습니다. 여기서 정한 제목은 **잠기고**, 이후 `a`를 다시 눌러도 유지됩니다(빈 제목으로 지우면 다시 잠금 해제되어 다음 `a`에 자동 생성) |
-| `r` | 원래 에이전트에서 그 세션 그대로 **이어열기** (resume, 바로 여기서). 상세 화면에서는 `r` 대신 `Enter` — "여기서 열기"(및 일반 세션에 한해 "명령어 복사"(새 탭 붙여넣기용)) 중 선택. **병합/분할된 세션은 자체적으로 이어열기가 불가능**해서(실제 에이전트가 아는 id가 아님) `h`(핸드오프)로 대체되어 에이전트를 고르고 새 세션을 만듭니다. **그렇게 만들어진 실제 세션으로 돌아오면, 병합/분할 세션의 내용이 그 세션 안에 합쳐지고 병합/분할 세션 자체는 사라집니다** — 이후로는 그 실제 세션 하나만 남아 평범한 세션처럼 `r`로 바로 이어열립니다(그래서 명령어 복사는 병합/분할 세션에서는 애초에 제공되지 않습니다 — 진짜 이어열 수 있는 id가 없으니까요) |
-| `o` | **스마트 정리** — 세션을 폴더에 배정하는 유일한 방법(캡처는 자동 배치를 하지 않습니다). **지금 보고 있는 범위만** 검토(Root면 store 전체, New면 미분류 세션만, 폴더 안이면 그 폴더+하위 폴더만). 대상 세션을 요약한 뒤, 이미 정리된 폴더들(store 전체)의 내용과 비교해 잘 맞는 기존 폴더나 **새로 만들 하위 폴더**를 제안. 제안 목록은 **전부 체크된 채로 뜨므로** `Enter`만 눌러도 전체 적용되고, 잘못된 것만 `Space`로 체크 해제하면 됩니다(해제한 건 검토완료로 큐에서 빠짐), `Esc`로 전체 취소(마찬가지로 큐에서 빠짐 — 다시 `o`를 누르면 새로 계산). 새로 생길 폴더는 목록에 "신규" 표시 |
-| `h` | 다른 에이전트로 컨텍스트 넘겨 **새 세션 시작** (handoff) |
-| `n` | 이 폴더 컨텍스트로 새 에이전트 세션 띄우기 |
-| `m` / `t` | 폴더 이동 / 태그 편집 |
-| `x` | 세션 삭제 (Mycelium 저장소에서만 — 원본 로그는 그대로 두고, 다시 스캔해도 재캡처되지 않도록 삭제 목록에 기록) |
-| `y` | 세션 내용(제목+요약+대화)을 클립보드로 복사 |
-| `Shift+M` | **병합** — `Space`로 2개 이상 선택 후. 원본은 절대 수정하지 않고 새 세션 하나를 만들어 대화를 이어붙입니다(git merge처럼). 원본들은 목록에서 숨겨지고(내용은 그대로 보존), `mycelium unmerge <id>`로 언제든 되돌릴 수 있습니다 |
-| `Shift+S` | **분할** — 현재 세션(목록/상세 어디서든)을 LLM이 주제별 턴 구간으로 나눠 제안하고, 검토 후 원하는 구간만 새 세션으로 분리합니다. 새 조각들은 원본과 같은 폴더에 만들어지고, **원본은 지우거나 숨기지 않고 그대로 목록에 남습니다**(내용이 실제로 옮겨간 게 아니라 일부만 복제된 것이므로). `mycelium unsplit <id>`로 조각들을 지우고 원상복구할 수 있습니다 |
-| `Shift+O` | **정렬 순서 전환** — 최신순(기본) → 제목순(A-Z) → 에이전트순, 다시 누르면 최신순으로 순환. 현재 폴더/검색 범위 안에서만 다시 정렬하는 화면 표시 전용 기능이라 저장되지 않습니다. 기본값이 아닐 때는 상단 헤더 오른쪽에 현재 정렬 상태가 표시됩니다 |
-| `Space` | 다중 선택 |
-| `/` | 전문 검색 |
-| `v` | **캘린더 탭**으로 전환 — Sessions 화면 전체가 월간 그리드 \| 그 날짜 세션 목록 \| 상세, 3단 패널로 바뀝니다(k9s 드릴다운과 동일한 조작: 화살표로 날짜 이동 시 목록·상세가 바로 갱신, `Enter`/`→`로 오른쪽 패널로, `Esc`/`←`로 뒤로). `PgUp`/`PgDn`으로 월 변경. 다시 `v`(또는 그리드에서 `Esc`)를 누르면 Sessions 화면으로 돌아가며, 폴더 선택·검색어 등은 그대로 보존됩니다 |
-| `s` | **스캔**을 TUI에서 바로 (`mycelium scan`과 동일 — 여러 탭/터미널에서 켜둔 세션을 CLI 없이 그대로 불러옴). 폴더 배치는 하지 않음 — 새 세션은 미분류(`New`, `[New]`)로 들어오고, 위 `o`로 정리 |
-| `w` / `c` / `i` / `d` | 폴더 지식 추출(미리보기 후 확인) / 컨텍스트 보기 / AGENTS.md 주입(미리보기 후 확인) / 다이제스트 읽기 (안에서 `n`/`w`로 오늘/이번주 생성) |
-| `g` | **시작 안내 다시 보기** — 처음 실행 시 한 번 자동으로 뜨는 짧은 안내(4단계 라이프사이클 + 핵심 키)를 언제든 다시 열기 |
-| `q` | 종료 |
-
-핸드오프로 이어진 세션은 리스트에 `↩`/`→` 마커와 상세에 "이어받음/이어감" 링크로 표시됩니다. 병합/분할된 세션은 `🔀`(병합 결과)/`✂`(분할 결과) 마커로, 조각을 낳은 분할 원본이나(병합의 경우, 숨겨져 있어 잘 보이진 않지만) 병합된 원본은 `⤳` 마커로 표시됩니다. 상세 화면에는 어느 세션에서 왔는지/어디로 갔는지 링크로 표시됩니다.
-
-## 학습·재사용 루프 (세션이 끝난 뒤 다음 세션에 반영되기)
-
-Mycelium이 "자동으로 좋아진다"는 건 Claude Code의 `/write`, `/proofread` 같은
-**스킬 자체를 고친다는 뜻이 아닙니다** — 스킬 정의는 Mycelium이 전혀 건드리지
-않습니다. Mycelium이 실제로 갱신하는 건 그 위에 얹히는 **폴더별 컨텍스트**
-(`KNOWLEDGE.md` → `AGENTS.md`)입니다: 지난 세션에서 확정된 규칙·표현·구조를
-다음 세션이 시작할 때부터 이미 알고 있게 만드는 것.
-
-**예시 — 사건(케이스) 처리로 서신 작성**
-
-1. **Capture** — `사건/OO` 폴더 작업 디렉토리에서 세션을 열고 `/write`로
-   서신 초안을 작성, `/proofread`로 다듬습니다. 세션은 실시간으로 캡처되고
-   있으니 이 단계에서 따로 할 일은 없습니다.
-2. 초안을 손으로 더 다듬어 최종본을 만듭니다. **이 최종본이나 "무엇을
-   바꿨는지"가 세션 안에 텍스트로 남아 있어야** 다음 단계에서 학습됩니다 —
-   Mycelium은 세션 밖(이메일 클라이언트 등)에서 벌어진 수작업은 볼 수
-   없습니다. 최종본을 세션에 붙여넣거나, 세션을 마치기 전에 "이렇게
-   고쳤고 이유는 이거다" 한 줄을 남기세요.
-3. **Organize** — 세션이 처음이면 `m`으로 `사건/OO` 폴더에 배정합니다
-   (이후 같은 작업 디렉토리의 세션은 규칙에 따라 자동 배정됩니다).
-4. **Learn**
-   - `a` — 세션을 요약·태깅합니다. 손질 규칙을 결정(decision)으로 뽑아
-     내려면, 세션을 마치기 전에 "이번에 확정한 문서 작성 규칙을 정리해줘"
-     한 번 물어보세요 — `a`가 그 답을 `decisions`로 구조화해 담습니다.
-     `a`는 다시 돌릴 때마다 요약·태그·결정·할일을 최신 내용으로 갱신하니
-     세션이 더 진행됐으면 언제든 다시 눌러도 됩니다. 제목만은 한 번
-     정해지면(`a`가 처음 붙였든 `e`로 직접 적었든) 계속 유지됩니다 — 자동
-     추출된 제목이 마음에 안 들면 `e`로 고쳐 쓰세요.
-   - `w` — **폴더(`사건/OO`) 지식을 추출**합니다. 그 폴더의 모든 세션의
-     요약·결정을 모아 `KNOWLEDGE.md`로 컴파일합니다 — 이번 케이스뿐 아니라
-     그 폴더의 과거 케이스들까지 함께 반영됩니다.
-5. **Reuse** — 다음에 같은 폴더에서 새 세션을 열면(`n`/`h`/`r`), Mycelium이
-   그 시점의 `KNOWLEDGE.md`를 작업 디렉토리의 `AGENTS.md`에 자동
-   주입합니다. Claude Code/Codex/Kiro는 세션을 시작하자마자 이 폴더에서 확정된
-   규칙을 이미 알고 있는 상태가 됩니다 — `/write`나 `/proofread`는 그대로
-   쓰더라도, 그 위에 깔리는 배경 지식이 갱신돼 있으니 결과물이 달라집니다.
-
-**어디까지 자동인가:**
-
-| 단계 | TUI가 켜져 있는 동안 | TUI가 꺼져 있을 때 |
-|---|---|---|
-| Capture (스캔) | 5분마다 자동(폴더 배정은 안 함 — 새 세션은 미분류로 시작) | 수동 — `mycelium scan` 또는 TUI를 다시 열기 |
-| Organize: 스마트 정리 (`o`) | 30분마다 자동 계산 후 대기열에 큐잉(기본은 적용까지는 안 함) | `o` 또는 `mycelium organize` 수동 |
-| Learn: 요약·태깅 (`a`) | 새로 들어온 세션에 자동 실행 | `a` 또는 `mycelium autotag` 수동 |
-| Learn: 폴더 지식 (`w`) | **자동 아님** | `w` 또는 `mycelium knowledge <폴더>` 수동 |
-| Reuse: AGENTS.md 주입 | `n`/`h`로 띄운 세션엔 항상 자동 | 동일 — TUI 실행 여부와 무관 |
-
-이 upkeep은 **TUI 프로세스 자체 안에서** 도는 것이지 별도 백그라운드
-프로세스가 아닙니다 — 그래서 TUI를 새로 열 때마다 항상 최신 코드로
-실행되고, TUI를 닫으면 같이 멈춥니다. (예전에는 TUI가 켜질 때 분리된
-데몬 프로세스를 자동으로 띄우는 방식이었는데, 그 프로세스가 코드를
-바꿔도 재시작 전까진 예전 동작을 계속 들고 있는 문제가 있어서 이렇게
-바꿨습니다. TUI 없이도 계속 돌리고 싶다면 아래 "TUI 없이 백그라운드만"
-참고.)
-
-**캡처는 폴더를 배정하지 않습니다** — 새로 캡처된 세션은 전부 미분류
-(`New`, `[New]`)로 시작하고, **스마트 정리(`o`)가 폴더를 배정하는 유일한
-경로**입니다. LLM 추측이라 오분류 위험이 있어서 `w`/`i`와 같은 원칙(쓰기
-전에 항상 사람이 미리보기)을 따릅니다.
-
-30분마다(환경변수 `MYCELIUM_SMART_ORGANIZE_MS`로 조절, 한 사이클당 최대
-`MYCELIUM_SMART_ORGANIZE_LIMIT`개, 기본 100개) 아직 사람이 확정하지 않은
-세션을 요약·분류해서 세션 자체에 제안을 큐잉해 둡니다. 다음에 TUI를 열면
-"N개 정리 제안 대기 중 — o로 확인" 알림이 뜨고, `o`를 누르면 **다시
-계산하지 않고** 바로 그 제안을 다중 선택 화면으로 보여줍니다 — 원하는
-것만 체크해서 `Enter`로 적용, 나머지는 검토완료로 대기열에서 빠집니다
-(다시 안 나타남). `Esc`도 마찬가지로 대기열에서 지웁니다 — 다시 보고
-싶으면 `o`를 다시 눌러 새로 계산하면 됩니다. 검토 없이 바로 옮기게
-하려면 `~/.mycelium/config.json`의 `autoApproveSmartOrganize`를 `true`로
-바꾸세요(기본 `false`).
-
-**대기열이 비어 있을 때 직접 `o`를 누르면(또는 `mycelium organize`),
-사람이 직접 옮기지 않은 세션은 전부 검토 대상**입니다(폴더가 이미
-있어도 마찬가지). **단, 검토 대상은 항상 지금 보고 있는 폴더(+하위)로
-한정됩니다** — Root에서 누르면 store 전체, `New`에서 누르면 미분류
-세션만, 특정 폴더 안에서 누르면 그 폴더와 하위 폴더의 세션만 대상입니다
-(CLI는 `--folder <경로>`로 동일하게 좁힐 수 있음, 생략 시 store 전체). 다만 옮길
-후보 폴더 자체(비교 대상)는 항상 store 전체 — 지금 있는 폴더가 아닌
-완전히 다른 폴더로 옮기자는 제안도 나올 수 있습니다. 이미 정리된
-폴더(KNOWLEDGE.md나 요약이 쌓인 폴더)와 내용이 더 잘 맞으면 그쪽으로
-옮기자고 제안하고, 맞는 기존 폴더가 없지만 현재 세션의 뚜렷한 주제라면
-**새 폴더**를 제안하기도 합니다(제안 목록에 "신규"로 표시). 이때도 결정은
-항상 사람 — 미리보기에서 체크한 것만 실제로 옮겨집니다. 한 번 실행할 때
-최대 200개까지만 처리합니다(`mycelium organize --limit N`으로 조절) —
-한꺼번에 store 전체를 재분류하지
-않도록. 확실히 매칭 안 된 세션은 24시간 동안(환경변수
-`MYCELIUM_SMART_ORGANIZE_COOLDOWN_MS`로 조절) 다시 물어보지 않습니다 —
-30분 자동 사이클이 같은 미분류 세션에 계속 LLM 비용만 쓰는 걸 막기
-위함이며, `o`를 직접 누르면 이 쿨다운도 무시하고 바로 재평가합니다.
-
-**"자동"은 `n`/`h`로 띄운 세션에 한합니다.** 터미널에서 그냥 `claude`/`codex`/`kiro-cli`를
-직접 치거나 스크립트로 여는 세션은 Mycelium을 거치지 않으므로 이 주입 트리거가
-걸리지 않습니다 — `AGENTS.md`는 그냥 디스크의 파일이라, 예전에 한 번이라도
-주입된 적이 있으면 그 스냅샷은 계속 읽히지만 **그 이후 `KNOWLEDGE.md`가 갱신된
-내용은 자동으로 안 따라갑니다.** Mycelium 밖에서 여는 세션에도 최신 지식을
-넣고 싶으면 그 직전에 TUI `i` 키 또는
-```sh
-mycelium inject --dir <프로젝트 경로> --folder <폴더>   # --folder는 필수
-```
-를 실행하세요. Capture(스캔)·Learn(요약·태깅)은 세션을 어떻게 열었는지와 무관하게
-항상 적용됩니다 — 오직 이 "AGENTS.md 새로고침" 단계만 실행 경로를 탑니다.
-
-`w`(폴더 지식 추출)만 사람이 직접 눌러야 하는 지점입니다 — 의도적으로
-그렇게 두었습니다: 무엇이 "이 폴더에서 확정된 규칙"인지는 사람이 그 시점의
-세션들을 보고 판단하는 편이, 세션이 들어올 때마다 자동으로 `KNOWLEDGE.md`를
-다시 쓰는 것보다 안전합니다. 데몬의 스캔 주기에 `w`까지 자동으로 끼워 넣는
-것도 가능하니, 원하면 요청하세요.
-
-**TUI의 `w`/`i`는 쓰기 전에 항상 미리보기를 보여주고 확인을 받습니다.**
-LLM이 생성한 `KNOWLEDGE.md` 내용이나 `AGENTS.md`에 주입될 내용을 스크롤
-가능한 창으로 먼저 보여주고, `y`/`Enter`로 저장하거나 `n`/`Esc`로 취소할 수
-있습니다 — 한 번 `KNOWLEDGE.md`에 들어가면 그 폴더의 모든 미래 세션에
-자동으로 주입되기 때문에, 저장 전에 사람이 실제로 훑어보는 지점을 하나
-만들어 둔 것입니다. (CLI의 `mycelium knowledge <폴더>`는 확인할 사람이
-없는 비대화형 호출이라 예전처럼 바로 씁니다.) 다만 `n`/`h`로 에이전트를
-띄울 때 자동으로 일어나는 `AGENTS.md` 주입 자체는 이미 저장된
-`KNOWLEDGE.md`를 그대로 반영하는 것이라 확인 없이 계속 자동으로
-진행됩니다 — 확인은 그 `KNOWLEDGE.md`가 저장되는 `w` 시점에서 이미
-끝난 것으로 봅니다.
-
-## 핸드오프 라이프사이클 (모델 간 이어가기)
-
-Claude Code, Codex, Kiro는 세션을 서로 다른 포맷으로 저장하기 때문에, 벤더를 바꾸는
-핸드오프(`h`)는 항상 **새 세션**을 만듭니다 — 버그가 아니라 의도된 동작입니다.
-같은 에이전트로 그대로 이어가려면 `r`(이어열기/resume)을 쓰세요: `r`은 원래
-세션 자체를 이어가고(같은 에이전트에서만 가능), `h`는 다른 에이전트로(필요하면
-원래 에이전트로 되돌아가도) 항상 새 세션을 엽니다.
-
-```
-Claude 세션 A ──h(핸드오프)──▶ Codex 세션 B ──h(핸드오프)──▶ Claude 세션 C
-   (완료, 보존됨)                 (완료, 보존됨)                  (진행 중)
-```
-
-여러 번 왕복해도 세션은 계속 갈라지지만, 두 가지 방법으로 "수렴"됩니다:
-
-1. **체인 연결** — 각 홉은 `continuationOf`/`continuedTo`로 양방향 연결되어
-   리스트에 `↩`/`→` 마커, 상세 화면에 "이어받음/이어감" 링크로 보입니다.
-   끊어진 세션들이 아니라 하나의 흐름으로 추적됩니다.
-2. **폴더 지식으로 합류** — 실제로 "합쳐지는" 지점은 개별 세션 파일이 아니라
-   그 폴더의 `KNOWLEDGE.md`입니다. `w`를 누르면 그 폴더의 모든 세션(에이전트
-   상관없이)의 요약·결정을 하나의 문서로 컴파일하고, 이 문서는 다음에 그
-   폴더에서 에이전트를 띄울 때(`n`/`h`/`r`) `AGENTS.md`에 자동 주입됩니다.
-
-**되돌아가는 핸드오프(B→C) 전 권장 순서:**
-1. `a` — 넘겨줄 세션(B)에 아직 요약이 없다면 먼저 생성하세요. 핸드오프
-   프롬프트가 `extracted.summary`/`decisions`/`todos`를 그대로 담기 때문에,
-   없으면 첫/마지막 메시지 원문만으로 부실한 핸드오프가 됩니다.
-2. `w` — 폴더 지식을 최신화하세요. 다음 에이전트 시작 시 주입되는
-   `AGENTS.md`가 이 시점의 `KNOWLEDGE.md`를 반영합니다.
-3. `h` — B에서 핸드오프, 에이전트로 원하는 쪽(Claude Code 등)을 선택합니다.
-
-**이전 세션(A)은 어떻게 되나요?** 방치되는 게 아니라 "완료된 채 보존"됩니다:
-- 원본 `.jsonl` 로그는 그대로 남아 있고, 언제든 `r`로 그 시점 그대로 다시 열
-  수 있습니다.
-- A가 만든 코드/파일 변경은 이미 디스크(레포)에 있으므로, 대화 스레드가
-  옮겨가도 작업 결과물은 사라지지 않습니다.
-- A의 요약·결정은 이미 Mycelium에 저장돼 있고, `w`로 폴더 지식에 반영됩니다.
-- 다만 A는 "그 시점에서 멈춘 가지"가 됩니다 — 이후 진행은 C(또는 다음 이어
-  열기)에서 계속해야 하며, A를 나중에 다시 열어 타이핑해도 C에서 있었던
-  변경 사항은 알지 못합니다.
-
-## CLI (스크립팅용)
-
-TUI 없이 개별 명령으로도 전부 됩니다:
+Still experimental, so sessions/folders can get messy while testing. Clean
+up with `cleanup`:
 
 ```sh
-# Capture / Organize
-mycelium scan                                  # 캡처만, 폴더 배정은 안 함
-mycelium organize [--apply] [--limit N] [--folder <경로>]  # 내용 기반 폴더 제안(요약 먼저 채움, 새 폴더 제안도 가능, --folder로 특정 폴더+하위만 좁히기, --apply 전엔 미리보기만, 기본 200개씩)
-mycelium mkdir 회사/플랫폼/인증
-mycelium mv <session> 회사/플랫폼/인증
-mycelium tag <session> +긴급 -오분류
-mycelium unmerge <session>                     # TUI Shift+M 병합 되돌리기
-mycelium unsplit <session>                     # TUI Shift+S 분할 되돌리기
-
-# Learn
-mycelium autotag                               # 과거 세션 소급 일괄 요약·태깅
-mycelium digest [week] [--date YYYY-MM-DD]
-mycelium knowledge 회사/플랫폼/인증
-
-# Reuse / Find
-mycelium context <session>
-mycelium inject --dir <프로젝트> --folder <폴더> # AGENTS.md에 지식 주입
-mycelium handoff <session>                     # 인수인계 프롬프트 출력
-mycelium resume <session|prefix> [--copy|--exec] # 이어열기 명령어 출력/클립보드 복사/즉시 실행
-mycelium search "쿼터" --tag 인프라 --folder 회사
-mycelium list / tags / reindex
-
-# (선택) TUI 없이도 백그라운드 업키핑만 계속 돌리고 싶을 때
-mycelium daemon                 # 포그라운드로 실행
-mycelium daemon --detach        # 백그라운드로 분리 실행 (idempotent)
-mycelium daemon --stop          # 정지
-
-# 가짜 세션으로 인터랙티브 튜토리얼(3분 데모용, 별도 스토어 ~/.mycelium-demo)
-mycelium demo
-
-# TUI 표시 언어 (기본 en) — 다음 TUI 실행부터 적용
-mycelium lang        # 현재 설정 확인
-mycelium lang ko      # 한국어로 전환
-mycelium lang en      # 영어로 전환
+mycelium cleanup            # (= tidy) safe cleanup: removes Mycelium's own LLM-call sessions
+                            #  + empty folders + rebuilds the index. Safe to run any time.
+mycelium cleanup folders    # remove empty folders only
+mycelium cleanup archive    # delete sessions filed under _archive from the store
+mycelium cleanup index      # rebuild just the sqlite index (if search looks off)
+mycelium cleanup reset --yes # full reset: delete ~/.mycelium entirely → re-scan
 ```
 
-**`mycelium`(TUI)을 그냥 평소처럼 열면 백그라운드 업키핑(스캔·정리·다이제스트)이
-TUI 프로세스 자기 자신 안에서 같이 돕니다** — 따로 `mycelium daemon`이나 스크립트를
-실행할 필요 없습니다. **TUI를 닫으면 업키핑도 같이 멈춥니다** — 별도 프로세스가
-남지 않으니 다음에 열 때는 항상 지금 설치된 코드로 새로 시작합니다. 이 자동
-업키핑이 싫으면 `MYCELIUM_NO_AUTOSTART=1` 환경변수로 끌 수 있습니다.
+- **`tidy` (default), `folders`, and `index` are safe** — they never delete
+  original sessions (`raw/`).
+- **`archive`** deletes sessions filed under `_archive` from the store. The
+  original `~/.claude`/`~/.codex`/`~/.kiro` logs are untouched, so a
+  re-`scan` brings them back — but this time unfiled (they don't
+  auto-return to `_archive`; that's manual-placement only).
+- **`reset --yes` cannot be undone** — it deletes all of `~/.mycelium`
+  (normalized sessions, folders, knowledge, index). It still doesn't touch
+  the original agent session logs, so `mycelium scan` rebuilds it from
+  scratch.
 
-### TUI 없이 백그라운드만 (선택)
+For a clean start: `mycelium cleanup reset --yes && mycelium scan`.
 
-TUI를 열어두지 않고도 계속 스캔·정리·다이제스트가 돌길 원하면(예: 헤드리스로만
-쓰는 경우, 서버에 상시 띄워두는 경우) 별도 데몬 프로세스를 명시적으로 띄우세요:
-```sh
-mycelium daemon --detach    # 이미 떠 있으면 아무 일 안 함(idempotent), 로그는 ~/.mycelium/daemon.log
-mycelium daemon --stop      # 떠 있으면 정지, 없으면 아무 일 안 함
-```
-`npm install -g`로 설치했다면(git clone 없이) 이 두 명령이 기본입니다. git clone으로
-설치했다면 저장소 루트의 `scripts/run.sh`/`scripts/stop.sh`도 완전히 동일하게 동작합니다
-(내부적으로 같은 로직). 셋 다 같은 `~/.mycelium/daemon.pid`를 쓰므로, 어느 쪽으로
-띄웠든 아무 방법으로나 멈출 수 있습니다. 재부팅 시 자동 시작 같은 건 없습니다 —
-필요하면 `mycelium daemon --detach`(또는 `scripts/run.sh`)를 launchd/systemd/cron
-등에 걸어 쓰세요. **이렇게 별도로 띄운 데몬은 그 시점 코드를 계속 들고 있으니,
-mycelium을 업데이트했다면 `mycelium daemon --stop` 후 다시 `--detach`로 띄워야
-새 코드가 적용됩니다.**
+## Contributing
 
-백그라운드 upkeep 주기·상한은 전부 환경변수로 조절됩니다(기본값은 큰
-백로그에서도 LLM 프로세스가 한꺼번에 몰리지 않게 보수적으로 잡혀 있음 —
-Windows에서 Claude 콘솔창이 계속 뜨던 문제[#3]가 바로 이 몰림 때문이었음):
-
-| 환경변수 | 기본값 | 의미 |
-|---|---|---|
-| `MYCELIUM_SCAN_MS` | 5분 | 스캔(캡처) 주기 |
-| `MYCELIUM_TAG_BATCH_LIMIT` | 20 | 스캔 사이클 한 번당 자동 요약·태깅할 세션 수 상한(오래된 것부터, 나머지는 다음 사이클) |
-| `MYCELIUM_SMART_ORGANIZE_MS` | 30분 | 스마트 정리 자동 계산 주기 |
-| `MYCELIUM_SMART_ORGANIZE_LIMIT` | 100 | 스마트 정리 사이클 한 번당 분류할 세션 수 상한 |
-| `MYCELIUM_SMART_ORGANIZE_COOLDOWN_MS` | 24시간 | 매칭 안 된 세션을 다시 분류 시도하기까지 대기 시간 |
-| `MYCELIUM_SUMMARIZE_CONCURRENCY` | 3 | 스마트 정리 자동 사이클에서 동시에 띄우는 `claude`/`codex` 프로세스 수 |
-
-## 정리 (실험 단계)
-
-아직 실험 단계라 테스트하다 보면 세션/폴더가 지저분해질 수 있습니다. `cleanup`으로 정리합니다:
-
-```sh
-mycelium cleanup            # (= tidy) 안전 정리: Mycelium 자체 LLM 호출 세션 제거
-                            #  + 빈 폴더 제거 + 인덱스 재생성. 수시로 돌려도 됨.
-mycelium cleanup folders    # 빈 폴더만 제거
-mycelium cleanup archive    # _archive에 넣어둔 세션을 스토어에서 삭제
-mycelium cleanup index      # sqlite 인덱스만 재생성 (검색이 이상할 때)
-mycelium cleanup reset --yes # 전체 초기화: ~/.mycelium 통째로 삭제 → 다시 scan
-```
-
-- **`tidy`(기본)와 `folders`/`index`는 안전**합니다 — 원본 세션(`raw/`)을 지우지 않습니다.
-- **`archive`**는 `_archive` 폴더에 넣어둔 세션을 스토어에서 지웁니다. 원본 `~/.claude`/`~/.codex`/`~/.kiro` 로그는 그대로라, 다시 `scan`하면 재유입되지만 이번엔 미분류로 들어옵니다(자동으로 다시 `_archive`로 가지 않음 — `_archive`는 수동 배치 전용).
-- **`reset --yes`는 되돌릴 수 없습니다** — `~/.mycelium`(정규화 세션·폴더·지식·인덱스)를 전부 삭제합니다. 그래도 원본 에이전트 세션 로그는 안 건드리므로, `mycelium scan`으로 처음부터 다시 만들 수 있습니다.
-
-깨끗하게 새로 시작하려면: `mycelium cleanup reset --yes && mycelium scan`.
-
-## 데이터 위치
-
-모든 데이터는 `~/.mycelium/`에 로컬 저장. **파일이 원본, sqlite는 파생 인덱스**(지워도 `mycelium reindex`로 재생성):
-
-```
-~/.mycelium/
-  raw/<id>.json          중립 스키마로 정규화된 세션 (source of truth)
-  tree/<폴더>/           사용자 폴더 구조 = 실제 디렉토리
-    KNOWLEDGE.md         폴더별 프로젝트 지식 (상속 단위)
-  digests/YYYY-Wnn.md    서사형 다이제스트
-  db/index.db            sqlite FTS5 검색 인덱스 (재생성 가능)
-  config.json            삭제 목록, 표시 언어(locale) 등
-```
-
-머신 간에 세션을 옮기려면 `raw/`와 `tree/`를 복사한 뒤 대상에서 `mycelium reindex`.
-
-## 설계 원칙
-
-- **로컬 전용**: 세션에는 민감한 업무가 포함되므로 외부 전송 없음. 인터페이스는 로컬 터미널 TUI, LLM 호출도 사용자 본인의 CLI 구독 경유.
-- **모델 비종속**: 저장 포맷이 특정 벤더 세션 형식이 아닌 중립 스키마. 새 에이전트 추가 = 어댑터 한 파일.
-- **사람 우선**: 자동 배치/태깅은 제안일 뿐, 사람이 정리한 세션(`organizedBy: human`)은 자동화가 덮어쓰지 않음.
-- **의존성 최소**: 코어는 Node 내장 모듈(`node:sqlite` 등)만, TUI만 `neo-blessed`(MIT) 하나. MIT 라이선스.
-
-## 상태
-
-POC. 라이프사이클 4단계 전부 실제 로컬 세션(Claude Code + Codex + Kiro)으로 동작 검증. TUI는 neo-blessed 기반이며 실제 터미널에서 사용 검증 중.
+See [`CONTRIBUTING.md`](./CONTRIBUTING.md) — includes the dev setup, how to
+run lint/tests, and how to add support for a new AI agent CLI.
