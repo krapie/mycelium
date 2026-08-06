@@ -15,7 +15,16 @@ permissions:
 jobs:
   cla-check:
     runs-on: ubuntu-latest
-    if: (github.event.comment.body && contains(github.event.comment.body, 'recheck')) || github.event_name == 'pull_request_target'
+    # Re-runs on: the PR itself opening/syncing, a "recheck" comment, OR the
+    # actual sign-off comment (custom-pr-sign-comment below) — without that
+    # last clause, signing does nothing by itself and a contributor has to
+    # post a second, separate "recheck" comment just to make it re-check
+    # what they just signed.
+    if: >
+      github.event_name == 'pull_request_target' ||
+      (github.event.comment.body &&
+        (contains(github.event.comment.body, 'recheck') ||
+         contains(github.event.comment.body, 'I have read the CLA Document and I hereby sign the CLA')))
     steps:
       - name: CLA Assistant Lite
         uses: contributor-assistant/github-action@v2.6.1
