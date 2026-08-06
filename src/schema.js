@@ -65,9 +65,21 @@ export function emptyNeutral(id, source) {
 // summary, system-reminder, task-id, task-notification, tool-use-id, usage.
 const SYNTHETIC_TURN = /^<[a-z][a-z-]*>/i;
 
+/**
+ * The first real (non-synthetic) user turn, or null if there isn't one.
+ * Split out from firstUserText() below so callers that need more than a
+ * short list-preview (handoff.js's ~800-char excerpt, insight.js's ~80-char
+ * digest line) can apply their own truncation on top of the same
+ * synthetic-turn-skipping search, instead of being stuck with this file's
+ * 200-char preview length.
+ */
+export function firstUserTurn(neutral) {
+  return neutral.turns.find((x) => x.role === 'user' && x.text?.trim() && !SYNTHETIC_TURN.test(x.text.trim())) || null;
+}
+
 /** A short one-line preview used in lists / FTS fallback. */
 export function firstUserText(neutral) {
-  const t = neutral.turns.find((x) => x.role === 'user' && x.text?.trim() && !SYNTHETIC_TURN.test(x.text.trim()));
+  const t = firstUserTurn(neutral);
   return t ? t.text.trim().slice(0, 200) : '';
 }
 

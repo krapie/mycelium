@@ -19,7 +19,6 @@ import {
   classificationCandidates,
   listTreeDirs,
   mergeSessions,
-  foldProductIntoSession,
 } from '../../organize.js';
 import { suggestSplitBoundaries, applySplit } from '../../split.js';
 import { scan } from '../../scanner.js';
@@ -27,9 +26,7 @@ import { pickFolder, editTags, menu, multiSelectList } from '../widgets/pickers.
 import { createCalendarTab } from './calendar.js';
 import { formatSessionDetail } from '../render.js';
 import { basename } from 'node:path';
-import { launchAgent, resumeSession } from '../launch.js';
-import { resumeCommandLine } from '../../agents.js';
-import { buildHandoff } from '../../handoff.js';
+import { launchAgent } from '../launch.js';
 import { autoTagSession } from '../../learn.js';
 import { buildKnowledgeText, writeKnowledgeText } from '../../insight.js';
 import { assembleContext, injectAgentsMd } from '../../reuse.js';
@@ -37,6 +34,7 @@ import { textView, digestReader, confirmText, helpModal, welcomeModal } from '..
 import { textPrompt } from '../widgets/pickers.js';
 import { copyToClipboard } from '../clipboard.js';
 import { t } from '../i18n.js';
+import { createResumeHandoff } from '../resume-handoff.js';
 
 // Plain-text rendering of a session for the clipboard (title, summary, and the
 // full transcript — everything you'd want to paste elsewhere).
@@ -787,102 +785,28 @@ export function sessionsView(opts = {}) {
         });
       });
 
-      // Shared tail for any real resume.
-      const doActualResume = (session) => {
-        // resumeSession() (launch.js) already reindexes exactly what changed.
-        resumeSession(app, session, () => {
+      // Resume/handoff/copy-command trio — shared with the Calendar tab's
+      // day-list/detail (see resume-handoff.js). Only the "what's currently
+      // selected" accessor and the post-action callbacks are view-specific.
+      const { doResume, doHandoff, onDetailEnter } = createResumeHandoff(app, {
+        getCurrentRow: currentRow,
+        afterResume: () => {
           reloadFolders();
           reloadList();
           listBox.focus();
           setLevel('sessions');
           app.render();
-        });
-      };
-
-      // Reuse: hand the current session off to another agent (seeded NEW
-      // session). `fallback: true` means this handoff is doResume()'s
-      // substitute for a merge/split product that has no real agent-native
-      // id to resume — explain that in the agent-picker's own title instead
-      // of a separate app.notify() toast, which would just visibly overlap
-      // the picker (both are centered overlays and the picker opens in the
-      // same tick, before a timed toast has any time to be read).
-      const doHandoff = ({ fallback = false } = {}) => {
-        const r = currentRow();
-        if (!r) return;
-        const hb = buildHandoff(r.id);
-        if (!hb.ok) return app.notify(hb.error, 3);
-        const isDerived = r.mergedFrom?.length || r.splitFrom;
-        // launchAgent() (launch.js) already reindexes exactly what changed,
-        // and already linkContinuation()s the new session to r.id.
-        launchAgent(app, { folder: r.folder, seed: hb.prompt, parentId: r.id, title: fallback ? t('launch.selectAgentFallback') : undefined }, (mine) => {
-          // A merge/split product only ever existed to seed this handoff —
-          // once a real, directly-resumable session exists, fold the
-          // product's content into it and drop the product entirely, so
-          // there's one ordinary session left (not two rows, and no
-          // continued special-casing: from here on `r` on the new session
-          // is just a normal resume, see organize.js's foldProductIntoSession).
-          if (isDerived && mine?.[0]) {
-            const res = foldProductIntoSession(r.id, mine[0].id);
-            if (res.ok) {
-              data.refreshOne(r.id); // gone — reindex removes it
-              data.refreshOne(mine[0].id); // now holds the folded turns
-              data.refreshMany(res.touchedIds || []); // their backlinks changed too
-            }
-          }
+        },
+        afterHandoff: () => {
           reloadFolders();
           reloadList();
           listBox.focus();
           app.render();
-        });
-      };
-      listBox.key('h', () => doHandoff());
-
-      // Reuse: RESUME the exact session in its original agent (claude --resume / codex resume).
-      // A merge/split product has no real agent-native id to resume — `r`
-      // falls back to handoff, which folds the product into whatever real
-      // session that produces (see doHandoff above), so this only ever
-      // happens once per product: after that it's gone, replaced by an
-      // ordinary session `r` resumes normally.
-      const doResume = () => {
-        const r = currentRow();
-        if (!r) return;
-        const n = data.detail(r.id);
-        if (n?.mergedFrom?.length || n?.splitFrom) {
-          return doHandoff({ fallback: true });
-        }
-        doActualResume({ id: r.id, source: r.source, cwd: n?.cwd, projectDir: n?.projectDir });
-      };
-      listBox.key('r', doResume);
-      // Detail panel uses Enter instead of r — it's the leaf level, so Enter
-      // (the drill-down/act key everywhere else in this view) is free here.
-      // Unlike listBox's `r` (instant resume), Enter offers a choice: resume
-      // right here, or copy the equivalent shell command for a new tab.
-      detailBox.key('enter', () => {
-        const r = currentRow();
-        if (!r) return;
-        // "Copy command" pastes into a brand-new terminal outside the TUI —
-        // there's no way to auto-absorb through that path, and a merge/split
-        // product's id isn't a real agent-native session id to begin with,
-        // so the copied command would just fail with "session not found"
-        // when actually run. Only offer it for a real, truly resumable session.
-        const isDerived = r.mergedFrom?.length || r.splitFrom;
-        const choices = [{ label: t('resume.openHere'), value: 'here' }];
-        if (!isDerived) choices.push({ label: t('resume.copyCommand'), value: 'copy' });
-        menu(
-          app,
-          t('resume.chooseAction'),
-          choices,
-          (choice) => {
-            if (choice === 'here') return doResume();
-            if (choice === 'copy') {
-              const n = data.detail(r.id);
-              const res = resumeCommandLine({ id: r.id, source: r.source, cwd: n?.cwd, projectDir: n?.projectDir });
-              if (!res.ok) return app.notify(res.error, 3);
-              app.notify(copyToClipboard(res.line) ? t('resume.copied') : t('resume.copyFailed'), 3);
-            }
-          },
-        );
+        },
       });
+      listBox.key('h', () => doHandoff());
+      listBox.key('r', doResume);
+      detailBox.key('enter', onDetailEnter);
 
       // Learn: generate summary + tags (content-based). Works on the multi-
       // selection if any, else the current row. This is how a session gets its

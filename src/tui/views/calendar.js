@@ -4,12 +4,7 @@ import { C, sourceColor, sourceLabel } from '../theme.js';
 import * as data from '../data.js';
 import { t } from '../i18n.js';
 import { formatSessionDetail } from '../render.js';
-import { launchAgent, resumeSession } from '../launch.js';
-import { resumeCommandLine } from '../../agents.js';
-import { buildHandoff } from '../../handoff.js';
-import { foldProductIntoSession } from '../../organize.js';
-import { menu } from '../widgets/pickers.js';
-import { copyToClipboard } from '../clipboard.js';
+import { createResumeHandoff } from '../resume-handoff.js';
 
 const MONTH_NAMES_EN = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -243,13 +238,11 @@ export function createCalendarTab(app, { onBack }) {
     dayListBox.key(['enter', 'right'], drillIntoCalDetail);
     dayListBox.key(['escape', 'left'], backToGrid);
 
-    // Resume/handoff — same actions and same underlying functions as the
-    // Sessions screen's listBox `r`/`h` and detailBox `enter` (sessions.js),
-    // just reimplemented against dayRows/dayListBox instead of rows/listBox.
-    // Kept independent rather than sharing sessions.js's closures: that
-    // resume/handoff flow has already been redesigned more than once this
-    // project, and duplicating ~40 lines here is a smaller risk than
-    // reaching into it from a second, structurally different view.
+    // Resume/handoff/copy-command trio — shared with the Sessions panel's
+    // listBox/detailBox (see resume-handoff.js). Only the "what's currently
+    // selected" accessor and the post-action callback are view-specific;
+    // both resume and handoff use the same afterAction() here (unlike
+    // sessions.js, which returns to a different level after each).
     const afterAction = () => {
       loadMonth();
       renderAll();
@@ -257,34 +250,11 @@ export function createCalendarTab(app, { onBack }) {
       level = 'dayList';
       app.render();
     };
-    const doActualResume = (session) => {
-      resumeSession(app, session, afterAction);
-    };
-    const doHandoff = ({ fallback = false } = {}) => {
-      const r = dayRows[dayListBox.selected];
-      if (!r) return;
-      const hb = buildHandoff(r.id);
-      if (!hb.ok) return app.notify(hb.error, 3);
-      const isDerived = r.mergedFrom?.length || r.splitFrom;
-      launchAgent(app, { folder: r.folder, seed: hb.prompt, parentId: r.id, title: fallback ? t('launch.selectAgentFallback') : undefined }, (mine) => {
-        if (isDerived && mine?.[0]) {
-          const res = foldProductIntoSession(r.id, mine[0].id);
-          if (res.ok) {
-            data.refreshOne(r.id);
-            data.refreshOne(mine[0].id);
-            data.refreshMany(res.touchedIds || []);
-          }
-        }
-        afterAction();
-      });
-    };
-    const doResume = () => {
-      const r = dayRows[dayListBox.selected];
-      if (!r) return;
-      const n = data.detail(r.id);
-      if (n?.mergedFrom?.length || n?.splitFrom) return doHandoff({ fallback: true });
-      doActualResume({ id: r.id, source: r.source, cwd: n?.cwd, projectDir: n?.projectDir });
-    };
+    const { doResume, doHandoff, onDetailEnter } = createResumeHandoff(app, {
+      getCurrentRow: () => dayRows[dayListBox.selected],
+      afterResume: afterAction,
+      afterHandoff: afterAction,
+    });
     dayListBox.key('r', doResume);
     dayListBox.key('h', () => doHandoff());
 
@@ -297,22 +267,7 @@ export function createCalendarTab(app, { onBack }) {
       app.render();
     };
     calDetailBox.key(['escape', 'left'], backToDayList);
-    calDetailBox.key('enter', () => {
-      const r = dayRows[dayListBox.selected];
-      if (!r) return;
-      const isDerived = r.mergedFrom?.length || r.splitFrom;
-      const choices = [{ label: t('resume.openHere'), value: 'here' }];
-      if (!isDerived) choices.push({ label: t('resume.copyCommand'), value: 'copy' });
-      menu(app, t('resume.chooseAction'), choices, (choice) => {
-        if (choice === 'here') return doResume();
-        if (choice === 'copy') {
-          const n = data.detail(r.id);
-          const res = resumeCommandLine({ id: r.id, source: r.source, cwd: n?.cwd, projectDir: n?.projectDir });
-          if (!res.ok) return app.notify(res.error, 3);
-          app.notify(copyToClipboard(res.line) ? t('resume.copied') : t('resume.copyFailed'), 3);
-        }
-      });
-    });
+    calDetailBox.key('enter', onDetailEnter);
 
     created = true;
   }

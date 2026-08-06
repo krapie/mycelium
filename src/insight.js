@@ -3,7 +3,8 @@ import { writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { complete } from './llm.js';
 import { allRaw } from './scanner.js';
 import { TREE_DIR, DIGEST_DIR, ensureDirs } from './paths.js';
-import { isSuperseded } from './organize.js';
+import { isSuperseded, isInSubtree } from './organize.js';
+import { firstUserTurn } from './schema.js';
 
 function dayOf(iso) {
   return iso ? iso.slice(0, 10) : null;
@@ -53,7 +54,7 @@ export async function generateDigest({ period = 'day', date } = {}) {
   const blocks = [];
   for (const [folder, ss] of byFolder) {
     const items = ss
-      .map((s) => `- [${folder}] ${s.extracted.summary || s.turns.find((t) => t.role === 'user')?.text?.slice(0, 80) || '(요약 없음)'}`)
+      .map((s) => `- [${folder}] ${s.extracted.summary || firstUserTurn(s)?.text?.slice(0, 80) || '(요약 없음)'}`)
       .join('\n');
     blocks.push(items);
   }
@@ -93,7 +94,7 @@ export async function buildKnowledgeText(folder) {
   const sessions = allRaw().filter((s) => {
     if (isSuperseded(s)) return false; // its content now lives in the merge/split product instead
     const f = s.folder || '_inbox';
-    return f === folder || f.startsWith(folder + '/');
+    return isInSubtree(f, folder);
   });
   if (sessions.length === 0) return { ok: false, error: `no sessions in ${folder}` };
 

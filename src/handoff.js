@@ -1,5 +1,6 @@
 import { loadRaw } from './scanner.js';
 import { assembleContext } from './reuse.js';
+import { firstUserTurn } from './schema.js';
 
 /**
  * Render a session into a handoff prompt a *different* agent can pick up with.
@@ -12,7 +13,7 @@ export function buildHandoff(sessionId) {
   const n = loadRaw(sessionId);
   if (!n) return { ok: false, error: `no session ${sessionId}` };
 
-  const firstUser = n.turns.find((t) => t.role === 'user')?.text?.trim() || '(원 요청 없음)';
+  const firstUser = firstUserTurn(n)?.text?.trim() || '(원 요청 없음)';
   const lastAssistant = [...n.turns].reverse().find((t) => t.role === 'assistant')?.text?.trim() || '';
   const knowledge = assembleContext(n.folder);
 

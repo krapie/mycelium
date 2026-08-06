@@ -2,7 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { ensureDirs, DB_PATH } from './paths.js';
 import { allRaw } from './scanner.js';
 import { firstUserText, searchableText } from './schema.js';
-import { isArchive } from './organize.js';
+import { isArchive, isInSubtree } from './organize.js';
 
 // The sqlite index is a DERIVED artifact — it can be dropped and rebuilt from
 // raw/ at any time (files are the source of truth). ai-memory validated that
@@ -203,7 +203,7 @@ export function listSessions({ folder, date, includeSuperseded = false } = {}) {
   if (!includeSuperseded) rows = rows.filter((r) => !hasSupersededBy(r));
   if (folder === undefined) return rows;
   if (folder === null) return rows.filter((r) => !r.folder);
-  return rows.filter((r) => r.folder === folder || (r.folder && r.folder.startsWith(folder + '/')));
+  return rows.filter((r) => isInSubtree(r.folder, folder));
 }
 
 /**
@@ -262,7 +262,7 @@ export function search({ query, tags = [], folder, date, includeSuperseded = fal
   // restriction, null = only genuinely unfiled (searching from the New
   // pseudo-folder), a path = that subtree.
   if (folder === null) sessions = sessions.filter((s) => !s.folder);
-  else if (folder) sessions = sessions.filter((s) => s.folder && (s.folder === folder || s.folder.startsWith(folder + '/')));
+  else if (folder) sessions = sessions.filter((s) => isInSubtree(s.folder, folder));
   if (rankOrder) {
     for (const s of sessions) s.snippet = snippets.get(s.id) || null;
     sessions.sort((a, b) => (rankOrder.get(a.id) ?? 1e9) - (rankOrder.get(b.id) ?? 1e9));
