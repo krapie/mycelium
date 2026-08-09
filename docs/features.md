@@ -331,9 +331,10 @@ inject AGENTS.md (preview-then-confirm, sibling to `w`). ⬜
 ## TUI — Calendar tab (`src/tui/views/calendar.js`)
 
 Month grid ↔ day list ↔ detail, same drill-down language as Sessions.
-Grid arrows move the day cursor (left/right ±1 day, up/down ±7, clamped to
-month bounds — does not roll into adjacent months); PgUp/PgDn changes
-month. **`r`/`h`/detail-Enter are ~40 lines independently duplicated from
+Grid left/right move the day cursor ±1 day and up/down ±1 week; both roll
+into the adjacent month at the edges (moveDay uses Date arithmetic and
+reloads that month's counts when the boundary is crossed). PgUp/PgDn jump a
+whole month, keeping the same day-of-month. **`r`/`h`/detail-Enter are ~40 lines independently duplicated from
 Sessions** — a deliberate, self-acknowledged choice by the original author
 (comment explains resume/handoff churned enough that sharing felt riskier
 at the time) — the clearest extraction candidate in the codebase. Tab
