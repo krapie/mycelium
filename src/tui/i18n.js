@@ -211,11 +211,11 @@ const en = {
 
   // calendar.js — Calendar tab (v key toggles Sessions ↔ Calendar)
   'calendar.header': 'Calendar',
-  'calendar.gridLabel': ' Calendar (←→↑↓ day, PgUp/PgDn month, Enter →) ',
+  'calendar.gridLabel': ' Calendar (←→ day, ↑↓ week, PgUp/PgDn month, Enter →) ',
   'calendar.sessionCount': (n) => `${n} session${n === 1 ? '' : 's'}`,
   'calendar.dayListLabel': (date, n) => ` ${date} — ${n} session${n === 1 ? '' : 's'} `,
   'calendar.detailLabel': ' Detail ',
-  'calendar.tabHint': '←→↑↓ move  PgUp/PgDn month  Enter/→ drill in  r resume  h handoff  Esc/← back  v Sessions',
+  'calendar.tabHint': '←→ day  ↑↓ week  PgUp/PgDn month  Enter/→ drill in  r resume  h handoff  Esc/← back  v Sessions',
 
   'help.text': null, // filled in below (large block)
 };
@@ -394,11 +394,11 @@ const ko = {
 
   // calendar.js — 캘린더 탭 (v 키로 세션 ↔ 캘린더 전환)
   'calendar.header': '캘린더',
-  'calendar.gridLabel': ' 캘린더 (←→↑↓ 날짜, PgUp/PgDn 월 변경, Enter →) ',
+  'calendar.gridLabel': ' 캘린더 (←→ 날짜, ↑↓ 주, PgUp/PgDn 월 변경, Enter →) ',
   'calendar.sessionCount': (n) => `${n}개 세션`,
   'calendar.dayListLabel': (date, n) => ` ${date} — ${n}개 세션 `,
   'calendar.detailLabel': ' 상세 ',
-  'calendar.tabHint': '←→↑↓ 이동  PgUp/PgDn 월 변경  Enter/→ 상세  r 이어열기  h 핸드오프  Esc/← 뒤로  v 세션으로',
+  'calendar.tabHint': '←→ 날짜  ↑↓ 주  PgUp/PgDn 월 변경  Enter/→ 상세  r 이어열기  h 핸드오프  Esc/← 뒤로  v 세션으로',
 
   'help.text': null,
 };

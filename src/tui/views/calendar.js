@@ -124,10 +124,22 @@ export function createCalendarTab(app, { onBack }) {
     app.render();
   }
 
+  // Move the day cursor by delta days, rolling into the adjacent month when
+  // it crosses a month boundary (e.g. ↓ from the last week lands in the next
+  // month, ↑ from the first week in the previous one). Date does the
+  // month/year normalization; when the month actually changes we reload its
+  // session counts. day is always a real day of the resulting month, so
+  // loadMonth()'s clampDay() is a no-op here.
   function moveDay(delta) {
-    const nd = day + delta;
-    if (nd < 1 || nd > daysInMonth(year, month)) return;
-    day = nd;
+    const d = new Date(year, month - 1, day + delta);
+    const ny = d.getFullYear();
+    const nm = d.getMonth() + 1;
+    day = d.getDate();
+    if (nm !== month || ny !== year) {
+      year = ny;
+      month = nm;
+      loadMonth();
+    }
     renderAll();
   }
 
@@ -185,28 +197,26 @@ export function createCalendarTab(app, { onBack }) {
 
     // Grid: arrows move the day cursor (live preview) — → is already taken
     // by "next day", so unlike Sessions' panels, only Enter drills right.
-    gridBox.key(['left'], () => moveDay(-1));
-    gridBox.key(['right'], () => moveDay(1));
-    gridBox.key(['up'], () => moveDay(-7));
-    gridBox.key(['down'], () => moveDay(7));
-    gridBox.key(['pageup'], () => {
-      month--;
+    // ←→ ±1 day, ↑↓ ±1 week; both roll into the adjacent month at the edges
+    // (moveDay). PgUp/PgDn jump a whole month, keeping the same day-of-month.
+    const changeMonth = (delta) => {
+      month += delta;
       if (month < 1) {
         month = 12;
         year--;
-      }
-      loadMonth();
-      renderAll();
-    });
-    gridBox.key(['pagedown'], () => {
-      month++;
-      if (month > 12) {
+      } else if (month > 12) {
         month = 1;
         year++;
       }
       loadMonth();
       renderAll();
-    });
+    };
+    gridBox.key(['left'], () => moveDay(-1));
+    gridBox.key(['right'], () => moveDay(1));
+    gridBox.key(['up'], () => moveDay(-7));
+    gridBox.key(['down'], () => moveDay(7));
+    gridBox.key(['pageup'], () => changeMonth(-1));
+    gridBox.key(['pagedown'], () => changeMonth(1));
     const drillIntoDayList = () => {
       dayListBox.focus();
       level = 'dayList';
