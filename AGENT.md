@@ -2,6 +2,8 @@
 
 Orientation for an AI coding agent (Claude Code, Codex, Cursor, or similar) working in this repository. If you're a human, [`README.md`](./README.md) and [`docs/`](./docs) are the better starting point — this file is dense and reference-oriented on purpose.
 
+Claude Code loads this automatically via `CLAUDE.md`'s `@AGENT.md` import; other tools that only auto-read a differently-named file should be pointed at this one manually.
+
 ## What this tool is
 
 Mycelium is a local-first Context Lifecycle TUI for AI coding-agent sessions. It manages context produced by AI collaboration through four stages — **Capture → Organize → Learn → Reuse** — implemented as a terminal UI (`neo-blessed`) plus a CLI, both reading/writing a plain-file store under `~/.mycelium/`.
