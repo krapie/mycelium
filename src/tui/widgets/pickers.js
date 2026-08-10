@@ -90,12 +90,12 @@ export function textPrompt(app, label, initial, cb) {
 }
 
 /** A small menu picker returning the chosen value. */
-export function menu(app, label, choices, cb) {
+export function menu(app, label, choices, cb, { width = '40%' } = {}) {
   const box = blessed.list({
     parent: app.screen,
     top: 'center',
     left: 'center',
-    width: '40%',
+    width,
     // Explicit height — blessed 'shrink' on a list can render only the first
     // item, which was hiding the second agent (e.g. Codex) in the handoff menu.
     height: Math.min(choices.length + 2, 14),

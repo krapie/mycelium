@@ -29,3 +29,24 @@ test('buildMockSessions() only uses real adapter sources', () => {
   const sessions = buildMockSessions();
   for (const s of sessions) assert.ok(['claude', 'codex', 'kiro'].includes(s.source), s.source);
 });
+
+test('buildMockSessions() supports every persona, each fully-formed and unfiled', () => {
+  // swe: 3 storylines x 2 sessions. cse: 3 + 2 (its merge storyline is a
+  // 3-way merge). sa: 3 storylines x 2 sessions.
+  for (const [personaId, expectedCount] of [
+    ['swe', 6],
+    ['cse', 5],
+    ['sa', 6],
+  ]) {
+    const sessions = buildMockSessions(personaId);
+    assert.equal(sessions.length, expectedCount, `${personaId} session count`);
+    const ids = sessions.map((s) => s.id);
+    assert.deepEqual(ids, [...new Set(ids)], `${personaId} ids must be unique`);
+    for (const s of sessions) {
+      assert.equal(s.demo, true, `${personaId} session must be demo:true`);
+      assert.equal(s.folder, null, `${personaId} session must start unfiled`);
+      assert.ok(s.extracted.title, `${personaId} session needs a title`);
+      assert.ok(s.turns.length >= 2, `${personaId} session needs a believable conversation`);
+    }
+  }
+});

@@ -136,19 +136,20 @@ const en = {
   'tutorial.promptTitle': 'First time here! Want a quick interactive tour?',
   'tutorial.promptYes': 'Start the tutorial',
   'tutorial.promptNo': 'Skip, just show me around',
+  'tutorial.personaPromptTitle': 'Whose work should the tour follow?',
   'tutorial.exitHint': 'q: exit tutorial',
   'tutorial.step1Title': 'Step 1/14 — Navigate',
   'tutorial.step1Body': (fg) =>
     `{${fg}-fg}→{/} moves focus right — Folders → Sessions → Detail — and {${fg}-fg}←{/} moves back. Press {${fg}-fg}→{/} now to continue.`,
   'tutorial.step2Title': 'Step 2/14 — Organize',
-  'tutorial.step2Body': (fg) => `6 fresh, unfiled sessions are sitting below. Press {${fg}-fg}o{/} to have Mycelium read them and suggest folders.`,
+  'tutorial.step2Body': (fg, count) => `${count} fresh, unfiled sessions are sitting below. Press {${fg}-fg}o{/} to have Mycelium read them and suggest folders.`,
   'tutorial.step3Title': 'Step 3/14',
   'tutorial.step3Body': (fg) => `Review the suggested folders, then press {${fg}-fg}Enter{/} to apply them.`,
   'tutorial.step4Title': 'Step 4/14',
-  'tutorial.step4Body': (fg) =>
-    `Folders were created automatically and your sessions are sorted — the two payment sessions landed together in \`backend/payments\`. Press {${fg}-fg}←{/} to get back to the Folders panel, then {${fg}-fg}↓{/} to find it and {${fg}-fg}Enter{/}/→ to open it.`,
+  'tutorial.step4Body': (fg, count, folder) =>
+    `Folders were created automatically and your sessions are sorted — several landed together in \`${folder}\`. Press {${fg}-fg}←{/} to get back to the Folders panel, then {${fg}-fg}↓{/} to find it and {${fg}-fg}Enter{/}/→ to open it.`,
   'tutorial.step5Title': 'Step 5/14 — Learn',
-  'tutorial.step5Body': (fg) => `With \`backend/payments\` open, press {${fg}-fg}w{/} — Mycelium distills everything in it into one KNOWLEDGE.md.`,
+  'tutorial.step5Body': (fg, count, folder) => `With \`${folder}\` open, press {${fg}-fg}w{/} — Mycelium distills everything in it into one KNOWLEDGE.md.`,
   'tutorial.step6Title': 'Step 6/14',
   'tutorial.step6Body': (fg) => `Review the knowledge draft, then press {${fg}-fg}Enter{/} to save it. Next: see exactly what a new session here would inherit from it.`,
   'tutorial.step7Title': 'Step 7/14 — Reuse',
@@ -158,16 +159,17 @@ const en = {
     `This is exactly what gets injected into AGENTS.md automatically whenever you start a session here with {${fg}-fg}n{/} or {${fg}-fg}h{/} — or press {${fg}-fg}i{/} to inject it into a project manually, right now. Press {${fg}-fg}c{/} or {${fg}-fg}Esc{/} to close.`,
   'tutorial.step9Title': 'Step 9/14 — Merge',
   'tutorial.step9Body': (fg) =>
-    `These two sessions are actually one story — investigate, then fix. Select both with {${fg}-fg}Space{/}, then press {${fg}-fg}Shift+M{/} to merge them into one continuous record.`,
+    `These sessions are actually one story. Select them with {${fg}-fg}Space{/}, then press {${fg}-fg}Shift+M{/} to merge them into one continuous record.`,
   'tutorial.step10Title': 'Step 10/14',
   'tutorial.step10Body': (fg) => `Type a title (or leave it blank for a default), then press {${fg}-fg}Enter{/}.`,
   'tutorial.step11Title': 'Step 11/14 — Split',
-  'tutorial.step11Body': (fg) =>
-    `Fully reversible, the other direction too. The merged session stayed right here in \`backend/payments\` — with it selected, press {${fg}-fg}Shift+S{/} for topic-boundary suggestions.`,
+  'tutorial.step11Body': (fg, count, folder) =>
+    `Fully reversible, the other direction too. The merged session stayed right here in \`${folder}\` — with it selected, press {${fg}-fg}Shift+S{/} for topic-boundary suggestions.`,
   'tutorial.step12Title': 'Step 12/14',
   'tutorial.step12Body': (fg) => `Press {${fg}-fg}*{/} to select all the proposed ranges, then {${fg}-fg}Enter{/} to apply.`,
   'tutorial.step13Title': 'Step 13/14',
-  'tutorial.step13Body': (fg) => `You can also search everything with {${fg}-fg}/{/} or browse by date with {${fg}-fg}v{/}. Press {${fg}-fg}Enter{/} to continue.`,
+  'tutorial.step13Body': (fg) =>
+    `Press {${fg}-fg}/{/} and search for a keyword you remember from these sessions, then press {${fg}-fg}v{/} to check the calendar and find the date they're on. Press {${fg}-fg}Enter{/} to continue.`,
   'tutorial.step14Title': 'Tutorial complete!',
   'tutorial.step14Body': (fg) =>
     `That's the full lifecycle. Press {${fg}-fg}q{/} when you're done — the mock sessions get cleaned up and you're back to your own, existing data.`,
@@ -221,12 +223,12 @@ const en = {
 
   'merge.needsTwo': 'Select 2 or more sessions first (Space)',
   'merge.titlePrompt': 'Title for the merged session (optional)',
-  'merge.done': (n) => `Merged ${n} sessions`,
+  'merge.done': (n, id) => `Merged ${n} sessions — undo with \`mycelium unmerge ${id}\``,
 
   'split.suggesting': 'Analyzing session for topic boundaries…',
   'split.reviewTitle': 'Proposed split',
   'split.turnRangeLabel': (from, to, label) => `Turn ${from}-${to}  "${label}"`,
-  'split.done': (n) => `Split into ${n} session${n === 1 ? '' : 's'}`,
+  'split.done': (n, id) => `Split into ${n} session${n === 1 ? '' : 's'} — undo with \`mycelium unsplit ${id}\``,
 
   'smart.running': 'Summarizing + classifying sessions…',
   'smart.noMatches': 'No confident folder matches found',
@@ -352,19 +354,20 @@ const ko = {
   'tutorial.promptTitle': '처음 오셨네요! 짧은 인터랙티브 튜토리얼 보시겠어요?',
   'tutorial.promptYes': '튜토리얼 시작하기',
   'tutorial.promptNo': '건너뛰고 바로 시작하기',
+  'tutorial.personaPromptTitle': '누구의 작업을 따라가 볼까요?',
   'tutorial.exitHint': 'q: 튜토리얼 종료',
   'tutorial.step1Title': '1/14단계 — 이동',
   'tutorial.step1Body': (fg) =>
     `{${fg}-fg}→{/}로 포커스를 오른쪽으로 이동합니다 — 폴더 → 세션 → 상세 — {${fg}-fg}←{/}로 되돌아갑니다. 지금 {${fg}-fg}→{/}를 눌러 계속하세요.`,
   'tutorial.step2Title': '2/14단계 — 조직화',
-  'tutorial.step2Body': (fg) => `아직 정리 안 된 세션 6개가 아래에 있습니다. {${fg}-fg}o{/}를 눌러 Mycelium이 내용을 읽고 폴더를 제안하게 해보세요.`,
+  'tutorial.step2Body': (fg, count) => `아직 정리 안 된 세션 ${count}개가 아래에 있습니다. {${fg}-fg}o{/}를 눌러 Mycelium이 내용을 읽고 폴더를 제안하게 해보세요.`,
   'tutorial.step3Title': '3/14단계',
   'tutorial.step3Body': (fg) => `제안된 폴더를 확인하고 {${fg}-fg}Enter{/}로 적용해보세요.`,
   'tutorial.step4Title': '4/14단계',
-  'tutorial.step4Body': (fg) =>
-    `폴더가 자동으로 생성되고 세션들이 정리됐습니다 — 결제 관련 세션 둘은 \`backend/payments\`로 함께 모였습니다. {${fg}-fg}←{/}로 Folders 패널로 돌아간 뒤 {${fg}-fg}↓{/}로 찾고 {${fg}-fg}Enter{/}/→로 열어보세요.`,
+  'tutorial.step4Body': (fg, count, folder) =>
+    `폴더가 자동으로 생성되고 세션들이 정리됐습니다 — 관련 세션 여럿이 \`${folder}\`로 함께 모였습니다. {${fg}-fg}←{/}로 Folders 패널로 돌아간 뒤 {${fg}-fg}↓{/}로 찾고 {${fg}-fg}Enter{/}/→로 열어보세요.`,
   'tutorial.step5Title': '5/14단계 — 학습',
-  'tutorial.step5Body': (fg) => `\`backend/payments\`를 연 상태에서 {${fg}-fg}w{/}를 눌러보세요 — 그 폴더의 모든 세션을 하나의 KNOWLEDGE.md로 압축합니다.`,
+  'tutorial.step5Body': (fg, count, folder) => `\`${folder}\`를 연 상태에서 {${fg}-fg}w{/}를 눌러보세요 — 그 폴더의 모든 세션을 하나의 KNOWLEDGE.md로 압축합니다.`,
   'tutorial.step6Title': '6/14단계',
   'tutorial.step6Body': (fg) => `지식 초안을 확인하고 {${fg}-fg}Enter{/}로 저장하세요. 다음: 새 세션이 여기서 무엇을 물려받는지 직접 확인해봅니다.`,
   'tutorial.step7Title': '7/14단계 — 재사용',
@@ -374,16 +377,17 @@ const ko = {
     `{${fg}-fg}n{/} 또는 {${fg}-fg}h{/}로 이 폴더에서 세션을 시작할 때마다 이 내용이 AGENTS.md에 자동으로 주입됩니다 — 또는 {${fg}-fg}i{/}로 지금 바로 프로젝트에 직접 주입할 수도 있습니다. {${fg}-fg}c{/} 또는 {${fg}-fg}Esc{/}로 닫으세요.`,
   'tutorial.step9Title': '9/14단계 — 병합',
   'tutorial.step9Body': (fg) =>
-    `이 두 세션은 사실 하나의 이야기입니다 — 조사, 그리고 수정. {${fg}-fg}Space{/}로 둘 다 선택한 뒤 {${fg}-fg}Shift+M{/}으로 하나의 연속된 기록으로 병합해보세요.`,
+    `이 세션들은 사실 하나의 이야기입니다. {${fg}-fg}Space{/}로 선택한 뒤 {${fg}-fg}Shift+M{/}으로 하나의 연속된 기록으로 병합해보세요.`,
   'tutorial.step10Title': '10/14단계',
   'tutorial.step10Body': (fg) => `제목을 입력하거나(비워두면 기본값) {${fg}-fg}Enter{/}를 누르세요.`,
   'tutorial.step11Title': '11/14단계 — 분할',
-  'tutorial.step11Body': (fg) =>
-    `반대 방향도 완전히 되돌릴 수 있습니다. 병합된 세션은 그대로 \`backend/payments\`에 남아 있습니다 — 선택된 상태에서 {${fg}-fg}Shift+S{/}로 주제 경계 제안을 받아보세요.`,
+  'tutorial.step11Body': (fg, count, folder) =>
+    `반대 방향도 완전히 되돌릴 수 있습니다. 병합된 세션은 그대로 \`${folder}\`에 남아 있습니다 — 선택된 상태에서 {${fg}-fg}Shift+S{/}로 주제 경계 제안을 받아보세요.`,
   'tutorial.step12Title': '12/14단계',
   'tutorial.step12Body': (fg) => `{${fg}-fg}*{/}로 제안된 구간을 모두 선택한 뒤 {${fg}-fg}Enter{/}로 적용하세요.`,
   'tutorial.step13Title': '13/14단계',
-  'tutorial.step13Body': (fg) => `{${fg}-fg}/{/}로 전체 검색, {${fg}-fg}v{/}로 날짜별 캘린더 보기도 가능합니다. {${fg}-fg}Enter{/}로 계속하세요.`,
+  'tutorial.step13Body': (fg) =>
+    `{${fg}-fg}/{/}를 눌러 방금 본 세션들에서 기억나는 키워드로 검색해보고, {${fg}-fg}v{/}를 눌러 캘린더에서 해당 세션이 있는 날짜를 확인해보세요. {${fg}-fg}Enter{/}로 계속하세요.`,
   'tutorial.step14Title': '튜토리얼 완료!',
   'tutorial.step14Body': (fg) =>
     `전체 라이프사이클을 다 보셨습니다. 다 보셨으면 {${fg}-fg}q{/}를 누르세요 — 데모 세션이 정리되고 원래(기존) 데이터로 돌아갑니다.`,
@@ -429,12 +433,12 @@ const ko = {
 
   'merge.needsTwo': '먼저 세션을 2개 이상 선택하세요 (Space)',
   'merge.titlePrompt': '병합된 세션의 제목 (선택 사항)',
-  'merge.done': (n) => `${n}개 세션 병합됨`,
+  'merge.done': (n, id) => `${n}개 세션 병합됨 — \`mycelium unmerge ${id}\`로 되돌리기`,
 
   'split.suggesting': '주제 경계 분석 중…',
   'split.reviewTitle': '분할 제안',
   'split.turnRangeLabel': (from, to, label) => `턴 ${from}-${to}  "${label}"`,
-  'split.done': (n) => `${n}개 세션으로 분할됨`,
+  'split.done': (n, id) => `${n}개 세션으로 분할됨 — \`mycelium unsplit ${id}\`로 되돌리기`,
 
   'smart.running': '세션 요약 + 폴더 분류 중…',
   'smart.noMatches': '확실한 폴더 매칭을 찾지 못했습니다',

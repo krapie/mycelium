@@ -52,6 +52,30 @@ function sessionToText(n) {
   return L.join('\n');
 }
 
+// Prefills the merge title prompt with a sensible default instead of a bare
+// blank field — same "shared folder" agreement mergeSessions() itself uses
+// to decide where the merged record lands (folders.size === 1 && truthy),
+// so the suggestion only appears when it's actually meaningful (sessions
+// merged from different/unfiled folders get no suggestion, same as they get
+// no folder placement). The folder's own leaf name is usually a good stand-in
+// for "what this merge is about" — e.g. `cases/onprem-connectivity` suggests
+// "Onprem Connectivity" — cheap, local, and needs no LLM call, unlike a
+// real summary would. Purely a starting point: still a plain textPrompt, so
+// it's fully editable or clearable before merging.
+function suggestMergeTitle(ids) {
+  const folders = new Set(ids.map((id) => data.detail(id)?.folder || null));
+  if (folders.size !== 1) return '';
+  const folder = [...folders][0];
+  if (!folder) return '';
+  return folder
+    .split('/')
+    .pop()
+    .split(/[-_]+/)
+    .filter(Boolean)
+    .map((w) => w[0].toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
 /**
  * The main cockpit view: folder tree (left), session list (right top), detail
  * (right bottom). Tab cycles focus; / searches; Enter drills into detail. The
@@ -65,6 +89,20 @@ export function sessionsView(opts = {}) {
   // the New pseudo-folder (genuinely unfiled only), a path = that folder's
   // subtree.
   let state = { folder: undefined, query: '', tags: [], selected: new Set(), sortBy: 'recent' };
+  // Guards o/w/Shift+S — each is an async LLM-bound flow that shows a
+  // spinner, awaits a real complete() call (anywhere from under a second to
+  // 10+ seconds), then opens a review modal. None of them disable their own
+  // key while in flight, so an impatient repeat press (nothing visibly
+  // happened yet) used to start a SECOND concurrent run — a second spinner,
+  // a second LLM call, and eventually a second review modal stacking on top
+  // of the first (each independently `parent: app.screen`). Closing just the
+  // top one left the other still parented underneath, so anything watching
+  // `app.screen.children.length` against a pre-press baseline (the
+  // tutorial's own isModalOpen()) never saw it drop back down — stuck
+  // waiting for a "close" that could never fully arrive. One shared flag
+  // is enough since these three are mutually exclusive anyway (nothing
+  // sane comes from running two of them at once regardless of which two).
+  let asyncReviewFlowRunning = false;
   const SORT_CYCLE = ['recent', 'title', 'agent'];
   let app;
   let foldersBox, listBox, detailBox;
@@ -513,7 +551,7 @@ export function sessionsView(opts = {}) {
       listBox.key('S-m', () => {
         const ids = [...state.selected];
         if (ids.length < 2) return app.notify(t('merge.needsTwo'), 3);
-        textPrompt(app, t('merge.titlePrompt'), '', (title) => {
+        textPrompt(app, t('merge.titlePrompt'), suggestMergeTitle(ids), (title) => {
           if (title === null) return listBox.focus(); // Esc — cancelled
           const res = mergeSessions(ids, { title: title.trim() || undefined });
           if (!res.ok) return app.notify(res.error, 3);
@@ -521,7 +559,12 @@ export function sessionsView(opts = {}) {
           data.refreshMany([res.merged.id, ...ids]);
           reloadFolders();
           reloadList();
-          app.notify(t('merge.done', ids.length), 3);
+          // Longer duration + the actual id: merge is fully reversible
+          // (`mycelium unmerge <id>` restores the originals, deletes this
+          // record) but that's only discoverable if this toast actually
+          // says so — a bare "Merged N sessions" gave no hint it could be
+          // undone at all, let alone how.
+          app.notify(t('merge.done', ids.length, res.merged.id.slice(0, 8)), 6);
           listBox.focus();
           app.render();
         });
@@ -534,10 +577,24 @@ export function sessionsView(opts = {}) {
       const doSplit = async () => {
         const r = currentRow();
         if (!r) return;
+        // See asyncReviewFlowRunning's own comment (near `state`'s
+        // declaration) — an impatient repeat press while the LLM call is
+        // still in flight used to start a second concurrent run: a second
+        // spinner, a second suggestSplitBoundaries() call, and eventually a
+        // second review modal stacking on top of the first. Closing just the
+        // top one left the other still parented to app.screen underneath,
+        // so anything watching screen.children.length against a pre-press
+        // baseline (the tutorial's own isModalOpen()) never saw it drop back
+        // down — stuck waiting for a "close" that could never fully arrive.
+        if (asyncReviewFlowRunning) return;
+        asyncReviewFlowRunning = true;
         const spin = app.startSpinner(t('split.suggesting'));
         const res = await suggestSplitBoundaries(r.id);
         spin.stop();
-        if (!res.ok) return app.notify(res.error, 3);
+        if (!res.ok) {
+          asyncReviewFlowRunning = false;
+          return app.notify(res.error, 3);
+        }
         const items = res.ranges.map((rg) => ({ label: t('split.turnRangeLabel', rg.from, rg.to, rg.label), value: rg }));
         // defaultAll: true — same as smart-organize's placement review.
         // Without it, a bare Enter (the obvious first thing to try) checked
@@ -546,12 +603,22 @@ export function sessionsView(opts = {}) {
         // registering. The LLM already proposed these ranges; reviewing
         // them is "uncheck the wrong one," not "check the right ones",
         // same reasoning organize's own review already uses.
+        // Guard is released the instant this modal actually opens (not only
+        // once its callback later fires) — same scope as `o`/`w`'s guards,
+        // which release once their own review modal opens rather than
+        // staying held through however long the human takes to review it.
+        asyncReviewFlowRunning = false;
         multiSelectList(app, t('split.reviewTitle'), items, (chosen) => {
           if (!chosen?.length) return; // Esc or everything unchecked — original untouched
           const applied = applySplit(r.id, chosen);
           if (!applied.ok) return app.notify(applied.error, 3);
           data.refreshMany([r.id, ...applied.pieces.map((p) => p.id)]);
-          app.notify(t('split.done', applied.pieces.length), 3);
+          // Longer duration + the original's id: split is fully reversible
+          // (`mycelium unsplit <id>` deletes the pieces, original untouched
+          // the whole time) but that's only discoverable if this toast
+          // actually says so — a bare "Split into N sessions" gave no hint
+          // it could be undone at all, let alone how.
+          app.notify(t('split.done', applied.pieces.length, r.id.slice(0, 8)), 6);
           reloadFolders();
           reloadList();
           listBox.focus();
@@ -626,6 +693,18 @@ export function sessionsView(opts = {}) {
       // (like w/i), and never run automatically by the daemon — unlike `s`'s
       // plain scan, this makes real LLM calls and moves things.
       screenKey(app, ['o'], async () => {
+        // See asyncReviewFlowRunning's own comment above — an impatient
+        // repeat press while the LLM call is still in flight used to start
+        // a second concurrent run.
+        if (asyncReviewFlowRunning) return;
+        asyncReviewFlowRunning = true;
+        try {
+          await runSmartOrganize();
+        } finally {
+          asyncReviewFlowRunning = false;
+        }
+      });
+      async function runSmartOrganize() {
         // Reuse whatever the daemon already queued (see organize.js's
         // smartOrganizeCycle) instead of recomputing — makes `o` instant when
         // the daemon's been doing the work in the background. Deliberately
@@ -706,7 +785,7 @@ export function sessionsView(opts = {}) {
           reloadList();
           app.render();
         }, { defaultAll: true });
-      });
+      }
 
       // ?: full keymap reference — status bar only shows a short breadcrumb now.
       screenKey(app, ['?'], () => helpModal(app));
@@ -912,29 +991,39 @@ export function sessionsView(opts = {}) {
       // session in this folder), and only save on explicit confirm.
       const doKnowledge = async () => {
         if (!state.folder) return app.notify(t('folders.selectFirst'), 3);
+        // See asyncReviewFlowRunning's own comment (near `state`'s
+        // declaration) — an impatient repeat press while the LLM call is
+        // still in flight used to start a second concurrent run.
+        if (asyncReviewFlowRunning) return;
+        asyncReviewFlowRunning = true;
         const refocus = () => (state.level === 'folders' ? foldersBox : listBox).focus();
-        // startSpinner() (app.js) both animates the wait and keeps the toast
-        // alive for however long buildKnowledgeText() actually takes — it
-        // used to be a fixed-duration notify() that could expire mid-call on
-        // a slow/large folder, leaving nothing on screen well before the
-        // call actually finished. stop() dismisses it explicitly either way,
-        // same as the old dismissNotify() call did before the preview opens.
-        const spin = app.startSpinner(t('knowledge.generating'));
-        const gen = await buildKnowledgeText(state.folder);
-        spin.stop();
-        if (!gen.ok) {
-          app.notify(gen.error, 3);
-          return refocus();
-        }
-        confirmText(app, t('knowledge.previewTitle', state.folder), gen.text, (ok) => {
-          if (!ok) {
-            app.notify(t('knowledge.cancelled'), 2);
+        try {
+          // startSpinner() (app.js) both animates the wait and keeps the
+          // toast alive for however long buildKnowledgeText() actually takes
+          // — it used to be a fixed-duration notify() that could expire
+          // mid-call on a slow/large folder, leaving nothing on screen well
+          // before the call actually finished. stop() dismisses it
+          // explicitly either way, same as the old dismissNotify() call did
+          // before the preview opens.
+          const spin = app.startSpinner(t('knowledge.generating'));
+          const gen = await buildKnowledgeText(state.folder);
+          spin.stop();
+          if (!gen.ok) {
+            app.notify(gen.error, 3);
             return refocus();
           }
-          const w = writeKnowledgeText(state.folder, gen.text);
-          app.notify(w.ok ? t('knowledge.saved', state.folder) : w.error, 3);
-          refocus();
-        });
+          confirmText(app, t('knowledge.previewTitle', state.folder), gen.text, (ok) => {
+            if (!ok) {
+              app.notify(t('knowledge.cancelled'), 2);
+              return refocus();
+            }
+            const w = writeKnowledgeText(state.folder, gen.text);
+            app.notify(w.ok ? t('knowledge.saved', state.folder) : w.error, 3);
+            refocus();
+          });
+        } finally {
+          asyncReviewFlowRunning = false;
+        }
       };
       listBox.key('w', doKnowledge);
       foldersBox.key('w', doKnowledge);

@@ -1,3 +1,5 @@
+import { findPersona } from './personas.js';
+
 // Deterministic, instant stand-ins for the tutorial's real o/w/Shift+S LLM
 // calls, wired up via llm.js's __setTestProvider() for the lifetime of the
 // mock session store (see tutorial.js's seedMockSessions()/endTutorial()).
@@ -20,74 +22,58 @@
 // active; those get the knowledge-shaped fallback, which is a harmless
 // mismatch (wrong-shaped text shown, nothing crashes or corrupts data), not
 // worth a 4th prompt-shape detector for paths the tutorial doesn't script.
+//
+// Storyline content (folder/keywords/knowledge/splitLabels) lives in
+// personas.js, shared with tutorial-data.js, so the two can't drift out of
+// sync the way separate hardcoded copies once did (see git history: merge/
+// split regressions traced back to folder-name mismatches between this file
+// and tutorial-data.js).
 
-const STORYLINES = [
-  {
-    folder: 'backend/payments',
-    keywords: /pg-pool|connection-?pool|payment/i,
-    knowledge: `## Payments backend
-
-- **Connection pooling**: pg-pool's \`max\` must have headroom over real peak concurrency, not just steady-state — the timeout incident traced back to \`max: 10\` against 40-50 concurrent requests at peak. Current setting: \`max: 30\`, \`idleTimeoutMillis: 10000\`.
-- **RDS side matters too**: raising the pool's \`max\` without also raising the RDS parameter group's \`max_connections\` just moves the bottleneck — both were raised together (100 → 200).
-- **Watch for regressions**: no connection-pool metrics on the dashboard yet — flagged as the next follow-up so this class of issue is caught before it times out in production again.`,
-  },
-  {
-    folder: 'frontend/login-ui',
-    keywords: /login-card|ios safari|responsive|media query/i,
-    knowledge: `## Login page / responsive layout
-
-- **Team convention**: card-style components use \`max-width\` + \`width: 100%\`, never a bare fixed \`width\` — a fixed \`width: 480px\` on \`.login-card\` was what caused horizontal scroll and pushed the submit button off-screen on narrow viewports.
-- **Breakpoint**: padding/font-size step down under \`max-width: 360px\` (iPhone SE-class widths) — verified against real devices, not just DevTools emulation.
-- **Regression source**: this exact bug has recurred once already, introduced by a design-refresh commit that swapped \`max-width\` for a plain \`width\`.`,
-  },
-  {
-    folder: 'data/sales-pipeline',
-    keywords: /airflow|sales|pandas|parquet/i,
-    knowledge: `## Daily sales report pipeline
-
-- **Shape**: pandas aggregates yesterday's orders by product/region → lands as parquet in S3 (kept for later re-analysis, not just a transient artifact) → summary posted to Slack via webhook.
-- **Scheduling**: runs as an Airflow DAG (\`daily_sales_report\`, 07:00 KST), not cron — chosen specifically for retries/monitoring/dependency management. \`retries: 3\`, 5-minute retry delay, \`on_failure_callback\` posts a Slack alert.
-- **Verified failure path**: the failure alert itself was tested (DB connection deliberately killed mid-run), not just the happy path.`,
-  },
-];
-
-function storylineForText(text) {
-  return STORYLINES.find((s) => s.keywords.test(text)) || null;
+function storylineForText(storylines, text) {
+  return storylines.find((s) => s.keywords.test(text)) || null;
 }
 
-function mockPlacements(prompt) {
+function mockPlacements(storylines, prompt) {
   const placements = [];
   const re = /- id:(\S+) 현재폴더:\S+ 요약:(.+)/g;
   let m;
   while ((m = re.exec(prompt))) {
     const [, id, summary] = m;
-    const story = storylineForText(summary);
+    const story = storylineForText(storylines, summary);
     placements.push({ id, folder: story ? story.folder : null, reason: story ? 'tutorial demo' : 'unclear' });
   }
   return JSON.stringify({ placements });
 }
 
-function mockKnowledge(prompt) {
+function mockKnowledge(storylines, prompt) {
   const folderMatch = prompt.match(/"([^"]+)" 작업 공간/);
   const requested = folderMatch?.[1];
   // isInSubtree-equivalent match, not strict equality: buildKnowledgeText()
   // itself is scoped by subtree (organize/folders.js's isInSubtree()), so a
   // human who pressed `w` one folder level short of the leaf (e.g.
-  // `backend` instead of `backend/payments`) still gets real session
-  // material in the prompt — this only needs to resolve which storyline
-  // that material belongs to, same as the real classification does.
-  const story = requested && STORYLINES.find((s) => s.folder === requested || s.folder.startsWith(`${requested}/`));
+  // `retail-website` instead of `retail-website/express-reorder`) still
+  // gets real session material in the prompt — this only needs to resolve
+  // which storyline that material belongs to, same as the real
+  // classification does.
+  const story = requested && storylines.find((s) => s.folder === requested || s.folder.startsWith(`${requested}/`));
   return story ? story.knowledge : '## Notes\n\n(no tutorial notes for this folder)';
 }
 
-function mockSplit() {
-  // Every tutorial-data.js session has exactly 4 turns — a fixed 2-and-2
-  // split (diagnose, then resolve) fits all six without needing to inspect
-  // the actual turn text.
+// The real prompt (split.js's suggestSplitBoundaries()) numbers every turn
+// as `턴 N [role]: text`, 1-indexed, no gaps — so the actual turn count is
+// read straight out of the prompt instead of assuming a fixed number.
+// Needed once storyline session lengths stopped all being the same (the CSE
+// persona's 3-way merge produces more total turns than a 2-way one), and a
+// hardcoded {1,2}/{3,4} split silently dropped everything past turn 4.
+function mockSplit(mergeStoryline, prompt) {
+  const turnNumbers = [...prompt.matchAll(/턴 (\d+) \[/g)].map((m) => Number(m[1]));
+  const total = turnNumbers.length ? Math.max(...turnNumbers) : 2;
+  const mid = Math.max(1, Math.floor(total / 2));
+  const [firstLabel, secondLabel] = mergeStoryline.splitLabels || ['Part 1', 'Part 2'];
   return JSON.stringify({
     ranges: [
-      { from: 1, to: 2, label: 'Diagnosis' },
-      { from: 3, to: 4, label: 'Resolution' },
+      { from: 1, to: mid, label: firstLabel },
+      { from: mid + 1, to: total, label: secondLabel },
     ],
   });
 }
@@ -108,8 +94,18 @@ function delayed(value) {
   return new Promise((resolve) => setTimeout(() => resolve(value), MOCK_DELAY_MS));
 }
 
-export function tutorialMockProvider(prompt) {
-  if (prompt.includes('"placements"')) return delayed(mockPlacements(prompt));
-  if (prompt.includes('"ranges"')) return delayed(mockSplit());
-  return delayed(mockKnowledge(prompt));
+// Factory rather than a single stateless function: which storyline set (and
+// therefore which folder names/knowledge/split labels) applies depends on
+// which persona the user picked before the tutorial started — see
+// tutorial.js's seedMockSessions(personaId).
+export function createTutorialMockProvider(personaId = 'swe') {
+  const persona = findPersona(personaId);
+  const storylines = persona.storylines;
+  const mergeStoryline = storylines[persona.mergeStorylineIndex];
+
+  return function tutorialMockProvider(prompt) {
+    if (prompt.includes('"placements"')) return delayed(mockPlacements(storylines, prompt));
+    if (prompt.includes('"ranges"')) return delayed(mockSplit(mergeStoryline, prompt));
+    return delayed(mockKnowledge(storylines, prompt));
+  };
 }
