@@ -7,6 +7,9 @@ import { tutorialMockProvider } from '../src/tui/tutorial-mock-llm.js';
 // fragments below mirror the REAL shapes organize/classify.js, split.js,
 // and insight.js build (see those files), not just what this module itself
 // assumes, so a drift in either side would actually break a test here.
+// tutorialMockProvider() resolves after a deliberate short delay (see its
+// own comment) so the demo's spinner has something to animate — every test
+// here awaits it.
 
 function placementsPrompt(candidates) {
   const folderBlock = '(아직 정리된 폴더 없음)';
@@ -39,8 +42,8 @@ function knowledgePrompt(folder) {
   return `아래는 "${folder}" 작업 공간에서 있었던 세션 요약과 결정들이다. 이 공간에서 새 작업을 시작하는 AI가 미리 알아야 할 "프로젝트 지식"을 정리해라.`;
 }
 
-test('tutorialMockProvider() classifies placement candidates by storyline keyword into English folders', () => {
-  const reply = tutorialMockProvider(
+test('tutorialMockProvider() classifies placement candidates by storyline keyword into English folders', async () => {
+  const reply = await tutorialMockProvider(
     placementsPrompt([
       { id: 'a', summary: "Investigated pg-pool's max setting causing payment timeouts." },
       { id: 'b', summary: 'Fixed the login-card CSS overflow on iOS Safari.' },
@@ -56,8 +59,8 @@ test('tutorialMockProvider() classifies placement candidates by storyline keywor
   assert.equal(byId.d, null);
 });
 
-test('tutorialMockProvider() returns valid JSON matching every candidate id, in the placements schema', () => {
-  const reply = tutorialMockProvider(
+test('tutorialMockProvider() returns valid JSON matching every candidate id, in the placements schema', async () => {
+  const reply = await tutorialMockProvider(
     placementsPrompt([{ id: 'demo-1', summary: 'connection-pool payment timeout investigation' }]),
   );
   const parsed = JSON.parse(reply);
@@ -67,8 +70,8 @@ test('tutorialMockProvider() returns valid JSON matching every candidate id, in 
   assert.ok(typeof parsed.placements[0].reason === 'string');
 });
 
-test('tutorialMockProvider() returns fixed 2-range split boundaries for a split prompt', () => {
-  const reply = tutorialMockProvider(splitPrompt());
+test('tutorialMockProvider() returns fixed 2-range split boundaries for a split prompt', async () => {
+  const reply = await tutorialMockProvider(splitPrompt());
   const parsed = JSON.parse(reply);
   assert.deepEqual(parsed.ranges, [
     { from: 1, to: 2, label: 'Diagnosis' },
@@ -76,20 +79,26 @@ test('tutorialMockProvider() returns fixed 2-range split boundaries for a split 
   ]);
 });
 
-test('tutorialMockProvider() returns the matching canned English knowledge text for a known demo folder', () => {
-  const reply = tutorialMockProvider(knowledgePrompt('backend/payments'));
+test('tutorialMockProvider() returns the matching canned English knowledge text for a known demo folder', async () => {
+  const reply = await tutorialMockProvider(knowledgePrompt('backend/payments'));
   assert.match(reply, /Payments backend/);
   assert.doesNotMatch(reply, /[가-힣]/, 'demo knowledge output must be English, not Korean');
 });
 
-test('tutorialMockProvider() falls back gracefully for an unknown folder in a knowledge prompt', () => {
-  const reply = tutorialMockProvider(knowledgePrompt('some/unexpected/folder'));
+test('tutorialMockProvider() falls back gracefully for an unknown folder in a knowledge prompt', async () => {
+  const reply = await tutorialMockProvider(knowledgePrompt('some/unexpected/folder'));
   assert.match(reply, /no tutorial notes/);
 });
 
-test('tutorialMockProvider() every canned knowledge text is English, not Korean', () => {
+test('tutorialMockProvider() every canned knowledge text is English, not Korean', async () => {
   for (const folder of ['backend/payments', 'frontend/login-ui', 'data/sales-pipeline']) {
-    const reply = tutorialMockProvider(knowledgePrompt(folder));
+    const reply = await tutorialMockProvider(knowledgePrompt(folder));
     assert.doesNotMatch(reply, /[가-힣]/, `${folder}'s canned knowledge text must be English`);
   }
+});
+
+test('tutorialMockProvider() resolves after a deliberate delay, not instantly', async () => {
+  const start = Date.now();
+  await tutorialMockProvider(knowledgePrompt('backend/payments'));
+  assert.ok(Date.now() - start >= 400, 'mock output should not resolve near-instantly (spinner needs frames to animate)');
 });

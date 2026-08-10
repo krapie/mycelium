@@ -85,8 +85,20 @@ function mockSplit() {
   });
 }
 
+// A genuinely instant (0ms) response is its own regression here: the
+// animated spinner (app.js's startSpinner()) never gets to animate a single
+// frame, and the flow reads as "did that actually run?" rather than a
+// (much faster, but still real) version of the production wait. This delay
+// is deliberately well under a real claude/codex call (seconds) but long
+// enough for a few spinner ticks (120ms/frame) to be visible.
+const MOCK_DELAY_MS = 500;
+
+function delayed(value) {
+  return new Promise((resolve) => setTimeout(() => resolve(value), MOCK_DELAY_MS));
+}
+
 export function tutorialMockProvider(prompt) {
-  if (prompt.includes('"placements"')) return mockPlacements(prompt);
-  if (prompt.includes('"ranges"')) return mockSplit();
-  return mockKnowledge(prompt);
+  if (prompt.includes('"placements"')) return delayed(mockPlacements(prompt));
+  if (prompt.includes('"ranges"')) return delayed(mockSplit());
+  return delayed(mockKnowledge(prompt));
 }

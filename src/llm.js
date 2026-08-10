@@ -28,9 +28,9 @@ export const META_MARKER = '​[mycelium:meta-call]​';
 // unit-test all of them without a real claude/codex subprocess. Real
 // production callers never touch this. The one non-test caller is
 // tui/tutorial.js's seedMockSessions(), for the same reason tests use it —
-// deterministic, instant output instead of a real subprocess — so the
-// first-run tutorial / `mycelium demo` stays fast; see
-// tui/tutorial-mock-llm.js.
+// deterministic output instead of a real subprocess — so the first-run
+// tutorial / `mycelium demo` stays fast (though not literally instant on
+// purpose, see tui/tutorial-mock-llm.js).
 let _testProvider = null;
 export function __setTestProvider(fn) {
   _testProvider = fn;

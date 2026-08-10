@@ -12,16 +12,17 @@ import { tutorialMockProvider } from './tutorial-mock-llm.js';
 /**
  * First-run interactive tutorial (and `mycelium demo`'s engine) — mock
  * sessions dropped into the real store just long enough to walk through
- * Organize (`o`) → Learn (`w`) → Reuse (`c`) → session lineage (Shift+M
- * merge, Shift+S split), using the TUI's own real key handlers (sessions.js
- * is never touched or hooked into: this module just ALSO listens for the
- * same keypresses, purely to advance its own narration, alongside whatever
- * sessions.js's real handlers do with them). `o`/`w`/Shift+S all call
- * llm.js's complete() under the hood — seedMockSessions() swaps that over
- * to tutorialMockProvider() (instant, deterministic, English) for as long
- * as the mock sessions are in the store, so the tutorial stays fast and
- * doesn't depend on a real claude/codex subprocess. See
- * tutorial-mock-llm.js for why.
+ * 3-column panel navigation (← →) then Organize (`o`) → Learn (`w`) →
+ * Reuse (`c`) → session lineage (Shift+M merge, Shift+S split), using the
+ * TUI's own real key handlers (sessions.js is never touched or hooked
+ * into: this module just ALSO listens for the same keypresses, purely to
+ * advance its own narration, alongside whatever sessions.js's real
+ * handlers do with them). `o`/`w`/Shift+S all call llm.js's complete()
+ * under the hood — seedMockSessions() swaps that over to
+ * tutorialMockProvider() (fast, deterministic, English — see
+ * tutorial-mock-llm.js for why, including why it's deliberately not
+ * instant) for as long as the mock sessions are in the store, so the
+ * tutorial stays fast without depending on a real claude/codex subprocess.
  */
 
 // `thenWait: 'open'|'close'` marks steps whose key triggers a REAL o/w LLM
@@ -35,8 +36,15 @@ import { tutorialMockProvider } from './tutorial-mock-llm.js';
 // waits again for it to close once the matching confirm step's key fires.
 // See isModalOpen() below.
 const STEPS = [
-  { titleKey: 'tutorial.step1Title', bodyKey: 'tutorial.step1Body', waitFor: 'o', thenWait: 'open', waitingKey: 'tutorial.waitingOrganize' },
-  { titleKey: 'tutorial.step2Title', bodyKey: 'tutorial.step2Body', waitFor: 'enter', thenWait: 'close', waitingKey: 'tutorial.waitingApply' },
+  // Panel focus: → walks Folders → Sessions → Detail, ← walks back — the
+  // very first thing worth knowing before any of the lifecycle steps below,
+  // since several of them (browsing into a folder, opening a session) rely
+  // on it. No thenWait — this is plain focus movement within the persistent
+  // 3-column layout, not a real handler that opens a new modal, so there's
+  // nothing for isModalOpen() to poll for.
+  { titleKey: 'tutorial.step1Title', bodyKey: 'tutorial.step1Body', waitFor: 'right' },
+  { titleKey: 'tutorial.step2Title', bodyKey: 'tutorial.step2Body', waitFor: 'o', thenWait: 'open', waitingKey: 'tutorial.waitingOrganize' },
+  { titleKey: 'tutorial.step3Title', bodyKey: 'tutorial.step3Body', waitFor: 'enter', thenWait: 'close', waitingKey: 'tutorial.waitingApply' },
   // waitFor is 'down'/'enter' here, not null — these steps' own text names
   // a specific key (↓ to browse the new folders, Enter to finish), and both
   // also suggest OTHER real keys to go try (v for the calendar, / for
@@ -46,9 +54,9 @@ const STEPS = [
   // `o` (previous step) is normally pressed from the folders panel already
   // — ← only means anything coming back FROM the sessions panel, so it was
   // a dead key most of the time. ↓ (into the new folder) works either way.
-  { titleKey: 'tutorial.step3Title', bodyKey: 'tutorial.step3Body', waitFor: 'down' },
-  { titleKey: 'tutorial.step4Title', bodyKey: 'tutorial.step4Body', waitFor: 'w', thenWait: 'open', waitingKey: 'tutorial.waitingKnowledge' },
-  { titleKey: 'tutorial.step5Title', bodyKey: 'tutorial.step5Body', waitFor: 'enter', thenWait: 'close', waitingKey: 'tutorial.waitingSave' },
+  { titleKey: 'tutorial.step4Title', bodyKey: 'tutorial.step4Body', waitFor: 'down' },
+  { titleKey: 'tutorial.step5Title', bodyKey: 'tutorial.step5Body', waitFor: 'w', thenWait: 'open', waitingKey: 'tutorial.waitingKnowledge' },
+  { titleKey: 'tutorial.step6Title', bodyKey: 'tutorial.step6Body', waitFor: 'enter', thenWait: 'close', waitingKey: 'tutorial.waitingSave' },
   // Reuse: `c` (view context) rather than `i` (inject AGENTS.md) — both are
   // real, LLM-free, instant reads (reuse.js), but `c` opens exactly one
   // modal (textView) where `i` chains two (textPrompt → confirmText), and
@@ -60,8 +68,8 @@ const STEPS = [
   // final step, which would fire from inside textView too since both listen
   // at the screen level — textView already accepts 'q' as an equivalent
   // close key, so that's the one this step waits for instead.
-  { titleKey: 'tutorial.step6Title', bodyKey: 'tutorial.step6Body', waitFor: 'c', thenWait: 'open', waitingKey: 'tutorial.waitingContext' },
-  { titleKey: 'tutorial.step7Title', bodyKey: 'tutorial.step7Body', waitFor: 'q', thenWait: 'close', waitingKey: 'tutorial.waitingClose' },
+  { titleKey: 'tutorial.step7Title', bodyKey: 'tutorial.step7Body', waitFor: 'c', thenWait: 'open', waitingKey: 'tutorial.waitingContext' },
+  { titleKey: 'tutorial.step8Title', bodyKey: 'tutorial.step8Body', waitFor: 'q', thenWait: 'close', waitingKey: 'tutorial.waitingClose' },
   // Session lineage: merge the two payment sessions (they're genuinely one
   // story — investigate, then fix), then split the result back apart by
   // topic. Both fully reversible (`mycelium unmerge`/`unsplit`), same as the
@@ -71,10 +79,10 @@ const STEPS = [
   // ≥2 sessions are already Space-selected — that's on the human to have
   // done per this step's own text; nothing here can verify it, same
   // accepted-risk shape as every other step's instructions.
-  { titleKey: 'tutorial.step8Title', bodyKey: 'tutorial.step8Body', waitFor: 'm', shift: true, thenWait: 'open', waitingKey: 'tutorial.waitingMerge' },
-  { titleKey: 'tutorial.step9Title', bodyKey: 'tutorial.step9Body', pollOnEntry: 'close' },
-  { titleKey: 'tutorial.step10Title', bodyKey: 'tutorial.step10Body', waitFor: 's', shift: true, thenWait: 'open', waitingKey: 'tutorial.waitingSplit' },
-  { titleKey: 'tutorial.step11Title', bodyKey: 'tutorial.step11Body', waitFor: 'enter', thenWait: 'close', waitingKey: 'tutorial.waitingApply' },
+  { titleKey: 'tutorial.step9Title', bodyKey: 'tutorial.step9Body', waitFor: 'm', shift: true, thenWait: 'open', waitingKey: 'tutorial.waitingMerge' },
+  { titleKey: 'tutorial.step10Title', bodyKey: 'tutorial.step10Body', pollOnEntry: 'close' },
+  { titleKey: 'tutorial.step11Title', bodyKey: 'tutorial.step11Body', waitFor: 's', shift: true, thenWait: 'open', waitingKey: 'tutorial.waitingSplit' },
+  { titleKey: 'tutorial.step12Title', bodyKey: 'tutorial.step12Body', waitFor: 'enter', thenWait: 'close', waitingKey: 'tutorial.waitingApply' },
   // freeform: this step's whole point is "go try the real thing" (v for the
   // calendar, / for search) — both of those use Escape themselves for
   // normal back-navigation (calendar/detail → sessions). If the tutorial
@@ -82,14 +90,14 @@ const STEPS = [
   // view the step just told you to open would silently kill the tutorial
   // (and, for `mycelium demo`, the whole process) instead of just going
   // back. See onKeypress/render below for how this changes handling.
-  { titleKey: 'tutorial.step12Title', bodyKey: 'tutorial.step12Body', waitFor: 'enter', freeform: true },
+  { titleKey: 'tutorial.step13Title', bodyKey: 'tutorial.step13Body', waitFor: 'enter', freeform: true },
   // waitFor is 'q', not null/any-key — Enter is what every step up to here
   // used to advance, so leaving the last one on "any key" risked leftover
   // muscle-memory Enter ending the whole tutorial (and, for `mycelium
   // demo`, silently taking the process with it). `q` also doubles as a
   // preview of the real app's own quit key. See onKeypress's `final` branch
   // for the confirm step this triggers before actually finishing.
-  { titleKey: 'tutorial.step13Title', bodyKey: 'tutorial.step13Body', waitFor: 'q', final: true },
+  { titleKey: 'tutorial.step14Title', bodyKey: 'tutorial.step14Body', waitFor: 'q', final: true },
 ];
 
 export function seedMockSessions() {

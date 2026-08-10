@@ -349,8 +349,9 @@ sessions (`demo: true`, unfiled); a narrator overlay runs its OWN
 sessions.js's real handlers, inferring "did a real action's modal open/close"
 by polling `app.screen.children.length` against a captured baseline — a
 generic heuristic that works because every picker/viewer in the codebase
-parents itself to `app.screen`. 13-step script covering the full lifecycle —
-Organize (`o`) → Learn (`w`) → Reuse (`c`) → session lineage (Shift+M merge,
+parents itself to `app.screen`. 14-step script covering panel navigation
+(← → between Folders/Sessions/Detail) then the full lifecycle — Organize
+(`o`) → Learn (`w`) → Reuse (`c`) → session lineage (Shift+M merge,
 Shift+S split) → freeform explore — mixing `waitFor`+`thenWait` (poll for a
 real modal), plain `waitFor` (a literal key), a `shift: true` flag (blessed's
 raw keypress reports Shift+M as `key.name: 'm'` + `key.shift: true`, not the
@@ -373,9 +374,14 @@ with the global quit binding. `o`/`w`/Shift+S all call real LLM-bound
 functions (`suggestPlacements`, `buildKnowledgeText`, `suggestSplitBoundaries`)
 — `seedMockSessions()` swaps `llm.js`'s `complete()` over to
 `tutorial-mock-llm.js`'s `tutorialMockProvider()` for as long as the mock
-sessions exist (cleared in `endTutorial()`), so these resolve instantly and
-deterministically instead of via a real `claude`/`codex` subprocess call —
-this is also what keeps the tutorial's folder/knowledge output in English
+sessions exist (cleared in `endTutorial()`), so these resolve quickly and
+deterministically instead of via a real `claude`/`codex` subprocess call.
+`tutorialMockProvider()` still resolves after a deliberate ~500ms delay
+(`MOCK_DELAY_MS`), not instantly — a 0ms response is its own regression,
+since `app.js`'s animated spinner never gets a frame to actually animate
+and the wait reads as "did that run at all?" rather than a faster stand-in
+for the real thing. This is also what keeps the tutorial's folder/knowledge
+output in English
 regardless of locale, since the real classification/knowledge prompts are
 Korean by design (see `AGENT.md`) and would otherwise mirror that language
 back for any newly-proposed folder name. 🟡 (`buildMockSessions()` and
