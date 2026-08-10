@@ -141,7 +141,8 @@ export function sessionsView(opts = {}) {
       // thing you're actually scanning for) reads first on the line.
       const src = `{${sourceColor(r.source)}-fg}#${sourceLabel(r.source)}{/}`;
       // Same "source #idPrefix" shape as the continuation links in detail
-      // (↩ 이어받음/→ 이어감), so you can match a row here to that label there.
+      // ("Continues:"/"Continued by:"), so you can match a row here to that
+      // label there.
       const idPrefix = `{${C.dim}-fg}#${r.id.slice(0, 8)}{/}`;
       // No reserved gutter — the checkmark only takes space on rows you've
       // actually selected, so the title starts flush-left the rest of the
@@ -150,22 +151,25 @@ export function sessionsView(opts = {}) {
       // Continuation markers moved into the right-hand metadata cluster —
       // they're relationship metadata about the row, same category as
       // agent/id, not something that belongs competing for the left edge.
-      // Trailing space is required, not cosmetic: ↩/→ are ambiguous-width
-      // glyphs that render wider than one column in most terminal fonts, so
-      // packing them directly against the next character visually overlapped it.
-      const link = r.continuationOf ? `{${C.spore}-fg}↩{/} ` : (r.continuedTo && r.continuedTo.length) ? `{${C.spore}-fg}→{/} ` : '';
-      // Same marker language, different glyph: 🔀 merge product, ✂ split
-      // piece, ⤳ a session with related derived content elsewhere —
-      // supersededBy (merge original — hidden by default, so this case is
-      // mostly unreachable in practice) or splitInto (split original, which
-      // DOES stay visible, unlike a merge original, since none of its
-      // content actually moved anywhere).
+      // Bracketed text tags, same visual language as isNew's [New] below —
+      // no emoji for state/relationship markers anywhere in this codebase.
+      const link = r.continuationOf
+        ? `{${C.spore}-fg}[${t('sessions.resumedBadge')}]{/} `
+        : r.continuedTo && r.continuedTo.length
+          ? `{${C.spore}-fg}[${t('sessions.handoffBadge')}]{/} `
+          : '';
+      // Same marker language, different tag: merge product, split piece, or
+      // a session with related derived content elsewhere — supersededBy
+      // (merge original — hidden by default, so this case is mostly
+      // unreachable in practice) or splitInto (split original, which DOES
+      // stay visible, unlike a merge original, since none of its content
+      // actually moved anywhere).
       const lineage = r.mergedFrom?.length
-        ? `{${C.merged}-fg}🔀{/} `
+        ? `{${C.merged}-fg}[${t('sessions.mergedBadge')}]{/} `
         : r.splitFrom
-          ? `{${C.merged}-fg}✂{/} `
+          ? `{${C.merged}-fg}[${t('sessions.splitBadge')}]{/} `
           : r.supersededBy?.length || r.splitInto?.length
-            ? `{${C.faint}-fg}⤳{/} `
+            ? `{${C.faint}-fg}[${t('sessions.linkedBadge')}]{/} `
             : '';
       const isNew = !r.folder ? `{${C.spore}-fg}[${t('sessions.newBadge')}]{/}` : '';
       // Under active search, lead with the FTS snippet — the row's row-reason.

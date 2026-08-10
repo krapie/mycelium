@@ -64,7 +64,7 @@ Keep this pattern flat, not deeply nested — no `services/`/`repositories/`/`co
 ## Docs conventions
 
 - `README.md` stays trimmed to Intro/Requirements/Install/Getting Started/Learn More/Cleanup/Contributing — anything more detailed belongs in `docs/`, linked from "Learn More."
-- `docs/features.md` is a **living catalog**, not a one-time snapshot: every module's capabilities as "As a user, I can ___" stories with file:line references, invariants, and a coverage marker (✅ tested / 🟡 partial / ⬜ untested). **When you add or change a capability, update its entry and coverage marker in the same change** — this file and the test suite are meant to track each other.
+- `docs/features.md` is a **living catalog**, not a one-time snapshot: every module's capabilities as "As a user, I can ___" stories with file:line references, invariants, and a coverage marker (`[tested]` / `[partial]` / `[untested]`). **When you add or change a capability, update its entry and coverage marker in the same change** — this file and the test suite are meant to track each other.
 - Markdown prose is **not hard-wrapped** — one paragraph per source line, let the viewer soft-wrap. (Established after CLA.md/CONTRIBUTING.md were found hard-wrapped at ~80 cols while the rest of `docs/*.md` wasn't; un-wrapped to match the dominant convention. Code blocks and lists are unaffected either way.)
 
 ## Tests

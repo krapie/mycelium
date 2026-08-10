@@ -69,7 +69,14 @@ function mockPlacements(prompt) {
 
 function mockKnowledge(prompt) {
   const folderMatch = prompt.match(/"([^"]+)" 작업 공간/);
-  const story = folderMatch && STORYLINES.find((s) => s.folder === folderMatch[1]);
+  const requested = folderMatch?.[1];
+  // isInSubtree-equivalent match, not strict equality: buildKnowledgeText()
+  // itself is scoped by subtree (organize/folders.js's isInSubtree()), so a
+  // human who pressed `w` one folder level short of the leaf (e.g.
+  // `backend` instead of `backend/payments`) still gets real session
+  // material in the prompt — this only needs to resolve which storyline
+  // that material belongs to, same as the real classification does.
+  const story = requested && STORYLINES.find((s) => s.folder === requested || s.folder.startsWith(`${requested}/`));
   return story ? story.knowledge : '## Notes\n\n(no tutorial notes for this folder)';
 }
 

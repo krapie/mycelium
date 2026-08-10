@@ -29,6 +29,11 @@ const en = {
   'folders.root': 'Root',
   'folders.new': 'New',
   'sessions.newBadge': 'New',
+  'sessions.mergedBadge': 'Merged',
+  'sessions.splitBadge': 'Split',
+  'sessions.linkedBadge': 'Linked',
+  'sessions.resumedBadge': 'Resumed',
+  'sessions.handoffBadge': 'Handoff',
 
   // sessions.js — folders panel
   'folders.newPrompt': (parent) => `New folder name${parent ? ` (under ${parent})` : ' (root)'}`,
@@ -64,12 +69,12 @@ const en = {
   'detail.summary': 'Summary',
   'detail.decisions': 'Decisions',
   'detail.todos': 'Action Items',
-  'detail.continuationOf': (label) => `↩ continues: ${label}`,
-  'detail.continuedTo': (label) => `→ continued by: ${label}`,
-  'detail.mergedFrom': (n, labels) => `🔀 merged from ${n}: ${labels}`,
-  'detail.splitFrom': (label) => `✂ split from: ${label}`,
-  'detail.superseded': (labels) => `⤳ superseded by: ${labels}`,
-  'detail.splitInto': (n, labels) => `⤳ split into ${n}: ${labels}`,
+  'detail.continuationOf': (label) => `Continues: ${label}`,
+  'detail.continuedTo': (label) => `Continued by: ${label}`,
+  'detail.mergedFrom': (n, labels) => `Merged from ${n}: ${labels}`,
+  'detail.splitFrom': (label) => `Split from: ${label}`,
+  'detail.superseded': (labels) => `Superseded by: ${labels}`,
+  'detail.splitInto': (n, labels) => `Split into ${n}: ${labels}`,
 
   // sessions.js — status bar (lifecycle bar: stage/key/arrow colors passed
   // in by the caller, same pattern as help.text). Shown at every drill
@@ -143,7 +148,7 @@ const en = {
   'tutorial.step3Body': (fg) => `Review the suggested folders, then press {${fg}-fg}Enter{/} to apply them.`,
   'tutorial.step4Title': 'Step 4/14',
   'tutorial.step4Body': (fg) =>
-    `Folders were created automatically and your sessions are sorted — the two payment sessions landed together in \`backend/payments\`. Press {${fg}-fg}↓{/} to find it, then {${fg}-fg}Enter{/}/→ to open it.`,
+    `Folders were created automatically and your sessions are sorted — the two payment sessions landed together in \`backend/payments\`. Press {${fg}-fg}←{/} to get back to the Folders panel, then {${fg}-fg}↓{/} to find it and {${fg}-fg}Enter{/}/→ to open it.`,
   'tutorial.step5Title': 'Step 5/14 — Learn',
   'tutorial.step5Body': (fg) => `With \`backend/payments\` open, press {${fg}-fg}w{/} — Mycelium distills everything in it into one KNOWLEDGE.md.`,
   'tutorial.step6Title': 'Step 6/14',
@@ -159,7 +164,7 @@ const en = {
   'tutorial.step10Body': (fg) => `Type a title (or leave it blank for a default), then press {${fg}-fg}Enter{/}.`,
   'tutorial.step11Title': 'Step 11/14 — Split',
   'tutorial.step11Body': (fg) =>
-    `Fully reversible, the other direction too. The merged session landed in {${fg}-fg}New{/} (unfiled) — go there and select it, then press {${fg}-fg}Shift+S{/} for topic-boundary suggestions.`,
+    `Fully reversible, the other direction too. The merged session stayed right here in \`backend/payments\` — with it selected, press {${fg}-fg}Shift+S{/} for topic-boundary suggestions.`,
   'tutorial.step12Title': 'Step 12/14',
   'tutorial.step12Body': (fg) => `Press {${fg}-fg}*{/} to select all the proposed ranges, then {${fg}-fg}Enter{/} to apply.`,
   'tutorial.step13Title': 'Step 13/14',
@@ -254,6 +259,11 @@ const ko = {
   'folders.root': 'Root',
   'folders.new': 'New',
   'sessions.newBadge': 'New',
+  'sessions.mergedBadge': '병합됨',
+  'sessions.splitBadge': '분할됨',
+  'sessions.linkedBadge': '연결됨',
+  'sessions.resumedBadge': '이어받음',
+  'sessions.handoffBadge': '이어감',
 
   'folders.newPrompt': (parent) => `새 폴더 이름${parent ? ` (${parent} 아래)` : ' (루트)'}`,
   'folders.created': (path) => `폴더 생성: ${path}`,
@@ -287,12 +297,12 @@ const ko = {
   'detail.summary': '요약',
   'detail.decisions': '결정',
   'detail.todos': '실행 항목',
-  'detail.continuationOf': (label) => `↩ 이어받음: ${label}`,
-  'detail.continuedTo': (label) => `→ 이어감: ${label}`,
-  'detail.mergedFrom': (n, labels) => `🔀 ${n}개 병합됨: ${labels}`,
-  'detail.splitFrom': (label) => `✂ 분할됨 — 원본: ${label}`,
-  'detail.superseded': (labels) => `⤳ 대체됨: ${labels}`,
-  'detail.splitInto': (n, labels) => `⤳ ${n}개로 분할됨: ${labels}`,
+  'detail.continuationOf': (label) => `이어받음: ${label}`,
+  'detail.continuedTo': (label) => `이어감: ${label}`,
+  'detail.mergedFrom': (n, labels) => `${n}개 병합됨: ${labels}`,
+  'detail.splitFrom': (label) => `분할됨 — 원본: ${label}`,
+  'detail.superseded': (labels) => `대체됨: ${labels}`,
+  'detail.splitInto': (n, labels) => `${n}개로 분할됨: ${labels}`,
 
   'lifecycle.bar': (stage, key, arrow) =>
     `{${stage}-fg}생성{/}{${key}-fg}·s{/}  {${arrow}-fg}→{/}  ` +
@@ -355,7 +365,7 @@ const ko = {
   'tutorial.step3Body': (fg) => `제안된 폴더를 확인하고 {${fg}-fg}Enter{/}로 적용해보세요.`,
   'tutorial.step4Title': '4/14단계',
   'tutorial.step4Body': (fg) =>
-    `폴더가 자동으로 생성되고 세션들이 정리됐습니다 — 결제 관련 세션 둘은 \`backend/payments\`로 함께 모였습니다. {${fg}-fg}↓{/}로 찾은 뒤 {${fg}-fg}Enter{/}/→로 열어보세요.`,
+    `폴더가 자동으로 생성되고 세션들이 정리됐습니다 — 결제 관련 세션 둘은 \`backend/payments\`로 함께 모였습니다. {${fg}-fg}←{/}로 Folders 패널로 돌아간 뒤 {${fg}-fg}↓{/}로 찾고 {${fg}-fg}Enter{/}/→로 열어보세요.`,
   'tutorial.step5Title': '5/14단계 — 학습',
   'tutorial.step5Body': (fg) => `\`backend/payments\`를 연 상태에서 {${fg}-fg}w{/}를 눌러보세요 — 그 폴더의 모든 세션을 하나의 KNOWLEDGE.md로 압축합니다.`,
   'tutorial.step6Title': '6/14단계',
@@ -371,7 +381,7 @@ const ko = {
   'tutorial.step10Body': (fg) => `제목을 입력하거나(비워두면 기본값) {${fg}-fg}Enter{/}를 누르세요.`,
   'tutorial.step11Title': '11/14단계 — 분할',
   'tutorial.step11Body': (fg) =>
-    `반대 방향도 완전히 되돌릴 수 있습니다. 병합된 세션은 {${fg}-fg}New{/}(미분류)로 이동했습니다 — 거기로 가서 선택한 뒤 {${fg}-fg}Shift+S{/}로 주제 경계 제안을 받아보세요.`,
+    `반대 방향도 완전히 되돌릴 수 있습니다. 병합된 세션은 그대로 \`backend/payments\`에 남아 있습니다 — 선택된 상태에서 {${fg}-fg}Shift+S{/}로 주제 경계 제안을 받아보세요.`,
   'tutorial.step12Title': '12/14단계',
   'tutorial.step12Body': (fg) => `{${fg}-fg}*{/}로 제안된 구간을 모두 선택한 뒤 {${fg}-fg}Enter{/}로 적용하세요.`,
   'tutorial.step13Title': '13/14단계',

@@ -97,6 +97,15 @@ test('tutorialMockProvider() falls back gracefully for an unknown folder in a kn
   assert.match(reply, /no tutorial notes/);
 });
 
+test('tutorialMockProvider() matches a knowledge request scoped one level above the storyline folder', async () => {
+  // buildKnowledgeText() is subtree-scoped (isInSubtree()), so a human who
+  // pressed `w` while on `backend` (not the leaf `backend/payments`) still
+  // gets real material in the prompt — the mock's folder match needs the
+  // same tolerance, not strict equality.
+  const reply = await tutorialMockProvider(knowledgePrompt('backend'));
+  assert.match(reply, /Payments backend/);
+});
+
 test('tutorialMockProvider() every canned knowledge text is English, not Korean', async () => {
   for (const folder of ['backend/payments', 'frontend/login-ui', 'data/sales-pipeline']) {
     const reply = await tutorialMockProvider(knowledgePrompt(folder));

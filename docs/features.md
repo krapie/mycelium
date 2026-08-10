@@ -10,7 +10,7 @@ behavior changes. It exists so that during architecture work, "is this the
 intended behavior?" has a documented answer instead of relying on tribal
 memory.
 
-Coverage legend: ✅ tested · ⬜ untested · 🟡 partially tested.
+Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
 
 ---
 
@@ -22,49 +22,49 @@ Coverage legend: ✅ tested · ⬜ untested · 🟡 partially tested.
   Drops empty sessions and Mycelium's own meta-calls. On re-import, carries
   forward 13 downstream-owned fields (`extracted`, `folder`, `organizedBy`,
   lineage arrays, suggestion/classification bookkeeping, `titleLocked`,
-  `summarizedTurnCount`) so capture never clobbers later-stage state. 🟡
+  `summarizedTurnCount`) so capture never clobbers later-stage state. [partial]
   (`scan()`'s carry-forward + skip-unchanged + empty-session-drop behavior is
   tested against a fake adapter; the real per-adapter `parse()` paths are
   covered separately under Agents/Adapters)
 - **Never re-capture Mycelium's own LLM calls.** `purgeMeta()` /
   `isMyceliumMeta()` — matches `META_MARKER` (current) or 7 legacy Korean
-  prompt fragments (retroactive only). ✅ (marker path tested; legacy
+  prompt fragments (retroactive only). [tested] (marker path tested; legacy
   Korean-fragment fallback is not)
 - **Raw record CRUD.** `loadRaw`/`saveRaw`/`deleteRaw`/`allRaw` — `loadRaw`
-  never throws (null on missing/corrupt file). ✅
+  never throws (null on missing/corrupt file). [tested]
 - **Look up a session by short id prefix.** `findSession(idOrPrefix)` —
   exact match wins; unique prefix match; ambiguous → up to 5 candidates
-  listed; zero matches → error. ✅
+  listed; zero matches → error. [tested]
 
 ## Organize — Folder tree (`src/organize.js`)
 
-- **Create a folder.** `mkdir(folderPath)`. ✅
+- **Create a folder.** `mkdir(folderPath)`. [tested]
 - **List the full tree** (including empty folders). `listTreeDirs()`. `_inbox`
-  excluded (virtual); `_archive` present but hidden from default views. ⬜
+  excluded (virtual); `_archive` present but hidden from default views. [untested]
 - **Rename/re-nest a folder.** `renameFolder(oldPath, newPath)`. Rejects
   moving into self/a descendant. Rewrites `folder` prefix on every affected
   session (`organizedBy` preserved — structural move, not re-filing).
   **Special-cases case-only renames** on case-insensitive filesystems
-  (macOS/Windows) via a temp-name two-step, to avoid deleting the source. ✅
+  (macOS/Windows) via a temp-name two-step, to avoid deleting the source. [tested]
   (including the case-only-rename branch — no longer the highest-risk
   untested function in the module)
 - **Delete a folder.** `deleteFolder(folderPath, { reassignTo })` — sessions
-  reassigned (default `_inbox`), never orphaned. ✅
+  reassigned (default `_inbox`), never orphaned. [tested]
 
 ## Organize — Manual session mutation (human-owned)
 
 - **Move a session to a folder.** `move(sessionId, folderPath)` — sets
-  `organizedBy: 'human'` (the sticky flag automation always respects). ✅
+  `organizedBy: 'human'` (the sticky flag automation always respects). [tested]
 - **Edit tags manually.** `tag(sessionId, add, remove)` — also marks
-  human-owned. ✅
+  human-owned. [tested]
 - **Edit title/summary manually.** `setContent(sessionId, { title, summary })`
   — non-empty title → `titleLocked: true`; **clearing it to empty unlocks it
-  again** so auto-tag refills it. Summary always refreshes regardless. ✅
+  again** so auto-tag refills it. Summary always refreshes regardless. [tested]
 - **Delete a session (Mycelium-only, original log untouched).**
   `deleteSession(sessionId)` — adds to `config.excludedSessionIds`
   (persistent tombstone); sweeps every other session's
   `continuedTo`/`mergedFrom`/`supersededBy`/`splitInto` to remove dangling
-  backlinks; returns `touchedIds` for reindexing. ✅
+  backlinks; returns `touchedIds` for reindexing. [tested]
 
 ## Organize — Smart-organize classification workflow (LLM)
 
@@ -80,7 +80,7 @@ Coverage legend: ✅ tested · ⬜ untested · 🟡 partially tested.
   (`isSafeFolderPath`), flags `isNew` for folders that don't exist yet, and
   stamps `lastClassifiedAt` on every candidate seen **regardless of match
   outcome** (this is what makes the cooldown work). `applyPlacements` reuses
-  `move()`. 🟡 (`classificationCandidates`, `queueSuggestions`,
+  `move()`. [partial] (`classificationCandidates`, `queueSuggestions`,
   `pendingSuggestions`, `clearSuggestions`, `applyPlacements` — the
   non-LLM plumbing around the workflow — are untested; `summarizeCandidates`
   and `suggestPlacements` themselves call `complete()` and still need
@@ -89,15 +89,15 @@ Coverage legend: ✅ tested · ⬜ untested · 🟡 partially tested.
 ## Organize — Lineage (continuation / merge / split)
 
 - **Link a handoff's parent/child sessions.** `linkContinuation(childId, parentId)`
-  — no-op if `childId === parentId`; dedupes. ✅
+  — no-op if `childId === parentId`; dedupes. [tested]
 - **Fold a merge/split "product" into a real resumed session.**
   `foldProductIntoSession(productId, newId)` — prepends product's turns with
   a `role:'system'` provenance separator, unions `filesChanged`, deletes the
-  product (backlink sweep applies). ⬜
+  product (backlink sweep applies). [untested]
 - **Merge sessions (git-like, reversible).** `mergeSessions(ids, {title})` /
   `unmerge(mergedId)` — requires ≥2 valid ids; **originals never mutated**,
   only `supersededBy` set; sorted by `startedAt` before concatenating; each
-  block gets a `role:'system'` separator turn. ✅
+  block gets a `role:'system'` separator turn. [tested]
 
 ## Learn (`src/learn.js`)
 
@@ -106,46 +106,46 @@ Coverage legend: ✅ tested · ⬜ untested · 🟡 partially tested.
   LLM call. Title overwritten **only if `!titleLocked`**. Tags capped at 5.
   `summarizedTurnCount` recorded every run (growth-detection baseline).
   Prompt excerpt is 60%-head/40%-tail of a 6000-char cap, not a plain
-  truncate. ⬜
+  truncate. [untested]
 - **Retroactive bulk (re-)tagging.** `tagAll({force, onProgress, limit})` —
   skip condition is "has summary AND hasn't grown since"; a session that
   grew is retagged even without `force`. `limit` caps per-call volume
-  (issue #3 history — avoid outlasting the scan interval). ⬜
+  (issue #3 history — avoid outlasting the scan interval). [untested]
 
 ## Insight — Digests & folder knowledge (`src/insight.js`)
 
 - **Generate a daily/weekly narrative digest.** `generateDigest({period, date})`
   — ISO week computation (Monday-based, UTC); no sessions for the period →
-  error before any LLM call; overwrites any existing digest for that key. ⬜
+  error before any LLM call; overwrites any existing digest for that key. [untested]
 - **Extract, preview, then save folder knowledge.** `buildKnowledgeText(folder)`
   (generate only, no write — split out for the TUI's human-confirm step),
   `writeKnowledgeText(folder, text)`, `extractKnowledge(folder)`
   (generate+write, non-interactive CLI path). Excludes superseded sessions
   from the LLM material. Prompt explicitly forbids meta-report phrasing
-  since the output is injected verbatim into AGENTS.md later. ⬜
-- **List which folders have sessions.** `foldersWithSessions()`. ⬜
+  since the output is injected verbatim into AGENTS.md later. [untested]
+- **List which folders have sessions.** `foldersWithSessions()`. [untested]
 
 ## Reuse — Context inheritance (`src/reuse.js`)
 
 - **Inherit ancestor-folder knowledge.** `assembleContext(folderPath)` —
   walks root→leaf, concatenating every ancestor's `KNOWLEDGE.md` that
-  exists (missing ones silently skipped). ✅
+  exists (missing ones silently skipped). [tested]
 - **Inject knowledge into a project's `AGENTS.md`.**
   `injectAgentsMd(targetDir, folderPath)` — **the riskiest write in the
   app: edits a file Mycelium doesn't own**, outside `~/.mycelium`. Only
   touches content between `<!-- mycelium:begin -->`/`<!-- mycelium:end -->`
   markers; replaces in place if present, appends (preserving existing
-  content) if not; no-ops if no `KNOWLEDGE.md` exists in the ancestor path. ✅
+  content) if not; no-ops if no `KNOWLEDGE.md` exists in the ancestor path. [tested]
   (including the repeated-call/no-duplication invariant — no longer the
   untested riskiest write in the app)
-- **Preview what a session would inherit.** `contextForSession(sessionId)`. ✅
+- **Preview what a session would inherit.** `contextForSession(sessionId)`. [tested]
 
 ## Handoff (`src/handoff.js`)
 
 - **Generate a cross-agent handoff prompt.** `buildHandoff(sessionId)` —
   composes original request, summary, files changed (capped 30), decisions,
   todos, last assistant message (capped 600 chars), inherited knowledge.
-  Every optional section is omitted (not blanked) if empty. ✅ (inherited
+  Every optional section is omitted (not blanked) if empty. [tested] (inherited
   `assembleContext()` knowledge section itself covered separately under Reuse)
 
 ## Split (`src/split.js`)
@@ -157,22 +157,22 @@ Coverage legend: ✅ tested · ⬜ untested · 🟡 partially tested.
   to 300 chars. Ranges validated (integer, in-bounds) before trusting.
   Pieces inherit `cwd`/`projectDir`/dates/`folder` from the original and are
   marked `organizedBy: 'human'`; **original is never hidden** (`splitInto`
-  is informational only, unlike merge's hiding via `supersededBy`). 🟡
+  is informational only, unlike merge's hiding via `supersededBy`). [partial]
   (`applySplit`'s slicing/range-validation/piece-metadata is tested;
   `suggestSplitBoundaries` itself calls `complete()` and still needs
   Phase 5's mocked-LLM tests)
 - **Undo a split.** `unsplit(originalId)` — only removes pieces whose
-  `splitFrom === originalId` (defensive check). ✅
+  `splitFrom === originalId` (defensive check). [tested]
 
 ## Cleanup (`src/cleanup.js`)
 
 - **Prune empty folders.** `pruneEmptyFolders()` — `_inbox`/`_archive`
-  always protected. ✅
-- **Bulk-delete `_archive`.** `clearArchive()`. ✅
-- **Rebuild the sqlite index from scratch.** `rebuildIndex()`. ✅
-- **One-shot safe tidy** (purge meta + prune folders + reindex). `tidy()`. ✅
+  always protected. [tested]
+- **Bulk-delete `_archive`.** `clearArchive()`. [tested]
+- **Rebuild the sqlite index from scratch.** `rebuildIndex()`. [tested]
+- **One-shot safe tidy** (purge meta + prune folders + reindex). `tidy()`. [tested]
 - **Full destructive reset.** `resetStore()` — deletes `~/.mycelium`
-  entirely (irreversible; original agent logs untouched). ✅
+  entirely (irreversible; original agent logs untouched). [tested]
 
 ## Daemon / Background Upkeep (`src/daemon.js`)
 
@@ -186,65 +186,65 @@ Coverage legend: ✅ tested · ⬜ untested · 🟡 partially tested.
   branches on `config.autoApproveSmartOrganize` (default `false`). Every
   cadence/limit is env-tunable (`MYCELIUM_SCAN_MS`,
   `MYCELIUM_SMART_ORGANIZE_MS`, `_LIMIT`, `_COOLDOWN_MS`,
-  `MYCELIUM_TAG_BATCH_LIMIT`, `MYCELIUM_SUMMARIZE_CONCURRENCY`). ⬜
+  `MYCELIUM_TAG_BATCH_LIMIT`, `MYCELIUM_SUMMARIZE_CONCURRENCY`). [untested]
 - **Run upkeep inside the TUI process (no separate daemon).**
   `startTuiRoutine()` — replaced an earlier detached-process design that
   kept running stale code across restarts. Opt-out via
-  `MYCELIUM_NO_AUTOSTART`. ⬜
+  `MYCELIUM_NO_AUTOSTART`. [untested]
 - **Explicit detached daemon** (`mycelium daemon --detach`/`--stop`).
   `spawnDetachedDaemon()`/`stopDetachedDaemon()` — idempotent via pidfile +
-  liveness check. ⬜
+  liveness check. [untested]
 
 ## Agents / Adapters (`src/agents.js`, `src/adapters/*`)
 
-- **See which agent CLIs are installed.** `which(cmd)` — PATH scan. ⬜
+- **See which agent CLIs are installed.** `which(cmd)` — PATH scan. [untested]
 - **Resolve the right binary/args to resume a session.**
   `binFor(source)`/`resumeArgsFor(source, id)` — fall back to
-  `claude`/`['--resume', id]` for an unrecognized source. ⬜
+  `claude`/`['--resume', id]` for an unrecognized source. [untested]
 - **Resolve the correct working directory to resume in.**
   `workDirFor(session)` — prefers `projectDir` over `cwd`; `null` if neither
-  path still exists on disk. ⬜
+  path still exists on disk. [untested]
 - **Get a copy-pasteable resume command.** `resumeCommandLine(session)` —
-  checks the binary is installed, shell-quotes safely. ⬜
+  checks the binary is installed, shell-quotes safely. [untested]
 - **Adapter contract** (`src/adapters/base.js`, registry in `index.js`):
   every adapter exports `name` (== session `source`), `label`, `bin`,
-  `newArgs`, `resumeArgs`, `listSessions()`, `parse(ref)`. ✅
+  `newArgs`, `resumeArgs`, `listSessions()`, `parse(ref)`. [tested]
 - **Claude Code adapter** — parses `~/.claude/projects/*/*.jsonl`,
   recovers `projectDir` from the encoded folder name, tool activity as
-  prose-only summaries (never raw payloads). 🟡 (parse tested; corrupt-line
+  prose-only summaries (never raw payloads). [partial] (parse tested; corrupt-line
   resilience and `filesChanged` regex not directly tested)
 - **Codex adapter** — parses `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`.
-  🟡 (parse tested; `session_meta` id-override case not tested)
+  [partial] (parse tested; `session_meta` id-override case not tested)
 - **Kiro adapter** — unions 3 on-disk formats (SQLite v1/v2, JSONL
   sidecar); v2 opened `readOnly: true` (never mutates the user's real DB).
-  🟡 **(only the JSONL fallback is tested — the SQLite v1/v2 paths, which
+  [partial] **(only the JSONL fallback is tested — the SQLite v1/v2 paths, which
   the module's own doc says are what's actually live, are untested)**
 
 ## Config & Paths (`src/config.js`, `src/paths.js`)
 
 - **Persisted preferences with safe defaults.** `loadConfig()`/`saveConfig()`
   — merges `{...DEFAULTS, ...parsed}` (new defaults auto-backfill old
-  files); corrupt JSON falls back to pure `DEFAULTS`, never throws. ✅
-- **One overridable data home.** `HOME`/`RAW_DIR`/etc., `ensureDirs()`. ✅
+  files); corrupt JSON falls back to pure `DEFAULTS`, never throws. [tested]
+- **One overridable data home.** `HOME`/`RAW_DIR`/etc., `ensureDirs()`. [tested]
 
 ## Index / Search (`src/index-db.js`)
 
 - **Sqlite index rebuildable from raw files.** `reindex()` (full) /
   `reindexOne`/`reindexMany` (incremental) / `removeFromIndex()`. Schema
   migrations are additive `ALTER TABLE` (only `"duplicate column"` errors
-  swallowed). 🟡 (exercised transitively via `cleanup.test.js`, not directly)
+  swallowed). [partial] (exercised transitively via `cleanup.test.js`, not directly)
 - **List/filter sessions.** `listSessions({folder, date, includeSuperseded})`
   — same 3-way folder-scope contract as elsewhere (undefined=all,
   null=unfiled, string=subtree); date matches `ended_at` falling back to
-  `started_at` (last-activity, not creation). ✅
+  `started_at` (last-activity, not creation). [tested]
 - **Full-text + tag + folder search.** `search(...)` — FTS5, bm25-ranked
   when a text query is given; tag filter is AND; query tokens individually
-  quoted to survive punctuation/Korean text. ✅ (punctuation-safety asserted
+  quoted to survive punctuation/Korean text. [tested] (punctuation-safety asserted
   via "doesn't throw"; Korean-text tokenizing specifically not exercised)
 - **Folder/calendar counts.** `folderCounts()`/`sessionCountsByDay(month)`
   — both exclude superseded sessions; day grouping uses the same
-  last-activity basis as `listSessions`'s date filter. ✅
-- **List all tags with usage counts.** `listTags()`. ✅
+  last-activity basis as `listSessions`'s date filter. [tested]
+- **List all tags with usage counts.** `listTags()`. [tested]
 
 ## LLM Provider (`src/llm.js`)
 
@@ -252,19 +252,19 @@ Coverage legend: ✅ tested · ⬜ untested · 🟡 partially tested.
   key). `complete(prompt, {timeoutMs})` — prepends `META_MARKER` (the
   signal `scanner.js` filters back out); provider selectable via
   `MYCELIUM_LLM`; `windowsHide: true` (issue #3); default 4-minute timeout,
-  SIGTERM on expiry. 🟡 (the `__setTestProvider()` injection seam itself is
+  SIGTERM on expiry. [partial] (the `__setTestProvider()` injection seam itself is
   tested; the real `claude`/`codex` spawn path is not, by design)
 - **Normalize Claude/Codex's different stdout shapes.** `extractText(stdout)`
   — tries Claude's `{result}` JSON, falls back to scanning Codex JSONL for
   the last `agent_message` (both the `msg.type` and `payload.type` event
   shapes), falls back to raw trimmed text. Pure function, zero mocking
-  needed. ✅
+  needed. [tested]
 - **Parse a JSON reply out of prose/code-fences.** `parseJsonReply(text)` —
   extracts a ```` ```json ``` ```` fence if present, else finds first `{`/last
   `}`; returns `null` (never throws) on failure. **Known edge case**: text
   after the JSON containing its own braces mis-slices and returns `null`
   instead of the real object — pinned as a regression test, not yet fixed.
-  Pure function, zero mocking needed. ✅
+  Pure function, zero mocking needed. [tested]
 
 ## CLI (`src/cli.js`) — see [`docs/cli.md`](./cli.md) for the full command reference
 
@@ -279,17 +279,17 @@ independent of `mycelium lang` (which only affects the TUI) — worth a
 decision before assuming the CLI is localized. None of the 25+ subcommands
 are exercised through `cli.js`'s own dispatch layer today (the underlying
 module functions they call are tested where noted above, but the CLI
-argument-parsing/routing/output-formatting layer itself is not). ⬜
+argument-parsing/routing/output-formatting layer itself is not). [untested]
 
 ## TUI — App shell (`src/tui/app.js`, `index.js`)
 
 - **Quit confirm** (`q`/`Ctrl-C`) — two-press confirm, guarded by an
   overridable `app.quitGuard` (the tutorial takes it over during its own
-  run). ⬜
+  run). [untested]
 - **First-run onboarding prompt** — offers the interactive tutorial or a
-  static overview; `config.onboarded` set on first answer either way. ⬜
+  static overview; `config.onboarded` set on first answer either way. [untested]
 - **Post-mount notification** — pending-suggestion toast takes priority
-  over the unfiled-backlog hint. ⬜
+  over the unfiled-backlog hint. [untested]
 
 ## TUI — Detail rendering (`src/tui/render.js`)
 
@@ -299,7 +299,7 @@ argument-parsing/routing/output-formatting layer itself is not). ⬜
   lineage links (`?` placeholder when a linked session isn't in the store).
   One implementation, used by both the Sessions panel and the Calendar tab's
   detail panel. `splitSentences(text)` — sentence-boundary split for the
-  summary bullets, no blessed dependency. ✅
+  summary bullets, no blessed dependency. [tested]
 
 ## TUI — Folders panel (`src/tui/views/sessions.js`)
 
@@ -307,7 +307,7 @@ Live preview on navigate; `a` new subfolder; `e` rename (blocked on
 Root/New); `m` move/re-nest; `x` delete (sessions reassigned to New, not
 deleted); `w` extract KNOWLEDGE.md (shared with Sessions panel — async LLM
 generate → dismiss toast → `confirmText` preview → conditional write, the
-canonical "preview-then-confirm" pattern reused by `i` too). ⬜
+canonical "preview-then-confirm" pattern reused by `i` too). [untested]
 
 ## TUI — Sessions panel (`src/tui/views/sessions.js`)
 
@@ -326,7 +326,7 @@ merge/split product into the new real session), detail-panel `Enter`
 resume-or-copy choice, `a` auto-tag (sequential batch with per-item
 progress + partial-failure tolerance), `e` rename title, `y` copy to
 clipboard, `d` digest reader (nested mini-screen), `c` view context, `i`
-inject AGENTS.md (preview-then-confirm, sibling to `w`). ⬜
+inject AGENTS.md (preview-then-confirm, sibling to `w`). [untested]
 
 ## TUI — Calendar tab (`src/tui/views/calendar.js`)
 
@@ -339,7 +339,7 @@ Sessions** — a deliberate, self-acknowledged choice by the original author
 (comment explains resume/handoff churned enough that sharing felt riskier
 at the time) — the clearest extraction candidate in the codebase. Tab
 activate/deactivate preserves the calendar's own cursor position across
-switches (lazy-created once, cheap to reactivate). ⬜
+switches (lazy-created once, cheap to reactivate). [untested]
 
 ## TUI — Tutorial / `mycelium demo` (`src/tui/tutorial.js`, `tutorial-data.js`, `tutorial-mock-llm.js`)
 
@@ -409,7 +409,7 @@ actual `~/.mycelium` data instead of a bare shell prompt. An early Esc
 bail (`completed: false`) just exits plainly, no handoff — someone who
 bailed out mid-tour didn't ask to see real (possibly sensitive) data
 next, which also keeps `mycelium demo` safe to run in front of others as
-originally intended. 🟡 (`buildMockSessions()` and
+originally intended. [partial] (`buildMockSessions()` and
 `tutorial-mock-llm.js`'s prompt-dispatch/classification/folder-lookup logic
 are unit-tested as pure functions — the interactive state machine itself has
 zero coverage)

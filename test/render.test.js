@@ -94,10 +94,10 @@ test('formatSessionDetail() renders merge/split lineage links using "?" when the
     splitInto: ['55555555-eeee'],
   });
   const lines = formatSessionDetail(n).join('\n');
-  assert.match(lines, /merged from 2/);
+  assert.match(lines, /merged from 2/i);
   assert.match(lines, /\? #11111111/);
-  assert.match(lines, /split from/);
+  assert.match(lines, /split from/i);
   assert.match(lines, /\? #33333333/);
-  assert.match(lines, /superseded by/);
-  assert.match(lines, /split into 1/);
+  assert.match(lines, /superseded by/i);
+  assert.match(lines, /split into 1/i);
 });

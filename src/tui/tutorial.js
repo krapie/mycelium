@@ -45,16 +45,18 @@ const STEPS = [
   { titleKey: 'tutorial.step1Title', bodyKey: 'tutorial.step1Body', waitFor: 'right' },
   { titleKey: 'tutorial.step2Title', bodyKey: 'tutorial.step2Body', waitFor: 'o', thenWait: 'open', waitingKey: 'tutorial.waitingOrganize' },
   { titleKey: 'tutorial.step3Title', bodyKey: 'tutorial.step3Body', waitFor: 'enter', thenWait: 'close', waitingKey: 'tutorial.waitingApply' },
-  // waitFor is 'down'/'enter' here, not null — these steps' own text names
-  // a specific key (↓ to browse the new folders, Enter to finish), and both
-  // also suggest OTHER real keys to go try (v for the calendar, / for
-  // search). A bare "any key advances" would treat trying those as "done,
-  // move on" and end the tutorial mid-explore instead of letting the human
-  // actually poke around like the text invites them to. Was ← at first, but
-  // `o` (previous step) is normally pressed from the folders panel already
-  // — ← only means anything coming back FROM the sessions panel, so it was
-  // a dead key most of the time. ↓ (into the new folder) works either way.
-  { titleKey: 'tutorial.step4Title', bodyKey: 'tutorial.step4Body', waitFor: 'down' },
+  // waitFor is 'left' here, not 'down' — applying placements (previous
+  // step) leaves focus on the Sessions list (nothing in that flow moves it
+  // back), so ↓ at this point would just browse session rows, never touch
+  // the folder cursor at all, and state.folder would stay whatever it was
+  // before step 1's panel-navigation lesson moved focus off Folders in the
+  // first place — silently starving every step after this one of a real
+  // folder scope (buildKnowledgeText/assembleContext both reduce to "no
+  // content" against an unscoped or wrong folder). ← is what actually
+  // returns focus to Folders so the human can navigate it for real — found
+  // by walking the tutorial live in tmux with the panel-nav step already in
+  // place, not obvious from reading the STEPS data in isolation.
+  { titleKey: 'tutorial.step4Title', bodyKey: 'tutorial.step4Body', waitFor: 'left' },
   { titleKey: 'tutorial.step5Title', bodyKey: 'tutorial.step5Body', waitFor: 'w', thenWait: 'open', waitingKey: 'tutorial.waitingKnowledge' },
   { titleKey: 'tutorial.step6Title', bodyKey: 'tutorial.step6Body', waitFor: 'enter', thenWait: 'close', waitingKey: 'tutorial.waitingSave' },
   // Reuse: `c` (view context) rather than `i` (inject AGENTS.md) — both are

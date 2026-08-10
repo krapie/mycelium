@@ -69,7 +69,8 @@ export function deleteSession(sessionId) {
   cfg.excludedSessionIds = [...excluded];
   saveConfig(cfg);
   // Sweep other sessions' backlinks to the now-gone id — continuation/merge/
-  // split arrays render.js reads for the ↩/→/🔀/⤳ markers and detail links.
+  // split arrays render.js reads for the "Continues:"/"Merged from:"/etc.
+  // markers and detail links.
   // A dangling entry doesn't crash anything (those lookups already degrade
   // to just showing the bare id), but it's stale bookkeeping worth cleaning
   // while we're already touching this id — same discipline unmerge()/
@@ -170,6 +171,17 @@ export function mergeSessions(ids, { title } = {}) {
   merged.endedAt = originals[originals.length - 1].endedAt;
   merged.mergedFrom = originals.map((n) => n.id);
   if (title) merged.extracted.title = title;
+  // Land in the shared folder rather than unfiled, when there is one — a
+  // merge is a deliberate human action on already-placed sessions, same
+  // reasoning applySplit() already uses for its own pieces ("not left
+  // unfiled... land where the original was"). Ambiguous when the originals
+  // don't agree (different folders, or any of them unfiled) — falls back
+  // to unfiled rather than guessing which one should win.
+  const folders = new Set(originals.map((n) => n.folder || null));
+  if (folders.size === 1 && [...folders][0]) {
+    merged.folder = [...folders][0];
+    merged.organizedBy = 'human';
+  }
   // Propagate demo:true so tutorial.js's endTutorial() sweep (which only
   // matches that flag) still catches the merge product — without this, a
   // merge inside the tutorial/mycelium demo leaves a real-looking orphaned
