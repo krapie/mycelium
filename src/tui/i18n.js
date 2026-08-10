@@ -29,6 +29,11 @@ const en = {
   'folders.root': 'Root',
   'folders.new': 'New',
   'sessions.newBadge': 'New',
+  'sessions.mergedBadge': 'Merged',
+  'sessions.splitBadge': 'Split',
+  'sessions.linkedBadge': 'Linked',
+  'sessions.resumedBadge': 'Resumed',
+  'sessions.handoffBadge': 'Handoff',
 
   // sessions.js — folders panel
   'folders.newPrompt': (parent) => `New folder name${parent ? ` (under ${parent})` : ' (root)'}`,
@@ -64,12 +69,12 @@ const en = {
   'detail.summary': 'Summary',
   'detail.decisions': 'Decisions',
   'detail.todos': 'Action Items',
-  'detail.continuationOf': (label) => `↩ continues: ${label}`,
-  'detail.continuedTo': (label) => `→ continued by: ${label}`,
-  'detail.mergedFrom': (n, labels) => `🔀 merged from ${n}: ${labels}`,
-  'detail.splitFrom': (label) => `✂ split from: ${label}`,
-  'detail.superseded': (labels) => `⤳ superseded by: ${labels}`,
-  'detail.splitInto': (n, labels) => `⤳ split into ${n}: ${labels}`,
+  'detail.continuationOf': (label) => `Continues: ${label}`,
+  'detail.continuedTo': (label) => `Continued by: ${label}`,
+  'detail.mergedFrom': (n, labels) => `Merged from ${n}: ${labels}`,
+  'detail.splitFrom': (label) => `Split from: ${label}`,
+  'detail.superseded': (labels) => `Superseded by: ${labels}`,
+  'detail.splitInto': (n, labels) => `Split into ${n}: ${labels}`,
 
   // sessions.js — status bar (lifecycle bar: stage/key/arrow colors passed
   // in by the caller, same pattern as help.text). Shown at every drill
@@ -128,36 +133,56 @@ const en = {
   // First-run tutorial (tutorial.js) — mock sessions, real o/w LLM calls.
   // Body strings are (fg) => `...` functions (same style as help.text/
   // welcome.body) so the key they're waiting for can be highlighted inline.
-  'tutorial.promptTitle': 'First time here! Want a 3-minute interactive tour?',
+  'tutorial.promptTitle': 'First time here! Want a quick interactive tour?',
   'tutorial.promptYes': 'Start the tutorial',
   'tutorial.promptNo': 'Skip, just show me around',
-  'tutorial.exitHint': 'Esc: exit tutorial',
-  'tutorial.confirmFinishTitle': 'Finish the tutorial?',
-  'tutorial.confirmFinishHint': (fg) => `Press {${fg}-fg}q{/} again to confirm, or any other key to keep exploring.`,
-  'tutorial.step1Title': 'Step 1/7 — Organize',
-  'tutorial.step1Body': (fg) => `6 fresh, unfiled sessions are sitting below. Press {${fg}-fg}o{/} to have Mycelium read them and suggest folders.`,
-  'tutorial.step2Title': 'Step 2/7',
-  'tutorial.step2Body': (fg) => `Review the suggested folders, then press {${fg}-fg}Enter{/} to apply them.`,
-  'tutorial.step3Title': 'Step 3/7',
-  'tutorial.step3Body': (fg) => `Folders were created automatically and your sessions are sorted. Press {${fg}-fg}↓{/} to look at the new folders.`,
-  'tutorial.step4Title': 'Step 4/7 — Learn',
-  'tutorial.step4Body': (fg) => `Pick a folder and press {${fg}-fg}w{/} — Mycelium distills everything in it into one KNOWLEDGE.md.`,
-  'tutorial.step5Title': 'Step 5/7 — Reuse',
-  'tutorial.step5Body': (fg) =>
-    `Review the knowledge draft, then press {${fg}-fg}Enter{/} to save it — it auto-injects next time you launch a session here with {${fg}-fg}n{/}/{${fg}-fg}h{/} (we won't actually launch an agent in this tutorial).`,
-  'tutorial.step6Title': 'Step 6/7',
-  'tutorial.step6Body': (fg) => `You can also search everything with {${fg}-fg}/{/} or browse by date with {${fg}-fg}v{/}. Press {${fg}-fg}Enter{/} to continue.`,
-  'tutorial.step7Title': 'Tutorial complete!',
-  'tutorial.step7Body': (fg) =>
-    `That's the core loop. Press {${fg}-fg}q{/} when you're done — the mock sessions get cleaned up and you're back to your own, existing data.`,
-  // Interim text shown while a real o/w LLM call is in flight — the narrator
-  // waits for the actual review modal to open/close (see tutorial.js's
-  // isModalOpen polling) rather than trusting the raw keypress alone, so
-  // these can be on screen anywhere from under a second to 10+ seconds.
-  'tutorial.waitingOrganize': 'Reading sessions and drafting folder suggestions… (real LLM call, a few seconds)',
+  'tutorial.exitHint': 'q: exit tutorial',
+  'tutorial.step1Title': 'Step 1/14 — Navigate',
+  'tutorial.step1Body': (fg) =>
+    `{${fg}-fg}→{/} moves focus right — Folders → Sessions → Detail — and {${fg}-fg}←{/} moves back. Press {${fg}-fg}→{/} now to continue.`,
+  'tutorial.step2Title': 'Step 2/14 — Organize',
+  'tutorial.step2Body': (fg) => `6 fresh, unfiled sessions are sitting below. Press {${fg}-fg}o{/} to have Mycelium read them and suggest folders.`,
+  'tutorial.step3Title': 'Step 3/14',
+  'tutorial.step3Body': (fg) => `Review the suggested folders, then press {${fg}-fg}Enter{/} to apply them.`,
+  'tutorial.step4Title': 'Step 4/14',
+  'tutorial.step4Body': (fg) =>
+    `Folders were created automatically and your sessions are sorted — the two payment sessions landed together in \`backend/payments\`. Press {${fg}-fg}←{/} to get back to the Folders panel, then {${fg}-fg}↓{/} to find it and {${fg}-fg}Enter{/}/→ to open it.`,
+  'tutorial.step5Title': 'Step 5/14 — Learn',
+  'tutorial.step5Body': (fg) => `With \`backend/payments\` open, press {${fg}-fg}w{/} — Mycelium distills everything in it into one KNOWLEDGE.md.`,
+  'tutorial.step6Title': 'Step 6/14',
+  'tutorial.step6Body': (fg) => `Review the knowledge draft, then press {${fg}-fg}Enter{/} to save it. Next: see exactly what a new session here would inherit from it.`,
+  'tutorial.step7Title': 'Step 7/14 — Reuse',
+  'tutorial.step7Body': (fg) => `Press {${fg}-fg}c{/} to see the context a new session in this folder would inherit.`,
+  'tutorial.step8Title': 'Step 8/14',
+  'tutorial.step8Body': (fg) =>
+    `This is exactly what gets injected into AGENTS.md automatically whenever you start a session here with {${fg}-fg}n{/} or {${fg}-fg}h{/} — or press {${fg}-fg}i{/} to inject it into a project manually, right now. Press {${fg}-fg}c{/} or {${fg}-fg}Esc{/} to close.`,
+  'tutorial.step9Title': 'Step 9/14 — Merge',
+  'tutorial.step9Body': (fg) =>
+    `These two sessions are actually one story — investigate, then fix. Select both with {${fg}-fg}Space{/}, then press {${fg}-fg}Shift+M{/} to merge them into one continuous record.`,
+  'tutorial.step10Title': 'Step 10/14',
+  'tutorial.step10Body': (fg) => `Type a title (or leave it blank for a default), then press {${fg}-fg}Enter{/}.`,
+  'tutorial.step11Title': 'Step 11/14 — Split',
+  'tutorial.step11Body': (fg) =>
+    `Fully reversible, the other direction too. The merged session stayed right here in \`backend/payments\` — with it selected, press {${fg}-fg}Shift+S{/} for topic-boundary suggestions.`,
+  'tutorial.step12Title': 'Step 12/14',
+  'tutorial.step12Body': (fg) => `Press {${fg}-fg}*{/} to select all the proposed ranges, then {${fg}-fg}Enter{/} to apply.`,
+  'tutorial.step13Title': 'Step 13/14',
+  'tutorial.step13Body': (fg) => `You can also search everything with {${fg}-fg}/{/} or browse by date with {${fg}-fg}v{/}. Press {${fg}-fg}Enter{/} to continue.`,
+  'tutorial.step14Title': 'Tutorial complete!',
+  'tutorial.step14Body': (fg) =>
+    `That's the full lifecycle. Press {${fg}-fg}q{/} when you're done — the mock sessions get cleaned up and you're back to your own, existing data.`,
+  // Interim text shown while a real handler is in flight (o/w/Shift+S's LLM
+  // calls are mocked during the tutorial — see tutorial-mock-llm.js — so
+  // these resolve almost instantly, but the narrator still has to wait for
+  // the actual modal to open/close (see tutorial.js's isModalOpen polling)
+  // rather than trusting the raw keypress alone).
+  'tutorial.waitingOrganize': 'Reading sessions and drafting folder suggestions…',
   'tutorial.waitingApply': 'Applying…',
-  'tutorial.waitingKnowledge': "Distilling this folder's sessions into a knowledge draft… (real LLM call, a few seconds)",
+  'tutorial.waitingKnowledge': "Distilling this folder's sessions into a knowledge draft…",
   'tutorial.waitingSave': 'Saving…',
+  'tutorial.waitingContext': 'Assembling inherited context…',
+  'tutorial.waitingMerge': "Waiting for Shift+M — make sure you've selected two sessions with Space first.",
+  'tutorial.waitingSplit': 'Analyzing the merged session for topic boundaries…',
 
   // pickers.js
   'picker.newLabel': '{gray-fg}New (unfiled){/}',
@@ -199,7 +224,8 @@ const en = {
   'merge.done': (n) => `Merged ${n} sessions`,
 
   'split.suggesting': 'Analyzing session for topic boundaries…',
-  'split.reviewTitle': 'Proposed split — space select, enter apply, esc cancel',
+  'split.reviewTitle': 'Proposed split',
+  'split.turnRangeLabel': (from, to, label) => `Turn ${from}-${to}  "${label}"`,
   'split.done': (n) => `Split into ${n} session${n === 1 ? '' : 's'}`,
 
   'smart.running': 'Summarizing + classifying sessions…',
@@ -232,6 +258,11 @@ const ko = {
   'folders.root': 'Root',
   'folders.new': 'New',
   'sessions.newBadge': 'New',
+  'sessions.mergedBadge': '병합됨',
+  'sessions.splitBadge': '분할됨',
+  'sessions.linkedBadge': '연결됨',
+  'sessions.resumedBadge': '이어받음',
+  'sessions.handoffBadge': '이어감',
 
   'folders.newPrompt': (parent) => `새 폴더 이름${parent ? ` (${parent} 아래)` : ' (루트)'}`,
   'folders.created': (path) => `폴더 생성: ${path}`,
@@ -265,12 +296,12 @@ const ko = {
   'detail.summary': '요약',
   'detail.decisions': '결정',
   'detail.todos': '실행 항목',
-  'detail.continuationOf': (label) => `↩ 이어받음: ${label}`,
-  'detail.continuedTo': (label) => `→ 이어감: ${label}`,
-  'detail.mergedFrom': (n, labels) => `🔀 ${n}개 병합됨: ${labels}`,
-  'detail.splitFrom': (label) => `✂ 분할됨 — 원본: ${label}`,
-  'detail.superseded': (labels) => `⤳ 대체됨: ${labels}`,
-  'detail.splitInto': (n, labels) => `⤳ ${n}개로 분할됨: ${labels}`,
+  'detail.continuationOf': (label) => `이어받음: ${label}`,
+  'detail.continuedTo': (label) => `이어감: ${label}`,
+  'detail.mergedFrom': (n, labels) => `${n}개 병합됨: ${labels}`,
+  'detail.splitFrom': (label) => `분할됨 — 원본: ${label}`,
+  'detail.superseded': (labels) => `대체됨: ${labels}`,
+  'detail.splitInto': (n, labels) => `${n}개로 분할됨: ${labels}`,
 
   'lifecycle.bar': (stage, key, arrow) =>
     `{${stage}-fg}생성{/}{${key}-fg}·s{/}  {${arrow}-fg}→{/}  ` +
@@ -318,32 +349,51 @@ const ko = {
   'welcome.modalLabel': ' Mycelium에 오신 것을 환영합니다 (Enter/Esc로 시작) ',
   'welcome.body': null,
 
-  'tutorial.promptTitle': '처음 오셨네요! 3분짜리 인터랙티브 튜토리얼 보시겠어요?',
+  'tutorial.promptTitle': '처음 오셨네요! 짧은 인터랙티브 튜토리얼 보시겠어요?',
   'tutorial.promptYes': '튜토리얼 시작하기',
   'tutorial.promptNo': '건너뛰고 바로 시작하기',
-  'tutorial.exitHint': 'Esc: 튜토리얼 종료',
-  'tutorial.confirmFinishTitle': '튜토리얼을 끝낼까요?',
-  'tutorial.confirmFinishHint': (fg) => `{${fg}-fg}q{/}를 한 번 더 누르면 확정, 다른 키를 누르면 계속 둘러봅니다.`,
-  'tutorial.step1Title': '1/7단계 — 조직화',
-  'tutorial.step1Body': (fg) => `아직 정리 안 된 세션 6개가 아래에 있습니다. {${fg}-fg}o{/}를 눌러 Mycelium이 내용을 읽고 폴더를 제안하게 해보세요.`,
-  'tutorial.step2Title': '2/7단계',
-  'tutorial.step2Body': (fg) => `제안된 폴더를 확인하고 {${fg}-fg}Enter{/}로 적용해보세요.`,
-  'tutorial.step3Title': '3/7단계',
-  'tutorial.step3Body': (fg) => `폴더가 자동으로 생성되고 세션들이 정리됐습니다. {${fg}-fg}↓{/}를 눌러 새로 생긴 폴더를 확인해보세요.`,
-  'tutorial.step4Title': '4/7단계 — 학습',
-  'tutorial.step4Body': (fg) => `폴더 하나를 고르고 {${fg}-fg}w{/}를 눌러보세요 — 그 폴더의 모든 세션을 하나의 KNOWLEDGE.md로 압축합니다.`,
-  'tutorial.step5Title': '5/7단계 — 재사용',
-  'tutorial.step5Body': (fg) =>
-    `지식 초안을 확인하고 {${fg}-fg}Enter{/}로 저장하세요 — 다음에 {${fg}-fg}n{/}/{${fg}-fg}h{/}로 이 폴더에서 세션을 열 때 자동으로 주입됩니다 (이 튜토리얼에서는 실제로 에이전트를 실행하지 않습니다).`,
-  'tutorial.step6Title': '6/7단계',
-  'tutorial.step6Body': (fg) => `{${fg}-fg}/{/}로 전체 검색, {${fg}-fg}v{/}로 날짜별 캘린더 보기도 가능합니다. {${fg}-fg}Enter{/}로 계속하세요.`,
-  'tutorial.step7Title': '튜토리얼 완료!',
-  'tutorial.step7Body': (fg) =>
-    `핵심 흐름은 여기까지입니다. 다 보셨으면 {${fg}-fg}q{/}를 누르세요 — 데모 세션이 정리되고 원래(기존) 데이터로 돌아갑니다.`,
-  'tutorial.waitingOrganize': '세션을 읽고 폴더를 제안하는 중… (실제 LLM 호출, 몇 초 정도 걸립니다)',
+  'tutorial.exitHint': 'q: 튜토리얼 종료',
+  'tutorial.step1Title': '1/14단계 — 이동',
+  'tutorial.step1Body': (fg) =>
+    `{${fg}-fg}→{/}로 포커스를 오른쪽으로 이동합니다 — 폴더 → 세션 → 상세 — {${fg}-fg}←{/}로 되돌아갑니다. 지금 {${fg}-fg}→{/}를 눌러 계속하세요.`,
+  'tutorial.step2Title': '2/14단계 — 조직화',
+  'tutorial.step2Body': (fg) => `아직 정리 안 된 세션 6개가 아래에 있습니다. {${fg}-fg}o{/}를 눌러 Mycelium이 내용을 읽고 폴더를 제안하게 해보세요.`,
+  'tutorial.step3Title': '3/14단계',
+  'tutorial.step3Body': (fg) => `제안된 폴더를 확인하고 {${fg}-fg}Enter{/}로 적용해보세요.`,
+  'tutorial.step4Title': '4/14단계',
+  'tutorial.step4Body': (fg) =>
+    `폴더가 자동으로 생성되고 세션들이 정리됐습니다 — 결제 관련 세션 둘은 \`backend/payments\`로 함께 모였습니다. {${fg}-fg}←{/}로 Folders 패널로 돌아간 뒤 {${fg}-fg}↓{/}로 찾고 {${fg}-fg}Enter{/}/→로 열어보세요.`,
+  'tutorial.step5Title': '5/14단계 — 학습',
+  'tutorial.step5Body': (fg) => `\`backend/payments\`를 연 상태에서 {${fg}-fg}w{/}를 눌러보세요 — 그 폴더의 모든 세션을 하나의 KNOWLEDGE.md로 압축합니다.`,
+  'tutorial.step6Title': '6/14단계',
+  'tutorial.step6Body': (fg) => `지식 초안을 확인하고 {${fg}-fg}Enter{/}로 저장하세요. 다음: 새 세션이 여기서 무엇을 물려받는지 직접 확인해봅니다.`,
+  'tutorial.step7Title': '7/14단계 — 재사용',
+  'tutorial.step7Body': (fg) => `{${fg}-fg}c{/}를 눌러 이 폴더의 새 세션이 물려받을 컨텍스트를 확인해보세요.`,
+  'tutorial.step8Title': '8/14단계',
+  'tutorial.step8Body': (fg) =>
+    `{${fg}-fg}n{/} 또는 {${fg}-fg}h{/}로 이 폴더에서 세션을 시작할 때마다 이 내용이 AGENTS.md에 자동으로 주입됩니다 — 또는 {${fg}-fg}i{/}로 지금 바로 프로젝트에 직접 주입할 수도 있습니다. {${fg}-fg}c{/} 또는 {${fg}-fg}Esc{/}로 닫으세요.`,
+  'tutorial.step9Title': '9/14단계 — 병합',
+  'tutorial.step9Body': (fg) =>
+    `이 두 세션은 사실 하나의 이야기입니다 — 조사, 그리고 수정. {${fg}-fg}Space{/}로 둘 다 선택한 뒤 {${fg}-fg}Shift+M{/}으로 하나의 연속된 기록으로 병합해보세요.`,
+  'tutorial.step10Title': '10/14단계',
+  'tutorial.step10Body': (fg) => `제목을 입력하거나(비워두면 기본값) {${fg}-fg}Enter{/}를 누르세요.`,
+  'tutorial.step11Title': '11/14단계 — 분할',
+  'tutorial.step11Body': (fg) =>
+    `반대 방향도 완전히 되돌릴 수 있습니다. 병합된 세션은 그대로 \`backend/payments\`에 남아 있습니다 — 선택된 상태에서 {${fg}-fg}Shift+S{/}로 주제 경계 제안을 받아보세요.`,
+  'tutorial.step12Title': '12/14단계',
+  'tutorial.step12Body': (fg) => `{${fg}-fg}*{/}로 제안된 구간을 모두 선택한 뒤 {${fg}-fg}Enter{/}로 적용하세요.`,
+  'tutorial.step13Title': '13/14단계',
+  'tutorial.step13Body': (fg) => `{${fg}-fg}/{/}로 전체 검색, {${fg}-fg}v{/}로 날짜별 캘린더 보기도 가능합니다. {${fg}-fg}Enter{/}로 계속하세요.`,
+  'tutorial.step14Title': '튜토리얼 완료!',
+  'tutorial.step14Body': (fg) =>
+    `전체 라이프사이클을 다 보셨습니다. 다 보셨으면 {${fg}-fg}q{/}를 누르세요 — 데모 세션이 정리되고 원래(기존) 데이터로 돌아갑니다.`,
+  'tutorial.waitingOrganize': '세션을 읽고 폴더를 제안하는 중…',
   'tutorial.waitingApply': '적용하는 중…',
-  'tutorial.waitingKnowledge': '이 폴더의 세션들을 지식 초안으로 압축하는 중… (실제 LLM 호출, 몇 초 정도 걸립니다)',
+  'tutorial.waitingKnowledge': '이 폴더의 세션들을 지식 초안으로 압축하는 중…',
   'tutorial.waitingSave': '저장하는 중…',
+  'tutorial.waitingContext': '상속받을 컨텍스트를 조합하는 중…',
+  'tutorial.waitingMerge': 'Shift+M을 기다리는 중 — 먼저 Space로 세션 두 개를 선택했는지 확인하세요.',
+  'tutorial.waitingSplit': '병합된 세션의 주제 경계를 분석하는 중…',
 
   'picker.newLabel': '{gray-fg}New (미분류){/}',
   'picker.folderLabel': ' 폴더 선택 (Enter, Esc 취소) ',
@@ -382,7 +432,8 @@ const ko = {
   'merge.done': (n) => `${n}개 세션 병합됨`,
 
   'split.suggesting': '주제 경계 분석 중…',
-  'split.reviewTitle': '분할 제안 — space 선택, enter 실행, esc 취소',
+  'split.reviewTitle': '분할 제안',
+  'split.turnRangeLabel': (from, to, label) => `턴 ${from}-${to}  "${label}"`,
   'split.done': (n) => `${n}개 세션으로 분할됨`,
 
   'smart.running': '세션 요약 + 폴더 분류 중…',

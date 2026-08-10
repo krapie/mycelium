@@ -141,7 +141,8 @@ export function sessionsView(opts = {}) {
       // thing you're actually scanning for) reads first on the line.
       const src = `{${sourceColor(r.source)}-fg}#${sourceLabel(r.source)}{/}`;
       // Same "source #idPrefix" shape as the continuation links in detail
-      // (↩ 이어받음/→ 이어감), so you can match a row here to that label there.
+      // ("Continues:"/"Continued by:"), so you can match a row here to that
+      // label there.
       const idPrefix = `{${C.dim}-fg}#${r.id.slice(0, 8)}{/}`;
       // No reserved gutter — the checkmark only takes space on rows you've
       // actually selected, so the title starts flush-left the rest of the
@@ -150,22 +151,25 @@ export function sessionsView(opts = {}) {
       // Continuation markers moved into the right-hand metadata cluster —
       // they're relationship metadata about the row, same category as
       // agent/id, not something that belongs competing for the left edge.
-      // Trailing space is required, not cosmetic: ↩/→ are ambiguous-width
-      // glyphs that render wider than one column in most terminal fonts, so
-      // packing them directly against the next character visually overlapped it.
-      const link = r.continuationOf ? `{${C.spore}-fg}↩{/} ` : (r.continuedTo && r.continuedTo.length) ? `{${C.spore}-fg}→{/} ` : '';
-      // Same marker language, different glyph: 🔀 merge product, ✂ split
-      // piece, ⤳ a session with related derived content elsewhere —
-      // supersededBy (merge original — hidden by default, so this case is
-      // mostly unreachable in practice) or splitInto (split original, which
-      // DOES stay visible, unlike a merge original, since none of its
-      // content actually moved anywhere).
+      // Bracketed text tags, same visual language as isNew's [New] below —
+      // no emoji for state/relationship markers anywhere in this codebase.
+      const link = r.continuationOf
+        ? `{${C.spore}-fg}[${t('sessions.resumedBadge')}]{/} `
+        : r.continuedTo && r.continuedTo.length
+          ? `{${C.spore}-fg}[${t('sessions.handoffBadge')}]{/} `
+          : '';
+      // Same marker language, different tag: merge product, split piece, or
+      // a session with related derived content elsewhere — supersededBy
+      // (merge original — hidden by default, so this case is mostly
+      // unreachable in practice) or splitInto (split original, which DOES
+      // stay visible, unlike a merge original, since none of its content
+      // actually moved anywhere).
       const lineage = r.mergedFrom?.length
-        ? `{${C.merged}-fg}🔀{/} `
+        ? `{${C.merged}-fg}[${t('sessions.mergedBadge')}]{/} `
         : r.splitFrom
-          ? `{${C.merged}-fg}✂{/} `
+          ? `{${C.merged}-fg}[${t('sessions.splitBadge')}]{/} `
           : r.supersededBy?.length || r.splitInto?.length
-            ? `{${C.faint}-fg}⤳{/} `
+            ? `{${C.faint}-fg}[${t('sessions.linkedBadge')}]{/} `
             : '';
       const isNew = !r.folder ? `{${C.spore}-fg}[${t('sessions.newBadge')}]{/}` : '';
       // Under active search, lead with the FTS snippet — the row's row-reason.
@@ -534,9 +538,16 @@ export function sessionsView(opts = {}) {
         const res = await suggestSplitBoundaries(r.id);
         spin.stop();
         if (!res.ok) return app.notify(res.error, 3);
-        const items = res.ranges.map((rg) => ({ label: `턴 ${rg.from}-${rg.to}  "${rg.label}"`, value: rg }));
+        const items = res.ranges.map((rg) => ({ label: t('split.turnRangeLabel', rg.from, rg.to, rg.label), value: rg }));
+        // defaultAll: true — same as smart-organize's placement review.
+        // Without it, a bare Enter (the obvious first thing to try) checked
+        // nothing, applied nothing, and closed the modal with zero
+        // feedback — indistinguishable from the keypress just not
+        // registering. The LLM already proposed these ranges; reviewing
+        // them is "uncheck the wrong one," not "check the right ones",
+        // same reasoning organize's own review already uses.
         multiSelectList(app, t('split.reviewTitle'), items, (chosen) => {
-          if (!chosen?.length) return; // Esc or nothing checked — original untouched
+          if (!chosen?.length) return; // Esc or everything unchecked — original untouched
           const applied = applySplit(r.id, chosen);
           if (!applied.ok) return app.notify(applied.error, 3);
           data.refreshMany([r.id, ...applied.pieces.map((p) => p.id)]);
@@ -545,7 +556,7 @@ export function sessionsView(opts = {}) {
           reloadList();
           listBox.focus();
           app.render();
-        });
+        }, { defaultAll: true });
       };
       listBox.key('S-s', doSplit);
       detailBox.key('S-s', doSplit);
@@ -930,35 +941,52 @@ export function sessionsView(opts = {}) {
 
       // d: digest viewer (browse existing; generate new from inside via n/w).
       screenKey(app, ['d'], () => digestReader(app));
-      listBox.key('c', () => {
-        const r = currentRow();
-        if (!r) return;
-        const ctx = assembleContext(r.folder);
-        textView(app, t('context.title', r.folder || t('sessions.newBadge')), ctx || t('context.empty'));
-      });
+      // c: preview inherited context for the current folder scope — same
+      // state.folder + dual-panel binding as w (doKnowledge) above, not
+      // currentRow().folder. Binding this on listBox only used to mean
+      // pressing c right after returning to the Folders panel (← — the
+      // exact key the previous tutorial step teaches) did nothing at all,
+      // leaving nothing for the tutorial's isModalOpen() poll to ever
+      // detect — found by walking the tutorial live in tmux, not from
+      // reading this handler in isolation.
+      const doContext = () => {
+        if (!state.folder) return app.notify(t('folders.selectFirst'), 3);
+        const ctx = assembleContext(state.folder);
+        textView(app, t('context.title', state.folder), ctx || t('context.empty'), ['c']);
+      };
+      listBox.key('c', doContext);
+      foldersBox.key('c', doContext);
       // i: inject the folder's KNOWLEDGE.md into a directory's AGENTS.md —
       // show exactly what will be written before touching that file.
-      listBox.key('i', () => {
-        const r = currentRow();
-        if (!r || !r.folder) return app.notify(t('context.needsFolder'), 3);
+      // i: inject the current folder scope's KNOWLEDGE.md into a directory's
+      // AGENTS.md. Same state.folder + dual-panel binding as w/c above, not
+      // currentRow().folder — for the same reason: c's list-only binding
+      // left the tutorial's Reuse step stuck if the human had just pressed
+      // ← back to Folders (which the step right before it teaches), and i
+      // had the identical bug.
+      const doInject = () => {
+        if (!state.folder) return app.notify(t('context.needsFolder'), 3);
+        const refocus = () => (state.level === 'folders' ? foldersBox : listBox).focus();
         textPrompt(app, t('inject.dirPrompt'), process.cwd(), (dir) => {
-          if (!dir) return listBox.focus();
-          const ctx = assembleContext(r.folder);
+          if (!dir) return refocus();
+          const ctx = assembleContext(state.folder);
           if (!ctx) {
-            app.notify(t('inject.noKnowledge', r.folder), 3);
-            return listBox.focus();
+            app.notify(t('inject.noKnowledge', state.folder), 3);
+            return refocus();
           }
           confirmText(app, t('inject.previewTitle', dir.trim()), ctx, (ok) => {
             if (!ok) {
               app.notify(t('inject.cancelled'), 2);
-              return listBox.focus();
+              return refocus();
             }
-            const res = injectAgentsMd(dir.trim(), r.folder);
+            const res = injectAgentsMd(dir.trim(), state.folder);
             app.notify(res.ok ? t('inject.done', dir.trim()) : res.error, 3);
-            listBox.focus();
+            refocus();
           });
         });
-      });
+      };
+      listBox.key('i', doInject);
+      foldersBox.key('i', doInject);
 
       // Expose hooks the action steps (organize/capture/reuse) bind onto.
       this._api = {

@@ -34,14 +34,16 @@ cd mycelium && npm install && npm link
 
 ```sh
 mycelium scan   # import Claude/Codex/Kiro sessions from this machine
-mycelium        # launch the TUI — first run offers a 3-minute tutorial
+mycelium        # launch the TUI — first run offers a quick interactive tutorial
 ```
 
 Capture never auto-assigns a folder — press `o` (smart organize) in the TUI,
 or run `mycelium organize`, to sort new sessions by content.
 
 Re-run the tutorial (or use it as a demo) any time with `mycelium demo` — a
-separate `~/.mycelium-demo` store, your real data is never touched.
+separate `~/.mycelium-demo` store, your real data is never touched. Finish
+the whole walkthrough and it hands off straight into your real sessions;
+press `Esc` to bail early instead and it just exits.
 
 > Skipped `npm link`? Use `node src/cli.js <command>` instead.
 

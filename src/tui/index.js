@@ -2,7 +2,7 @@ import { createApp } from './app.js';
 import { sessionsView } from './views/sessions.js';
 import { welcomeModal } from './widgets/viewers.js';
 import { menu } from './widgets/pickers.js';
-import { seedMockSessions, startTutorial } from './tutorial.js';
+import { seedMockSessions, startTutorial, DEMO_HANDOFF_EXIT_CODE } from './tutorial.js';
 import { t } from './i18n.js';
 import { pendingSuggestions } from '../organize.js';
 import { startTuiRoutine } from '../daemon.js';
@@ -36,20 +36,20 @@ export async function runTui({ forceTutorial = false } = {}) {
   // for real agent sessions in the background.
   if (forceTutorial) {
     seedMockSessions();
-    let api;
-    await app.show(sessionsView({ onReady: (a) => (api = a) }));
+    await app.show(sessionsView());
     app.render();
-    // The tutorial's own final step now requires an explicit `q` (with its
-    // own confirm) to finish — see tutorial.js's STEPS/confirmFinish — so
-    // reaching here always means the presenter deliberately chose to end
-    // it. No process.exit() of our own: just drop back to the (by-then-
-    // cleaned) demo store via the view's own resetToRoot() — not a second
-    // app.show(sessionsView()), see that method's comment for why — and
-    // let the TUI's normal `q` quit binding be the one way to actually
-    // leave, same as any other mycelium session.
-    startTutorial(app, () => {
-      api.resetToRoot();
-      app.render();
+    // Once the demo sessions are cleaned up, this isolated ~/.mycelium-demo
+    // store is empty — resetToRoot() used to just drop back into that empty
+    // view, which reads as "the demo is broken" (0 sessions, no obvious way
+    // out except the normal `q` quit). If the presenter went all the way
+    // through (completed:true — the final step's own q+confirm, not an
+    // early Esc bail), quit THIS process with a sentinel exit code instead;
+    // cli.js's demo command is watching for it and hands off straight into
+    // a real TUI against the user's actual ~/.mycelium. An early Esc bail
+    // (completed:false) just quits plainly — someone who bailed out mid-
+    // tour didn't ask to see real data next.
+    startTutorial(app, (completed) => {
+      app.quit(completed ? DEMO_HANDOFF_EXIT_CODE : 0);
     });
     return;
   }

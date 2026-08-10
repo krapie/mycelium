@@ -141,15 +141,44 @@ export function createApp() {
       const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
       let i = 0;
       let label = msg;
-      const tick = () => toast.display(`${frames[(i = (i + 1) % frames.length)]} ${label}`, 60, () => {});
+      const frame = () => `${frames[(i = (i + 1) % frames.length)]} ${label}`;
+      // Per-frame ticks use setContent(text, true) (noClear), not
+      // toast.display() — display() calls setContent() without noClear,
+      // which clears the toast's screen region before every redraw
+      // (element.js's clearPos()). Doing that every 120ms is invisible for
+      // a call that resolves in under a second, but visibly flickers (a
+      // real clear-then-redraw flash) once sustained over several real
+      // seconds — only became noticeable after mycelium demo's mock LLM
+      // delay grew from near-instant to a deliberate multi-second wait
+      // (tutorial-mock-llm.js). Safe to skip the clear here since the
+      // label text is identical frame to frame — only the leading
+      // single-width braille glyph changes, so there's nothing stale left
+      // over to expose.
+      const tick = () => {
+        toast.setContent(frame(), true);
+        screen.render();
+      };
+      toast.show();
       tick();
       const timer = setInterval(tick, 120);
+      // A real display() call, on a much slower cadence, to periodically
+      // re-arm blessed.message's own auto-hide timer (see the comment
+      // above this method for why that's needed) — its one clear-then-
+      // redraw is fine this rarely; it's only calling it every single
+      // animation tick that flickered.
+      const rearm = setInterval(() => toast.display(frame(), 60, () => {}), 20000);
       return {
+        // A real display() call here too: update() means the label itself
+        // changed (e.g. sessions.js's progress toasts, "3/6" → "4/6"), so
+        // the region genuinely needs clearing in case the new text is
+        // shorter than what it's replacing.
         update(newMsg) {
           label = newMsg;
+          toast.display(frame(), 60, () => {});
         },
         stop() {
           clearInterval(timer);
+          clearInterval(rearm);
           toast.hide();
           screen.render();
         },
@@ -165,16 +194,22 @@ export function createApp() {
     render() {
       screen.render();
     },
-    quit() {
+    // code lets a caller signal something to a parent process via exit code
+    // (see tutorial.js's DEMO_HANDOFF_EXIT_CODE) — every other caller just
+    // calls quit() with no args, which keeps the normal 0.
+    quit(code = 0) {
       screen.destroy();
-      process.exit(0);
+      process.exit(code);
     },
-    // Lets a caller (the tutorial, for its own confirm-before-finishing
-    // step) intercept the global q/C-c quit below instead of it instantly
-    // killing the process out from under them. Set to a function that
-    // returns true to swallow the keypress and handle it yourself; leave
-    // null (the default, restored once done) for the normal one-press quit
-    // every other screen in the app already relies on.
+    // Lets a caller (the tutorial, which handles its own q directly — see
+    // tutorial.js) intercept the global q quit below instead of it also
+    // firing right behind/instead of that. Set to a function that returns
+    // true to swallow the keypress and handle it yourself; leave null (the
+    // default, restored once done) for the normal one-press-then-confirm
+    // quit every other screen in the app already relies on. Deliberately
+    // does NOT gate C-c at all (see the key bindings below) — Ctrl+C is
+    // meant to work as a hard, unconditional exit no matter what's on
+    // screen, guard or not.
     quitGuard: null,
   };
 
@@ -211,10 +246,21 @@ export function createApp() {
   };
 
   // Global keys. View-local keys are attached by each view on its own widgets.
-  screen.key(['q', 'C-c'], () => {
+  screen.key(['q'], () => {
     if (app.quitGuard && app.quitGuard()) return;
     confirmQuit();
   });
+  // C-c: unconditional hard exit, on top of q — never gated by quitGuard,
+  // never asks first. The standard "just kill it" expectation for Ctrl+C
+  // specifically, unlike q (which is allowed to confirm, and which a
+  // caller like the tutorial can intercept to handle its own way).
+  // Deliberate trade-off: this skips the tutorial's own endTutorial()
+  // cleanup if one is active in the real ~/.mycelium store (the first-run
+  // path, not `mycelium demo`'s already-isolated store) — a few leftover
+  // demo:true sessions, not data loss, recoverable via `mycelium cleanup`.
+  // Not worth adding cleanup-ordering complexity to what Ctrl+C users
+  // expect to be an immediate, no-questions-asked exit.
+  screen.key(['C-c'], () => app.quit());
 
   return app;
 }

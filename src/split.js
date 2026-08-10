@@ -89,6 +89,10 @@ export function applySplit(sessionId, ranges) {
     // cwd-rule auto-organize pass reshuffle it elsewhere).
     piece.folder = original.folder;
     piece.organizedBy = 'human';
+    // Propagate demo:true (see organize/lineage.js's mergeSessions() for
+    // why) so a split inside the tutorial/mycelium demo doesn't leave an
+    // orphaned piece behind after endTutorial()'s demo:true sweep.
+    if (original.demo) piece.demo = true;
     saveRaw(piece);
     pieces.push(piece);
   }

@@ -8,8 +8,14 @@ import { copyToClipboard } from '../clipboard.js';
 import { generateDigest } from '../../insight.js';
 import { t } from '../i18n.js';
 
-/** Scrollable read-only overlay for markdown/text (context, knowledge, digest). */
-export function textView(app, title, content) {
+/**
+ * Scrollable read-only overlay for markdown/text (context, knowledge, digest).
+ * extraCloseKeys lets a caller's own open key also close it (e.g. `c` for
+ * the context viewer) — a toggle feel, on top of the always-present
+ * escape/q. Empty by default so other callers (the digest reader) aren't
+ * affected.
+ */
+export function textView(app, title, content, extraCloseKeys = []) {
   const box = blessed.box({
     parent: app.screen,
     top: 'center',
@@ -30,7 +36,7 @@ export function textView(app, title, content) {
   });
   box.focus();
   app.render();
-  box.key(['escape', 'q'], () => {
+  box.key(['escape', 'q', ...extraCloseKeys], () => {
     box.destroy();
     app.render();
   });

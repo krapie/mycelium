@@ -75,8 +75,9 @@ Once a session is moved to `_archive`, re-scanning won't bring it back out —
 | `g` | **Re-show the getting-started guide** — the short walkthrough (4-stage lifecycle + key shortcuts) that auto-shows once on first launch, any time |
 | `q` | Quit |
 
-Sessions connected by handoff show `↩`/`→` markers in the list and
-"continued from/to" links in detail. Merged/split sessions show `🔀`
-(merge result) / `✂` (split result) markers; a split original (or, for
-merges, the hidden originals) shows an `⤳` marker. The detail screen shows
-which session something came from or went to as clickable-style links.
+Sessions connected by handoff show `[Resumed]`/`[Handoff]` tags in the list
+and "Continues:"/"Continued by:" links in detail. Merged/split sessions
+show `[Merged]` (merge result) / `[Split]` (split result) tags; a split
+original (or, for merges, the hidden originals) shows a `[Linked]` tag.
+The detail screen shows which session something came from or went to as
+clickable-style links.

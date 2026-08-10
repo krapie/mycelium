@@ -189,6 +189,47 @@ test('mergeSessions() combines turns in startedAt order, tags originals with sup
   assert.deepEqual(loadRaw('m-2').supersededBy, []);
 });
 
+test('mergeSessions() propagates demo:true from originals so tutorial.js\'s endTutorial() sweep still catches the merge product', () => {
+  seed('md-1', { demo: true });
+  seed('md-2', { demo: true });
+  const res = mergeSessions(['md-1', 'md-2']);
+  assert.equal(res.ok, true);
+  assert.equal(res.merged.demo, true);
+});
+
+test('mergeSessions() leaves demo unset when no original was a demo session', () => {
+  seed('nd-1');
+  seed('nd-2');
+  const res = mergeSessions(['nd-1', 'nd-2']);
+  assert.equal(res.ok, true);
+  assert.ok(!res.merged.demo);
+});
+
+test('mergeSessions() lands in the shared folder (human-owned) instead of unfiled, when originals agree', () => {
+  seed('mf-1', { folder: 'work/proj' });
+  seed('mf-2', { folder: 'work/proj' });
+  const res = mergeSessions(['mf-1', 'mf-2']);
+  assert.equal(res.ok, true);
+  assert.equal(res.merged.folder, 'work/proj');
+  assert.equal(res.merged.organizedBy, 'human');
+});
+
+test('mergeSessions() falls back to unfiled when originals disagree on folder', () => {
+  seed('mf-3', { folder: 'work/a' });
+  seed('mf-4', { folder: 'work/b' });
+  const res = mergeSessions(['mf-3', 'mf-4']);
+  assert.equal(res.ok, true);
+  assert.equal(res.merged.folder, null);
+});
+
+test('mergeSessions() falls back to unfiled when any original was itself unfiled', () => {
+  seed('mf-5', { folder: 'work/proj' });
+  seed('mf-6', { folder: null });
+  const res = mergeSessions(['mf-5', 'mf-6']);
+  assert.equal(res.ok, true);
+  assert.equal(res.merged.folder, null);
+});
+
 test('unmerge() rejects an id that was never a merge product', () => {
   seed('not-merged');
   const res = unmerge('not-merged');
