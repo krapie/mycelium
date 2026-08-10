@@ -1,10 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { tutorialMockProvider } from '../src/tui/tutorial-mock-llm.js';
 
-// Pure — no filesystem/MYCELIUM_HOME involvement, so a plain static import
-// is fine here (unlike most other test files in this directory). Prompt
-// fragments below mirror the REAL shapes organize/classify.js, split.js,
+// Production delay is 5s (see tutorial-mock-llm.js's MOCK_DELAY_MS) — fine
+// for a human clicking through the demo, but this file makes ~9 calls
+// across its tests, so a static import would make the suite take 45s+.
+// Override it to something fast but still nonzero (proves the delay
+// mechanism itself works) before dynamically importing the module — same
+// env-before-dynamic-import pattern test/helpers.js's useTempHome() uses
+// for MYCELIUM_HOME, since the module reads this once at load time too.
+process.env.MYCELIUM_DEMO_MOCK_DELAY_MS = '30';
+const { tutorialMockProvider } = await import('../src/tui/tutorial-mock-llm.js');
+
+// Prompt fragments below mirror the REAL shapes organize/classify.js, split.js,
 // and insight.js build (see those files), not just what this module itself
 // assumes, so a drift in either side would actually break a test here.
 // tutorialMockProvider() resolves after a deliberate short delay (see its
@@ -100,5 +107,8 @@ test('tutorialMockProvider() every canned knowledge text is English, not Korean'
 test('tutorialMockProvider() resolves after a deliberate delay, not instantly', async () => {
   const start = Date.now();
   await tutorialMockProvider(knowledgePrompt('backend/payments'));
-  assert.ok(Date.now() - start >= 400, 'mock output should not resolve near-instantly (spinner needs frames to animate)');
+  // Checks against this file's own MYCELIUM_DEMO_MOCK_DELAY_MS override
+  // (30ms), not the real 5s production default — this only needs to prove
+  // the delay mechanism fires at all, not what the demo actually feels like.
+  assert.ok(Date.now() - start >= 20, 'mock output should not resolve near-instantly (spinner needs frames to animate)');
 });

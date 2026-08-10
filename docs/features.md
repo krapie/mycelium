@@ -376,11 +376,14 @@ functions (`suggestPlacements`, `buildKnowledgeText`, `suggestSplitBoundaries`)
 `tutorial-mock-llm.js`'s `tutorialMockProvider()` for as long as the mock
 sessions exist (cleared in `endTutorial()`), so these resolve quickly and
 deterministically instead of via a real `claude`/`codex` subprocess call.
-`tutorialMockProvider()` still resolves after a deliberate ~500ms delay
-(`MOCK_DELAY_MS`), not instantly — a 0ms response is its own regression,
+`tutorialMockProvider()` still resolves after a deliberate ~5s delay
+(`MOCK_DELAY_MS`, overridable via `MYCELIUM_DEMO_MOCK_DELAY_MS` — see
+`test/tutorial-mock-llm.test.js`, which sets it to 30ms so the suite isn't
+stuck waiting on it), not instantly — a 0ms response is its own regression,
 since `app.js`'s animated spinner never gets a frame to actually animate
-and the wait reads as "did that run at all?" rather than a faster stand-in
-for the real thing. This is also what keeps the tutorial's folder/knowledge
+and the wait reads as "did that run at all?" rather than a real (much
+faster) stand-in for the production wait. This is also what keeps the
+tutorial's folder/knowledge
 output in English
 regardless of locale, since the real classification/knowledge prompts are
 Korean by design (see `AGENT.md`) and would otherwise mirror that language

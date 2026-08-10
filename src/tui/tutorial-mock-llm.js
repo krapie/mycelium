@@ -88,10 +88,14 @@ function mockSplit() {
 // A genuinely instant (0ms) response is its own regression here: the
 // animated spinner (app.js's startSpinner()) never gets to animate a single
 // frame, and the flow reads as "did that actually run?" rather than a
-// (much faster, but still real) version of the production wait. This delay
-// is deliberately well under a real claude/codex call (seconds) but long
-// enough for a few spinner ticks (120ms/frame) to be visible.
-const MOCK_DELAY_MS = 500;
+// (much faster, but still real) version of the production wait. 5s is
+// still well under a real claude/codex call (which can run into the tens
+// of seconds), but long enough for the spinner to visibly cycle several
+// frames (120ms/frame) rather than just flash. Overridable so
+// test/tutorial-mock-llm.test.js isn't stuck waiting 5s per call — see
+// that file's dynamic import for how it sets this before loading the
+// module.
+const MOCK_DELAY_MS = Number(process.env.MYCELIUM_DEMO_MOCK_DELAY_MS) || 5000;
 
 function delayed(value) {
   return new Promise((resolve) => setTimeout(() => resolve(value), MOCK_DELAY_MS));
