@@ -415,21 +415,24 @@ Korean by design (see `AGENT.md`) and would otherwise mirror that language
 back for any newly-proposed folder name.
 
 **Demo → real handoff.** Finishing the tutorial's final step (`completed:
-true` — the `q`+confirm path, not an early Esc bail) no longer just
-`resetToRoot()`s into the by-then-empty `~/.mycelium-demo` store (which
-read as "the demo broke — 0 sessions"). Instead `app.quit(DEMO_HANDOFF_EXIT_CODE)`
-exits the isolated child process with a sentinel code (`tutorial.js`);
-`cli.js`'s `demo` command watches for exactly that code on the child's
-`exit` event and, only then, dynamically imports and runs the real TUI
-in the (unmodified-env) parent process — landing the presenter in their
-actual `~/.mycelium` data instead of a bare shell prompt. An early Esc
-bail (`completed: false`) just exits plainly, no handoff — someone who
-bailed out mid-tour didn't ask to see real (possibly sensitive) data
-next, which also keeps `mycelium demo` safe to run in front of others as
-originally intended. [partial] (`buildMockSessions()` and
-`tutorial-mock-llm.js`'s prompt-dispatch/classification/folder-lookup logic
-are unit-tested as pure functions — the interactive state machine itself has
-zero coverage)
+true` — `q` pressed on the actual last step, not an early exit) no longer
+just `resetToRoot()`s into the by-then-empty `~/.mycelium-demo` store
+(which read as "the demo broke — 0 sessions"). Instead
+`app.quit(DEMO_HANDOFF_EXIT_CODE)` exits the isolated child process with a
+sentinel code (`tutorial.js`); `cli.js`'s `demo` command watches for
+exactly that code on the child's `exit` event and, only then, dynamically
+imports and runs the real TUI in the (unmodified-env) parent process —
+landing the presenter in their actual `~/.mycelium` data instead of a bare
+shell prompt. `q` pressed on any earlier step (`completed: false`) just
+exits plainly, no handoff — someone who didn't reach the end didn't ask to
+see real (possibly sensitive) data next, which also keeps `mycelium demo`
+safe to run in front of others as originally intended. [tested]
+(`buildMockSessions()` and `tutorial-mock-llm.js`'s prompt-dispatch/
+classification/folder-lookup logic are unit-tested as pure functions;
+`test/demo-e2e.test.js` drives the real interactive state machine
+end-to-end — organize→learn→reuse→merge→split, the exit-key model, and the
+demo→real handoff itself — against fake terminal streams, see that file
+and the Phase 7 note right below for how)
 
 **TUI testability feasibility note (Phase 7 scope — investigation only, no
 code changed).** `isModalOpen()` (`app.screen.children.length > baseline`)
@@ -456,6 +459,28 @@ of scope for this refactor pass (the original plan scoped Phase 7 as
 "investigate feasibility, execute separately," and this note is that
 investigation). A follow-up plan should treat it as its own reviewed change,
 not a rider on an unrelated refactor.
+
+**Superseded, for coverage purposes, by a different approach**:
+`test/demo-e2e.test.js` doesn't unit-test the STEPS reducer in isolation
+(the `modalDepth` refactor above would still be needed for that specific
+goal) — it sidesteps the whole question by testing the real system
+end-to-end instead. `test/tui-helpers.js`'s `createTestApp()` gives
+`createApp()` fake `input`/`output` streams (a small, backward-compatible
+signature change — `createApp({input, output} = {})` — every production
+call site still calls it with no args), and writing real bytes to the fake
+input stream drives blessed's actual keypress parsing, which the real
+`element.key()` bindings depend on (a bare `screen.emit('keypress', ...)`
+does not reach them — see tui-helpers.js's module comment for why that
+distinction cost real debugging time to find). The test then uses the
+exact same `screen.children.length > baseline` heuristic `isModalOpen()`
+uses internally, from the outside, to know when to send the next key —
+so it's real coverage of the actual narrator + actual widgets + actual
+data layer together, at the cost of not being a fast, isolated unit test
+of the reducer alone (the full walkthrough test takes several real
+seconds, dominated by deliberate settle delays past the narrator's own
+250ms poll cadence — see that test's own comment for why those are
+needed, found by a real flaky-looking failure during development that
+turned out to be exactly this timing gap).
 
 ---
 
