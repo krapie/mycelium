@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { useTempHome } from './helpers.js';
 
 // Production delay is 5s (see tutorial-mock-llm.js's MOCK_DELAY_MS) — fine
 // for a human clicking through the demo, but this file makes many calls
@@ -8,6 +9,14 @@ import assert from 'node:assert/strict';
 // mechanism itself works) before dynamically importing the module — same
 // env-before-dynamic-import pattern test/helpers.js's useTempHome() uses
 // for MYCELIUM_HOME, since the module reads this once at load time too.
+//
+// useTempHome() itself matters more than usual here: createTutorialMockProvider()
+// now defaults its `locale` param to i18n.js's getLocale(), which reads
+// config.json — without isolating MYCELIUM_HOME first, that would read
+// whatever locale happens to be set in the REAL ~/.mycelium/config.json on
+// whatever machine runs this suite, not the 'en' default this file's
+// English-content assertions assume.
+useTempHome();
 process.env.MYCELIUM_DEMO_MOCK_DELAY_MS = '30';
 const { createTutorialMockProvider } = await import('../src/tui/tutorial-mock-llm.js');
 
@@ -178,6 +187,62 @@ test('every persona\'s canned knowledge text is English, not Korean', async () =
       assert.doesNotMatch(reply, /[가-힣]/, `${personaId}'s ${folder} knowledge text must be English`);
     }
   }
+});
+
+test('createTutorialMockProvider(personaId, "ko") classifies placement candidates against Korean summaries', async () => {
+  const swe = createTutorialMockProvider('swe', 'ko');
+  const sweReply = await swe(
+    placementsPrompt([
+      { id: 'a', summary: '주문 내역 페이지에 재주문 버튼을 구현했다.' },
+      { id: 'b', summary: '장바구니 합계 반올림 버그를 수정했다.' },
+      { id: 'c', summary: '알 수 없는 세션에 대한 요약.' },
+    ]),
+  );
+  const sweById = Object.fromEntries(JSON.parse(sweReply).placements.map((p) => [p.id, p.folder]));
+  assert.equal(sweById.a, 'retail-website/express-reorder');
+  assert.equal(sweById.b, 'retail-website/cart-rounding-fix');
+  assert.equal(sweById.c, null);
+
+  const cse = createTutorialMockProvider('cse', 'ko');
+  const cseReply = await cse(
+    placementsPrompt([
+      { id: 'a', summary: '온프레미스 링크의 BGP 세션을 점검했다.' },
+      { id: 'b', summary: 'S3 계정 간 AccessDenied 문제를 조사했다.' },
+    ]),
+  );
+  const cseById = Object.fromEntries(JSON.parse(cseReply).placements.map((p) => [p.id, p.folder]));
+  assert.equal(cseById.a, 'cases/onprem-connectivity');
+  assert.equal(cseById.b, 'cases/s3-cross-account');
+});
+
+test('createTutorialMockProvider(personaId, "ko") returns Korean canned knowledge text, per persona', async () => {
+  const swe = createTutorialMockProvider('swe', 'ko');
+  const sweReply = await swe(knowledgePrompt('retail-website/express-reorder'));
+  assert.match(sweReply, /익스프레스 재주문/);
+  assert.ok(/[가-힣]/.test(sweReply), 'ko knowledge output must actually contain Korean');
+
+  const cse = createTutorialMockProvider('cse', 'ko');
+  const cseReply = await cse(knowledgePrompt('cases/onprem-connectivity'));
+  assert.match(cseReply, /온프레미스/);
+
+  const sa = createTutorialMockProvider('sa', 'ko');
+  const saReply = await sa(knowledgePrompt('customers/nimbustech'));
+  assert.match(saReply, /NimbusTech/);
+  assert.ok(/[가-힣]/.test(saReply), 'ko knowledge output must actually contain Korean even with an English proper noun in it');
+});
+
+test('mockSplit uses the active locale\'s splitLabels, still computed from the real turn count', async () => {
+  // Same CSE 3-way-merge scenario (12 turns) as the English test above, but
+  // in Korean — the turn-count math is locale-independent, only the labels
+  // (and the "턴 N [role]:" prompt format itself, which is already Korean
+  // regardless of UI locale — split.js's real prompt is hardcoded Korean by
+  // design, see AGENT.md) should differ.
+  const cse = createTutorialMockProvider('cse', 'ko');
+  const reply = JSON.parse(await cse(splitPrompt(12)));
+  assert.deepEqual(reply.ranges, [
+    { from: 1, to: 6, label: 'DX/VPC/ALB 전반 조사' },
+    { from: 7, to: 12, label: 'MTU 근본 원인과 해결' },
+  ]);
 });
 
 test('provider resolves after a deliberate delay, not instantly', async () => {

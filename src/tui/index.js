@@ -5,22 +5,46 @@ import { menu } from './widgets/pickers.js';
 import { seedMockSessions, startTutorial, DEMO_HANDOFF_EXIT_CODE } from './tutorial.js';
 import { PERSONAS } from './personas.js';
 import { C } from './theme.js';
-import { t } from './i18n.js';
+import { t, getLocale, setLocale } from './i18n.js';
 import { pendingSuggestions } from '../organize.js';
 import { startTuiRoutine } from '../daemon.js';
 import { loadConfig, saveConfig } from '../config.js';
 import * as data from './data.js';
 
+// Shown before pickPersona, for both `mycelium demo` and first-run
+// onboarding — the very first choice a human makes here, so unlike every
+// other picker in this file it can't go through t() (the language isn't
+// known yet). Shown bilingually; each label is that language's own native
+// name, not a translation. `cb` receives undefined if dismissed with
+// Escape; callers default that to 'en'. setLocale() (called by the caller,
+// not here) takes effect immediately — every t() call from this point on,
+// including pickPersona's own label below, reflects the pick.
+function pickLanguage(app, cb) {
+  menu(
+    app,
+    'Choose your language / 언어를 선택하세요',
+    [
+      { label: 'English', value: 'en' },
+      { label: '한국어', value: 'ko' },
+    ],
+    cb,
+    { width: '50%' },
+  );
+}
+
 // Shown before seeding mock sessions, both for `mycelium demo` and for a
 // first-run user who opted into the tour — which persona's storylines
 // (personas.js) seedMockSessions()/startTutorial() should use. `cb` receives
 // undefined if the picker is dismissed with Escape; callers default that to
-// 'swe' rather than leaving the demo in a half-started state.
+// 'swe' rather than leaving the demo in a half-started state. personas.js's
+// label/description are `{en, ko}` — resolved here against whatever
+// pickLanguage() (called first, by every caller) already set.
 function pickPersona(app, cb) {
+  const locale = getLocale();
   menu(
     app,
     t('tutorial.personaPromptTitle'),
-    PERSONAS.map((p) => ({ label: `${p.label} — {${C.faint}-fg}${p.description}{/}`, value: p.id })),
+    PERSONAS.map((p) => ({ label: `${p.label[locale]} — {${C.faint}-fg}${p.description[locale]}{/}`, value: p.id })),
     cb,
     { width: '70%' },
   );
@@ -62,26 +86,37 @@ export async function runTui({ forceTutorial = false } = {}) {
     let api;
     await app.show(sessionsView({ onReady: (a) => (api = a) }));
     app.render();
-    pickPersona(app, async (personaId = 'swe') => {
-      seedMockSessions(personaId);
+    pickLanguage(app, (locale = 'en') => {
+      setLocale(locale);
+      // Refresh right away, not only once seedMockSessions() below also
+      // calls reloadAll() — panel border labels (`sessions.foldersPanelLabel`
+      // etc.) are blessed widget construction options, only re-applied when
+      // something calls reloadAll()'s updatePanelLabels(); without this call
+      // here too, any picker still shown on screen before persona/seeding
+      // (there is none in this branch, but see the onboarding branch below
+      // for where it matters) would sit next to stale-language chrome.
       api.reloadAll();
-      // Once the demo sessions are cleaned up, this isolated ~/.mycelium-demo
-      // store is empty — resetToRoot() used to just drop back into that empty
-      // view, which reads as "the demo is broken" (0 sessions, no obvious way
-      // out except the normal `q` quit). If the presenter went all the way
-      // through (completed:true — the final step's own q+confirm, not an
-      // early Esc bail), quit THIS process with a sentinel exit code instead;
-      // cli.js's demo command is watching for it and hands off straight into
-      // a real TUI against the user's actual ~/.mycelium. An early Esc bail
-      // (completed:false) just quits plainly — someone who bailed out mid-
-      // tour didn't ask to see real data next.
-      startTutorial(
-        app,
-        (completed) => {
-          app.quit(completed ? DEMO_HANDOFF_EXIT_CODE : 0);
-        },
-        personaId,
-      );
+      pickPersona(app, async (personaId = 'swe') => {
+        seedMockSessions(personaId);
+        api.reloadAll();
+        // Once the demo sessions are cleaned up, this isolated ~/.mycelium-demo
+        // store is empty — resetToRoot() used to just drop back into that empty
+        // view, which reads as "the demo is broken" (0 sessions, no obvious way
+        // out except the normal `q` quit). If the presenter went all the way
+        // through (completed:true — the final step's own q+confirm, not an
+        // early Esc bail), quit THIS process with a sentinel exit code instead;
+        // cli.js's demo command is watching for it and hands off straight into
+        // a real TUI against the user's actual ~/.mycelium. An early Esc bail
+        // (completed:false) just quits plainly — someone who bailed out mid-
+        // tour didn't ask to see real data next.
+        startTutorial(
+          app,
+          (completed) => {
+            app.quit(completed ? DEMO_HANDOFF_EXIT_CODE : 0);
+          },
+          personaId,
+        );
+      });
     });
     return;
   }
@@ -101,41 +136,53 @@ export async function runTui({ forceTutorial = false } = {}) {
   // second app.show()) to drop the by-then-deleted mock rows — see that
   // method's comment for why re-mounting a second time isn't safe here.
   if (!cfg.onboarded) {
-    menu(
-      app,
-      t('tutorial.promptTitle'),
-      [
-        { label: t('tutorial.promptYes'), value: 'yes' },
-        { label: t('tutorial.promptNo'), value: 'no' },
-      ],
-      async (choice) => {
-        saveConfig({ ...loadConfig(), onboarded: true });
-        // Mount the (real, pre-seed) sessions view FIRST, same reasoning as
-        // the forceTutorial branch above — the persona picker (when shown)
-        // gets real TUI chrome behind it instead of a bare screen.
-        let api;
-        await app.show(sessionsView({ onReady: (a) => (api = a) }));
-        app.render();
-        if (choice === 'yes') {
-          pickPersona(app, (personaId = 'swe') => {
-            seedMockSessions(personaId);
-            api.reloadAll();
-            startTutorial(
-              app,
-              () => {
-                api.resetToRoot();
-                app.render();
-                notifyPostMount(app);
-              },
-              personaId,
-            );
-          });
-        } else {
-          // Declining the guided tour still gets the short static overview.
-          welcomeModal(app, () => notifyPostMount(app));
-        }
-      },
-    );
+    // Mount the (real, pre-seed) sessions view FIRST, same reasoning as the
+    // forceTutorial branch above — every picker shown from here on (language,
+    // tour prompt, persona) gets real TUI chrome behind it instead of a bare
+    // screen.
+    let api;
+    await app.show(sessionsView({ onReady: (a) => (api = a) }));
+    app.render();
+    pickLanguage(app, (locale = 'en') => {
+      setLocale(locale);
+      // Refresh right away — the tour-prompt menu shown next (and, if the
+      // human declines the tour, welcomeModal()'s static overview after
+      // that) both sit next to this same chrome, and neither path re-seeds
+      // anything, so without this the panel labels/status bar would stay
+      // stuck in whatever language was active at mount time, before the
+      // human had picked one at all. See sessions.js's updatePanelLabels()/
+      // updateStatusBar() for why reloadAll() is what actually refreshes them.
+      api.reloadAll();
+      menu(
+        app,
+        t('tutorial.promptTitle'),
+        [
+          { label: t('tutorial.promptYes'), value: 'yes' },
+          { label: t('tutorial.promptNo'), value: 'no' },
+        ],
+        async (choice) => {
+          saveConfig({ ...loadConfig(), onboarded: true });
+          if (choice === 'yes') {
+            pickPersona(app, (personaId = 'swe') => {
+              seedMockSessions(personaId);
+              api.reloadAll();
+              startTutorial(
+                app,
+                () => {
+                  api.resetToRoot();
+                  app.render();
+                  notifyPostMount(app);
+                },
+                personaId,
+              );
+            });
+          } else {
+            // Declining the guided tour still gets the short static overview.
+            welcomeModal(app, () => notifyPostMount(app));
+          }
+        },
+      );
+    });
     return;
   }
 

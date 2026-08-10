@@ -1,4 +1,5 @@
 import { findPersona } from './personas.js';
+import { getLocale } from './i18n.js';
 
 // Deterministic, instant stand-ins for the tutorial's real o/w/Shift+S LLM
 // calls, wired up via llm.js's __setTestProvider() for the lifetime of the
@@ -28,6 +29,19 @@ import { findPersona } from './personas.js';
 // sync the way separate hardcoded copies once did (see git history: merge/
 // split regressions traced back to folder-name mismatches between this file
 // and tutorial-data.js).
+//
+// personas.js's keywords/knowledge/splitLabels are `{en, ko}` — resolved
+// once per createTutorialMockProvider() call against the active locale, so
+// every function below keeps working against plain values exactly as
+// before locale support existed.
+function resolveStorylines(storylines, locale) {
+  return storylines.map((s) => ({
+    folder: s.folder,
+    keywords: s.keywords[locale],
+    knowledge: s.knowledge[locale],
+    splitLabels: s.splitLabels?.[locale],
+  }));
+}
 
 function storylineForText(storylines, text) {
   return storylines.find((s) => s.keywords.test(text)) || null;
@@ -96,11 +110,14 @@ function delayed(value) {
 
 // Factory rather than a single stateless function: which storyline set (and
 // therefore which folder names/knowledge/split labels) applies depends on
-// which persona the user picked before the tutorial started — see
-// tutorial.js's seedMockSessions(personaId).
-export function createTutorialMockProvider(personaId = 'swe') {
+// which persona AND language the user picked before the tutorial started —
+// see tutorial.js's seedMockSessions(personaId). `locale` defaults to
+// getLocale() rather than always reading it live, matching
+// buildMockSessions()'s own reasoning (tutorial-data.js) — pin a specific
+// language explicitly (tests) without needing setLocale() first.
+export function createTutorialMockProvider(personaId = 'swe', locale = getLocale()) {
   const persona = findPersona(personaId);
-  const storylines = persona.storylines;
+  const storylines = resolveStorylines(persona.storylines, locale);
   const mergeStoryline = storylines[persona.mergeStorylineIndex];
 
   return function tutorialMockProvider(prompt) {

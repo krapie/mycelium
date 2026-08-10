@@ -12,10 +12,19 @@ Reuse·n/h/r** lifecycle strip — a static reference for which key belongs to
 which stage (it doesn't highlight the current stage in real time). Press
 **`?`** anywhere for the full shortcut reference.
 
-**Display language defaults to English.** Switch to Korean with
-`mycelium lang ko` (takes effect on the next TUI launch), back with
-`mycelium lang en`. There's no in-TUI toggle key — it's set via the CLI
-before launch.
+**Display language defaults to English.** You're asked to pick a language
+the first time you launch Mycelium (and every time you run `mycelium demo`,
+right before the persona picker) — English or 한국어. From an already-running
+session, press **`l`** anywhere to switch (confirm, then Mycelium restarts
+to apply it — the same effect as running `mycelium lang <en|ko>` and
+relaunching, just without leaving the TUI first). The demo's own mock
+session content (titles, summaries, transcripts, extracted knowledge) is
+fully bilingual too, not just the surrounding menus/narrator text — picking
+한국어 for `mycelium demo` seeds genuinely Korean session content, not an
+English demo with a Korean interface wrapped around it. Finishing the whole
+demo hands off into your real `~/.mycelium` data in that same language too,
+so it feels seamless rather than switching back — but only on a full finish
+(`Esc` to bail early exits without touching your real language setting).
 
 ## Folders panel
 

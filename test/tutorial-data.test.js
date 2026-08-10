@@ -1,9 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildMockSessions } from '../src/tui/tutorial-data.js';
+import { useTempHome } from './helpers.js';
 
-// Pure — no filesystem/MYCELIUM_HOME involvement, so a plain static import
-// is fine here (unlike most other test files in this directory).
+// buildMockSessions() now defaults its `locale` param to i18n.js's
+// getLocale(), which reads config.json — needs useTempHome() (and therefore
+// a dynamic import, same pattern every other filesystem-backed test file in
+// this directory uses) so it resolves against an isolated default ('en'),
+// not whatever locale happens to be set in the real ~/.mycelium/config.json.
+useTempHome();
+const { buildMockSessions } = await import('../src/tui/tutorial-data.js');
 
 test('buildMockSessions() returns 6 fully-formed, unfiled demo sessions', () => {
   const sessions = buildMockSessions();
@@ -47,6 +52,28 @@ test('buildMockSessions() supports every persona, each fully-formed and unfiled'
       assert.equal(s.folder, null, `${personaId} session must start unfiled`);
       assert.ok(s.extracted.title, `${personaId} session needs a title`);
       assert.ok(s.turns.length >= 2, `${personaId} session needs a believable conversation`);
+    }
+  }
+});
+
+test('buildMockSessions(personaId, "ko") returns Korean title/summary/turns, same shape as English', () => {
+  for (const [personaId, expectedCount] of [
+    ['swe', 6],
+    ['cse', 5],
+    ['sa', 6],
+  ]) {
+    const en = buildMockSessions(personaId, 'en');
+    const ko = buildMockSessions(personaId, 'ko');
+    assert.equal(ko.length, expectedCount, `${personaId} ko session count`);
+    assert.equal(ko.length, en.length, `${personaId} ko/en session counts must match`);
+    for (let i = 0; i < ko.length; i++) {
+      assert.ok(/[가-힣]/.test(ko[i].extracted.title), `${personaId} session ${i} title must contain Korean`);
+      assert.ok(/[가-힣]/.test(ko[i].extracted.summary), `${personaId} session ${i} summary must contain Korean`);
+      assert.equal(ko[i].turns.length, en[i].turns.length, `${personaId} session ${i} turn count must match between locales`);
+      for (const t of ko[i].turns) assert.ok(/[가-힣]/.test(t.text), `${personaId} turn text must contain Korean`);
+      // Locale-independent fields must be identical regardless of language.
+      assert.equal(ko[i].source, en[i].source, `${personaId} session ${i} source must be locale-independent`);
+      assert.deepEqual(ko[i].extracted.tags, en[i].extracted.tags, `${personaId} session ${i} tags must be locale-independent`);
     }
   }
 });

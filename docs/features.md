@@ -394,6 +394,43 @@ direct callers, e.g. tests). [tested] (`test/tutorial-data.test.js`,
 knowledge/split output; `test/e2e/demo-e2e.test.js` has a dedicated case driving
 the CSE persona's real 3-way merge → split through the fake-terminal harness)
 
+**Bilingual (en/ko) persona content, not just bilingual chrome.** Every
+persona's `title`/`summary`/`turns` (per session) and `knowledge`/
+`splitLabels`/`keywords` (per storyline) are `{en, ko}` — each turn is one
+`{role, en, ko}` object, not two parallel arrays, so the two languages can't
+silently drift apart in length/order the way separate arrays could. `folder`
+(a real directory name under `~/.mycelium-demo/tree/`) and `tags` stay
+single, shared, ASCII values in both languages, mirroring how real project
+folder names and tech-stack tags stay English/kebab-case even on
+Korean-speaking teams. `keywords` is genuinely language-*specific*, not just
+translated — it's matched against whichever language the mock summary is
+actually rendered in, so an English regex would never match a Korean
+summary. `buildMockSessions(personaId, locale)` / `createTutorialMockProvider
+(personaId, locale)` resolve `.en`/`.ko` at build time; `locale` defaults to
+`i18n.js`'s `getLocale()` (mutated immediately by `setLocale()`, so a caller
+just needs to set the language before seeding — no extra parameter threading
+through `seedMockSessions()`/`startTutorial()` beyond what already existed).
+A new `pickLanguage()` step (`tui/index.js`) — "Choose your language / 언어를
+선택하세요," shown bilingually since the language isn't known yet — runs
+right before `pickPersona()`, for both `mycelium demo` and first-run
+onboarding, so the persona picker's own labels and everything the tutorial
+seeds/narrates after it are already in the picked language. `sessionsView()`'s
+status bar (`app.setStatus(...)`) is otherwise only re-set on a panel-level
+change (`setLevel()`), which used to leave it in whatever language was
+active when the view first mounted — factored into `updateStatusBar()`, now
+also called from `reloadAll()`, so a language switch that seeds via
+`api.reloadAll()` refreshes it too. For an already-onboarded real session,
+**`l`** (global, `app.js`) confirms and switches via the same `setLocale()` +
+restart `mycelium lang <en|ko>` already required — a live in-place hot-swap
+isn't safe, since `sessionsView()` doesn't clean up its own `screen.key()`
+bindings on unmount (a real bug this codebase already hit once re-mounting
+it: stale closures capturing already-detached boxes). [tested]
+(`test/tutorial-data.test.js`/`test/tutorial-mock-llm.test.js` assert Korean
+content/classification/knowledge/split-labels match their English
+counterparts 1:1 in shape; `test/e2e/demo-e2e.test.js`'s "ko locale" case
+drives a real organize→learn flow and asserts the saved KNOWLEDGE.md file
+itself contains Korean text, not just Korean menus around English content)
+
 **`mockSplit()`'s split-range computation is dynamic, not hardcoded.**
 Every persona's individual mock sessions happen to have 4 turns each, but
 `mergeSessions()` prepends a provenance separator turn (role `'system'`)
@@ -519,7 +556,16 @@ landing the presenter in their actual `~/.mycelium` data instead of a bare
 shell prompt. `q` pressed on any earlier step (`completed: false`) just
 exits plainly, no handoff — someone who didn't reach the end didn't ask to
 see real (possibly sensitive) data next, which also keeps `mycelium demo`
-safe to run in front of others as originally intended. [tested]
+safe to run in front of others as originally intended. On a full handoff,
+`cli.js` also reads the (still on disk — only wiped at the *start* of a
+future `mycelium demo` run, not on exit) isolated demo store's own
+`config.json` for whichever locale was picked in `pickLanguage()`, and calls
+the real `setLocale()` with it before starting the real TUI — so continuing
+straight into real data feels linguistically seamless instead of switching
+back to whatever language was set before. Deliberately scoped to the full-
+handoff path only, not every demo run: previewing/presenting the demo in a
+different language shouldn't silently change real settings unless the
+presenter actually continues into real data right after. [tested]
 (`buildMockSessions()` and `tutorial-mock-llm.js`'s prompt-dispatch/
 classification/folder-lookup logic are unit-tested as pure functions;
 `test/e2e/demo-e2e.test.js` drives the real interactive state machine
