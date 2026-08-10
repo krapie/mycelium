@@ -34,12 +34,20 @@ import { t } from './i18n.js';
  * Views are swapped in/out of `body`; each view owns its own widgets and
  * keybindings and exposes { mount, unmount, help }.
  */
-export function createApp() {
+// input/output let a caller substitute fake streams — test/tui-helpers.js's
+// createTestApp() uses this to drive the real app (real handlers, real
+// data layer) against a PassThrough pair instead of a real TTY, with no
+// other change to this function. Every production call site calls
+// createApp() with no args, so this defaults to blessed's own normal
+// process.stdin/stdout behavior.
+export function createApp({ input, output } = {}) {
   const screen = blessed.screen({
     smartCSR: true,
     title: 'Mycelium',
     fullUnicode: true,
     autoPadding: true,
+    input,
+    output,
     // blessed mis-compiles the xterm-256color `Setulc` (underline-color)
     // capability and dumps the generated JS to the terminal on exit. We don't
     // use underline colors, so skip extended terminfo entirely to avoid it.
