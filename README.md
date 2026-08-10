@@ -41,9 +41,12 @@ Capture never auto-assigns a folder — press `o` (smart organize) in the TUI,
 or run `mycelium organize`, to sort new sessions by content.
 
 Re-run the tutorial (or use it as a demo) any time with `mycelium demo` — a
-separate `~/.mycelium-demo` store, your real data is never touched. Finish
-the whole walkthrough and it hands off straight into your real sessions;
-press `Esc` to bail early instead and it just exits.
+separate `~/.mycelium-demo` store, your real data is never touched. You'll
+be asked to pick a persona first (software engineer, cloud support engineer,
+or solutions architect) so the walkthrough uses mock sessions that match
+your own kind of work. Finish the whole walkthrough and it hands off
+straight into your real sessions; press `Esc` to bail early instead and it
+just exits.
 
 > Skipped `npm link`? Use `node src/cli.js <command>` instead.
 

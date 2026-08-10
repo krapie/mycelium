@@ -3,11 +3,28 @@ import { sessionsView } from './views/sessions.js';
 import { welcomeModal } from './widgets/viewers.js';
 import { menu } from './widgets/pickers.js';
 import { seedMockSessions, startTutorial, DEMO_HANDOFF_EXIT_CODE } from './tutorial.js';
+import { PERSONAS } from './personas.js';
+import { C } from './theme.js';
 import { t } from './i18n.js';
 import { pendingSuggestions } from '../organize.js';
 import { startTuiRoutine } from '../daemon.js';
 import { loadConfig, saveConfig } from '../config.js';
 import * as data from './data.js';
+
+// Shown before seeding mock sessions, both for `mycelium demo` and for a
+// first-run user who opted into the tour — which persona's storylines
+// (personas.js) seedMockSessions()/startTutorial() should use. `cb` receives
+// undefined if the picker is dismissed with Escape; callers default that to
+// 'swe' rather than leaving the demo in a half-started state.
+function pickPersona(app, cb) {
+  menu(
+    app,
+    t('tutorial.personaPromptTitle'),
+    PERSONAS.map((p) => ({ label: `${p.label} — {${C.faint}-fg}${p.description}{/}`, value: p.id })),
+    cb,
+    { width: '70%' },
+  );
+}
 
 // Toast(s) that make sense once the view is up and settled — pending
 // smart-organize suggestions first (something already computed, waiting on
@@ -35,21 +52,36 @@ export async function runTui({ forceTutorial = false } = {}) {
   // No background daemon either — a one-shot demo shouldn't be scanning
   // for real agent sessions in the background.
   if (forceTutorial) {
-    seedMockSessions();
-    await app.show(sessionsView());
+    // Mount the (empty, pre-seed) sessions view FIRST, then show the
+    // persona picker on top of it — so the picker has the real TUI chrome
+    // (header/panels/statusbar) behind it instead of a bare screen. Seeding
+    // happens after the pick, so `api.reloadAll()` is what makes the
+    // already-mounted view pick up the newly-written mock sessions (seeding
+    // writes straight to the raw store/index, bypassing this view's own
+    // in-memory state).
+    let api;
+    await app.show(sessionsView({ onReady: (a) => (api = a) }));
     app.render();
-    // Once the demo sessions are cleaned up, this isolated ~/.mycelium-demo
-    // store is empty — resetToRoot() used to just drop back into that empty
-    // view, which reads as "the demo is broken" (0 sessions, no obvious way
-    // out except the normal `q` quit). If the presenter went all the way
-    // through (completed:true — the final step's own q+confirm, not an
-    // early Esc bail), quit THIS process with a sentinel exit code instead;
-    // cli.js's demo command is watching for it and hands off straight into
-    // a real TUI against the user's actual ~/.mycelium. An early Esc bail
-    // (completed:false) just quits plainly — someone who bailed out mid-
-    // tour didn't ask to see real data next.
-    startTutorial(app, (completed) => {
-      app.quit(completed ? DEMO_HANDOFF_EXIT_CODE : 0);
+    pickPersona(app, async (personaId = 'swe') => {
+      seedMockSessions(personaId);
+      api.reloadAll();
+      // Once the demo sessions are cleaned up, this isolated ~/.mycelium-demo
+      // store is empty — resetToRoot() used to just drop back into that empty
+      // view, which reads as "the demo is broken" (0 sessions, no obvious way
+      // out except the normal `q` quit). If the presenter went all the way
+      // through (completed:true — the final step's own q+confirm, not an
+      // early Esc bail), quit THIS process with a sentinel exit code instead;
+      // cli.js's demo command is watching for it and hands off straight into
+      // a real TUI against the user's actual ~/.mycelium. An early Esc bail
+      // (completed:false) just quits plainly — someone who bailed out mid-
+      // tour didn't ask to see real data next.
+      startTutorial(
+        app,
+        (completed) => {
+          app.quit(completed ? DEMO_HANDOFF_EXIT_CODE : 0);
+        },
+        personaId,
+      );
     });
     return;
   }
@@ -78,15 +110,25 @@ export async function runTui({ forceTutorial = false } = {}) {
       ],
       async (choice) => {
         saveConfig({ ...loadConfig(), onboarded: true });
-        if (choice === 'yes') seedMockSessions();
+        // Mount the (real, pre-seed) sessions view FIRST, same reasoning as
+        // the forceTutorial branch above — the persona picker (when shown)
+        // gets real TUI chrome behind it instead of a bare screen.
         let api;
         await app.show(sessionsView({ onReady: (a) => (api = a) }));
         app.render();
         if (choice === 'yes') {
-          startTutorial(app, () => {
-            api.resetToRoot();
-            app.render();
-            notifyPostMount(app);
+          pickPersona(app, (personaId = 'swe') => {
+            seedMockSessions(personaId);
+            api.reloadAll();
+            startTutorial(
+              app,
+              () => {
+                api.resetToRoot();
+                app.render();
+                notifyPostMount(app);
+              },
+              personaId,
+            );
           });
         } else {
           // Declining the guided tour still gets the short static overview.

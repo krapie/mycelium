@@ -7,7 +7,8 @@ import { reindex } from '../index-db.js';
 import { pruneEmptyFolders } from '../cleanup.js';
 import { buildMockSessions } from './tutorial-data.js';
 import { __setTestProvider, __clearTestProvider } from '../llm.js';
-import { tutorialMockProvider } from './tutorial-mock-llm.js';
+import { createTutorialMockProvider } from './tutorial-mock-llm.js';
+import { findPersona } from './personas.js';
 
 /**
  * First-run interactive tutorial (and `mycelium demo`'s engine) — mock
@@ -101,10 +102,10 @@ const STEPS = [
   { titleKey: 'tutorial.step14Title', bodyKey: 'tutorial.step14Body' },
 ];
 
-export function seedMockSessions() {
-  for (const n of buildMockSessions()) saveRaw(n);
+export function seedMockSessions(personaId = 'swe') {
+  for (const n of buildMockSessions(personaId)) saveRaw(n);
   reindex();
-  __setTestProvider(tutorialMockProvider);
+  __setTestProvider(createTutorialMockProvider(personaId));
 }
 
 /** Remove every mock session (and whatever empty folders o/w created along
@@ -135,7 +136,10 @@ export const DEMO_HANDOFF_EXIT_CODE = 42;
  * only if `q` was pressed on the actual last step, `false` otherwise (q
  * anywhere earlier is just "done early").
  */
-export function startTutorial(app, onDone) {
+export function startTutorial(app, onDone, personaId = 'swe') {
+  const persona = findPersona(personaId);
+  const mergeFolder = persona.storylines[persona.mergeStorylineIndex].folder;
+  const sessionCount = persona.storylines.reduce((n, s) => n + s.sessions.length, 0);
   const box = blessed.box({
     parent: app.screen,
     bottom: 1,
@@ -177,7 +181,12 @@ export function startTutorial(app, onDone) {
     // bodies are, to color-highlight the key they're waiting for) and
     // just returns it as-is if it's a plain string — safe either way.
     box.setLabel(` ${t(step.titleKey)} `);
-    const body = waiting ? t(step.waitingKey) : t(step.bodyKey, C.fox);
+    // Extra args (sessionCount, mergeFolder) are passed uniformly to every
+    // step body — most step bodies are plain (fg) => ... functions that
+    // simply ignore the trailing args; only step2/4/5/11 (see i18n.js)
+    // actually read them, to interpolate the active persona's session count
+    // / merge-target folder instead of a hardcoded `backend/payments`.
+    const body = waiting ? t(step.waitingKey) : t(step.bodyKey, C.fox, sessionCount, mergeFolder);
     box.setContent(`${body}\n{${C.faint}-fg}${t('tutorial.exitHint')}{/}`);
     app.render();
   };
@@ -232,6 +241,30 @@ export function startTutorial(app, onDone) {
     tick();
   };
 
+  // Whether `key` is the exact keypress `step` is narrating/waiting for —
+  // same `shift`-flag reasoning as the inline comment below: Shift+M/Shift+S
+  // arrive as key.name 'm'/'s' + key.shift:true, not blessed's 'S-m' combo
+  // form, so a plain m/s must not satisfy a step whose waitFor needs Shift.
+  const matchesWaitFor = (step, k) => !!step.waitFor && k.name === step.waitFor && (!step.shift || k.shift);
+
+  // Keys that mean something different almost everywhere in the app —
+  // confirming ANY dialog, plain panel navigation — never count toward the
+  // skip-ahead scan below, only an exact match on the CURRENT step. Every
+  // step whose waitFor is one of these also happens to be a thenWait:'close'
+  // step (see STEPS), which is what made the very first version of
+  // skip-ahead actively dangerous: isModalOpen() is already false whenever
+  // no modal happens to be open, so a false-positive 'enter' match on a
+  // step several ahead resolved its thenWait:'close' wait INSTANTLY (no
+  // real modal ever had to close), landing on the step after THAT — one
+  // stray Enter (e.g. drilling into a session's detail view, dismissing an
+  // unrelated toast) could cascade the narrator several steps forward with
+  // no corresponding real action at all. `o`/`w`/`c`/Shift+M/Shift+S don't
+  // have this problem: each has exactly one real meaning in this app, so a
+  // match always corresponds to that specific real handler actually having
+  // run, and their thenWait is always 'open' — which only resolves once a
+  // modal genuinely appears, never trivially.
+  const AMBIGUOUS_KEYS = new Set(['enter', 'left', 'right']);
+
   function onKeypress(ch, key) {
     if (done || !key) return;
     // neo-blessed's program.js fires TWO synchronous keypress events for a
@@ -255,7 +288,6 @@ export function startTutorial(app, onDone) {
     // resolve one way or another), so nothing but q above should be able to
     // interrupt it.
     if (waiting) return;
-    const step = STEPS[i];
     // Escape is deliberately not handled here at all, on any step. It used
     // to double as "abort the tutorial", which meant closing a real modal
     // with Escape (its own normal close key, same as q on most of them)
@@ -268,22 +300,35 @@ export function startTutorial(app, onDone) {
     //
     // Every step names a specific key; anything else (e.g. trying the real
     // features a step points at, like v/`/`) is simply not this step's key
-    // and is left alone for sessions.js's own handlers. `shift: true`
-    // (merge/split steps) requires key.shift too — blessed's raw keypress
-    // reports Shift+M as key.name 'm' + key.shift true, NOT 'S-m' (that
-    // combo-string form is only how blessed element.key() BINDINGS are
-    // declared, e.g. sessions.js's own listBox.key('S-m', ...) — a
-    // completely different parser from this raw screen-level listener).
-    // Without the shift check, plain `m` (real move) or `s` (real scan)
-    // would satisfy waitFor and could falsely advance these steps.
-    if (key.name === step.waitFor && (!step.shift || key.shift)) {
-      if (step.thenWait) {
-        waiting = true;
-        render();
-        pollUntil(step.thenWait === 'open');
-      } else {
-        settleAt(i + 1);
-      }
+    // and is left alone for sessions.js's own handlers.
+    //
+    // This listener never gates sessions.js's own bindings — it only
+    // narrates alongside them — so a human who jumps ahead (e.g. pressing
+    // `o` while still on step 1's pure panel-navigation lesson) still
+    // triggers the real action; only the narrator was previously left
+    // behind, stuck showing the skipped step forever since its own
+    // waitFor never matched. An exact match on the CURRENT step always
+    // wins; failing that, and only for a non-ambiguous key (see
+    // AMBIGUOUS_KEYS above), scan forward for the first LATER step this
+    // keypress actually satisfies and jump straight there — steps in
+    // between (already-passed instructions) are silently skipped, same as
+    // if the human had pressed each of their keys in order. Anything else
+    // — no match at all, or an ambiguous key that only matches a step
+    // other than the current one — falls through untouched.
+    let j = i;
+    if (!matchesWaitFor(STEPS[j], key)) {
+      if (AMBIGUOUS_KEYS.has(key.name)) return;
+      while (j < STEPS.length && !matchesWaitFor(STEPS[j], key)) j++;
+      if (j >= STEPS.length) return;
+    }
+    i = j;
+    const step = STEPS[i];
+    if (step.thenWait) {
+      waiting = true;
+      render();
+      pollUntil(step.thenWait === 'open');
+    } else {
+      settleAt(i + 1);
     }
   }
 

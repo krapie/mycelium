@@ -328,6 +328,27 @@ progress + partial-failure tolerance), `e` rename title, `y` copy to
 clipboard, `d` digest reader (nested mini-screen), `c` view context, `i`
 inject AGENTS.md (preview-then-confirm, sibling to `w`). [untested]
 
+**`asyncReviewFlowRunning` guards `o`/`w`/Shift+S against a double-press
+while the LLM call is still in flight.** All three are async: show a
+spinner, `await` a real `complete()` call (anywhere from under a second to
+10+ seconds), then open a review modal. None disable their own key while
+waiting, so an impatient repeat press — nothing visibly happened yet —
+used to start a SECOND concurrent run: a second spinner, a second LLM
+call, and eventually a second review modal stacking on top of the first
+(each independently `parent: app.screen`). Closing just the top one left
+the other still parented underneath, so anything watching
+`app.screen.children.length` against a pre-press baseline (the tutorial's
+own `isModalOpen()`) never saw it drop back to baseline — permanently
+stuck waiting for a "close" that could never fully arrive (surfaced as the
+narrator hanging on "Applying…" forever after Shift+S). One shared flag
+covers all three (mutually exclusive anyway), set on entry and released
+the instant each one's own review modal opens — not held through however
+long the human takes to review it, so reviewing one doesn't block starting
+a different one afterward. [tested] (`test/e2e/demo-e2e.test.js`'s "an
+impatient double Shift+S while the LLM call is in flight" case double-
+presses inside the mock delay window and asserts only one modal opens and
+closing it returns exactly to baseline)
+
 ## TUI — Calendar tab (`src/tui/views/calendar.js`)
 
 Month grid ↔ day list ↔ detail, same drill-down language as Sessions.
@@ -341,10 +362,53 @@ at the time) — the clearest extraction candidate in the codebase. Tab
 activate/deactivate preserves the calendar's own cursor position across
 switches (lazy-created once, cheap to reactivate). [untested]
 
-## TUI — Tutorial / `mycelium demo` (`src/tui/tutorial.js`, `tutorial-data.js`, `tutorial-mock-llm.js`)
+## TUI — Tutorial / `mycelium demo` (`src/tui/tutorial.js`, `tutorial-data.js`, `tutorial-mock-llm.js`, `personas.js`)
 
-**Highest state-machine complexity in the app.** Seeds 6 realistic mock
-sessions (`demo: true`, unfiled); a narrator overlay runs its OWN
+**Persona-selectable mock content (`src/tui/personas.js`).** Before seeding,
+both `mycelium demo` and a first-run user who opts into the tour pick one of
+three personas via a `menu()` picker (`pickPersona()` in `tui/index.js`):
+**Software Engineer** (an Amazon-retail-style developer building a new
+"Express Reorder" feature across a backend and a frontend session, plus two
+more unrelated storylines — 6 sessions total), **Cloud Support Engineer**
+(cross-service troubleshooting an on-prem↔VPC connectivity issue across
+separate DX/VPC/ALB sessions that turn out to share one MTU root cause,
+merged 3-way, plus a second S3 case — 5 sessions total), and **Solutions
+Architect** (researching AI agent platform best practices and reference
+architectures for a customer, merged into one body of research that feeds a
+proposed architecture, plus two more customer-meeting storylines — 6
+sessions total). Each persona bundles, per storyline, its own
+`{folder, keywords, knowledge, sessions}` — and for the one storyline that's
+the tutorial's merge/split target, `splitLabels` — so `tutorial-data.js`
+(`buildMockSessions(personaId)`) and `tutorial-mock-llm.js`
+(`createTutorialMockProvider(personaId)`) both derive from this single
+source instead of maintaining separate, independently-hardcoded copies of
+the same folder names/keywords (a real bug class earlier in this feature's
+history — folder-name mismatches between the two files broke merge/split).
+`seedMockSessions(personaId)`/`startTutorial(app, onDone, personaId)` thread
+the choice through; `i18n.js`'s step2/4/5/11 body strings take extra
+interpolation args (session count, merge-target folder) via `t()`'s existing
+`(fg, ...args)` support, rather than each persona needing its own copy of
+those strings. `personaId` defaults to `'swe'` wherever omitted (existing
+direct callers, e.g. tests). [tested] (`test/tutorial-data.test.js`,
+`test/tutorial-mock-llm.test.js` cover all three personas' data/classification/
+knowledge/split output; `test/e2e/demo-e2e.test.js` has a dedicated case driving
+the CSE persona's real 3-way merge → split through the fake-terminal harness)
+
+**`mockSplit()`'s split-range computation is dynamic, not hardcoded.**
+Every persona's individual mock sessions happen to have 4 turns each, but
+`mergeSessions()` prepends a provenance separator turn (role `'system'`)
+before each merged block (see `organize/lineage.js`), and the CSE persona's
+merge target is a 3-way merge — so the real turn count the split prompt
+numbers (`턴 N [role]: ...`, see `split.js`) varies by persona and is no
+longer always 4. `mockSplit()` reads the actual highest turn number out of
+the prompt via regex, splits it roughly in half, and labels the two halves
+with the active persona's `splitLabels` — a fixed `{from:1,to:2}`/
+`{from:3,to:4}` response used to silently drop every turn past 4 for any
+merge bigger than 2×2.
+
+**Highest state-machine complexity in the app.** Seeds several realistic
+mock sessions (`demo: true`, unfiled; exact count depends on the chosen
+persona — see above); a narrator overlay runs its OWN
 `app.screen.on('keypress', ...)` listener alongside (never wrapping)
 sessions.js's real handlers, inferring "did a real action's modal open/close"
 by polling `app.screen.children.length` against a captured baseline — a
@@ -369,6 +433,35 @@ of them as `waitFor` left the narrator stuck displaying that step forever
 if the human used a different one — both instead poll for the state
 change directly the moment they're entered, not gated on catching any
 particular keypress).
+
+**Skip-ahead matching, restricted to distinctive keys.** Because this
+listener only narrates alongside sessions.js's real handlers (never gates
+them), a human who presses a LATER step's key before the current step's
+own — e.g. `o` while still on step 1's pure panel-navigation lesson —
+still triggers the real action (`suggestPlacements()` here) regardless.
+`onKeypress()` used to check only `STEPS[i]`'s own `waitFor`, so a keypress
+like that had nothing to match and left the narrator permanently stuck on
+the skipped step. An exact match on the CURRENT step still always wins;
+failing that, it scans forward for the first LATER step this keypress
+satisfies — but **only** for `o`/`w`/`c`/Shift+M/Shift+S (`AMBIGUOUS_KEYS`
+in `tutorial.js` is everything excluded: `enter`/`left`/`right`). Those
+five each have exactly one real meaning anywhere in this app, so a match
+always corresponds to that specific real handler having actually run.
+`enter`/`left`/`right` don't have that property — they're pressed
+constantly for reasons that have nothing to do with the tutorial script
+(confirming an unrelated dialog, plain panel/detail navigation), and an
+earlier version of this feature that didn't exclude them was a real
+regression: `enter` alone is step 3/6/12/13's `waitFor`, and step 3/6/12
+are all `thenWait: 'close'` — since `isModalOpen()` is already `false`
+whenever nothing happens to be open, a false-positive match on one of
+those resolved its "wait for close" **instantly**, landing on the step
+after that with zero corresponding real action; one stray Enter could
+silently jump the narrator several steps ahead. [tested]
+(`test/e2e/demo-e2e.test.js`'s "pressing a later step's key early" case
+drives the legitimate `o` skip-ahead end to end and asserts the narrator
+still reaches `completed: true`; "a stray Enter on step 1 does not falsely
+cascade the narrator forward" is the regression test for the false-match
+case, reading the narrator's own step number off its blessed label content)
 
 **Exit model, deliberately simple**: `q` exits the tutorial from any step,
 immediately, no confirm — checked once at the very top of `onKeypress`,
@@ -398,11 +491,11 @@ a hard, unconditional exit throughout, by design (skips `endTutorial()`'s
 cleanup sweep if a tutorial is active in the real store; accepted
 trade-off, see `app.js`'s comment). `o`/`w`/Shift+S all call real LLM-bound
 functions (`suggestPlacements`, `buildKnowledgeText`, `suggestSplitBoundaries`)
-— `seedMockSessions()` swaps `llm.js`'s `complete()` over to
-`tutorial-mock-llm.js`'s `tutorialMockProvider()` for as long as the mock
-sessions exist (cleared in `endTutorial()`), so these resolve quickly and
-deterministically instead of via a real `claude`/`codex` subprocess call.
-`tutorialMockProvider()` still resolves after a deliberate ~5s delay
+— `seedMockSessions(personaId)` swaps `llm.js`'s `complete()` over to
+`tutorial-mock-llm.js`'s `createTutorialMockProvider(personaId)` for as long
+as the mock sessions exist (cleared in `endTutorial()`), so these resolve
+quickly and deterministically instead of via a real `claude`/`codex`
+subprocess call. The returned provider still resolves after a deliberate ~5s delay
 (`MOCK_DELAY_MS`, overridable via `MYCELIUM_DEMO_MOCK_DELAY_MS` — see
 `test/tutorial-mock-llm.test.js`, which sets it to 30ms so the suite isn't
 stuck waiting on it), not instantly — a 0ms response is its own regression,
@@ -429,7 +522,7 @@ see real (possibly sensitive) data next, which also keeps `mycelium demo`
 safe to run in front of others as originally intended. [tested]
 (`buildMockSessions()` and `tutorial-mock-llm.js`'s prompt-dispatch/
 classification/folder-lookup logic are unit-tested as pure functions;
-`test/demo-e2e.test.js` drives the real interactive state machine
+`test/e2e/demo-e2e.test.js` drives the real interactive state machine
 end-to-end — organize→learn→reuse→merge→split, the exit-key model, and the
 demo→real handoff itself — against fake terminal streams, see that file
 and the Phase 7 note right below for how)
@@ -461,7 +554,7 @@ investigation). A follow-up plan should treat it as its own reviewed change,
 not a rider on an unrelated refactor.
 
 **Superseded, for coverage purposes, by a different approach**:
-`test/demo-e2e.test.js` doesn't unit-test the STEPS reducer in isolation
+`test/e2e/demo-e2e.test.js` doesn't unit-test the STEPS reducer in isolation
 (the `modalDepth` refactor above would still be needed for that specific
 goal) — it sidesteps the whole question by testing the real system
 end-to-end instead. `test/tui-helpers.js`'s `createTestApp()` gives

@@ -7,8 +7,8 @@ on:
     branches: [main]
 
 jobs:
-  lint-and-test:
-    name: lint & test (node ${{ matrix.node-version }})
+  lint-and-unit:
+    name: lint & unit test (node ${{ matrix.node-version }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -30,5 +30,28 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Test
-        run: npm test
+      - name: Unit test
+        run: npm run test:unit
+
+  e2e:
+    name: e2e test (node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ["22.x", "24.x"]
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: E2E test
+        run: npm run test:e2e
