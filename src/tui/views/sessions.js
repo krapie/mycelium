@@ -934,12 +934,21 @@ export function sessionsView(opts = {}) {
 
       // d: digest viewer (browse existing; generate new from inside via n/w).
       screenKey(app, ['d'], () => digestReader(app));
-      listBox.key('c', () => {
-        const r = currentRow();
-        if (!r) return;
-        const ctx = assembleContext(r.folder);
-        textView(app, t('context.title', r.folder || t('sessions.newBadge')), ctx || t('context.empty'));
-      });
+      // c: preview inherited context for the current folder scope — same
+      // state.folder + dual-panel binding as w (doKnowledge) above, not
+      // currentRow().folder. Binding this on listBox only used to mean
+      // pressing c right after returning to the Folders panel (← — the
+      // exact key the previous tutorial step teaches) did nothing at all,
+      // leaving nothing for the tutorial's isModalOpen() poll to ever
+      // detect — found by walking the tutorial live in tmux, not from
+      // reading this handler in isolation.
+      const doContext = () => {
+        if (!state.folder) return app.notify(t('folders.selectFirst'), 3);
+        const ctx = assembleContext(state.folder);
+        textView(app, t('context.title', state.folder), ctx || t('context.empty'));
+      };
+      listBox.key('c', doContext);
+      foldersBox.key('c', doContext);
       // i: inject the folder's KNOWLEDGE.md into a directory's AGENTS.md —
       // show exactly what will be written before touching that file.
       listBox.key('i', () => {
