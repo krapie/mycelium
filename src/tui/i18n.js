@@ -225,7 +225,7 @@ const en = {
   'merge.done': (n) => `Merged ${n} sessions`,
 
   'split.suggesting': 'Analyzing session for topic boundaries…',
-  'split.reviewTitle': 'Proposed split — space select, enter apply, esc cancel',
+  'split.reviewTitle': 'Proposed split',
   'split.turnRangeLabel': (from, to, label) => `Turn ${from}-${to}  "${label}"`,
   'split.done': (n) => `Split into ${n} session${n === 1 ? '' : 's'}`,
 
@@ -434,7 +434,7 @@ const ko = {
   'merge.done': (n) => `${n}개 세션 병합됨`,
 
   'split.suggesting': '주제 경계 분석 중…',
-  'split.reviewTitle': '분할 제안 — space 선택, enter 실행, esc 취소',
+  'split.reviewTitle': '분할 제안',
   'split.turnRangeLabel': (from, to, label) => `턴 ${from}-${to}  "${label}"`,
   'split.done': (n) => `${n}개 세션으로 분할됨`,
 

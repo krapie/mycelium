@@ -539,8 +539,15 @@ export function sessionsView(opts = {}) {
         spin.stop();
         if (!res.ok) return app.notify(res.error, 3);
         const items = res.ranges.map((rg) => ({ label: t('split.turnRangeLabel', rg.from, rg.to, rg.label), value: rg }));
+        // defaultAll: true — same as smart-organize's placement review.
+        // Without it, a bare Enter (the obvious first thing to try) checked
+        // nothing, applied nothing, and closed the modal with zero
+        // feedback — indistinguishable from the keypress just not
+        // registering. The LLM already proposed these ranges; reviewing
+        // them is "uncheck the wrong one," not "check the right ones",
+        // same reasoning organize's own review already uses.
         multiSelectList(app, t('split.reviewTitle'), items, (chosen) => {
-          if (!chosen?.length) return; // Esc or nothing checked — original untouched
+          if (!chosen?.length) return; // Esc or everything unchecked — original untouched
           const applied = applySplit(r.id, chosen);
           if (!applied.ok) return app.notify(applied.error, 3);
           data.refreshMany([r.id, ...applied.pieces.map((p) => p.id)]);
@@ -549,7 +556,7 @@ export function sessionsView(opts = {}) {
           reloadList();
           listBox.focus();
           app.render();
-        });
+        }, { defaultAll: true });
       };
       listBox.key('S-s', doSplit);
       detailBox.key('S-s', doSplit);
@@ -951,27 +958,35 @@ export function sessionsView(opts = {}) {
       foldersBox.key('c', doContext);
       // i: inject the folder's KNOWLEDGE.md into a directory's AGENTS.md —
       // show exactly what will be written before touching that file.
-      listBox.key('i', () => {
-        const r = currentRow();
-        if (!r || !r.folder) return app.notify(t('context.needsFolder'), 3);
+      // i: inject the current folder scope's KNOWLEDGE.md into a directory's
+      // AGENTS.md. Same state.folder + dual-panel binding as w/c above, not
+      // currentRow().folder — for the same reason: c's list-only binding
+      // left the tutorial's Reuse step stuck if the human had just pressed
+      // ← back to Folders (which the step right before it teaches), and i
+      // had the identical bug.
+      const doInject = () => {
+        if (!state.folder) return app.notify(t('context.needsFolder'), 3);
+        const refocus = () => (state.level === 'folders' ? foldersBox : listBox).focus();
         textPrompt(app, t('inject.dirPrompt'), process.cwd(), (dir) => {
-          if (!dir) return listBox.focus();
-          const ctx = assembleContext(r.folder);
+          if (!dir) return refocus();
+          const ctx = assembleContext(state.folder);
           if (!ctx) {
-            app.notify(t('inject.noKnowledge', r.folder), 3);
-            return listBox.focus();
+            app.notify(t('inject.noKnowledge', state.folder), 3);
+            return refocus();
           }
           confirmText(app, t('inject.previewTitle', dir.trim()), ctx, (ok) => {
             if (!ok) {
               app.notify(t('inject.cancelled'), 2);
-              return listBox.focus();
+              return refocus();
             }
-            const res = injectAgentsMd(dir.trim(), r.folder);
+            const res = injectAgentsMd(dir.trim(), state.folder);
             app.notify(res.ok ? t('inject.done', dir.trim()) : res.error, 3);
-            listBox.focus();
+            refocus();
           });
         });
-      });
+      };
+      listBox.key('i', doInject);
+      foldersBox.key('i', doInject);
 
       // Expose hooks the action steps (organize/capture/reuse) bind onto.
       this._api = {
