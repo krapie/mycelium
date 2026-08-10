@@ -363,23 +363,40 @@ the merge title-prompt step, because `blessed.prompt`'s Enter submit
 doesn't reliably bubble a matching keypress to this screen-level listener
 the way `blessed.list`-based widgets like `multiSelectList`/`confirmText`
 do, so `waitFor: 'enter'` there silently never fired; and the Reuse step's
-textView-close step, because textView treats 'q' AND 'escape' as equally
-valid real close keys, so tracking only one of them as `waitFor` left the
-narrator stuck displaying that step forever if the human used the other —
-both instead poll for the state change directly the moment they're
-entered, not gated on catching any particular keypress), `freeform`
-(steps where Escape passes through to real back-navigation instead of
-aborting — the textView-close step is ALSO freeform, on top of
-`pollOnEntry`, since onKeypress's Escape handling treats Escape as "abort
-tutorial" on any non-freeform/final step independent of `waitFor`; without
-it, closing the context view with Escape would separately abort the whole
-tutorial as a side effect of a completely unrelated real widget's own
-close behavior), and a `final` step with its own double-confirm. A
-100ms Escape-debounce guards against split ESC-byte-plus-arrow-key sequences
-(common over slow/tmux/SSH links) being misparsed as a standalone abort.
-`app.quitGuard` is held for the tutorial's whole duration and released via
-`setImmediate` (not synchronously) to dodge a same-physical-keypress race
-with the global quit binding. `o`/`w`/Shift+S all call real LLM-bound
+textView-close step, because textView treats 'c' (see sessions.js),
+'q', AND 'escape' as equally valid real close keys, so tracking only one
+of them as `waitFor` left the narrator stuck displaying that step forever
+if the human used a different one — both instead poll for the state
+change directly the moment they're entered, not gated on catching any
+particular keypress).
+
+**Exit model, deliberately simple**: `q` exits the tutorial from any step,
+immediately, no confirm — checked once at the very top of `onKeypress`,
+before even the `waiting` gate, so it works reliably mid-wait or with any
+real modal open. Only counts as a full "completed" run (which `cli.js`'s
+`demo` command reads as "hand off to the real TUI",
+`DEMO_HANDOFF_EXIT_CODE`) if pressed on the actual last step; `q` on any
+earlier step is just "done early, no handoff" — someone who didn't reach
+the end didn't ask to see real (possibly sensitive) data next. Escape is
+not handled by the tutorial at all, on any step — it just does whatever
+the real widget/view underneath does with it (closing a modal, stepping
+back a panel), same as outside the tutorial. This replaced an earlier
+design where Escape doubled as "abort the tutorial" (with a 100ms debounce
+against split ESC-byte-plus-arrow-key sequences over slow/tmux/SSH links,
+a `freeform` per-step flag to exempt steps that needed real Escape
+back-navigation, and a `final` step with its own double-confirm) — closing
+a real modal with Escape kept colliding with that abort behavior as a side
+effect of a completely unrelated widget's own close key, so the whole
+mechanism was cut in favor of one rule that holds everywhere: q exits,
+Escape closes. `app.quitGuard` still suppresses the app's own global `q`
+binding for the tutorial's duration (so its confirm-quit dialog doesn't
+also fire right behind this module's direct exit) and is released via
+`setImmediate`, not synchronously, to dodge a same-physical-keypress race
+with that global binding — see `app.js`. `app.js`'s C-c binding is
+deliberately NOT gated by `quitGuard` at all, tutorial or not — Ctrl+C is
+a hard, unconditional exit throughout, by design (skips `endTutorial()`'s
+cleanup sweep if a tutorial is active in the real store; accepted
+trade-off, see `app.js`'s comment). `o`/`w`/Shift+S all call real LLM-bound
 functions (`suggestPlacements`, `buildKnowledgeText`, `suggestSplitBoundaries`)
 — `seedMockSessions()` swaps `llm.js`'s `complete()` over to
 `tutorial-mock-llm.js`'s `tutorialMockProvider()` for as long as the mock

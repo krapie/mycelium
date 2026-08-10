@@ -65,22 +65,17 @@ const STEPS = [
   // isModalOpen()'s DOM-child-count heuristic can't tell "textPrompt closed,
   // confirmText about to open" from "fully closed" if that transition ever
   // landed on a render tick — not worth the risk for what the demo needs to
-  // show. Step 8 (closing it) is `pollOnEntry` + `freeform`, not a tracked
-  // `waitFor` key, and needs BOTH: textView treats 'q' and 'escape' as
-  // equally valid real close keys, so tracking only one of them (say 'q')
-  // left the narrator stuck displaying this step forever if the human used
-  // the other — `pollOnEntry` sidesteps that by not caring which key closed
+  // show. Step 8 (closing it) is `pollOnEntry`, not a tracked `waitFor` key
+  // — textView accepts 'c' (see sessions.js), 'q', and 'escape' as equally
+  // valid real close keys, so tracking only one of them left the narrator
+  // stuck displaying this step forever if the human used a different one.
+  // `pollOnEntry` sidesteps that entirely by not caring which key closed
   // it, just polling for the close itself (same mechanism as the merge
-  // step's title prompt below, for the same class of reason). `freeform` is
-  // still needed on top of that: onKeypress's Escape handling treats Escape
-  // as "abort tutorial" on any non-freeform/final step independent of
-  // pollOnEntry/waitFor, so without it a human who (reasonably) closes the
-  // context view with Escape would ALSO abort the whole tutorial as a side
-  // effect of a completely unrelated real widget's own close behavior —
-  // both of these were found by actually walking the tutorial in tmux, not
-  // by reasoning about the STEPS data.
+  // step's title prompt below, for the same class of reason) — found by
+  // actually walking the tutorial in tmux, not by reasoning about the STEPS
+  // data.
   { titleKey: 'tutorial.step7Title', bodyKey: 'tutorial.step7Body', waitFor: 'c', thenWait: 'open', waitingKey: 'tutorial.waitingContext' },
-  { titleKey: 'tutorial.step8Title', bodyKey: 'tutorial.step8Body', pollOnEntry: 'close', freeform: true },
+  { titleKey: 'tutorial.step8Title', bodyKey: 'tutorial.step8Body', pollOnEntry: 'close' },
   // Session lineage: merge the two payment sessions (they're genuinely one
   // story — investigate, then fix), then split the result back apart by
   // topic. Both fully reversible (`mycelium unmerge`/`unsplit`), same as the
@@ -94,21 +89,16 @@ const STEPS = [
   { titleKey: 'tutorial.step10Title', bodyKey: 'tutorial.step10Body', pollOnEntry: 'close' },
   { titleKey: 'tutorial.step11Title', bodyKey: 'tutorial.step11Body', waitFor: 's', shift: true, thenWait: 'open', waitingKey: 'tutorial.waitingSplit' },
   { titleKey: 'tutorial.step12Title', bodyKey: 'tutorial.step12Body', waitFor: 'enter', thenWait: 'close', waitingKey: 'tutorial.waitingApply' },
-  // freeform: this step's whole point is "go try the real thing" (v for the
-  // calendar, / for search) — both of those use Escape themselves for
-  // normal back-navigation (calendar/detail → sessions). If the tutorial
-  // still treated Escape as "abort tutorial" here, backing out of a real
-  // view the step just told you to open would silently kill the tutorial
-  // (and, for `mycelium demo`, the whole process) instead of just going
-  // back. See onKeypress/render below for how this changes handling.
-  { titleKey: 'tutorial.step13Title', bodyKey: 'tutorial.step13Body', waitFor: 'enter', freeform: true },
-  // waitFor is 'q', not null/any-key — Enter is what every step up to here
-  // used to advance, so leaving the last one on "any key" risked leftover
-  // muscle-memory Enter ending the whole tutorial (and, for `mycelium
-  // demo`, silently taking the process with it). `q` also doubles as a
-  // preview of the real app's own quit key. See onKeypress's `final` branch
-  // for the confirm step this triggers before actually finishing.
-  { titleKey: 'tutorial.step14Title', bodyKey: 'tutorial.step14Body', waitFor: 'q', final: true },
+  // This step's whole point is "go try the real thing" (v for the calendar,
+  // / for search) — both of those use Escape themselves for normal back-
+  // navigation (calendar/detail → sessions), which just works: Escape is
+  // never intercepted by the tutorial at all (see onKeypress below), on any
+  // step, not just this one.
+  { titleKey: 'tutorial.step13Title', bodyKey: 'tutorial.step13Body', waitFor: 'enter' },
+  // No waitFor at all — q is handled once, globally, at the top of
+  // onKeypress, the same way on every step including this one. This step is
+  // just the last thing shown before that q lands.
+  { titleKey: 'tutorial.step14Title', bodyKey: 'tutorial.step14Body' },
 ];
 
 export function seedMockSessions() {
@@ -138,10 +128,12 @@ export const DEMO_HANDOFF_EXIT_CODE = 42;
 /**
  * Mounts the narrator overlay and drives it through STEPS. `app`'s sessions
  * view must already be showing the freshly-seeded mock data (see index.js/
- * cli.js for the seed-then-mount ordering). `onDone(completed)` fires once
- * — after the final step's confirmed `q` (`completed: true`), or
- * immediately if the user presses Esc to bail early (`completed: false`)
- * — with cleanup already done.
+ * cli.js for the seed-then-mount ordering). `q` exits the tutorial from
+ * anywhere, immediately, no confirm — the only key the tutorial itself
+ * reacts to; Escape is left alone entirely (see onKeypress). `onDone
+ * (completed)` fires once, with cleanup already done — `completed: true`
+ * only if `q` was pressed on the actual last step, `false` otherwise (q
+ * anywhere earlier is just "done early").
  */
 export function startTutorial(app, onDone) {
   const box = blessed.box({
@@ -168,14 +160,15 @@ export function startTutorial(app, onDone) {
   let i = 0;
   let done = false;
   let waiting = false; // true while polling for a real modal to open/close
-  let escapeTimer = null; // see the Escape debounce in onKeypress below
 
-  // app.js's screen.key(['q', 'C-c']) instantly process.exit()s from
-  // ANYWHERE — that's a separate, always-on global binding, not something
-  // this module's own keypress listener can out-race or override on the
-  // same 'q' press. Suppress it for the tutorial's whole run so a stray `q`
-  // mid-walkthrough (or step7's own confirm exchange below) can't silently
-  // kill the process out from under it; restored the moment finish() runs.
+  // app.js's screen.key(['q']) is a separate, always-on global binding —
+  // not something this module's own keypress listener can out-race or
+  // override on the same 'q' press, both being independent listeners on
+  // the same underlying event. Suppress it for the tutorial's whole run so
+  // a stray `q` doesn't ALSO pop the app's own confirm-quit dialog right
+  // behind/instead of this module's own direct exit below; restored the
+  // moment finish() runs. Deliberately does not (and cannot) suppress C-c
+  // — see app.js — Ctrl+C stays a hard exit throughout the tutorial too.
   app.quitGuard = () => true;
 
   const render = () => {
@@ -185,28 +178,21 @@ export function startTutorial(app, onDone) {
     // just returns it as-is if it's a plain string — safe either way.
     box.setLabel(` ${t(step.titleKey)} `);
     const body = waiting ? t(step.waitingKey) : t(step.bodyKey, C.fox);
-    // freeform and final steps don't own Escape (see onKeypress) — showing
-    // "Esc: exit tutorial" on either was actively misleading: on freeform
-    // it backs out of whatever real view is open instead of ending the
-    // tutorial, and on final it used to let Escape instantly end things
-    // unconfirmed, defeating the whole point of requiring q + a confirm.
-    const hint = step.freeform || step.final ? '' : `\n{${C.faint}-fg}${t('tutorial.exitHint')}{/}`;
-    box.setContent(`${body}${hint}`);
+    box.setContent(`${body}\n{${C.faint}-fg}${t('tutorial.exitHint')}{/}`);
     app.render();
   };
 
   const finish = (completed) => {
     if (done) return;
     done = true;
-    if (escapeTimer) clearTimeout(escapeTimer);
     app.screen.removeListener('keypress', onKeypress);
     // Deferred, not immediate: program.js emits 'keypress' (which is what
     // drives this whole listener) and the global quit binding's 'key q'
     // synchronously back-to-back for the SAME physical press (see
     // program.js's _listenInput). Clearing the guard here directly would
     // still be in time for that same q-press's 'key q' phase to see it
-    // gone and instantly quit for real — exactly the confirm-then-
-    // immediately-die bug this guard exists to prevent. One tick later,
+    // gone and fire its own confirm-quit dialog right behind this — exactly
+    // the double-handling this guard exists to prevent. One tick later,
     // that pair has fully resolved and any FUTURE q is a genuinely new
     // keypress the guard should no longer touch.
     setImmediate(() => {
@@ -234,26 +220,6 @@ export function startTutorial(app, onDone) {
     if (STEPS[i].pollOnEntry) pollUntil(STEPS[i].pollOnEntry === 'open');
   };
 
-  // The final step doesn't finish() on its own `q` press — it swaps the
-  // narrator box into a one-question confirm first (reusing `waiting` to
-  // hold the main listener off, same trick the o/w LLM waits use) so a
-  // single `q` can't be a stray/accidental tutorial-ending press. `q` again
-  // confirms; anything else cancels back to the step's own text.
-  const confirmFinish = () => {
-    waiting = true;
-    box.setLabel(` ${t('tutorial.confirmFinishTitle')} `);
-    box.setContent(t('tutorial.confirmFinishHint', C.fox));
-    app.render();
-    const onConfirmKey = (ch, key) => {
-      if (!key || key.name === 'return') return;
-      app.screen.removeListener('keypress', onConfirmKey);
-      if (key.name === 'q') return finish(true);
-      waiting = false;
-      render();
-    };
-    app.screen.on('keypress', onConfirmKey);
-  };
-
   // Polls (rather than hooking sessions.js's real handlers) until the real
   // o/w action's review modal has opened or closed, then settles on the
   // next step. `want` is what isModalOpen() should read once ready.
@@ -275,57 +241,39 @@ export function startTutorial(app, onDone) {
     // double-advance a step whose waitFor is 'enter' — ignore the redundant
     // 'return' half of the pair.
     if (key.name === 'return') return;
-    const step = STEPS[i];
+    // q exits the tutorial from anywhere, immediately, no confirm — checked
+    // before even the `waiting` gate below, so it works reliably even mid-
+    // wait (a real LLM call in flight, a modal-close poll, whatever). Only
+    // counts as a full "completed" run — which cli.js's demo command reads
+    // as "hand off to the real TUI" (DEMO_HANDOFF_EXIT_CODE) — if pressed
+    // on the actual last step; q anywhere earlier is "done early, no
+    // handoff", since someone who didn't reach the end didn't ask to see
+    // real (possibly sensitive) data next.
+    if (key.name === 'q') return finish(i === STEPS.length - 1);
     // Holding for a real o/w LLM call's review modal to open/close — that
     // wait always ends on its own (buildKnowledgeText/suggestPlacements
-    // resolve one way or another), so nothing, including Escape, should be
-    // able to abort out from under it. Letting Escape through here used to
-    // destroy the narrator box (and wipe the mock sessions via
-    // endTutorial()) while the real LLM call kept running in the
-    // background — the narrator just vanishing mid-"processing" with no
-    // trace of why, since the abort has nothing to do with the real call.
+    // resolve one way or another), so nothing but q above should be able to
+    // interrupt it.
     if (waiting) return;
-    // Arrow keys are multi-byte escape sequences (`\x1b[A` etc.) — neo-
-    // blessed's keys.js parses whatever arrives in a single 'data' chunk
-    // (see emitKeypressEvents in keys.js), with no buffering across reads.
-    // If the terminal/tmux/SSH link delivers those bytes split across two
-    // reads (common enough in practice), the lone leading ESC byte gets
-    // misparsed as a standalone Escape keypress, immediately followed by
-    // the real arrow key a moment later. Debounce: hold off reacting to
-    // Escape briefly — if another keypress lands right behind it, it was
-    // never a real Escape, so drop it instead of already having ended the
-    // tutorial (and wiped the mock sessions) out from under a folder-list
-    // up/down press.
-    if (key.name === 'escape') {
-      // freeform: real in-app back-nav here, not "abort". final: q + its
-      // own confirm is the only way out of the last step — Escape used to
-      // instantly finish it unconfirmed, the exact "accidental keypress
-      // ends everything" problem q was introduced to prevent in the first
-      // place.
-      if (step.freeform || step.final) return;
-      if (escapeTimer) clearTimeout(escapeTimer);
-      escapeTimer = setTimeout(() => {
-        escapeTimer = null;
-        finish();
-      }, 100);
-      return;
-    }
-    if (escapeTimer) {
-      clearTimeout(escapeTimer);
-      escapeTimer = null;
-    }
-    if (step.final) {
-      if (key.name === 'q') confirmFinish();
-      return;
-    }
-    // Every non-final step names a specific key now — anything else (e.g.
-    // trying the real features a step points at, like v/`/`) is simply not
-    // this step's key and is left alone for sessions.js's own handlers.
-    // `shift: true` (merge/split steps) requires key.shift too — blessed's
-    // raw keypress reports Shift+M as key.name 'm' + key.shift true, NOT
-    // 'S-m' (that combo-string form is only how blessed element.key()
-    // BINDINGS are declared, e.g. sessions.js's own listBox.key('S-m', ...)
-    // — a completely different parser from this raw screen-level listener).
+    const step = STEPS[i];
+    // Escape is deliberately not handled here at all, on any step. It used
+    // to double as "abort the tutorial", which meant closing a real modal
+    // with Escape (its own normal close key, same as q on most of them)
+    // silently ended the whole tutorial as a side effect of a completely
+    // unrelated widget's own close behavior. Left alone, Escape just does
+    // whatever the real widget/view underneath does with it — closing a
+    // modal, stepping back a panel (calendar/detail → sessions) — exactly
+    // like it would outside the tutorial. q above is now the only key the
+    // tutorial itself reacts to.
+    //
+    // Every step names a specific key; anything else (e.g. trying the real
+    // features a step points at, like v/`/`) is simply not this step's key
+    // and is left alone for sessions.js's own handlers. `shift: true`
+    // (merge/split steps) requires key.shift too — blessed's raw keypress
+    // reports Shift+M as key.name 'm' + key.shift true, NOT 'S-m' (that
+    // combo-string form is only how blessed element.key() BINDINGS are
+    // declared, e.g. sessions.js's own listBox.key('S-m', ...) — a
+    // completely different parser from this raw screen-level listener).
     // Without the shift check, plain `m` (real move) or `s` (real scan)
     // would satisfy waitFor and could falsely advance these steps.
     if (key.name === step.waitFor && (!step.shift || key.shift)) {

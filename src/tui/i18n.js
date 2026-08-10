@@ -136,9 +136,7 @@ const en = {
   'tutorial.promptTitle': 'First time here! Want a quick interactive tour?',
   'tutorial.promptYes': 'Start the tutorial',
   'tutorial.promptNo': 'Skip, just show me around',
-  'tutorial.exitHint': 'Esc: exit tutorial',
-  'tutorial.confirmFinishTitle': 'Finish the tutorial?',
-  'tutorial.confirmFinishHint': (fg) => `Press {${fg}-fg}q{/} again to confirm, or any other key to keep exploring.`,
+  'tutorial.exitHint': 'q: exit tutorial',
   'tutorial.step1Title': 'Step 1/14 — Navigate',
   'tutorial.step1Body': (fg) =>
     `{${fg}-fg}→{/} moves focus right — Folders → Sessions → Detail — and {${fg}-fg}←{/} moves back. Press {${fg}-fg}→{/} now to continue.`,
@@ -156,7 +154,7 @@ const en = {
   'tutorial.step7Title': 'Step 7/14 — Reuse',
   'tutorial.step7Body': (fg) => `Press {${fg}-fg}c{/} to see the context a new session in this folder would inherit.`,
   'tutorial.step8Title': 'Step 8/14',
-  'tutorial.step8Body': (fg) => `This is exactly what gets injected into a project's AGENTS.md automatically (or via {${fg}-fg}i{/} to do it for real). Press {${fg}-fg}c{/}, {${fg}-fg}q{/}, or {${fg}-fg}Esc{/} to close.`,
+  'tutorial.step8Body': (fg) => `This is exactly what gets injected into a project's AGENTS.md automatically (or via {${fg}-fg}i{/} to do it for real). Press {${fg}-fg}c{/} or {${fg}-fg}Esc{/} to close.`,
   'tutorial.step9Title': 'Step 9/14 — Merge',
   'tutorial.step9Body': (fg) =>
     `These two sessions are actually one story — investigate, then fix. Select both with {${fg}-fg}Space{/}, then press {${fg}-fg}Shift+M{/} to merge them into one continuous record.`,
@@ -353,9 +351,7 @@ const ko = {
   'tutorial.promptTitle': '처음 오셨네요! 짧은 인터랙티브 튜토리얼 보시겠어요?',
   'tutorial.promptYes': '튜토리얼 시작하기',
   'tutorial.promptNo': '건너뛰고 바로 시작하기',
-  'tutorial.exitHint': 'Esc: 튜토리얼 종료',
-  'tutorial.confirmFinishTitle': '튜토리얼을 끝낼까요?',
-  'tutorial.confirmFinishHint': (fg) => `{${fg}-fg}q{/}를 한 번 더 누르면 확정, 다른 키를 누르면 계속 둘러봅니다.`,
+  'tutorial.exitHint': 'q: 튜토리얼 종료',
   'tutorial.step1Title': '1/14단계 — 이동',
   'tutorial.step1Body': (fg) =>
     `{${fg}-fg}→{/}로 포커스를 오른쪽으로 이동합니다 — 폴더 → 세션 → 상세 — {${fg}-fg}←{/}로 되돌아갑니다. 지금 {${fg}-fg}→{/}를 눌러 계속하세요.`,
@@ -373,7 +369,7 @@ const ko = {
   'tutorial.step7Title': '7/14단계 — 재사용',
   'tutorial.step7Body': (fg) => `{${fg}-fg}c{/}를 눌러 이 폴더의 새 세션이 물려받을 컨텍스트를 확인해보세요.`,
   'tutorial.step8Title': '8/14단계',
-  'tutorial.step8Body': (fg) => `이 내용이 그대로 프로젝트의 AGENTS.md에 자동 주입됩니다(또는 {${fg}-fg}i{/}로 직접 주입). {${fg}-fg}c{/}, {${fg}-fg}q{/}, 또는 {${fg}-fg}Esc{/}로 닫으세요.`,
+  'tutorial.step8Body': (fg) => `이 내용이 그대로 프로젝트의 AGENTS.md에 자동 주입됩니다(또는 {${fg}-fg}i{/}로 직접 주입). {${fg}-fg}c{/} 또는 {${fg}-fg}Esc{/}로 닫으세요.`,
   'tutorial.step9Title': '9/14단계 — 병합',
   'tutorial.step9Body': (fg) =>
     `이 두 세션은 사실 하나의 이야기입니다 — 조사, 그리고 수정. {${fg}-fg}Space{/}로 둘 다 선택한 뒤 {${fg}-fg}Shift+M{/}으로 하나의 연속된 기록으로 병합해보세요.`,

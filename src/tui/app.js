@@ -201,12 +201,15 @@ export function createApp() {
       screen.destroy();
       process.exit(code);
     },
-    // Lets a caller (the tutorial, for its own confirm-before-finishing
-    // step) intercept the global q/C-c quit below instead of it instantly
-    // killing the process out from under them. Set to a function that
-    // returns true to swallow the keypress and handle it yourself; leave
-    // null (the default, restored once done) for the normal one-press quit
-    // every other screen in the app already relies on.
+    // Lets a caller (the tutorial, which handles its own q directly — see
+    // tutorial.js) intercept the global q quit below instead of it also
+    // firing right behind/instead of that. Set to a function that returns
+    // true to swallow the keypress and handle it yourself; leave null (the
+    // default, restored once done) for the normal one-press-then-confirm
+    // quit every other screen in the app already relies on. Deliberately
+    // does NOT gate C-c at all (see the key bindings below) — Ctrl+C is
+    // meant to work as a hard, unconditional exit no matter what's on
+    // screen, guard or not.
     quitGuard: null,
   };
 
@@ -243,10 +246,21 @@ export function createApp() {
   };
 
   // Global keys. View-local keys are attached by each view on its own widgets.
-  screen.key(['q', 'C-c'], () => {
+  screen.key(['q'], () => {
     if (app.quitGuard && app.quitGuard()) return;
     confirmQuit();
   });
+  // C-c: unconditional hard exit, on top of q — never gated by quitGuard,
+  // never asks first. The standard "just kill it" expectation for Ctrl+C
+  // specifically, unlike q (which is allowed to confirm, and which a
+  // caller like the tutorial can intercept to handle its own way).
+  // Deliberate trade-off: this skips the tutorial's own endTutorial()
+  // cleanup if one is active in the real ~/.mycelium store (the first-run
+  // path, not `mycelium demo`'s already-isolated store) — a few leftover
+  // demo:true sessions, not data loss, recoverable via `mycelium cleanup`.
+  // Not worth adding cleanup-ordering complexity to what Ctrl+C users
+  // expect to be an immediate, no-questions-asked exit.
+  screen.key(['C-c'], () => app.quit());
 
   return app;
 }
