@@ -534,7 +534,7 @@ export function sessionsView(opts = {}) {
         const res = await suggestSplitBoundaries(r.id);
         spin.stop();
         if (!res.ok) return app.notify(res.error, 3);
-        const items = res.ranges.map((rg) => ({ label: `턴 ${rg.from}-${rg.to}  "${rg.label}"`, value: rg }));
+        const items = res.ranges.map((rg) => ({ label: t('split.turnRangeLabel', rg.from, rg.to, rg.label), value: rg }));
         multiSelectList(app, t('split.reviewTitle'), items, (chosen) => {
           if (!chosen?.length) return; // Esc or nothing checked — original untouched
           const applied = applySplit(r.id, chosen);

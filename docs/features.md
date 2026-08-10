@@ -341,7 +341,7 @@ at the time) — the clearest extraction candidate in the codebase. Tab
 activate/deactivate preserves the calendar's own cursor position across
 switches (lazy-created once, cheap to reactivate). ⬜
 
-## TUI — Tutorial / `mycelium demo` (`src/tui/tutorial.js`, `tutorial-data.js`)
+## TUI — Tutorial / `mycelium demo` (`src/tui/tutorial.js`, `tutorial-data.js`, `tutorial-mock-llm.js`)
 
 **Highest state-machine complexity in the app.** Seeds 6 realistic mock
 sessions (`demo: true`, unfiled); a narrator overlay runs its OWN
@@ -349,16 +349,39 @@ sessions (`demo: true`, unfiled); a narrator overlay runs its OWN
 sessions.js's real handlers, inferring "did a real action's modal open/close"
 by polling `app.screen.children.length` against a captured baseline — a
 generic heuristic that works because every picker/viewer in the codebase
-parents itself to `app.screen`. 7-step script mixing `waitFor`+`thenWait`
-(poll for a real modal), plain `waitFor` (a literal key), `freeform` (steps
-where Escape passes through to real back-navigation instead of aborting),
-and a `final` step with its own double-confirm. A 100ms Escape-debounce
-guards against split ESC-byte-plus-arrow-key sequences (common over
-slow/tmux/SSH links) being misparsed as a standalone abort. `app.quitGuard`
-is held for the tutorial's whole duration and released via `setImmediate`
-(not synchronously) to dodge a same-physical-keypress race with the global
-quit binding. 🟡 (only `buildMockSessions()`, the pure data builder, is
-tested — the interactive state machine itself has zero coverage)
+parents itself to `app.screen`. 13-step script covering the full lifecycle —
+Organize (`o`) → Learn (`w`) → Reuse (`c`) → session lineage (Shift+M merge,
+Shift+S split) → freeform explore — mixing `waitFor`+`thenWait` (poll for a
+real modal), plain `waitFor` (a literal key), a `shift: true` flag (blessed's
+raw keypress reports Shift+M as `key.name: 'm'` + `key.shift: true`, not the
+`'S-m'` combo-string form only `element.key()` bindings understand — the
+merge/split steps need this to avoid matching a stray plain `m`/`s`),
+`pollOnEntry` (the merge title-prompt step only — `blessed.prompt`'s Enter
+submit doesn't reliably bubble a matching keypress to this screen-level
+listener the way `blessed.list`-based widgets like `multiSelectList`/
+`confirmText` do, so `waitFor: 'enter'` there silently never fired; this
+step instead starts polling for close the moment it's entered, no keypress
+match needed, found by walking the tutorial live end-to-end in tmux — not
+something a unit test of the STEPS data would have caught), `freeform`
+(steps where Escape passes through to real back-navigation instead of
+aborting), and a `final` step with its own double-confirm. A
+100ms Escape-debounce guards against split ESC-byte-plus-arrow-key sequences
+(common over slow/tmux/SSH links) being misparsed as a standalone abort.
+`app.quitGuard` is held for the tutorial's whole duration and released via
+`setImmediate` (not synchronously) to dodge a same-physical-keypress race
+with the global quit binding. `o`/`w`/Shift+S all call real LLM-bound
+functions (`suggestPlacements`, `buildKnowledgeText`, `suggestSplitBoundaries`)
+— `seedMockSessions()` swaps `llm.js`'s `complete()` over to
+`tutorial-mock-llm.js`'s `tutorialMockProvider()` for as long as the mock
+sessions exist (cleared in `endTutorial()`), so these resolve instantly and
+deterministically instead of via a real `claude`/`codex` subprocess call —
+this is also what keeps the tutorial's folder/knowledge output in English
+regardless of locale, since the real classification/knowledge prompts are
+Korean by design (see `AGENT.md`) and would otherwise mirror that language
+back for any newly-proposed folder name. 🟡 (`buildMockSessions()` and
+`tutorial-mock-llm.js`'s prompt-dispatch/classification/folder-lookup logic
+are unit-tested as pure functions — the interactive state machine itself has
+zero coverage)
 
 **TUI testability feasibility note (Phase 7 scope — investigation only, no
 code changed).** `isModalOpen()` (`app.screen.children.length > baseline`)

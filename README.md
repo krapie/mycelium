@@ -34,7 +34,7 @@ cd mycelium && npm install && npm link
 
 ```sh
 mycelium scan   # import Claude/Codex/Kiro sessions from this machine
-mycelium        # launch the TUI — first run offers a 3-minute tutorial
+mycelium        # launch the TUI — first run offers a quick interactive tutorial
 ```
 
 Capture never auto-assigns a folder — press `o` (smart organize) in the TUI,

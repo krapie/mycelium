@@ -170,6 +170,12 @@ export function mergeSessions(ids, { title } = {}) {
   merged.endedAt = originals[originals.length - 1].endedAt;
   merged.mergedFrom = originals.map((n) => n.id);
   if (title) merged.extracted.title = title;
+  // Propagate demo:true so tutorial.js's endTutorial() sweep (which only
+  // matches that flag) still catches the merge product — without this, a
+  // merge inside the tutorial/mycelium demo leaves a real-looking orphaned
+  // session behind after cleanup, in the real ~/.mycelium store for the
+  // first-run tutorial path (not just the throwaway ~/.mycelium-demo one).
+  if (originals.some((n) => n.demo)) merged.demo = true;
   // Each block is preceded by a plain-text separator (role 'system' — not
   // produced by any adapter, so it can't be mistaken for a real user turn by
   // firstUserText()/handoff's turn lookups) noting provenance, same spirit

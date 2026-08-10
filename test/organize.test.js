@@ -189,6 +189,22 @@ test('mergeSessions() combines turns in startedAt order, tags originals with sup
   assert.deepEqual(loadRaw('m-2').supersededBy, []);
 });
 
+test('mergeSessions() propagates demo:true from originals so tutorial.js\'s endTutorial() sweep still catches the merge product', () => {
+  seed('md-1', { demo: true });
+  seed('md-2', { demo: true });
+  const res = mergeSessions(['md-1', 'md-2']);
+  assert.equal(res.ok, true);
+  assert.equal(res.merged.demo, true);
+});
+
+test('mergeSessions() leaves demo unset when no original was a demo session', () => {
+  seed('nd-1');
+  seed('nd-2');
+  const res = mergeSessions(['nd-1', 'nd-2']);
+  assert.equal(res.ok, true);
+  assert.ok(!res.merged.demo);
+});
+
 test('unmerge() rejects an id that was never a merge product', () => {
   seed('not-merged');
   const res = unmerge('not-merged');

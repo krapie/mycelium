@@ -48,6 +48,18 @@ test('applySplit() pieces inherit source/cwd/folder and are marked human-owned; 
   assert.deepEqual(original.splitInto, [piece.id]);
 });
 
+test("applySplit() propagates demo:true from the original so tutorial.js's endTutorial() sweep still catches split pieces", () => {
+  seed('split-demo', { demo: true, turns: turns(4) });
+  const res = applySplit('split-demo', [{ from: 1, to: 4, label: 'whole thing' }]);
+  assert.equal(res.pieces[0].demo, true);
+});
+
+test('applySplit() leaves demo unset when the original was not a demo session', () => {
+  seed('split-real', { turns: turns(4) });
+  const res = applySplit('split-real', [{ from: 1, to: 4, label: 'whole thing' }]);
+  assert.ok(!res.pieces[0].demo);
+});
+
 test('applySplit() skips a range that produces an empty slice', () => {
   seed('split-src3', { turns: turns(3) });
   // from > turns.length entirely -> slice() yields nothing for that range.

@@ -6,16 +6,22 @@ import { saveRaw, deleteRaw, allRaw } from '../scanner.js';
 import { reindex } from '../index-db.js';
 import { pruneEmptyFolders } from '../cleanup.js';
 import { buildMockSessions } from './tutorial-data.js';
+import { __setTestProvider, __clearTestProvider } from '../llm.js';
+import { tutorialMockProvider } from './tutorial-mock-llm.js';
 
 /**
  * First-run interactive tutorial (and `mycelium demo`'s engine) — mock
  * sessions dropped into the real store just long enough to walk through
- * Organize (`o`) → Learn (`w`) → Reuse, using the TUI's own real key
- * handlers (sessions.js is never touched or hooked into: this module just
- * ALSO listens for the same keypresses, purely to advance its own
- * narration, alongside whatever sessions.js's real handlers do with them).
- * `o`/`w` make real LLM calls against the mock data — that's deliberate,
- * see the plan this shipped from.
+ * Organize (`o`) → Learn (`w`) → Reuse (`c`) → session lineage (Shift+M
+ * merge, Shift+S split), using the TUI's own real key handlers (sessions.js
+ * is never touched or hooked into: this module just ALSO listens for the
+ * same keypresses, purely to advance its own narration, alongside whatever
+ * sessions.js's real handlers do with them). `o`/`w`/Shift+S all call
+ * llm.js's complete() under the hood — seedMockSessions() swaps that over
+ * to tutorialMockProvider() (instant, deterministic, English) for as long
+ * as the mock sessions are in the store, so the tutorial stays fast and
+ * doesn't depend on a real claude/codex subprocess. See
+ * tutorial-mock-llm.js for why.
  */
 
 // `thenWait: 'open'|'close'` marks steps whose key triggers a REAL o/w LLM
@@ -43,6 +49,32 @@ const STEPS = [
   { titleKey: 'tutorial.step3Title', bodyKey: 'tutorial.step3Body', waitFor: 'down' },
   { titleKey: 'tutorial.step4Title', bodyKey: 'tutorial.step4Body', waitFor: 'w', thenWait: 'open', waitingKey: 'tutorial.waitingKnowledge' },
   { titleKey: 'tutorial.step5Title', bodyKey: 'tutorial.step5Body', waitFor: 'enter', thenWait: 'close', waitingKey: 'tutorial.waitingSave' },
+  // Reuse: `c` (view context) rather than `i` (inject AGENTS.md) — both are
+  // real, LLM-free, instant reads (reuse.js), but `c` opens exactly one
+  // modal (textView) where `i` chains two (textPrompt → confirmText), and
+  // isModalOpen()'s DOM-child-count heuristic can't tell "textPrompt closed,
+  // confirmText about to open" from "fully closed" if that transition ever
+  // landed on a render tick — not worth the risk for what the demo needs to
+  // show. waitFor 'q' (not 'escape') to close it: onKeypress's own Escape
+  // handling below treats Escape as "abort tutorial" on any non-freeform/
+  // final step, which would fire from inside textView too since both listen
+  // at the screen level — textView already accepts 'q' as an equivalent
+  // close key, so that's the one this step waits for instead.
+  { titleKey: 'tutorial.step6Title', bodyKey: 'tutorial.step6Body', waitFor: 'c', thenWait: 'open', waitingKey: 'tutorial.waitingContext' },
+  { titleKey: 'tutorial.step7Title', bodyKey: 'tutorial.step7Body', waitFor: 'q', thenWait: 'close', waitingKey: 'tutorial.waitingClose' },
+  // Session lineage: merge the two payment sessions (they're genuinely one
+  // story — investigate, then fix), then split the result back apart by
+  // topic. Both fully reversible (`mycelium unmerge`/`unsplit`), same as the
+  // real feature. mergeSessions() itself needs no mocking (no LLM call) —
+  // Shift+S's suggestSplitBoundaries() does, same tutorialMockProvider as
+  // o/w. Shift+M's real handler no-ops (just a notify(), no modal) unless
+  // ≥2 sessions are already Space-selected — that's on the human to have
+  // done per this step's own text; nothing here can verify it, same
+  // accepted-risk shape as every other step's instructions.
+  { titleKey: 'tutorial.step8Title', bodyKey: 'tutorial.step8Body', waitFor: 'm', shift: true, thenWait: 'open', waitingKey: 'tutorial.waitingMerge' },
+  { titleKey: 'tutorial.step9Title', bodyKey: 'tutorial.step9Body', pollOnEntry: 'close' },
+  { titleKey: 'tutorial.step10Title', bodyKey: 'tutorial.step10Body', waitFor: 's', shift: true, thenWait: 'open', waitingKey: 'tutorial.waitingSplit' },
+  { titleKey: 'tutorial.step11Title', bodyKey: 'tutorial.step11Body', waitFor: 'enter', thenWait: 'close', waitingKey: 'tutorial.waitingApply' },
   // freeform: this step's whole point is "go try the real thing" (v for the
   // calendar, / for search) — both of those use Escape themselves for
   // normal back-navigation (calendar/detail → sessions). If the tutorial
@@ -50,19 +82,20 @@ const STEPS = [
   // view the step just told you to open would silently kill the tutorial
   // (and, for `mycelium demo`, the whole process) instead of just going
   // back. See onKeypress/render below for how this changes handling.
-  { titleKey: 'tutorial.step6Title', bodyKey: 'tutorial.step6Body', waitFor: 'enter', freeform: true },
+  { titleKey: 'tutorial.step12Title', bodyKey: 'tutorial.step12Body', waitFor: 'enter', freeform: true },
   // waitFor is 'q', not null/any-key — Enter is what every step up to here
   // used to advance, so leaving the last one on "any key" risked leftover
   // muscle-memory Enter ending the whole tutorial (and, for `mycelium
   // demo`, silently taking the process with it). `q` also doubles as a
   // preview of the real app's own quit key. See onKeypress's `final` branch
   // for the confirm step this triggers before actually finishing.
-  { titleKey: 'tutorial.step7Title', bodyKey: 'tutorial.step7Body', waitFor: 'q', final: true },
+  { titleKey: 'tutorial.step13Title', bodyKey: 'tutorial.step13Body', waitFor: 'q', final: true },
 ];
 
 export function seedMockSessions() {
   for (const n of buildMockSessions()) saveRaw(n);
   reindex();
+  __setTestProvider(tutorialMockProvider);
 }
 
 /** Remove every mock session (and whatever empty folders o/w created along
@@ -73,6 +106,7 @@ export function endTutorial() {
   }
   pruneEmptyFolders();
   reindex();
+  __clearTestProvider();
 }
 
 /**
@@ -161,6 +195,16 @@ export function startTutorial(app, onDone) {
     waiting = false;
     i = idx;
     render();
+    // pollOnEntry (merge's title-prompt step only): blessed.prompt's Enter
+    // submit doesn't reliably bubble a matching keypress to this screen-
+    // level listener the way blessed.list-based widgets (multiSelectList,
+    // confirmText) do — waitFor:'enter' silently never fires, leaving the
+    // narrator stuck showing this step's text after the real merge already
+    // went through. Sidestep it entirely: as soon as this step is entered
+    // (the title prompt is already open from the previous step's
+    // thenWait:'open'), start polling for close directly, no keypress match
+    // needed — same isModalOpen() poll, just not gated on catching a key.
+    if (STEPS[i].pollOnEntry) pollUntil(STEPS[i].pollOnEntry === 'open');
   };
 
   // The final step doesn't finish() on its own `q` press — it swaps the
@@ -250,7 +294,14 @@ export function startTutorial(app, onDone) {
     // Every non-final step names a specific key now — anything else (e.g.
     // trying the real features a step points at, like v/`/`) is simply not
     // this step's key and is left alone for sessions.js's own handlers.
-    if (key.name === step.waitFor) {
+    // `shift: true` (merge/split steps) requires key.shift too — blessed's
+    // raw keypress reports Shift+M as key.name 'm' + key.shift true, NOT
+    // 'S-m' (that combo-string form is only how blessed element.key()
+    // BINDINGS are declared, e.g. sessions.js's own listBox.key('S-m', ...)
+    // — a completely different parser from this raw screen-level listener).
+    // Without the shift check, plain `m` (real move) or `s` (real scan)
+    // would satisfy waitFor and could falsely advance these steps.
+    if (key.name === step.waitFor && (!step.shift || key.shift)) {
       if (step.thenWait) {
         waiting = true;
         render();
