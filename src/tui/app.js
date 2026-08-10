@@ -165,9 +165,12 @@ export function createApp() {
     render() {
       screen.render();
     },
-    quit() {
+    // code lets a caller signal something to a parent process via exit code
+    // (see tutorial.js's DEMO_HANDOFF_EXIT_CODE) — every other caller just
+    // calls quit() with no args, which keeps the normal 0.
+    quit(code = 0) {
       screen.destroy();
-      process.exit(0);
+      process.exit(code);
     },
     // Lets a caller (the tutorial, for its own confirm-before-finishing
     // step) intercept the global q/C-c quit below instead of it instantly

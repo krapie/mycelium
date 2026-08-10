@@ -417,8 +417,20 @@ async function main() {
         stdio: 'inherit',
       });
       return new Promise((resolve) => {
-        child.on('exit', (code) => {
-          process.exitCode = code ?? 0;
+        child.on('exit', async (code) => {
+          const { DEMO_HANDOFF_EXIT_CODE } = await import('./tui/tutorial.js');
+          if (code === DEMO_HANDOFF_EXIT_CODE) {
+            // The presenter went all the way through the tutorial (not an
+            // early Esc bail) — hand off straight into a real TUI session.
+            // This process's own env was never touched (only the CHILD's
+            // env got the MYCELIUM_HOME override above), so paths.js
+            // resolves the user's actual ~/.mycelium here, not the demo
+            // store — no separate spawn needed, just run it in-process.
+            const { runTui } = await import('./tui/index.js');
+            await runTui();
+          } else {
+            process.exitCode = code ?? 0;
+          }
           resolve();
         });
       });

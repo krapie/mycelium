@@ -357,15 +357,24 @@ real modal), plain `waitFor` (a literal key), a `shift: true` flag (blessed's
 raw keypress reports Shift+M as `key.name: 'm'` + `key.shift: true`, not the
 `'S-m'` combo-string form only `element.key()` bindings understand — the
 merge/split steps need this to avoid matching a stray plain `m`/`s`),
-`pollOnEntry` (the merge title-prompt step only — `blessed.prompt`'s Enter
-submit doesn't reliably bubble a matching keypress to this screen-level
-listener the way `blessed.list`-based widgets like `multiSelectList`/
-`confirmText` do, so `waitFor: 'enter'` there silently never fired; this
-step instead starts polling for close the moment it's entered, no keypress
-match needed, found by walking the tutorial live end-to-end in tmux — not
-something a unit test of the STEPS data would have caught), `freeform`
+`pollOnEntry` (used by two steps, both found via actually walking the
+tutorial in tmux, not by reasoning about the STEPS data in the abstract:
+the merge title-prompt step, because `blessed.prompt`'s Enter submit
+doesn't reliably bubble a matching keypress to this screen-level listener
+the way `blessed.list`-based widgets like `multiSelectList`/`confirmText`
+do, so `waitFor: 'enter'` there silently never fired; and the Reuse step's
+textView-close step, because textView treats 'q' AND 'escape' as equally
+valid real close keys, so tracking only one of them as `waitFor` left the
+narrator stuck displaying that step forever if the human used the other —
+both instead poll for the state change directly the moment they're
+entered, not gated on catching any particular keypress), `freeform`
 (steps where Escape passes through to real back-navigation instead of
-aborting), and a `final` step with its own double-confirm. A
+aborting — the textView-close step is ALSO freeform, on top of
+`pollOnEntry`, since onKeypress's Escape handling treats Escape as "abort
+tutorial" on any non-freeform/final step independent of `waitFor`; without
+it, closing the context view with Escape would separately abort the whole
+tutorial as a side effect of a completely unrelated real widget's own
+close behavior), and a `final` step with its own double-confirm. A
 100ms Escape-debounce guards against split ESC-byte-plus-arrow-key sequences
 (common over slow/tmux/SSH links) being misparsed as a standalone abort.
 `app.quitGuard` is held for the tutorial's whole duration and released via
@@ -383,11 +392,24 @@ stuck waiting on it), not instantly — a 0ms response is its own regression,
 since `app.js`'s animated spinner never gets a frame to actually animate
 and the wait reads as "did that run at all?" rather than a real (much
 faster) stand-in for the production wait. This is also what keeps the
-tutorial's folder/knowledge
-output in English
-regardless of locale, since the real classification/knowledge prompts are
+tutorial's folder/knowledge output in English regardless of locale, since
+the real classification/knowledge prompts are
 Korean by design (see `AGENT.md`) and would otherwise mirror that language
-back for any newly-proposed folder name. 🟡 (`buildMockSessions()` and
+back for any newly-proposed folder name.
+
+**Demo → real handoff.** Finishing the tutorial's final step (`completed:
+true` — the `q`+confirm path, not an early Esc bail) no longer just
+`resetToRoot()`s into the by-then-empty `~/.mycelium-demo` store (which
+read as "the demo broke — 0 sessions"). Instead `app.quit(DEMO_HANDOFF_EXIT_CODE)`
+exits the isolated child process with a sentinel code (`tutorial.js`);
+`cli.js`'s `demo` command watches for exactly that code on the child's
+`exit` event and, only then, dynamically imports and runs the real TUI
+in the (unmodified-env) parent process — landing the presenter in their
+actual `~/.mycelium` data instead of a bare shell prompt. An early Esc
+bail (`completed: false`) just exits plainly, no handoff — someone who
+bailed out mid-tour didn't ask to see real (possibly sensitive) data
+next, which also keeps `mycelium demo` safe to run in front of others as
+originally intended. 🟡 (`buildMockSessions()` and
 `tutorial-mock-llm.js`'s prompt-dispatch/classification/folder-lookup logic
 are unit-tested as pure functions — the interactive state machine itself has
 zero coverage)

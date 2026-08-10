@@ -151,7 +151,7 @@ const en = {
   'tutorial.step7Title': 'Step 7/14 — Reuse',
   'tutorial.step7Body': (fg) => `Press {${fg}-fg}c{/} to see the context a new session in this folder would inherit.`,
   'tutorial.step8Title': 'Step 8/14',
-  'tutorial.step8Body': (fg) => `This is exactly what gets injected into a project's AGENTS.md automatically (or via {${fg}-fg}i{/} to do it for real). Press {${fg}-fg}q{/} to close.`,
+  'tutorial.step8Body': (fg) => `This is exactly what gets injected into a project's AGENTS.md automatically (or via {${fg}-fg}i{/} to do it for real). Press {${fg}-fg}q{/} or {${fg}-fg}Esc{/} to close.`,
   'tutorial.step9Title': 'Step 9/14 — Merge',
   'tutorial.step9Body': (fg) =>
     `These two sessions are actually one story — investigate, then fix. Select both with {${fg}-fg}Space{/}, then press {${fg}-fg}Shift+M{/} to merge them into one continuous record.`,
@@ -177,7 +177,6 @@ const en = {
   'tutorial.waitingKnowledge': "Distilling this folder's sessions into a knowledge draft…",
   'tutorial.waitingSave': 'Saving…',
   'tutorial.waitingContext': 'Assembling inherited context…',
-  'tutorial.waitingClose': 'Closing…',
   'tutorial.waitingMerge': "Waiting for Shift+M — make sure you've selected two sessions with Space first.",
   'tutorial.waitingSplit': 'Analyzing the merged session for topic boundaries…',
 
@@ -385,7 +384,6 @@ const ko = {
   'tutorial.waitingKnowledge': '이 폴더의 세션들을 지식 초안으로 압축하는 중…',
   'tutorial.waitingSave': '저장하는 중…',
   'tutorial.waitingContext': '상속받을 컨텍스트를 조합하는 중…',
-  'tutorial.waitingClose': '닫는 중…',
   'tutorial.waitingMerge': 'Shift+M을 기다리는 중 — 먼저 Space로 세션 두 개를 선택했는지 확인하세요.',
   'tutorial.waitingSplit': '병합된 세션의 주제 경계를 분석하는 중…',
 

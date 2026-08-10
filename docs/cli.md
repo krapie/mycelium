@@ -34,7 +34,9 @@ mycelium daemon --stop          # stop it
 
 # interactive tutorial with fake sessions — the full lifecycle (organize, learn,
 # reuse, merge/split), LLM calls mocked so it's fast and deterministic;
-# separate ~/.mycelium-demo store, your real data is never touched
+# separate ~/.mycelium-demo store, your real data is never touched.
+# Finishing the whole tutorial hands off straight into a real TUI session
+# (your actual ~/.mycelium); Esc to bail early instead just exits.
 mycelium demo
 
 # TUI display language (default en) — takes effect on the next TUI launch

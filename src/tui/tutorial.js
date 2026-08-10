@@ -63,13 +63,22 @@ const STEPS = [
   // isModalOpen()'s DOM-child-count heuristic can't tell "textPrompt closed,
   // confirmText about to open" from "fully closed" if that transition ever
   // landed on a render tick — not worth the risk for what the demo needs to
-  // show. waitFor 'q' (not 'escape') to close it: onKeypress's own Escape
-  // handling below treats Escape as "abort tutorial" on any non-freeform/
-  // final step, which would fire from inside textView too since both listen
-  // at the screen level — textView already accepts 'q' as an equivalent
-  // close key, so that's the one this step waits for instead.
+  // show. Step 8 (closing it) is `pollOnEntry` + `freeform`, not a tracked
+  // `waitFor` key, and needs BOTH: textView treats 'q' and 'escape' as
+  // equally valid real close keys, so tracking only one of them (say 'q')
+  // left the narrator stuck displaying this step forever if the human used
+  // the other — `pollOnEntry` sidesteps that by not caring which key closed
+  // it, just polling for the close itself (same mechanism as the merge
+  // step's title prompt below, for the same class of reason). `freeform` is
+  // still needed on top of that: onKeypress's Escape handling treats Escape
+  // as "abort tutorial" on any non-freeform/final step independent of
+  // pollOnEntry/waitFor, so without it a human who (reasonably) closes the
+  // context view with Escape would ALSO abort the whole tutorial as a side
+  // effect of a completely unrelated real widget's own close behavior —
+  // both of these were found by actually walking the tutorial in tmux, not
+  // by reasoning about the STEPS data.
   { titleKey: 'tutorial.step7Title', bodyKey: 'tutorial.step7Body', waitFor: 'c', thenWait: 'open', waitingKey: 'tutorial.waitingContext' },
-  { titleKey: 'tutorial.step8Title', bodyKey: 'tutorial.step8Body', waitFor: 'q', thenWait: 'close', waitingKey: 'tutorial.waitingClose' },
+  { titleKey: 'tutorial.step8Title', bodyKey: 'tutorial.step8Body', pollOnEntry: 'close', freeform: true },
   // Session lineage: merge the two payment sessions (they're genuinely one
   // story — investigate, then fix), then split the result back apart by
   // topic. Both fully reversible (`mycelium unmerge`/`unsplit`), same as the
@@ -117,12 +126,20 @@ export function endTutorial() {
   __clearTestProvider();
 }
 
+// Exit code `mycelium demo`'s isolated child process (see cli.js) uses to
+// signal "the presenter finished the whole tour, hand off to the real TUI"
+// back to the parent process — distinct from a plain 0 (quit early / no
+// handoff wanted) or a crash. Arbitrary, just needs to not collide with a
+// Node-meaningful code (0/1) or a signal-death range (128+).
+export const DEMO_HANDOFF_EXIT_CODE = 42;
+
 /**
  * Mounts the narrator overlay and drives it through STEPS. `app`'s sessions
  * view must already be showing the freshly-seeded mock data (see index.js/
- * cli.js for the seed-then-mount ordering). `onDone` fires once — after the
- * final step, or immediately if the user presses Esc to bail early — with
- * cleanup already done.
+ * cli.js for the seed-then-mount ordering). `onDone(completed)` fires once
+ * — after the final step's confirmed `q` (`completed: true`), or
+ * immediately if the user presses Esc to bail early (`completed: false`)
+ * — with cleanup already done.
  */
 export function startTutorial(app, onDone) {
   const box = blessed.box({
@@ -176,7 +193,7 @@ export function startTutorial(app, onDone) {
     app.render();
   };
 
-  const finish = () => {
+  const finish = (completed) => {
     if (done) return;
     done = true;
     if (escapeTimer) clearTimeout(escapeTimer);
@@ -196,7 +213,7 @@ export function startTutorial(app, onDone) {
     box.destroy();
     endTutorial();
     app.render();
-    onDone();
+    onDone(!!completed);
   };
 
   const settleAt = (idx) => {
@@ -228,7 +245,7 @@ export function startTutorial(app, onDone) {
     const onConfirmKey = (ch, key) => {
       if (!key || key.name === 'return') return;
       app.screen.removeListener('keypress', onConfirmKey);
-      if (key.name === 'q') return finish();
+      if (key.name === 'q') return finish(true);
       waiting = false;
       render();
     };
