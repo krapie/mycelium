@@ -156,7 +156,7 @@ const en = {
   'tutorial.step7Title': 'Step 7/14 — Reuse',
   'tutorial.step7Body': (fg) => `Press {${fg}-fg}c{/} to see the context a new session in this folder would inherit.`,
   'tutorial.step8Title': 'Step 8/14',
-  'tutorial.step8Body': (fg) => `This is exactly what gets injected into a project's AGENTS.md automatically (or via {${fg}-fg}i{/} to do it for real). Press {${fg}-fg}q{/} or {${fg}-fg}Esc{/} to close.`,
+  'tutorial.step8Body': (fg) => `This is exactly what gets injected into a project's AGENTS.md automatically (or via {${fg}-fg}i{/} to do it for real). Press {${fg}-fg}c{/}, {${fg}-fg}q{/}, or {${fg}-fg}Esc{/} to close.`,
   'tutorial.step9Title': 'Step 9/14 — Merge',
   'tutorial.step9Body': (fg) =>
     `These two sessions are actually one story — investigate, then fix. Select both with {${fg}-fg}Space{/}, then press {${fg}-fg}Shift+M{/} to merge them into one continuous record.`,
@@ -373,7 +373,7 @@ const ko = {
   'tutorial.step7Title': '7/14단계 — 재사용',
   'tutorial.step7Body': (fg) => `{${fg}-fg}c{/}를 눌러 이 폴더의 새 세션이 물려받을 컨텍스트를 확인해보세요.`,
   'tutorial.step8Title': '8/14단계',
-  'tutorial.step8Body': (fg) => `이 내용이 그대로 프로젝트의 AGENTS.md에 자동 주입됩니다(또는 {${fg}-fg}i{/}로 직접 주입). {${fg}-fg}q{/}로 닫으세요.`,
+  'tutorial.step8Body': (fg) => `이 내용이 그대로 프로젝트의 AGENTS.md에 자동 주입됩니다(또는 {${fg}-fg}i{/}로 직접 주입). {${fg}-fg}c{/}, {${fg}-fg}q{/}, 또는 {${fg}-fg}Esc{/}로 닫으세요.`,
   'tutorial.step9Title': '9/14단계 — 병합',
   'tutorial.step9Body': (fg) =>
     `이 두 세션은 사실 하나의 이야기입니다 — 조사, 그리고 수정. {${fg}-fg}Space{/}로 둘 다 선택한 뒤 {${fg}-fg}Shift+M{/}으로 하나의 연속된 기록으로 병합해보세요.`,

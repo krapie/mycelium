@@ -952,7 +952,7 @@ export function sessionsView(opts = {}) {
       const doContext = () => {
         if (!state.folder) return app.notify(t('folders.selectFirst'), 3);
         const ctx = assembleContext(state.folder);
-        textView(app, t('context.title', state.folder), ctx || t('context.empty'));
+        textView(app, t('context.title', state.folder), ctx || t('context.empty'), ['c']);
       };
       listBox.key('c', doContext);
       foldersBox.key('c', doContext);

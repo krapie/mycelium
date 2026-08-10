@@ -141,15 +141,44 @@ export function createApp() {
       const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
       let i = 0;
       let label = msg;
-      const tick = () => toast.display(`${frames[(i = (i + 1) % frames.length)]} ${label}`, 60, () => {});
+      const frame = () => `${frames[(i = (i + 1) % frames.length)]} ${label}`;
+      // Per-frame ticks use setContent(text, true) (noClear), not
+      // toast.display() — display() calls setContent() without noClear,
+      // which clears the toast's screen region before every redraw
+      // (element.js's clearPos()). Doing that every 120ms is invisible for
+      // a call that resolves in under a second, but visibly flickers (a
+      // real clear-then-redraw flash) once sustained over several real
+      // seconds — only became noticeable after mycelium demo's mock LLM
+      // delay grew from near-instant to a deliberate multi-second wait
+      // (tutorial-mock-llm.js). Safe to skip the clear here since the
+      // label text is identical frame to frame — only the leading
+      // single-width braille glyph changes, so there's nothing stale left
+      // over to expose.
+      const tick = () => {
+        toast.setContent(frame(), true);
+        screen.render();
+      };
+      toast.show();
       tick();
       const timer = setInterval(tick, 120);
+      // A real display() call, on a much slower cadence, to periodically
+      // re-arm blessed.message's own auto-hide timer (see the comment
+      // above this method for why that's needed) — its one clear-then-
+      // redraw is fine this rarely; it's only calling it every single
+      // animation tick that flickered.
+      const rearm = setInterval(() => toast.display(frame(), 60, () => {}), 20000);
       return {
+        // A real display() call here too: update() means the label itself
+        // changed (e.g. sessions.js's progress toasts, "3/6" → "4/6"), so
+        // the region genuinely needs clearing in case the new text is
+        // shorter than what it's replacing.
         update(newMsg) {
           label = newMsg;
+          toast.display(frame(), 60, () => {});
         },
         stop() {
           clearInterval(timer);
+          clearInterval(rearm);
           toast.hide();
           screen.render();
         },
