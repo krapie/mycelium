@@ -34,6 +34,8 @@ export function workDirFor(session) {
   return candidates.find((d) => existsSync(d)) || null;
 }
 
+const quoteArg = (s) => (/^[\w./-]+$/.test(s) ? s : `'${String(s).replace(/'/g, `'\\''`)}'`);
+
 /** Build a copy-pasteable `cd <dir> && <bin> <args>` line — shared by
  * `mycelium resume` (CLI) and the TUI's "copy command" resume option. */
 export function resumeCommandLine(session) {
@@ -42,6 +44,21 @@ export function resumeCommandLine(session) {
   const cwd = workDirFor(session);
   if (!cwd) return { ok: false, error: 'no working directory found for this session' };
   const args = resumeArgsFor(session.source, session.id);
-  const quote = (s) => (/^[\w./-]+$/.test(s) ? s : `'${String(s).replace(/'/g, `'\\''`)}'`);
-  return { ok: true, line: `cd ${quote(cwd)} && ${quote(bin)} ${args.map(quote).join(' ')}`, bin, args, cwd };
+  return { ok: true, line: `cd ${quoteArg(cwd)} && ${quoteArg(bin)} ${args.map(quoteArg).join(' ')}`, bin, args, cwd };
+}
+
+/** Same shape as resumeCommandLine(), but for starting a brand-new session
+ * (no existing session id to resume against) — there's no `n`/`h`
+ * equivalent of "resume in place" that makes sense to skip, since launching
+ * IS the whole action, so this only ever backs the TUI's "copy command
+ * (new tab)" alternative to launch.js's normal in-terminal foreground()
+ * handoff — see launchAgent()'s `copyOnly` option. `agentKey` is one of
+ * AGENTS' own keys (the same picker launch.js already uses to choose it). */
+export function newCommandLine({ agentKey, dir, seed }) {
+  const agent = AGENTS[agentKey];
+  if (!agent) return { ok: false, error: 'unknown agent' };
+  if (!which(agent.bin)) return { ok: false, error: `${agent.bin} not installed` };
+  if (!dir || !existsSync(dir)) return { ok: false, error: 'no working directory found' };
+  const args = agent.newArgs(seed);
+  return { ok: true, line: `cd ${quoteArg(dir)} && ${quoteArg(agent.bin)} ${args.map(quoteArg).join(' ')}`, bin: agent.bin, args, cwd: dir };
 }

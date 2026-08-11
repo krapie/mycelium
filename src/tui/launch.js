@@ -5,8 +5,9 @@ import { move, linkContinuation } from '../organize.js';
 import { injectAgentsMd } from '../reuse.js';
 import { menu, textPrompt } from './widgets/pickers.js';
 import { foreground } from './foreground.js';
+import { copyToClipboard } from './clipboard.js';
 import { t } from './i18n.js';
-import { AGENTS, which, binFor, resumeArgsFor, workDirFor } from '../agents.js';
+import { AGENTS, which, binFor, resumeArgsFor, workDirFor, newCommandLine } from '../agents.js';
 
 /** Distinct existing working directories of the sessions in a folder subtree. */
 function dirsForFolder(folder) {
@@ -36,8 +37,19 @@ function dirsForFolder(folder) {
  * before this picker opens doesn't get time to be read and visibly overlaps
  * it, since both are centered blessed overlays and the picker opens in the
  * same tick.
+ *
+ * `copyOnly` (optional) skips the foreground() handoff entirely and instead
+ * copies the equivalent `cd <dir> && <bin> <args>` shell command to the
+ * clipboard — same "copy command" escape hatch resume-handoff.js's
+ * onDetailEnter already offers for resuming an EXISTING session, extended
+ * here to a brand-new one. foreground() hands over the SAME terminal/TTY
+ * (stdio: 'inherit') and blocks the whole TUI until the child exits, so
+ * there was previously no way to have several sessions going at once — the
+ * only way to get real parallelism is to run the new session in a genuinely
+ * separate terminal tab/window, which only the human (not this process) can
+ * open; pasting the copied command there is how. See sessions.js's Shift+N.
  */
-export function launchAgent(app, { folder, seed, parentId, title } = {}, done) {
+export function launchAgent(app, { folder, seed, parentId, title, copyOnly = false } = {}, done) {
   const available = Object.entries(AGENTS).filter(([, a]) => which(a.bin));
   if (!available.length) {
     app.notify(t('launch.noAgents'), 3);
@@ -52,10 +64,33 @@ export function launchAgent(app, { folder, seed, parentId, title } = {}, done) {
       if (!agentKey) return done && done();
       resolveDir(app, folder, (dir) => {
         if (!dir) return done && done();
+        if (copyOnly) return copyNewCommand(app, { agentKey, dir, folder, seed }, done);
         run(app, { agentKey, dir, folder, seed, parentId }, done);
       });
     },
   );
+}
+
+// Same AGENTS.md injection run() does before foregrounding — the whole
+// point of injecting it is so the session that actually starts (wherever/
+// however) has the folder's accumulated knowledge; skipping that just
+// because this path doesn't itself launch anything would silently degrade
+// whatever gets pasted from the clipboard.
+function copyNewCommand(app, { agentKey, dir, folder, seed }, done) {
+  if (folder) {
+    try {
+      injectAgentsMd(dir, folder);
+    } catch {
+      /* no KNOWLEDGE yet — fine, agent just starts fresh */
+    }
+  }
+  const res = newCommandLine({ agentKey, dir, seed });
+  if (!res.ok) {
+    app.notify(res.error, 3);
+    return done && done([]);
+  }
+  app.notify(copyToClipboard(res.line) ? t('resume.copied') : t('resume.copyFailed'), 3);
+  done && done([]);
 }
 
 function resolveDir(app, folder, cb) {

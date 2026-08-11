@@ -500,6 +500,7 @@ en['help.text'] = (fg, spore) => `{bold}Global{/}
   {${fg}-fg}r{/}       Resume (reopen in the original agent, right here — merged/split sessions fall back to handoff instead, which replaces them with the real session it produces)
   {${fg}-fg}h{/}       Handoff (start a new session on a different agent)
   {${fg}-fg}n{/}       Launch a new agent session with this folder's context
+  {${fg}-fg}Shift+N{/} Same, but copy the shell command instead of opening it here — paste into a separate terminal tab to run several sessions in parallel (n takes over this one until it exits)
   {${fg}-fg}m{/} / {${fg}-fg}t{/}   Move to folder / edit tags
   {${fg}-fg}x{/}       Delete session (Mycelium record only, original log kept)
   {${fg}-fg}w{/}       Extract folder knowledge — preview then confirm
@@ -567,6 +568,7 @@ ko['help.text'] = (fg, spore) => `{bold}전역{/}
   {${fg}-fg}r{/}       이어열기 (원래 에이전트로, 바로 여기서 — 병합/분할 세션은 핸드오프로 대체되고, 그렇게 생긴 실제 세션이 원래 자리를 대신함)
   {${fg}-fg}h{/}       핸드오프 (다른 에이전트로 새 세션 시작)
   {${fg}-fg}n{/}       이 폴더 컨텍스트로 새 에이전트 세션
+  {${fg}-fg}Shift+N{/} 위와 동일하지만 여기서 열지 않고 셸 명령어를 복사 — 다른 터미널 탭에 붙여넣어 여러 세션을 동시에 실행 (n은 종료할 때까지 이 화면을 차지함)
   {${fg}-fg}m{/} / {${fg}-fg}t{/}   폴더 이동 / 태그 편집
   {${fg}-fg}x{/}       세션 삭제 (Mycelium 저장소에서만, 원본 로그 유지)
   {${fg}-fg}w{/}       폴더 지식 추출 — 미리보기 후 확인

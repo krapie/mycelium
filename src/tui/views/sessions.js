@@ -896,6 +896,19 @@ export function sessionsView(opts = {}) {
           app.render();
         });
       });
+      // Shift+N: same agent/directory picker as n, but copies the equivalent
+      // shell command to the clipboard instead of taking over this terminal
+      // — n's foreground() hands over the SAME tty and blocks the whole TUI
+      // until that one session exits, so it's the only way to have several
+      // new sessions going in parallel (paste into as many separate tabs as
+      // you want). Nothing was actually captured here (no real launch, no
+      // scan()), so no reloadFolders()/reloadList() — just refocus.
+      listBox.key('S-n', () => {
+        launchAgent(app, { folder: state.folder, copyOnly: true }, () => {
+          listBox.focus();
+          app.render();
+        });
+      });
 
       // Resume/handoff/copy-command trio — shared with the Calendar tab's
       // day-list/detail (see resume-handoff.js). Only the "what's currently
