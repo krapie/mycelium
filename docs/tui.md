@@ -69,8 +69,7 @@ Once a session is moved to `_archive`, re-scanning won't bring it back out —
 | `r` | **Resume** that exact session in its original agent, right here. In the detail screen, `Enter` instead of `r` lets you choose "open here" (and, for ordinary sessions, "copy command" for pasting into a new tab). **Merged/split sessions can't be resumed directly** (there's no real id an actual agent knows about), so `h` (handoff) is offered instead — pick an agent and it starts a new session. **Once you return to that newly-created real session, the merged/split session's content is folded into it and the merge/split session itself disappears** — from then on, only that real session remains, resumable with `r` like any ordinary session (which is also why "copy command" isn't offered on merge/split sessions in the first place — there's no real id to resume) |
 | `o` | **Smart organize** — the only way sessions get assigned to a folder (capture never auto-files). Reviews **only what's currently in view** (the whole store from `Root`, only unfiled sessions from `New`, or that folder + subfolders from inside one). Summarizes the target sessions, then compares them against already-organized folders (store-wide) to suggest a good existing folder or a **new subfolder to create**. Suggestions arrive **all pre-checked**, so `Enter` alone applies everything — uncheck the wrong ones with `Space` (unchecking still marks them reviewed and drops them from the queue), or `Esc` to cancel the whole batch (also drops from the queue — press `o` again to recompute fresh). New folders are labeled "new" in the list |
 | `h` | **Start a new session** on a different agent, handing off context |
-| `n` | Launch a new agent session with this folder's context. Hands over this same terminal (`foreground()`, `stdio: 'inherit'`) and blocks the whole TUI until that session exits — only one at a time |
-| `Shift+N` | Same agent/directory picker as `n`, but copies the equivalent `cd <dir> && <bin> ...` shell command to the clipboard instead of opening it here. Paste into as many separate terminal tabs as you want to run several sessions in parallel — there's no portable way for Mycelium itself to open a new tab across terminal emulators, so this is the escape hatch |
+| `n` | Launch a new agent session with this folder's context. After picking an agent and directory, asks **"open here"** (hands over this same terminal — `foreground()`, `stdio: 'inherit'` — and blocks the whole TUI until that session exits, only one at a time) or **"copy command"** (copies the equivalent `cd <dir> && <bin> ...` shell command to the clipboard instead, to paste into a separate terminal tab and run several sessions in parallel — there's no portable way for Mycelium itself to open a new tab across terminal emulators, so this is the escape hatch). Same choice `Enter` already offers when resuming an existing session |
 | `m` / `t` | Move folder / edit tags |
 | `x` | Delete the session (from Mycelium's own store only — the original log stays put, and it's recorded so a future scan won't re-capture it) |
 | `y` | Copy the session (title + summary + transcript) to the clipboard |
@@ -81,7 +80,7 @@ Once a session is moved to `_archive`, re-scanning won't bring it back out —
 | `/` | Full-text search |
 | `v` | Switch to the **Calendar tab** — the Sessions screen becomes a monthly grid \| that day's session list \| detail, three panels (same k9s-style drill-down: `←`/`→` move the day cursor ±1 day and `↑`/`↓` ±1 week, both rolling into the adjacent month at the edges and refreshing the list/detail live, `Enter`/`→` into the right panel, `Esc`/`←` back). `PgUp`/`PgDn` jumps a whole month. Press `v` again (or `Esc` from the grid) to return to Sessions — folder selection, search terms, etc. are preserved |
 | `s` | **Scan** right from the TUI (same as `mycelium scan` — pulls in sessions left open in other tabs/terminals without leaving the TUI). Doesn't assign folders — new sessions land unfiled (`New`, `[New]`), sort with `o` above |
-| `w` / `c` / `i` / `d` | Extract folder knowledge (preview then confirm) / view context / inject AGENTS.md — also drops a one-line CLAUDE.md bridge so Claude Code actually reads it (preview then confirm) / read digests (`n`/`w` inside to generate today's/this week's) |
+| `w` / `c` / `i` / `d` | Extract folder knowledge (preview then confirm) / view context / inject AGENTS.md — also drops a one-line CLAUDE.md bridge so Claude Code actually reads it (preview then confirm) / read digests (`n`/`w` inside to generate today's/this week's, `r` inside to review any knowledge-refresh proposals — see below) |
 | `g` | **Re-show the getting-started guide** — the short walkthrough (4-stage lifecycle + key shortcuts) that auto-shows once on first launch, any time |
 | `q` | Quit |
 
@@ -91,3 +90,26 @@ show `[Merged]` (merge result) / `[Split]` (split result) tags; a split
 original (or, for merges, the hidden originals) shows a `[Linked]` tag.
 The detail screen shows which session something came from or went to as
 clickable-style links.
+
+## Day-end knowledge review
+
+Keeping every active folder's KNOWLEDGE.md fresh by hand (`w`, folder by
+folder) is easy to fall behind on. Once a day, the background daemon (or
+the TUI's own in-process upkeep — see `docs/cli.md`) generates the day's
+digest and, for every folder that had filed activity that day, also
+pre-computes a knowledge-refresh proposal — the same `w` would produce, just
+computed ahead of time so reviewing it is instant. Nothing is written yet;
+each proposal sits as a `KNOWLEDGE.pending.md` next to that folder's real
+KNOWLEDGE.md until you review it.
+
+If a proposal is still unreviewed the next time you open Mycelium, a toast
+points you at `d`. Inside the digest reader, `r` opens the same
+checkbox-list review `o` (smart organize) already uses — every folder starts
+checked, `Space` to uncheck one you don't want, `Enter` applies the checked
+ones. **Approving a folder is the confirmation**: it writes KNOWLEDGE.md and
+immediately injects into every working directory that folder's sessions
+have used — the same trust level `n`/`h`'s own silent auto-inject-on-launch
+already operates at, since the content landing there is exactly what was
+just approved, nothing new. Whatever's left unchecked (or the whole batch,
+on `Esc`) is simply dismissed — it won't keep asking again, and a manual `w`
+can always regenerate it later.

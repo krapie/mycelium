@@ -2,7 +2,8 @@ import { scan } from '../scanner.js';
 import { reindex } from '../index-db.js';
 import { summarizeCandidates, suggestPlacements, applyPlacements, queueSuggestions, pendingSuggestions } from '../organize.js';
 import { tagAll } from '../learn.js';
-import { generateDigest } from '../insight.js';
+import { generateDigest, foldersActiveOn, buildKnowledgeText, writePendingKnowledgeText, pendingKnowledgeReviews } from '../insight.js';
+import { mapConcurrent } from '../llm.js';
 import { loadConfig } from '../config.js';
 
 // The cadence/policy layer: what runs, how often, and in what order — kept
@@ -27,6 +28,11 @@ const TAG_BATCH_LIMIT = Number(process.env.MYCELIUM_TAG_BATCH_LIMIT || 20);
 // issue #3 (looked like runaway Claude console windows on Windows; the real
 // cause was many of these piling up concurrently).
 const SUMMARIZE_CONCURRENCY = Number(process.env.MYCELIUM_SUMMARIZE_CONCURRENCY || 3);
+// Same "gradual drain" reasoning as SMART_ORGANIZE_BATCH_LIMIT, applied to
+// digestCycle's knowledge-refresh proposals — a day touching many folders
+// at once (a big reorganize, say) shouldn't turn into that many LLM calls
+// in one cycle.
+const DIGEST_KNOWLEDGE_LIMIT = Number(process.env.MYCELIUM_DIGEST_KNOWLEDGE_LIMIT || 10);
 
 // setInterval doesn't wait for a previous async callback to finish before
 // scheduling the next one — on a large backlog, a single scanCycle()/
@@ -118,7 +124,53 @@ export async function digestCycle(log) {
     if (r.ok) log.log(`[digest] ${r.keyed} (${r.count} sessions)`);
   } catch (err) {
     log.error(`[digest] ${err.message}`);
+    return; // no digest means no folder activity to work from either
   }
+  await proposeKnowledgeRefreshes(yesterday, log);
+}
+
+/**
+ * After a day's digest is generated, propose a knowledge refresh (see
+ * insight.js's writePendingKnowledgeText()) for each folder that had filed
+ * activity that day — the same buildKnowledgeText() LLM call a manual `w`
+ * press makes, just pre-computed here so reviewing it later (digest reader's
+ * `r` key) is instant, same "daemon computes, human reviews" split
+ * smartOrganizeCycle already uses for placement suggestions. Never
+ * overwrites a folder's still-unreviewed pending proposal — avoids both
+ * clobbering something not yet looked at and repeat LLM spend on the same
+ * folder every cycle. Bounded by DIGEST_KNOWLEDGE_LIMIT, same "gradual
+ * drain" reasoning as smart-organize's own batch limit.
+ *
+ * Exported (not just called from digestCycle) so tests can exercise the
+ * per-folder skip/limit logic directly — digestCycle's own lastDigestDay
+ * gate (real wall-clock, once per local day) makes driving this path
+ * through digestCycle() itself impractical to unit test more than once per
+ * process.
+ */
+export async function proposeKnowledgeRefreshes(date, log) {
+  const alreadyPending = new Set(pendingKnowledgeReviews().map((p) => p.folder));
+  const folders = foldersActiveOn(date)
+    .filter((f) => !alreadyPending.has(f))
+    .slice(0, DIGEST_KNOWLEDGE_LIMIT);
+  if (!folders.length) return;
+  let proposed = 0;
+  await mapConcurrent(folders, SUMMARIZE_CONCURRENCY, async (folder) => {
+    try {
+      const gen = await buildKnowledgeText(folder);
+      if (gen.ok) {
+        writePendingKnowledgeText(folder, gen.text);
+        proposed++;
+      } else {
+        // buildKnowledgeText() already catches its own LLM failure and
+        // resolves ok:false rather than throwing — surface it here too, or
+        // a failed proposal would otherwise be silent.
+        log.error(`[digest] knowledge proposal failed for ${folder}: ${gen.error}`);
+      }
+    } catch (err) {
+      log.error(`[digest] knowledge proposal failed for ${folder}: ${err.message}`);
+    }
+  });
+  if (proposed) log.log(`[digest] ${proposed} folder(s) have knowledge ready for review`);
 }
 
 /**

@@ -5,7 +5,9 @@ import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { DIGEST_DIR } from '../../paths.js';
 import { copyToClipboard } from '../clipboard.js';
-import { generateDigest } from '../../insight.js';
+import { generateDigest, pendingKnowledgeReviews, promoteKnowledge, dismissPendingKnowledge } from '../../insight.js';
+import { injectAgentsMd, dirsForFolder } from '../../reuse.js';
+import { multiSelectList } from './pickers.js';
 import { t } from '../i18n.js';
 
 /**
@@ -147,6 +149,7 @@ export function digestReader(app) {
   });
   box.key('n', () => generate('day'));
   box.key('w', () => generate('week'));
+  box.key('r', () => reviewKnowledge(app, box));
   box.on('select', (_, idx) => {
     if (!files.length) return;
     const path = join(DIGEST_DIR, files[idx]);
@@ -154,6 +157,61 @@ export function digestReader(app) {
     const md = existsSync(path) ? readFileSync(path, 'utf8') : t('digest.readFailed');
     textView(app, files[idx], md);
   });
+}
+
+/**
+ * `r` from the digest reader — review knowledge-refresh proposals
+ * digestCycle (daemon/cycles.js) staged overnight for folders that had
+ * activity that day (see insight.js's pendingKnowledgeReviews()). Same
+ * multiSelectList shape sessions.js's `o` (smart organize) review already
+ * uses: every folder starts checked, Enter applies the checked ones, Esc
+ * cancels the whole batch — but either way every folder shown here is
+ * cleared from the pending state (approved+injected, or dismissed), so it
+ * won't keep nagging; a later manual `w` can always regenerate a dismissed
+ * one from scratch.
+ */
+function reviewKnowledge(app, digestBox) {
+  const pending = pendingKnowledgeReviews();
+  if (!pending.length) return app.notify(t('digest.reviewNone'), 3);
+  digestBox.hide();
+  app.render();
+  const items = pending.map((p) => ({
+    label: `${p.folder}  {${C.faint}-fg}${p.text.split('\n').find((l) => l.trim() && !l.startsWith('#'))?.trim().slice(0, 60) || ''}{/}`,
+    value: p.folder,
+  }));
+  multiSelectList(
+    app,
+    t('digest.reviewTitle'),
+    items,
+    (chosen) => {
+      const chosenSet = new Set(chosen || []);
+      let applied = 0;
+      for (const p of pending) {
+        if (!chosenSet.has(p.folder)) {
+          dismissPendingKnowledge(p.folder);
+          continue;
+        }
+        const res = promoteKnowledge(p.folder);
+        if (!res.ok) continue;
+        applied++;
+        // Approving the knowledge IS the confirmation — inject silently
+        // into every directory this folder's sessions actually used, same
+        // trust level n/h's own auto-inject-on-launch already operates at.
+        for (const dir of dirsForFolder(p.folder)) {
+          try {
+            injectAgentsMd(dir, p.folder);
+          } catch {
+            /* no reachable AGENTS.md target — fine, best-effort */
+          }
+        }
+      }
+      app.notify(applied ? t('digest.reviewApplied', applied) : t('digest.reviewSkipped'), 4);
+      digestBox.show();
+      digestBox.focus();
+      app.render();
+    },
+    { defaultAll: true },
+  );
 }
 
 /**

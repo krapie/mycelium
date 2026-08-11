@@ -1,9 +1,9 @@
 import { join } from 'node:path';
-import { writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { writeFileSync, readFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { complete } from './llm.js';
 import { allRaw } from './scanner.js';
 import { TREE_DIR, DIGEST_DIR, ensureDirs } from './paths.js';
-import { isSuperseded, isInSubtree } from './organize.js';
+import { isSuperseded, isInSubtree, listTreeDirs } from './organize.js';
 import { firstUserTurn } from './schema.js';
 
 function dayOf(iso) {
@@ -30,6 +30,28 @@ function groupByFolder(sessions) {
   return by;
 }
 
+/** Sessions started on/in a given day or ISO week — the filter generateDigest()
+ * and foldersActiveOn() both need, pulled out so the two stay in sync. */
+function sessionsForPeriod(period, target) {
+  const keyed = period === 'week' ? isoWeek(`${target}T00:00:00Z`) : target;
+  return allRaw().filter((s) => {
+    if (!s.startedAt) return false;
+    return period === 'week' ? isoWeek(s.startedAt) === keyed : dayOf(s.startedAt) === target;
+  });
+}
+
+/**
+ * Folders with at least one FILED session (unfiled/`_inbox` sessions are
+ * deliberately excluded — a knowledge summary of an unsorted catch-all isn't
+ * meaningful) that started on `date`. Used by digestCycle (daemon/cycles.js)
+ * to decide which folders get a knowledge-refresh proposal after each day's
+ * digest is generated — see that file and docs/features.md for the full flow.
+ */
+export function foldersActiveOn(date) {
+  const sessions = sessionsForPeriod('day', date).filter((s) => s.folder);
+  return [...new Set(sessions.map((s) => s.folder))];
+}
+
 /**
  * Narrative digest for a period. Reuses the per-session summaries that
  * auto-tagging already produced (no re-reading full transcripts — cheap), and
@@ -43,10 +65,7 @@ export async function generateDigest({ period = 'day', date } = {}) {
   const target = date || new Date().toISOString().slice(0, 10);
   const keyed = period === 'week' ? isoWeek(`${target}T00:00:00Z`) : target;
 
-  const sessions = allRaw().filter((s) => {
-    if (!s.startedAt) return false;
-    return period === 'week' ? isoWeek(s.startedAt) === keyed : dayOf(s.startedAt) === target;
-  });
+  const sessions = sessionsForPeriod(period, target);
 
   if (sessions.length === 0) return { ok: false, error: `no sessions for ${keyed}` };
 
@@ -135,6 +154,53 @@ export function writeKnowledgeText(folder, text) {
   const path = join(dir, 'KNOWLEDGE.md');
   writeFileSync(path, text);
   return { ok: true, path, folder };
+}
+
+function pendingKnowledgePath(folder) {
+  return join(TREE_DIR, ...folder.split('/'), 'KNOWLEDGE.pending.md');
+}
+
+/**
+ * Stage an LLM-generated knowledge proposal without touching the real
+ * KNOWLEDGE.md — written by digestCycle (daemon/cycles.js) after a day's
+ * digest, reviewed by a human via the digest reader's `r` key, and only
+ * promoted to KNOWLEDGE.md on explicit approval (promoteKnowledge() below).
+ * The file's mere existence IS the review queue — no separate store, same
+ * "plain file is the state" approach the rest of this codebase uses.
+ */
+export function writePendingKnowledgeText(folder, text) {
+  ensureDirs();
+  const dir = join(TREE_DIR, ...folder.split('/'));
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  const path = pendingKnowledgePath(folder);
+  writeFileSync(path, text);
+  return { ok: true, path, folder };
+}
+
+/** Folders currently carrying an unreviewed knowledge proposal, with its text. */
+export function pendingKnowledgeReviews() {
+  return listTreeDirs()
+    .filter((folder) => existsSync(pendingKnowledgePath(folder)))
+    .map((folder) => ({ folder, text: readFileSync(pendingKnowledgePath(folder), 'utf8') }));
+}
+
+/** Approve a pending proposal: promote it to the real KNOWLEDGE.md, then
+ * clear the pending file so it stops showing up for review. */
+export function promoteKnowledge(folder) {
+  const path = pendingKnowledgePath(folder);
+  if (!existsSync(path)) return { ok: false, error: `no pending knowledge for ${folder}` };
+  const text = readFileSync(path, 'utf8');
+  const w = writeKnowledgeText(folder, text);
+  rmSync(path);
+  return w;
+}
+
+/** Reject a pending proposal without promoting it — a later manual `w` can
+ * always regenerate one from scratch, so this just stops the nagging. */
+export function dismissPendingKnowledge(folder) {
+  const path = pendingKnowledgePath(folder);
+  if (existsSync(path)) rmSync(path);
+  return { ok: true, folder };
 }
 
 /**

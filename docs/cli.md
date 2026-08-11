@@ -112,3 +112,4 @@ caused Claude's console window to keep popping up on Windows, [#3](https://githu
 | `MYCELIUM_SMART_ORGANIZE_LIMIT` | 100 | Max sessions classified per smart-organize cycle |
 | `MYCELIUM_SMART_ORGANIZE_COOLDOWN_MS` | 24 h | Wait time before retrying an unmatched session |
 | `MYCELIUM_SUMMARIZE_CONCURRENCY` | 3 | Concurrent `claude`/`codex` processes the auto smart-organize cycle spawns |
+| `MYCELIUM_DIGEST_KNOWLEDGE_LIMIT` | 10 | Max folders per day proposed for a knowledge refresh after the digest is generated (review via the TUI's `d` → `r`) |

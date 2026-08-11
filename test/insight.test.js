@@ -10,7 +10,18 @@ const { emptyNeutral } = await import('../src/schema.js');
 const { saveRaw } = await import('../src/scanner.js');
 const { __setTestProvider, __clearTestProvider } = await import('../src/llm.js');
 const { DIGEST_DIR, TREE_DIR } = await import('../src/paths.js');
-const { generateDigest, buildKnowledgeText, writeKnowledgeText, extractKnowledge, foldersWithSessions } = await import('../src/insight.js');
+const {
+  generateDigest,
+  buildKnowledgeText,
+  writeKnowledgeText,
+  extractKnowledge,
+  foldersWithSessions,
+  foldersActiveOn,
+  writePendingKnowledgeText,
+  pendingKnowledgeReviews,
+  promoteKnowledge,
+  dismissPendingKnowledge,
+} = await import('../src/insight.js');
 
 function seed(id, overrides = {}) {
   const n = { ...emptyNeutral(id, 'claude'), ...overrides };
@@ -159,4 +170,55 @@ test('foldersWithSessions() lists every distinct folder that currently has a ses
   assert.ok(folders.includes('alpha-folder'));
   assert.ok(folders.includes('beta-folder'));
   assert.equal(folders.includes(null), false);
+});
+
+test('foldersActiveOn() returns filed folders with a session that day, excluding unfiled ones', async () => {
+  seed('active-1', { folder: 'active-folder-a', startedAt: '2026-06-01T09:00:00.000Z' });
+  seed('active-2', { folder: 'active-folder-a', startedAt: '2026-06-01T11:00:00.000Z' }); // same folder, same day — no duplicate
+  seed('active-3', { folder: 'active-folder-b', startedAt: '2026-06-01T09:00:00.000Z' });
+  seed('active-4', { folder: null, startedAt: '2026-06-01T09:00:00.000Z' }); // unfiled — excluded
+  seed('active-5', { folder: 'active-folder-c', startedAt: '2026-06-02T09:00:00.000Z' }); // different day — excluded
+
+  const folders = foldersActiveOn('2026-06-01');
+
+  assert.deepEqual([...folders].sort(), ['active-folder-a', 'active-folder-b']);
+});
+
+test('writePendingKnowledgeText()/pendingKnowledgeReviews() round-trip a staged proposal without touching KNOWLEDGE.md', () => {
+  const res = writePendingKnowledgeText('pending-folder', 'proposed knowledge text');
+  assert.equal(res.ok, true);
+  assert.ok(existsSync(res.path));
+  assert.equal(existsSync(join(TREE_DIR, 'pending-folder', 'KNOWLEDGE.md')), false);
+
+  const reviews = pendingKnowledgeReviews();
+  const mine = reviews.find((r) => r.folder === 'pending-folder');
+  assert.ok(mine);
+  assert.equal(mine.text, 'proposed knowledge text');
+});
+
+test('promoteKnowledge() writes the pending text as the real KNOWLEDGE.md and clears the pending file', () => {
+  writePendingKnowledgeText('promote-folder', 'text to promote');
+  const res = promoteKnowledge('promote-folder');
+  assert.equal(res.ok, true);
+  const kPath = join(TREE_DIR, 'promote-folder', 'KNOWLEDGE.md');
+  assert.ok(existsSync(kPath));
+  assert.equal(readFileSync(kPath, 'utf8'), 'text to promote');
+  assert.equal(pendingKnowledgeReviews().some((r) => r.folder === 'promote-folder'), false);
+});
+
+test('promoteKnowledge() fails cleanly when there is no pending proposal for that folder', () => {
+  const res = promoteKnowledge('no-such-pending-folder');
+  assert.equal(res.ok, false);
+});
+
+test('dismissPendingKnowledge() clears the pending file without ever writing KNOWLEDGE.md', () => {
+  writePendingKnowledgeText('dismiss-folder', 'text to reject');
+  dismissPendingKnowledge('dismiss-folder');
+  assert.equal(pendingKnowledgeReviews().some((r) => r.folder === 'dismiss-folder'), false);
+  assert.equal(existsSync(join(TREE_DIR, 'dismiss-folder', 'KNOWLEDGE.md')), false);
+});
+
+test('dismissPendingKnowledge() on a folder with no pending file is a harmless no-op', () => {
+  const res = dismissPendingKnowledge('never-had-one');
+  assert.equal(res.ok, true);
 });

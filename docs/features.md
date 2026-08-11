@@ -124,6 +124,22 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   from the LLM material. Prompt explicitly forbids meta-report phrasing
   since the output is injected verbatim into AGENTS.md later. [untested]
 - **List which folders have sessions.** `foldersWithSessions()`. [untested]
+- **Day-end knowledge-refresh proposals, staged for review.**
+  `foldersActiveOn(date)` (filed folders — unfiled/`_inbox` excluded — with
+  a session that started that day; shares its day-filter with
+  `generateDigest()` via an internal `sessionsForPeriod()` helper, so the
+  two can't drift). `writePendingKnowledgeText(folder, text)` stages a
+  proposal at `KNOWLEDGE.pending.md`, next to (not overwriting) the real
+  `KNOWLEDGE.md`. `pendingKnowledgeReviews()` lists every folder currently
+  carrying one. `promoteKnowledge(folder)` writes it as the real
+  `KNOWLEDGE.md` (via `writeKnowledgeText()`) and clears the pending file;
+  `dismissPendingKnowledge(folder)` clears it without promoting — either
+  way the folder stops being returned by `pendingKnowledgeReviews()`. The
+  pending file's mere existence *is* the review queue, no separate store —
+  same "plain file is the state" shape as `organize/classify.js`'s
+  session-level `suggestedFolder` queue, just folder-scoped. Driven by
+  `daemon/cycles.js`'s `digestCycle` (below); reviewed via the TUI's digest
+  reader `r` key (`docs/tui.md`'s "Day-end knowledge review"). [tested]
 
 ## Reuse — Context inheritance (`src/reuse.js`)
 
@@ -157,6 +173,11 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   existing-content, and no-duplication-on-repeat all covered in
   `test/reuse.test.js`, same pattern as `AGENTS.md`'s own marker-block tests)
 - **Preview what a session would inherit.** `contextForSession(sessionId)`. [tested]
+- **Distinct existing working directories a folder's sessions have used.**
+  `dirsForFolder(folder)` — moved here from `tui/launch.js` (which still
+  uses it for `n`'s directory picker) so `daemon/cycles.js`'s digest-review
+  auto-inject can use it too, without core importing from `tui/**`. Filters
+  to directories that still `existsSync()`. [tested]
 
 ## Handoff (`src/handoff.js`)
 
@@ -204,7 +225,25 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   branches on `config.autoApproveSmartOrganize` (default `false`). Every
   cadence/limit is env-tunable (`MYCELIUM_SCAN_MS`,
   `MYCELIUM_SMART_ORGANIZE_MS`, `_LIMIT`, `_COOLDOWN_MS`,
-  `MYCELIUM_TAG_BATCH_LIMIT`, `MYCELIUM_SUMMARIZE_CONCURRENCY`). [untested]
+  `MYCELIUM_TAG_BATCH_LIMIT`, `MYCELIUM_SUMMARIZE_CONCURRENCY`,
+  `MYCELIUM_DIGEST_KNOWLEDGE_LIMIT`). [partial] (`scanCycle`/
+  `smartOrganizeCycle` themselves still untested; `digestCycle`'s own
+  knowledge-proposal step below is covered)
+- **`digestCycle` also stages a knowledge-refresh proposal per active
+  folder, after generating the day's digest.** `proposeKnowledgeRefreshes(date, log)`
+  (exported separately from `digestCycle` itself specifically so tests can
+  drive it directly — `digestCycle`'s own `lastDigestDay` gate is real
+  wall-clock and only ever fires once per process per calendar day, which
+  makes exercising more than one scenario through `digestCycle()` alone
+  impractical). For each folder `insight.js`'s `foldersActiveOn(date)`
+  returns, skips it if it already has an unreviewed
+  `KNOWLEDGE.pending.md` (no duplicate LLM spend on a proposal nobody's
+  looked at yet), otherwise calls the same `buildKnowledgeText()` a manual
+  `w` press makes and stages the result via `writePendingKnowledgeText()`.
+  Concurrency-bounded by the existing `SUMMARIZE_CONCURRENCY`; folder count
+  per cycle bounded by `MYCELIUM_DIGEST_KNOWLEDGE_LIMIT` (default 10), same
+  "gradual drain" reasoning as `SMART_ORGANIZE_BATCH_LIMIT`. [tested]
+  (`test/daemon-cycles.test.js`)
 - **Run upkeep inside the TUI process (no separate daemon).**
   `startTuiRoutine()` — replaced an earlier detached-process design that
   kept running stale code across restarts. Opt-out via
@@ -338,34 +377,35 @@ architectural coordination point in the file), `s` scan, `o` smart-organize
 (largest/most stateful handler: cached-vs-fresh branch, two sequential LLM
 phases, toast-dismiss race, multi-select review, always-clear-queue-on-close),
 `?` help, `g` re-show onboarding, `m`/`t` move/tag, `x` delete (sweeps
-backlinks across all targets), `n` launch new agent, `Shift+N` same picker
-but copies the shell command instead of launching (see below), `r` resume
-(falls back to handoff for merge/split products), `h` handoff (post-launch
-folds a merge/split product into the new real session), detail-panel `Enter`
-resume-or-copy choice, `a` auto-tag (sequential batch with per-item
-progress + partial-failure tolerance), `e` rename title, `y` copy to
-clipboard, `d` digest reader (nested mini-screen), `c` view context, `i`
-inject AGENTS.md (preview-then-confirm, sibling to `w`). [untested]
+backlinks across all targets), `n` launch new agent (open-here-or-copy
+choice, see below), `r` resume (falls back to handoff for merge/split
+products), `h` handoff (post-launch folds a merge/split product into the
+new real session), detail-panel `Enter` resume-or-copy choice, `a` auto-tag
+(sequential batch with per-item progress + partial-failure tolerance), `e`
+rename title, `y` copy to clipboard, `d` digest reader (nested mini-screen,
+`r` inside to review knowledge-refresh proposals — see below), `c` view
+context, `i` inject AGENTS.md (preview-then-confirm, sibling to `w`).
+[untested]
 
-**`Shift+N`: copy-command escape hatch for launching a new session, so
-parallel sessions are possible at all.** `n`'s `launchAgent()` → `run()`
-hands the terminal over to the child agent process via `foreground()`
-(`spawn(..., {stdio: 'inherit'})`) — the SAME tty, blocking the whole TUI
-until that one session exits. There's no portable way for a terminal app to
-open a genuinely new tab/window across terminal emulators (Terminal.app,
-iTerm2, tmux, Windows Terminal, ...), so the only way to actually run
-several sessions at once is a separate terminal the human opens themselves.
-`launchAgent()` now takes a `copyOnly` option: same agent-picker →
-directory-picker flow as `n`, but instead of `run()`'s foreground handoff,
-`copyNewCommand()` builds a `cd <dir> && <bin> <args>` line
-(`agents.js`'s `newCommandLine()`, sharing its quoting helper with the
-existing `resumeCommandLine()` resume-detail-Enter already used for the
-same "copy command" idea on an *existing* session) and copies it to the
-clipboard — paste into as many tabs as you want. Still runs
-`injectAgentsMd()` first, same as `run()`, since skipping it just because
-this path doesn't itself launch anything would silently degrade whatever
-gets pasted. Bound as `Shift+N` (list level only, same scope as plain `n`)
-in `sessions.js`. [untested]
+**`n`: one flow for launching a new session, either here or as a copyable
+command — no separate `Shift+N` keybinding.** `launchAgent()`'s
+agent-picker → directory-picker is followed by a third choice — "open here"
+or "copy command" — the exact same shape `resume-handoff.js`'s
+`onDetailEnter()` already offers for resuming an *existing* session (same
+`resume.openHere`/`resume.copyCommand` i18n strings, reused rather than
+duplicated). "Open here" hands the terminal over to the child agent process
+via `foreground()` (`spawn(..., {stdio: 'inherit'})`) — the SAME tty,
+blocking the whole TUI until that one session exits. "Copy command" instead
+builds a `cd <dir> && <bin> <args>` line (`agents.js`'s `newCommandLine()`)
+and copies it to the clipboard — paste into as many separate terminal tabs
+as you want, since there's no portable way for a terminal app to open a
+genuinely new tab/window across terminal emulators (Terminal.app, iTerm2,
+tmux, Windows Terminal, ...). Both branches run `injectAgentsMd()` first —
+skipping it on the copy path just because it doesn't itself launch anything
+would silently degrade whatever gets pasted. A previous version bound the
+copy path to a separate `Shift+N` key, decided *before* the agent/directory
+picker instead of after; folded into `n` itself as one shared choice.
+[untested]
 
 **`asyncReviewFlowRunning` guards `o`/`w`/Shift+S against a double-press
 while the LLM call is still in flight.** All three are async: show a

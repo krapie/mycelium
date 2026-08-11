@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync, mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { useTempHome } from '../helpers.js';
 import { createTestApp, sendKey, sendKeys, waitFor } from '../tui-helpers.js';
 
@@ -25,12 +26,14 @@ import { createTestApp, sendKey, sendKeys, waitFor } from '../tui-helpers.js';
 useTempHome();
 process.env.MYCELIUM_DEMO_MOCK_DELAY_MS = '15';
 
-const { allRaw } = await import('../../src/scanner.js');
+const { allRaw, saveRaw } = await import('../../src/scanner.js');
+const { emptyNeutral } = await import('../../src/schema.js');
 const { TREE_DIR } = await import('../../src/paths.js');
 const { createApp } = await import('../../src/tui/app.js');
 const { sessionsView } = await import('../../src/tui/views/sessions.js');
 const { seedMockSessions, startTutorial } = await import('../../src/tui/tutorial.js');
 const { setLocale } = await import('../../src/tui/i18n.js');
+const { writePendingKnowledgeText } = await import('../../src/insight.js');
 
 // seedMockSessions()/createTutorialMockProvider() default their locale to
 // i18n.js's getLocale() — setLocale('ko') (used by exactly one test below)
@@ -591,6 +594,42 @@ test('demo: a stray Enter on step 1 does not falsely cascade the narrator forwar
     await new Promise((r) => setTimeout(r, 320));
     assert.equal(narratorStepIndex(app), 3, 'o still correctly skips ahead once the real organize modal opens');
     assert.equal(doneArg, undefined, 'tutorial is still running');
+  } finally {
+    cleanup(app);
+  }
+});
+
+test('digest review (d, then r): approving a staged knowledge proposal writes KNOWLEDGE.md and injects AGENTS.md', async () => {
+  // Not part of the scripted tutorial (which deliberately uses `c`, not a
+  // real launch, for its Reuse step — see tutorial.js's own comment) — this
+  // exercises digestReader()'s review flow directly against a proposal
+  // staged the same way daemon/cycles.js's proposeKnowledgeRefreshes()
+  // would, without needing a real LLM call or waiting on the daemon's own
+  // once-per-day cadence.
+  const { app, input } = await mountDemo();
+  try {
+    const settle = () => new Promise((r) => setTimeout(r, 320));
+    const realDir = mkdtempSync(join(tmpdir(), 'mycelium-review-'));
+    saveRaw({ ...emptyNeutral('review-sess-1', 'claude'), folder: 'review-folder', projectDir: realDir });
+    writePendingKnowledgeText('review-folder', '# review-folder — Project Knowledge\n\nSome proposed knowledge text.\n');
+
+    const baseline = app.screen.children.length;
+    sendKey(input, 'd');
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 1000 });
+    await settle();
+    const afterDigestOpen = app.screen.children.length;
+    sendKey(input, 'r');
+    await waitFor(() => app.screen.children.length > afterDigestOpen, { timeoutMs: 1000 });
+    await settle();
+    sendKey(input, 'enter'); // defaultAll:true — applies the one pending folder shown
+    await waitFor(() => existsSync(join(TREE_DIR, 'review-folder', 'KNOWLEDGE.md')), { timeoutMs: 1000 });
+
+    const knowledge = readFileSync(join(TREE_DIR, 'review-folder', 'KNOWLEDGE.md'), 'utf8');
+    assert.match(knowledge, /Some proposed knowledge text/);
+    assert.equal(existsSync(join(TREE_DIR, 'review-folder', 'KNOWLEDGE.pending.md')), false, 'pending file cleared after promotion');
+
+    const agentsMd = readFileSync(join(realDir, 'AGENTS.md'), 'utf8');
+    assert.match(agentsMd, /Some proposed knowledge text/, 'approval auto-injects into the folder\'s known working directory');
   } finally {
     cleanup(app);
   }

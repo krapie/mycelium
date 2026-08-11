@@ -2,25 +2,12 @@ import { existsSync } from 'node:fs';
 import { scan, allRaw, loadRaw } from '../scanner.js';
 import { reindexMany } from '../index-db.js';
 import { move, linkContinuation } from '../organize.js';
-import { injectAgentsMd } from '../reuse.js';
+import { injectAgentsMd, dirsForFolder } from '../reuse.js';
 import { menu, textPrompt } from './widgets/pickers.js';
 import { foreground } from './foreground.js';
 import { copyToClipboard } from './clipboard.js';
 import { t } from './i18n.js';
 import { AGENTS, which, binFor, resumeArgsFor, workDirFor, newCommandLine } from '../agents.js';
-
-/** Distinct existing working directories of the sessions in a folder subtree. */
-function dirsForFolder(folder) {
-  if (!folder) return [];
-  const set = new Set();
-  for (const n of allRaw()) {
-    const inFolder = n.folder === folder || (n.folder && n.folder.startsWith(folder + '/'));
-    if (!inFolder) continue;
-    const d = n.projectDir || n.cwd;
-    if (d && existsSync(d)) set.add(d);
-  }
-  return [...set];
-}
 
 /**
  * The cockpit's headline flow. Pick an agent, resolve the folder's working
@@ -38,18 +25,20 @@ function dirsForFolder(folder) {
  * it, since both are centered blessed overlays and the picker opens in the
  * same tick.
  *
- * `copyOnly` (optional) skips the foreground() handoff entirely and instead
- * copies the equivalent `cd <dir> && <bin> <args>` shell command to the
- * clipboard — same "copy command" escape hatch resume-handoff.js's
- * onDetailEnter already offers for resuming an EXISTING session, extended
- * here to a brand-new one. foreground() hands over the SAME terminal/TTY
- * (stdio: 'inherit') and blocks the whole TUI until the child exits, so
- * there was previously no way to have several sessions going at once — the
- * only way to get real parallelism is to run the new session in a genuinely
- * separate terminal tab/window, which only the human (not this process) can
- * open; pasting the copied command there is how. See sessions.js's Shift+N.
+ * Once the agent and directory are settled, offers the same "open here or
+ * copy command" choice resume-handoff.js's onDetailEnter already offers for
+ * resuming an EXISTING session — one shared shape instead of a separate
+ * Shift+N keybinding for the copy-only path (removed; used to decide this
+ * up front, before the agent/dir picker, rather than after). "Open here"
+ * hands the terminal to the agent in the foreground — foreground() takes
+ * over the SAME terminal/TTY (stdio: 'inherit') and blocks the whole TUI
+ * until the child exits, so it's not how to get several sessions going at
+ * once. "Copy command" instead copies the equivalent `cd <dir> && <bin>
+ * <args>` shell command to the clipboard, to paste into a separate terminal
+ * tab/window — the only way to get real parallelism, since only the human
+ * (not this process) can open one.
  */
-export function launchAgent(app, { folder, seed, parentId, title, copyOnly = false } = {}, done) {
+export function launchAgent(app, { folder, seed, parentId, title } = {}, done) {
   const available = Object.entries(AGENTS).filter(([, a]) => which(a.bin));
   if (!available.length) {
     app.notify(t('launch.noAgents'), 3);
@@ -64,8 +53,19 @@ export function launchAgent(app, { folder, seed, parentId, title, copyOnly = fal
       if (!agentKey) return done && done();
       resolveDir(app, folder, (dir) => {
         if (!dir) return done && done();
-        if (copyOnly) return copyNewCommand(app, { agentKey, dir, folder, seed }, done);
-        run(app, { agentKey, dir, folder, seed, parentId }, done);
+        menu(
+          app,
+          t('launch.chooseAction'),
+          [
+            { label: t('resume.openHere'), value: 'here' },
+            { label: t('resume.copyCommand'), value: 'copy' },
+          ],
+          (choice) => {
+            if (choice === 'copy') return copyNewCommand(app, { agentKey, dir, folder, seed }, done);
+            if (choice === 'here') return run(app, { agentKey, dir, folder, seed, parentId }, done);
+            done && done();
+          },
+        );
       });
     },
   );

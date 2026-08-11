@@ -987,25 +987,18 @@ export function sessionsView(opts = {}) {
       detailBox.key('x', doDelete);
 
       // Capture: launch a new agent session in the current folder's context.
+      // Once an agent/directory are picked, launchAgent() (launch.js) itself
+      // asks "open here or copy command (new tab)" — same choice
+      // resume-handoff.js's onDetailEnter offers for an existing session.
+      // "Copy command" doesn't actually capture anything here (no real
+      // launch, no scan()), so reloadFolders()/reloadList() below are a
+      // harmless no-op refresh in that case, not a bug.
       listBox.key('n', () => {
         // launchAgent() (launch.js) already reindexes exactly what scan()
         // captured internally — no need to also reindex the whole store here.
         launchAgent(app, { folder: state.folder }, () => {
           reloadFolders();
           reloadList();
-          listBox.focus();
-          app.render();
-        });
-      });
-      // Shift+N: same agent/directory picker as n, but copies the equivalent
-      // shell command to the clipboard instead of taking over this terminal
-      // — n's foreground() hands over the SAME tty and blocks the whole TUI
-      // until that one session exits, so it's the only way to have several
-      // new sessions going in parallel (paste into as many separate tabs as
-      // you want). Nothing was actually captured here (no real launch, no
-      // scan()), so no reloadFolders()/reloadList() — just refocus.
-      listBox.key('S-n', () => {
-        launchAgent(app, { folder: state.folder, copyOnly: true }, () => {
           listBox.focus();
           app.render();
         });

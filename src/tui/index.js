@@ -7,6 +7,7 @@ import { PERSONAS } from './personas.js';
 import { C } from './theme.js';
 import { t, getLocale, setLocale } from './i18n.js';
 import { pendingSuggestions } from '../organize.js';
+import { pendingKnowledgeReviews } from '../insight.js';
 import { startTuiRoutine } from '../daemon.js';
 import { loadConfig, saveConfig } from '../config.js';
 import * as data from './data.js';
@@ -57,6 +58,14 @@ function pickPersona(app, cb) {
 function notifyPostMount(app) {
   const pending = pendingSuggestions().length;
   if (pending) return app.notify(t('smart.pendingOnOpen', pending), 5);
+  // Same tier as the smart-organize toast above: something the daemon
+  // already computed overnight (digestCycle's knowledge-refresh proposals —
+  // see insight.js), waiting on a human decision. No toast fires the moment
+  // it's computed (digestCycle itself is silent) — this is the deliberately
+  // deferred "you didn't check `d` yet, here's a nudge next time you open
+  // Mycelium" surface the user asked for, not an interrupt at generation time.
+  const knowledgePending = pendingKnowledgeReviews().length;
+  if (knowledgePending) return app.notify(t('digest.pendingOnOpen', knowledgePending), 5);
   const unfiled = data.sessions({ folder: null }).length;
   if (!data.folders().list.length && unfiled >= 3) {
     app.notify(t('sessions.unfiledHint', unfiled), 8);

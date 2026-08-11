@@ -11,7 +11,7 @@ const { emptyNeutral } = await import('../src/schema.js');
 const { saveRaw } = await import('../src/scanner.js');
 const { mkdir } = await import('../src/organize.js');
 const { TREE_DIR } = await import('../src/paths.js');
-const { assembleContext, injectAgentsMd, contextForSession } = await import('../src/reuse.js');
+const { assembleContext, injectAgentsMd, contextForSession, dirsForFolder } = await import('../src/reuse.js');
 
 function writeKnowledge(folderPath, text) {
   mkdir(folderPath);
@@ -122,6 +122,24 @@ test('injectAgentsMd() never duplicates the CLAUDE.md bridge line on repeated ca
   const claudeMd = readFileSync(join(targetDir, 'CLAUDE.md'), 'utf8');
   const bridgeCount = (claudeMd.match(/@AGENTS\.md/g) || []).length;
   assert.equal(bridgeCount, 1);
+});
+
+test('dirsForFolder() returns distinct existing working directories used by a folder subtree, deduplicated', () => {
+  const dirA = mkdtempSync(join(tmpdir(), 'mycelium-dirs-'));
+  const dirB = mkdtempSync(join(tmpdir(), 'mycelium-dirs-'));
+  saveRaw({ ...emptyNeutral('dff-1', 'claude'), folder: 'dff-folder', projectDir: dirA });
+  saveRaw({ ...emptyNeutral('dff-2', 'claude'), folder: 'dff-folder', projectDir: dirA }); // same dir — deduplicated
+  saveRaw({ ...emptyNeutral('dff-3', 'claude'), folder: 'dff-folder/sub', cwd: dirB }); // subtree, cwd fallback
+  saveRaw({ ...emptyNeutral('dff-4', 'claude'), folder: 'dff-folder', projectDir: '/no/such/dir/at/all' }); // doesn't exist — excluded
+  saveRaw({ ...emptyNeutral('dff-5', 'claude'), folder: 'unrelated-folder', projectDir: dirA }); // outside the subtree — excluded
+
+  const dirs = dirsForFolder('dff-folder');
+  assert.deepEqual([...dirs].sort(), [dirA, dirB].sort());
+});
+
+test('dirsForFolder() returns an empty array for a falsy folder', () => {
+  assert.deepEqual(dirsForFolder(null), []);
+  assert.deepEqual(dirsForFolder(''), []);
 });
 
 test('contextForSession() resolves a session\'s folder context, and fails cleanly for a missing session', () => {
