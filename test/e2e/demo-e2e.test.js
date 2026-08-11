@@ -147,10 +147,12 @@ test('demo: full lifecycle walkthrough — organize, learn, reuse, merge, split,
     await waitFor(() => app.screen.children.length === baseline3, { timeoutMs: 1000 });
 
     // Step 9/10 — select both express-reorder sessions (backend + frontend),
-    // Shift+M merge. No LLM call — mergeSessions() is synchronous, so no
-    // poll needed, just a settle. A literal uppercase char over the raw
-    // byte stream arrives as key.name:'m' + key.shift:true, exactly like a
-    // real terminal — that's what listBox.key('S-m', ...) actually matches
+    // Shift+M merge. mergeSessions() itself is synchronous, but the handler
+    // now also auto-summarizes the result (autoTagSession(), same mocked
+    // LLM as everything else) — waitFor()s below poll real state either way,
+    // so this doesn't need special-casing. A literal uppercase char over the
+    // raw byte stream arrives as key.name:'m' + key.shift:true, exactly like
+    // a real terminal — that's what listBox.key('S-m', ...) actually matches
     // internally.
     sendKey(input, 'space');
     sendKey(input, 'down');
@@ -166,6 +168,13 @@ test('demo: full lifecycle walkthrough — organize, learn, reuse, merge, split,
       'retail-website/express-reorder',
       'merge kept the shared folder instead of landing unfiled — regression test',
     );
+    // Auto-summarize runs AFTER the UI already recovered (see sessions.js) —
+    // give it a moment past the mock's own delay before checking the result.
+    await waitFor(() => !!allRaw().find((s) => s.id === merged.id)?.extracted.summary, { timeoutMs: 2000 });
+    assert.ok(
+      allRaw().find((s) => s.id === merged.id).extracted.summary,
+      'merge auto-summarizes the result — regression test for the "merge produces an empty session" complaint',
+    );
 
     // Step 11/12 — Shift+S split (mocked LLM), then bare Enter (regression
     // test: split's review list must default-select everything, or a bare
@@ -178,6 +187,35 @@ test('demo: full lifecycle walkthrough — organize, learn, reuse, merge, split,
     const pieces = allRaw().filter((s) => s.splitFrom === merged.id);
     assert.equal(pieces.length, 2, 'both split pieces created and visible — regression test');
     for (const p of pieces) assert.equal(p.folder, 'retail-website/express-reorder');
+    // Same auto-summarize check, for each split piece this time.
+    await waitFor(
+      () => allRaw().filter((s) => s.splitFrom === merged.id).every((p) => p.extracted.summary),
+      { timeoutMs: 2000 },
+    );
+
+    // Shift+S on a split PIECE reverts the whole split instead of proposing
+    // a fresh one — reloadList() after applying the split doesn't pin the
+    // cursor to any particular row, so navigate to a known piece explicitly
+    // rather than assume where it landed. unsplit()/unmerge() used to be
+    // CLI-only — this is the TUI-reachable path the split.done toast above
+    // has pointed at since `mycelium unsplit <id>` was added.
+    for (let i = 0; i < 10 && api.row?.id !== pieces[0].id; i++) await sendKeys(input, ['down'], 20);
+    assert.equal(api.row?.id, pieces[0].id, 'navigated the cursor onto a split piece');
+    const baseline5 = app.screen.children.length;
+    sendKey(input, 'S');
+    await waitFor(() => allRaw().filter((s) => s.splitFrom === merged.id).length === 0, { timeoutMs: 2000 });
+    assert.equal(app.screen.children.length, baseline5, 'revert is instant — no modal opened, unlike a fresh split proposal');
+    assert.ok(allRaw().some((s) => s.id === merged.id), 'the merged session itself is untouched by reverting its split');
+
+    // Shift+M on the merged session reverts the merge — same
+    // explicit-navigation reasoning as above, not an assumed cursor position.
+    for (let i = 0; i < 10 && api.row?.id !== merged.id; i++) await sendKeys(input, ['down'], 20);
+    assert.equal(api.row?.id, merged.id, 'navigated the cursor onto the merged session');
+    sendKey(input, 'M');
+    await waitFor(() => !allRaw().some((s) => s.id === merged.id), { timeoutMs: 2000 });
+    const restored = allRaw().filter((s) => merged.mergedFrom.includes(s.id));
+    assert.equal(restored.length, 2, 'both originals restored after unmerge');
+    for (const s of restored) assert.equal(s.supersededBy.length, 0, 'originals are no longer marked as superseded');
   } finally {
     cleanup(app);
   }

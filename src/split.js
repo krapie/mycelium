@@ -81,6 +81,14 @@ export function applySplit(sessionId, ranges) {
     piece.turns = slice;
     piece.splitFrom = sessionId;
     piece.extracted.title = r.label || null;
+    // Locked for the same reason mergeSessions() now locks an explicit
+    // merge title — this came from an LLM boundary suggestion the human
+    // already reviewed and accepted (or the "턴 N-M" fallback, still a real
+    // anchor), so the auto-summarize pass sessions.js runs right after a
+    // split (autoTagSession(), same call `a` uses) must not silently
+    // replace it with something else; titleLocked is what already protects
+    // a deliberately-set title from that.
+    piece.titleLocked = !!piece.extracted.title;
     piece.artifacts.filesChanged = original.artifacts.filesChanged || [];
     // Same folder as the original, not left unfiled — a split is a
     // deliberate reorganization of one already-placed session, so its

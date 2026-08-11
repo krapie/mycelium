@@ -62,6 +62,22 @@ function knowledgePrompt(folder) {
   return `아래는 "${folder}" 작업 공간에서 있었던 세션 요약과 결정들이다. 이 공간에서 새 작업을 시작하는 AI가 미리 알아야 할 "프로젝트 지식"을 정리해라.`;
 }
 
+// Mirrors learn.js's buildPrompt()/sessionExcerpt() shape closely enough to
+// exercise the dispatch (the "decisions" substring) and mockAutotag()'s own
+// line-parsing — not a byte-for-byte copy of the real (Korean) prompt text.
+function autotagPrompt(userText, assistantText) {
+  return `아래 세션 기록을 읽고 JSON으로만 출력해라.
+
+세션 기록:
+"""
+user: ${userText}
+assistant: ${assistantText}
+"""
+
+출력 형식:
+{"title": "", "tags": [], "summary": "", "decisions": [], "todos": []}`;
+}
+
 test('createTutorialMockProvider("swe") classifies placement candidates by storyline keyword into English folders', async () => {
   const provider = createTutorialMockProvider('swe');
   const reply = await provider(
@@ -243,6 +259,40 @@ test('mockSplit uses the active locale\'s splitLabels, still computed from the r
     { from: 1, to: 6, label: 'DX/VPC/ALB 전반 조사' },
     { from: 7, to: 12, label: 'MTU 근본 원인과 해결' },
   ]);
+});
+
+test('provider returns a valid autotag-shaped JSON reply, derived from the actual turn content', async () => {
+  // Regression test: Shift+M/Shift+S's merge/split handlers (sessions.js)
+  // now call autoTagSession() on their own result right after — without a
+  // dispatch case for this prompt shape, the mock's knowledge-shaped
+  // fallback isn't valid JSON, so autoTagSession() silently failed
+  // (unparseable reply) and a demo merge/split kept showing an empty
+  // summary, the exact "merge/split quality is too low" complaint this
+  // whole feature exists to fix.
+  const provider = createTutorialMockProvider('swe');
+  const reply = await provider(autotagPrompt('How do I fix the flaky test?', 'Added a retry with backoff.'));
+  const parsed = JSON.parse(reply);
+  assert.ok(typeof parsed.title === 'string' && parsed.title.length > 0);
+  assert.ok(typeof parsed.summary === 'string' && parsed.summary.length > 0);
+  assert.ok(Array.isArray(parsed.tags));
+  assert.ok(Array.isArray(parsed.decisions));
+  assert.ok(Array.isArray(parsed.todos));
+  assert.match(parsed.summary, /flaky test/, 'summary is derived from the actual turn content, not a fixed canned string');
+});
+
+test('provider\'s autotag mock varies per session instead of returning identical text every time', async () => {
+  const provider = createTutorialMockProvider('swe');
+  const a = JSON.parse(await provider(autotagPrompt('Question about caching.', 'Use an LRU cache.')));
+  const b = JSON.parse(await provider(autotagPrompt('Question about retries.', 'Use exponential backoff.')));
+  assert.notEqual(a.summary, b.summary);
+  assert.notEqual(a.title, b.title);
+});
+
+test('provider\'s autotag mock respects locale', async () => {
+  const provider = createTutorialMockProvider('swe', 'ko');
+  const reply = await provider(autotagPrompt('캐싱 관련 질문', 'LRU 캐시를 사용하세요'));
+  const parsed = JSON.parse(reply);
+  assert.ok(/[가-힣]/.test(parsed.summary), 'ko locale summary must actually contain Korean');
 });
 
 test('provider resolves after a deliberate delay, not instantly', async () => {
