@@ -138,6 +138,24 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   content) if not; no-ops if no `KNOWLEDGE.md` exists in the ancestor path. [tested]
   (including the repeated-call/no-duplication invariant — no longer the
   untested riskiest write in the app)
+- **`CLAUDE.md` bridge, so Claude Code actually sees any of this.**
+  `injectAgentsMd()` also unconditionally calls `ensureClaudeBridge(targetDir)`
+  — confirmed against Anthropic's own current docs that **Claude Code does
+  not read `AGENTS.md` natively** (it only ever auto-loads `CLAUDE.md`), so
+  writing `AGENTS.md` alone silently did nothing for a Claude Code session.
+  Codex needs no bridge (walks up the tree for `AGENTS.md`, plus a global
+  `~/.codex/AGENTS.md`); Kiro treats a root `AGENTS.md` as steering context,
+  though a still-open upstream bug (`kirodotdev/Kiro#6755`) means it's
+  sometimes listed as loaded without actually being read — not something
+  Mycelium can work around from its side. The bridge is one line
+  (`@AGENTS.md`), idempotent (checks for that substring first, so repeat
+  injects never duplicate it), and additive — prepended ahead of whatever a
+  real `CLAUDE.md` already has, never rewriting it. Unconditional rather
+  than gated on which agent is about to launch: cheap and harmless for
+  Codex/Kiro users, and covers manual `i`-key inject, which doesn't know the
+  target agent up front. [tested] (fresh-create, prepend-without-touching-
+  existing-content, and no-duplication-on-repeat all covered in
+  `test/reuse.test.js`, same pattern as `AGENTS.md`'s own marker-block tests)
 - **Preview what a session would inherit.** `contextForSession(sessionId)`. [tested]
 
 ## Handoff (`src/handoff.js`)

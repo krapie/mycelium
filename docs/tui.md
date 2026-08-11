@@ -81,7 +81,7 @@ Once a session is moved to `_archive`, re-scanning won't bring it back out —
 | `/` | Full-text search |
 | `v` | Switch to the **Calendar tab** — the Sessions screen becomes a monthly grid \| that day's session list \| detail, three panels (same k9s-style drill-down: `←`/`→` move the day cursor ±1 day and `↑`/`↓` ±1 week, both rolling into the adjacent month at the edges and refreshing the list/detail live, `Enter`/`→` into the right panel, `Esc`/`←` back). `PgUp`/`PgDn` jumps a whole month. Press `v` again (or `Esc` from the grid) to return to Sessions — folder selection, search terms, etc. are preserved |
 | `s` | **Scan** right from the TUI (same as `mycelium scan` — pulls in sessions left open in other tabs/terminals without leaving the TUI). Doesn't assign folders — new sessions land unfiled (`New`, `[New]`), sort with `o` above |
-| `w` / `c` / `i` / `d` | Extract folder knowledge (preview then confirm) / view context / inject AGENTS.md (preview then confirm) / read digests (`n`/`w` inside to generate today's/this week's) |
+| `w` / `c` / `i` / `d` | Extract folder knowledge (preview then confirm) / view context / inject AGENTS.md — also drops a one-line CLAUDE.md bridge so Claude Code actually reads it (preview then confirm) / read digests (`n`/`w` inside to generate today's/this week's) |
 | `g` | **Re-show the getting-started guide** — the short walkthrough (4-stage lifecycle + key shortcuts) that auto-shows once on first launch, any time |
 | `q` | Quit |
 

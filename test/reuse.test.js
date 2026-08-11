@@ -90,6 +90,40 @@ test('injectAgentsMd() replaces only the marker block on repeated calls — no d
   assert.equal(beginCount, 1);
 });
 
+test('injectAgentsMd() also creates a CLAUDE.md bridging to AGENTS.md, since Claude Code does not read AGENTS.md on its own', () => {
+  writeKnowledge('claude-bridge-fresh', 'Bridge knowledge.');
+  const targetDir = mkdtempSync(join(tmpdir(), 'mycelium-agents-'));
+  injectAgentsMd(targetDir, 'claude-bridge-fresh');
+  const claudeMd = readFileSync(join(targetDir, 'CLAUDE.md'), 'utf8');
+  assert.match(claudeMd, /@AGENTS\.md/);
+});
+
+test('injectAgentsMd() prepends the bridge to an existing CLAUDE.md without touching its own content', () => {
+  writeKnowledge('claude-bridge-existing', 'More bridge knowledge.');
+  const targetDir = mkdtempSync(join(tmpdir(), 'mycelium-agents-'));
+  mkdirSync(targetDir, { recursive: true });
+  writeFileSync(join(targetDir, 'CLAUDE.md'), '# My own Claude instructions\n\nDo not touch this.\n');
+
+  injectAgentsMd(targetDir, 'claude-bridge-existing');
+  const claudeMd = readFileSync(join(targetDir, 'CLAUDE.md'), 'utf8');
+  assert.match(claudeMd, /@AGENTS\.md/);
+  assert.match(claudeMd, /My own Claude instructions/);
+  assert.match(claudeMd, /Do not touch this\./);
+});
+
+test('injectAgentsMd() never duplicates the CLAUDE.md bridge line on repeated calls', () => {
+  writeKnowledge('claude-bridge-repeat', 'v1');
+  const targetDir = mkdtempSync(join(tmpdir(), 'mycelium-agents-'));
+
+  injectAgentsMd(targetDir, 'claude-bridge-repeat');
+  writeKnowledge('claude-bridge-repeat', 'v2');
+  injectAgentsMd(targetDir, 'claude-bridge-repeat');
+
+  const claudeMd = readFileSync(join(targetDir, 'CLAUDE.md'), 'utf8');
+  const bridgeCount = (claudeMd.match(/@AGENTS\.md/g) || []).length;
+  assert.equal(bridgeCount, 1);
+});
+
 test('contextForSession() resolves a session\'s folder context, and fails cleanly for a missing session', () => {
   writeKnowledge('ctx-folder', 'Context-for-session knowledge.');
   const n = emptyNeutral('ctx-sess-1', 'claude');
