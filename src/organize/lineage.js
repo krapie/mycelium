@@ -38,6 +38,18 @@ export function tag(sessionId, add = [], remove = []) {
  * (empty string) unlocks it again, so the next auto-tag fills it back in.
  * Summary always refreshes on the next `a` regardless, same as if this had
  * never run.
+ *
+ * Setting a non-empty title ALSO marks the session organizedBy:'human' —
+ * same sticky flag move()/tag()/applyPlacements() already set the moment a
+ * person makes a deliberate decision about a session. Without this, a
+ * session that landed in a folder via auto-classification (never went
+ * through the reviewed `o` → apply flow, so organizedBy stayed non-human)
+ * stayed "fair game" for classificationCandidates() — a LATER `o` press
+ * (even one scoped to a totally different folder) or the background daemon
+ * cycle could silently re-classify it, including back to unfiled, with
+ * nothing about renaming it having signaled "leave this one alone." One-way
+ * like every other organizedBy write in this file — clearing the title
+ * unlocks the title again but does not un-human the session.
  */
 export function setContent(sessionId, { title, summary } = {}) {
   const n = loadRaw(sessionId);
@@ -45,6 +57,7 @@ export function setContent(sessionId, { title, summary } = {}) {
   if (typeof title === 'string') {
     n.extracted.title = title.trim() || null;
     n.titleLocked = !!n.extracted.title;
+    if (n.titleLocked) n.organizedBy = 'human';
   }
   if (typeof summary === 'string') n.extracted.summary = summary.trim() || null;
   saveRaw(n);

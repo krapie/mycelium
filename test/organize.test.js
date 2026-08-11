@@ -113,6 +113,39 @@ test('setContent() sets summary independently of title', () => {
   assert.equal(res.session.titleLocked, false);
 });
 
+test('setContent() marks the session organizedBy:human when a non-empty title is set — regression test', () => {
+  // Without this, a session auto-classified into a folder (organizedBy left
+  // at the schema default 'auto') stayed eligible for re-classification by
+  // classificationCandidates() (filters on organizedBy !== 'human') even
+  // after a human explicitly renamed it — a later `o` press (in a totally
+  // different folder's scope) or the background daemon cycle could silently
+  // reshuffle/unfile it, with nothing about the rename itself protecting it,
+  // unlike move()/tag()/applyPlacements() which all already mark this.
+  seed('set-3', { folder: 'some-folder' });
+  const res = setContent('set-3', { title: 'Renamed' });
+  assert.equal(res.session.organizedBy, 'human');
+  assert.equal(res.session.folder, 'some-folder', 'folder itself is untouched by setContent()');
+});
+
+test('setContent() clearing the title back to empty does NOT un-human the session', () => {
+  // organizedBy is a one-way sticky flag everywhere else in this file
+  // (move()/tag() never un-set it either) — unlocking the title (so the
+  // next auto-tag can regenerate one) is a separate concern from folder
+  // placement eligibility, and shouldn't silently make an already-curated
+  // session "fair game" for re-classification again.
+  seed('set-4');
+  setContent('set-4', { title: 'Renamed' });
+  const res = setContent('set-4', { title: '' });
+  assert.equal(res.session.titleLocked, false);
+  assert.equal(res.session.organizedBy, 'human');
+});
+
+test('setContent() summary-only calls do not touch organizedBy', () => {
+  seed('set-5');
+  const res = setContent('set-5', { summary: 'just a summary, no title' });
+  assert.equal(res.session.organizedBy, 'auto');
+});
+
 test('deleteSession() removes the raw file and adds the id to config.excludedSessionIds', async () => {
   seed('del-1');
   const res = deleteSession('del-1');

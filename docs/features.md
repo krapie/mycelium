@@ -562,7 +562,7 @@ and the wait reads as "did that run at all?" rather than a real (much
 faster) stand-in for the production wait. This is also what keeps the
 tutorial's folder/knowledge output in English regardless of locale, since
 the real classification/knowledge prompts are
-Korean by design (see `AGENT.md`) and would otherwise mirror that language
+Korean by design (see `AGENTS.md`) and would otherwise mirror that language
 back for any newly-proposed folder name.
 
 **Demo → real handoff.** Finishing the tutorial's final step (`completed:
