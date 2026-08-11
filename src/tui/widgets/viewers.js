@@ -100,6 +100,17 @@ export function digestReader(app) {
     }
   };
   let files = listFiles();
+  // A synthetic first row when a knowledge-refresh proposal is waiting (see
+  // insight.js's pendingKnowledgeReviews(), staged by daemon/cycles.js's
+  // digestCycle) — opened with the exact same Enter/`select` a real digest
+  // file already uses, not a separate keybinding. Mirrors `o` (smart
+  // organize): there's no distinct "now open the review" step there either,
+  // pressing the one key IS what shows the review.
+  let pendingCount = pendingKnowledgeReviews().length;
+  const displayItems = () => {
+    const base = files.length ? files : [t('digest.empty')];
+    return pendingCount ? [`{${C.spore}-fg}${t('digest.reviewEntry', pendingCount)}{/}`, ...base] : base;
+  };
 
   const box = blessed.list({
     parent: app.screen,
@@ -108,7 +119,7 @@ export function digestReader(app) {
     width: '50%',
     height: '60%',
     label: t('digest.label'),
-    items: files.length ? files : [t('digest.empty')],
+    items: displayItems(),
     tags: true,
     keys: true,
     mouse: true,
@@ -120,7 +131,8 @@ export function digestReader(app) {
 
   const refresh = () => {
     files = listFiles();
-    box.setItems(files.length ? files : [t('digest.empty')]);
+    pendingCount = pendingKnowledgeReviews().length;
+    box.setItems(displayItems());
     app.render();
   };
   const generate = async (period) => {
@@ -149,30 +161,33 @@ export function digestReader(app) {
   });
   box.key('n', () => generate('day'));
   box.key('w', () => generate('week'));
-  box.key('r', () => reviewKnowledge(app, box));
   box.on('select', (_, idx) => {
+    if (pendingCount && idx === 0) return reviewKnowledge(app, box, refresh);
+    const fileIdx = pendingCount ? idx - 1 : idx;
     if (!files.length) return;
-    const path = join(DIGEST_DIR, files[idx]);
+    const path = join(DIGEST_DIR, files[fileIdx]);
     box.destroy();
     const md = existsSync(path) ? readFileSync(path, 'utf8') : t('digest.readFailed');
-    textView(app, files[idx], md);
+    textView(app, files[fileIdx], md);
   });
 }
 
 /**
- * `r` from the digest reader — review knowledge-refresh proposals
- * digestCycle (daemon/cycles.js) staged overnight for folders that had
- * activity that day (see insight.js's pendingKnowledgeReviews()). Same
- * multiSelectList shape sessions.js's `o` (smart organize) review already
- * uses: every folder starts checked, Enter applies the checked ones, Esc
- * cancels the whole batch — but either way every folder shown here is
- * cleared from the pending state (approved+injected, or dismissed), so it
- * won't keep nagging; a later manual `w` can always regenerate a dismissed
- * one from scratch.
+ * Opened by selecting the digest reader's synthetic "review knowledge" row —
+ * review knowledge-refresh proposals digestCycle (daemon/cycles.js) staged
+ * overnight for folders that had activity that day (see insight.js's
+ * pendingKnowledgeReviews()). Same multiSelectList shape sessions.js's `o`
+ * (smart organize) review already uses: every folder starts checked, Enter
+ * applies the checked ones, Esc cancels the whole batch — but either way
+ * every folder shown here is cleared from the pending state (approved+
+ * injected, or dismissed), so it won't keep nagging; a later manual `w` can
+ * always regenerate a dismissed one from scratch. `refresh` is the digest
+ * reader's own list-items refresh, so the synthetic row disappears/updates
+ * its count once this resolves.
  */
-function reviewKnowledge(app, digestBox) {
+function reviewKnowledge(app, digestBox, refresh) {
   const pending = pendingKnowledgeReviews();
-  if (!pending.length) return app.notify(t('digest.reviewNone'), 3);
+  if (!pending.length) return; // the row that opens this only shows when pending.length > 0
   digestBox.hide();
   app.render();
   const items = pending.map((p) => ({
@@ -206,6 +221,7 @@ function reviewKnowledge(app, digestBox) {
         }
       }
       app.notify(applied ? t('digest.reviewApplied', applied) : t('digest.reviewSkipped'), 4);
+      refresh();
       digestBox.show();
       digestBox.focus();
       app.render();

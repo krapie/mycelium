@@ -138,8 +138,9 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   pending file's mere existence *is* the review queue, no separate store —
   same "plain file is the state" shape as `organize/classify.js`'s
   session-level `suggestedFolder` queue, just folder-scoped. Driven by
-  `daemon/cycles.js`'s `digestCycle` (below); reviewed via the TUI's digest
-  reader `r` key (`docs/tui.md`'s "Day-end knowledge review"). [tested]
+  `daemon/cycles.js`'s `digestCycle` (below); reviewed via a synthetic row
+  in the TUI's digest reader (`docs/tui.md`'s "Day-end knowledge review").
+  [tested]
 
 ## Reuse — Context inheritance (`src/reuse.js`)
 
@@ -383,9 +384,9 @@ products), `h` handoff (post-launch folds a merge/split product into the
 new real session), detail-panel `Enter` resume-or-copy choice, `a` auto-tag
 (sequential batch with per-item progress + partial-failure tolerance), `e`
 rename title, `y` copy to clipboard, `d` digest reader (nested mini-screen,
-`r` inside to review knowledge-refresh proposals — see below), `c` view
-context, `i` inject AGENTS.md (preview-then-confirm, sibling to `w`).
-[untested]
+synthetic "review knowledge" row + `Enter` when a proposal is waiting — see
+below), `c` view context, `i` inject AGENTS.md (preview-then-confirm,
+sibling to `w`). [untested]
 
 **`n`: one flow for launching a new session, either here or as a copyable
 command — no separate `Shift+N` keybinding.** `launchAgent()`'s

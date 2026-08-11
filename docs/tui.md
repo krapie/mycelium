@@ -80,7 +80,7 @@ Once a session is moved to `_archive`, re-scanning won't bring it back out —
 | `/` | Full-text search |
 | `v` | Switch to the **Calendar tab** — the Sessions screen becomes a monthly grid \| that day's session list \| detail, three panels (same k9s-style drill-down: `←`/`→` move the day cursor ±1 day and `↑`/`↓` ±1 week, both rolling into the adjacent month at the edges and refreshing the list/detail live, `Enter`/`→` into the right panel, `Esc`/`←` back). `PgUp`/`PgDn` jumps a whole month. Press `v` again (or `Esc` from the grid) to return to Sessions — folder selection, search terms, etc. are preserved |
 | `s` | **Scan** right from the TUI (same as `mycelium scan` — pulls in sessions left open in other tabs/terminals without leaving the TUI). Doesn't assign folders — new sessions land unfiled (`New`, `[New]`), sort with `o` above |
-| `w` / `c` / `i` / `d` | Extract folder knowledge (preview then confirm) / view context / inject AGENTS.md — also drops a one-line CLAUDE.md bridge so Claude Code actually reads it (preview then confirm) / read digests (`n`/`w` inside to generate today's/this week's, `r` inside to review any knowledge-refresh proposals — see below) |
+| `w` / `c` / `i` / `d` | Extract folder knowledge (preview then confirm) / view context / inject AGENTS.md — also drops a one-line CLAUDE.md bridge so Claude Code actually reads it (preview then confirm) / read digests (`n`/`w` inside to generate today's/this week's; a "★ Review knowledge" row appears at the top when there's a proposal waiting — `Enter` on it to review, same as opening any digest — see below) |
 | `g` | **Re-show the getting-started guide** — the short walkthrough (4-stage lifecycle + key shortcuts) that auto-shows once on first launch, any time |
 | `q` | Quit |
 
@@ -103,10 +103,12 @@ each proposal sits as a `KNOWLEDGE.pending.md` next to that folder's real
 KNOWLEDGE.md until you review it.
 
 If a proposal is still unreviewed the next time you open Mycelium, a toast
-points you at `d`. Inside the digest reader, `r` opens the same
-checkbox-list review `o` (smart organize) already uses — every folder starts
-checked, `Space` to uncheck one you don't want, `Enter` applies the checked
-ones. **Approving a folder is the confirmation**: it writes KNOWLEDGE.md and
+points you at `d`. Inside the digest reader, a **"★ Review knowledge (N
+folders)"** row appears at the top of the list when one's waiting — `Enter`
+on it (same as opening any digest file) opens the same checkbox-list review
+`o` (smart organize) already uses: every folder starts checked, `Space` to
+uncheck one you don't want, `Enter` applies the checked ones. **Approving a
+folder is the confirmation**: it writes KNOWLEDGE.md and
 immediately injects into every working directory that folder's sessions
 have used — the same trust level `n`/`h`'s own silent auto-inject-on-launch
 already operates at, since the content landing there is exactly what was

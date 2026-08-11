@@ -599,7 +599,7 @@ test('demo: a stray Enter on step 1 does not falsely cascade the narrator forwar
   }
 });
 
-test('digest review (d, then r): approving a staged knowledge proposal writes KNOWLEDGE.md and injects AGENTS.md', async () => {
+test('digest review (d, then Enter on the review row): approving a staged knowledge proposal writes KNOWLEDGE.md and injects AGENTS.md', async () => {
   // Not part of the scripted tutorial (which deliberately uses `c`, not a
   // real launch, for its Reuse step — see tutorial.js's own comment) — this
   // exercises digestReader()'s review flow directly against a proposal
@@ -618,7 +618,11 @@ test('digest review (d, then r): approving a staged knowledge proposal writes KN
     await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 1000 });
     await settle();
     const afterDigestOpen = app.screen.children.length;
-    sendKey(input, 'r');
+    // The review row is a synthetic first item (see digestReader()'s
+    // displayItems()), already the default cursor position on a freshly
+    // opened list — Enter selects it exactly like opening any digest file
+    // would, no dedicated keybinding.
+    sendKey(input, 'enter');
     await waitFor(() => app.screen.children.length > afterDigestOpen, { timeoutMs: 1000 });
     await settle();
     sendKey(input, 'enter'); // defaultAll:true — applies the one pending folder shown
