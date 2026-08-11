@@ -100,7 +100,11 @@ export function createResumeHandoff(app, { getCurrentRow, afterResume, afterHand
         const n = data.detail(r.id);
         const res = resumeCommandLine({ id: r.id, source: r.source, cwd: n?.cwd, projectDir: n?.projectDir });
         if (!res.ok) return app.notify(res.error, 3);
-        app.notify(copyToClipboard(res.line) ? t('resume.copied') : t('resume.copyFailed'), 3);
+        // Longer duration + the actual command line, not just "copied" —
+        // pasting blind into a new tab without knowing what you're about to
+        // run isn't great, and if the copy itself failed (no clipboard
+        // tool), showing the line is how you'd get it at all.
+        app.notify(copyToClipboard(res.line) ? t('resume.copied', res.line) : t('resume.copyFailed', res.line), 6);
       }
     });
   };

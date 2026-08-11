@@ -15,14 +15,19 @@ import { getLocale } from './i18n.js';
 //
 // Dispatch is by a substring unique to each call site's own JSON response
 // schema: classify.js's suggestPlacements() prompt asks for `{"placements":
-// [...`, split.js's suggestSplitBoundaries() asks for `{"ranges":[...`;
-// insight.js's buildKnowledgeText() has neither (freeform prose), so it's
-// the fallback case. Not exhaustive — mycelium demo's freeform explore step
-// lets a curious user press keys outside the scripted path (`a` autotag,
-// `d` digest) that also route through complete() while this is still
-// active; those get the knowledge-shaped fallback, which is a harmless
-// mismatch (wrong-shaped text shown, nothing crashes or corrupts data), not
-// worth a 4th prompt-shape detector for paths the tutorial doesn't script.
+// [...`, split.js's suggestSplitBoundaries() asks for `{"ranges":[...`,
+// learn.js's autoTagSession() asks for `{"title": "", ..., "decisions": [],
+// ...`; insight.js's buildKnowledgeText() has none of those (freeform
+// prose), so it's the fallback case. Not fully exhaustive — mycelium demo's
+// freeform explore step lets a curious user press `d` (digest) too, which
+// also routes through complete() while this is still active; that one gets
+// the knowledge-shaped fallback, a harmless mismatch (wrong-shaped text
+// shown, nothing crashes or corrupts data), not worth a 5th detector for a
+// path the tutorial doesn't script. `a` (autotag) DOES get its own case
+// below — it's no longer just the manual explore-step key, since Shift+M/
+// Shift+S's merge/split handlers now call autoTagSession() on their own
+// result right after (see sessions.js) to avoid leaving a demo merge/split
+// looking empty until a separate manual `a`.
 //
 // Storyline content (folder/keywords/knowledge/splitLabels) lives in
 // personas.js, shared with tutorial-data.js, so the two can't drift out of
@@ -71,6 +76,27 @@ function mockKnowledge(storylines, prompt) {
   // classification does.
   const story = requested && storylines.find((s) => s.folder === requested || s.folder.startsWith(`${requested}/`));
   return story ? story.knowledge : '## Notes\n\n(no tutorial notes for this folder)';
+}
+
+// learn.js's sessionExcerpt() embeds the transcript right above the JSON
+// schema instruction as "role: text" lines — pulled out here for a crude
+// but content-DERIVED (not identical regardless of which session this
+// runs on) mock title/summary, so a merge/split result (or a manual `a`)
+// doesn't show the exact same canned text for every session in the demo.
+function mockAutotag(prompt, locale) {
+  const lines = prompt
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+  const firstUser = lines.find((l) => l.startsWith('user:'))?.slice(5).trim() || '';
+  const lastTurn = [...lines].reverse().find((l) => /^(user|assistant):/.test(l));
+  const lastText = lastTurn?.replace(/^(user|assistant):\s*/, '') || '';
+  const title = (firstUser || lastText || 'Session').slice(0, 40);
+  const summary =
+    locale === 'ko'
+      ? `${firstUser.slice(0, 60) || '이 세션'}에 대해 다룸 — ${lastText.slice(0, 60) || '진행 중'}.`
+      : `Covers ${firstUser.slice(0, 60) || 'this session'} — ${lastText.slice(0, 80) || 'in progress'}.`;
+  return JSON.stringify({ title, tags: [], summary, decisions: [], todos: [] });
 }
 
 // The real prompt (split.js's suggestSplitBoundaries()) numbers every turn
@@ -123,6 +149,7 @@ export function createTutorialMockProvider(personaId = 'swe', locale = getLocale
   return function tutorialMockProvider(prompt) {
     if (prompt.includes('"placements"')) return delayed(mockPlacements(storylines, prompt));
     if (prompt.includes('"ranges"')) return delayed(mockSplit(mergeStoryline, prompt));
+    if (prompt.includes('"decisions"')) return delayed(mockAutotag(prompt, locale));
     return delayed(mockKnowledge(storylines, prompt));
   };
 }

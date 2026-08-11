@@ -89,7 +89,11 @@ function copyNewCommand(app, { agentKey, dir, folder, seed }, done) {
     app.notify(res.error, 3);
     return done && done([]);
   }
-  app.notify(copyToClipboard(res.line) ? t('resume.copied') : t('resume.copyFailed'), 3);
+  // Longer duration + the actual command line, not just "copied" — pasting
+  // blind into a new tab without knowing what you're about to run isn't
+  // great, and if the copy itself failed (no clipboard tool), showing the
+  // line is how you'd get it at all.
+  app.notify(copyToClipboard(res.line) ? t('resume.copied', res.line) : t('resume.copyFailed', res.line), 6);
   done && done([]);
 }
 

@@ -183,7 +183,14 @@ export function mergeSessions(ids, { title } = {}) {
   merged.startedAt = originals[0].startedAt;
   merged.endedAt = originals[originals.length - 1].endedAt;
   merged.mergedFrom = originals.map((n) => n.id);
-  if (title) merged.extracted.title = title;
+  // Locked the same way setContent()'s manual title-edit is — a human typed
+  // this deliberately, so the auto-summarize pass sessions.js runs right
+  // after a merge (autoTagSession(), same call `a` uses) must not silently
+  // overwrite it; titleLocked is exactly the flag that already protects it.
+  if (title) {
+    merged.extracted.title = title;
+    merged.titleLocked = true;
+  }
   // Land in the shared folder rather than unfiled, when there is one — a
   // merge is a deliberate human action on already-placed sessions, same
   // reasoning applySplit() already uses for its own pieces ("not left

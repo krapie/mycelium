@@ -19,8 +19,9 @@ import {
   classificationCandidates,
   listTreeDirs,
   mergeSessions,
+  unmerge,
 } from '../../organize.js';
-import { suggestSplitBoundaries, applySplit } from '../../split.js';
+import { suggestSplitBoundaries, applySplit, unsplit } from '../../split.js';
 import { scan } from '../../scanner.js';
 import { pickFolder, editTags, menu, multiSelectList } from '../widgets/pickers.js';
 import { createCalendarTab } from './calendar.js';
@@ -570,10 +571,40 @@ export function sessionsView(opts = {}) {
       // turns, just supersedes them; fully reversible via `mycelium
       // unmerge`). Blessed reports Shift+letter as 'S-<letter>', not the
       // literal uppercase character (confirmed in neo-blessed's program.js).
+      //
+      // Same key also REVERTS, when there's nothing to merge in the first
+      // place: 0 or 1 target (selected, or just the row under the cursor if
+      // nothing's selected) that turns out to BE a merge product. unmerge()/
+      // unsplit() were previously CLI-only — `mycelium unmerge <id>` — which
+      // meant actually reverting meant leaving the TUI, even though the toast
+      // (merge.done below) has told you the command exists since it was
+      // added. Doesn't touch the "merge 2+ selected" path at all: this only
+      // fires when that path wouldn't have had enough targets anyway.
+      const doUnmerge = (id) => {
+        const n = data.detail(id);
+        if (!n?.mergedFrom?.length) return false;
+        const res = unmerge(id);
+        if (!res.ok) {
+          app.notify(res.error, 3);
+          return true;
+        }
+        state.selected.clear();
+        data.refreshMany([id, ...res.restored.map((s) => s.id)]);
+        reloadFolders();
+        reloadList();
+        app.notify(t('merge.reverted', res.restored.length), 3);
+        listBox.focus();
+        app.render();
+        return true;
+      };
       listBox.key('S-m', () => {
         const ids = [...state.selected];
+        if (ids.length <= 1) {
+          const targetId = ids[0] ?? currentRow()?.id;
+          if (targetId && doUnmerge(targetId)) return;
+        }
         if (ids.length < 2) return app.notify(t('merge.needsTwo'), 3);
-        textPrompt(app, t('merge.titlePrompt'), suggestMergeTitle(ids), (title) => {
+        textPrompt(app, t('merge.titlePrompt'), suggestMergeTitle(ids), async (title) => {
           if (title === null) return listBox.focus(); // Esc — cancelled
           const res = mergeSessions(ids, { title: title.trim() || undefined });
           if (!res.ok) return app.notify(res.error, 3);
@@ -581,13 +612,40 @@ export function sessionsView(opts = {}) {
           data.refreshMany([res.merged.id, ...ids]);
           reloadFolders();
           reloadList();
+          // Restore focus/render synchronously, before the async
+          // auto-summarize below — textPrompt's own blessed.prompt takes
+          // focus while open and doesn't hand it back on its own once
+          // destroyed, so leaving this until after an awaited LLM call
+          // left listBox unfocused (and therefore deaf to the very next
+          // keypress, e.g. Shift+S right after a merge) for however long
+          // that call took.
+          listBox.focus();
+          app.render();
+          // Real title/summary/tags for the merged result, same LLM call `a`
+          // uses — without this, mergeSessions() alone leaves summary empty
+          // (and title empty too, unless typed above) until a separate
+          // manual `a`, which read as "merge produces a broken/empty
+          // session." Best-effort: a failed call here doesn't undo the
+          // merge that already happened, just leaves it for a later manual
+          // `a` — same degrade-gracefully shape autoTagSession() already
+          // has everywhere else it's called. Runs AFTER the UI has already
+          // recovered — the merged session shows up immediately (title
+          // blank unless typed above), summary fills in a moment later.
+          const spin = app.startSpinner(t('merge.summarizing'));
+          try {
+            await autoTagSession(res.merged.id);
+          } catch {
+            /* best-effort — merge already succeeded regardless */
+          }
+          spin.stop();
+          data.refreshOne(res.merged.id);
+          reloadList();
           // Longer duration + the actual id: merge is fully reversible
           // (`mycelium unmerge <id>` restores the originals, deletes this
           // record) but that's only discoverable if this toast actually
           // says so — a bare "Merged N sessions" gave no hint it could be
           // undone at all, let alone how.
           app.notify(t('merge.done', ids.length, res.merged.id.slice(0, 8)), 6);
-          listBox.focus();
           app.render();
         });
       });
@@ -599,6 +657,24 @@ export function sessionsView(opts = {}) {
       const doSplit = async () => {
         const r = currentRow();
         if (!r) return;
+        // Same key REVERTS when the current row IS a split piece — same
+        // "same key, no valid forward action here anyway" pattern as
+        // Shift+M's doUnmerge() above. A piece proposing its OWN fresh
+        // split (on its own partial content) was never a meaningful action
+        // to preserve here, and unsplit()/unmerge() were previously
+        // CLI-only — this is the TUI-reachable path the merge/split.done
+        // toasts have pointed at since `mycelium unsplit <id>` was added.
+        if (r.splitFrom) {
+          const res = unsplit(r.splitFrom);
+          if (!res.ok) return app.notify(res.error, 3);
+          data.refreshMany([r.splitFrom, ...res.removed]);
+          reloadFolders();
+          reloadList();
+          app.notify(t('split.reverted', res.removed.length), 3);
+          listBox.focus();
+          app.render();
+          return;
+        }
         // See asyncReviewFlowRunning's own comment (near `state`'s
         // declaration) — an impatient repeat press while the LLM call is
         // still in flight used to start a second concurrent run: a second
@@ -630,20 +706,45 @@ export function sessionsView(opts = {}) {
         // which release once their own review modal opens rather than
         // staying held through however long the human takes to review it.
         asyncReviewFlowRunning = false;
-        multiSelectList(app, t('split.reviewTitle'), items, (chosen) => {
+        multiSelectList(app, t('split.reviewTitle'), items, async (chosen) => {
           if (!chosen?.length) return; // Esc or everything unchecked — original untouched
           const applied = applySplit(r.id, chosen);
           if (!applied.ok) return app.notify(applied.error, 3);
           data.refreshMany([r.id, ...applied.pieces.map((p) => p.id)]);
+          reloadFolders();
+          reloadList();
+          // Restore focus/render synchronously, before the async
+          // auto-summarize below — same reasoning as the merge handler
+          // above: multiSelectList's own review box takes focus while
+          // open, and leaving this until after an awaited LLM call left
+          // listBox unfocused for however long that took.
+          listBox.focus();
+          app.render();
+          // Real summary/tags for each piece, same LLM call `a` uses —
+          // applySplit() alone leaves summary empty on every piece (title
+          // is already real, from the boundary label, and locked above so
+          // this doesn't replace it). Concurrency bounded the same way
+          // organize.js's summarizeCandidates()/suggestPlacements() already
+          // are — a split with several ranges shouldn't fire that many LLM
+          // subprocesses all at once (see issue #3). Best-effort per piece:
+          // one failing doesn't undo the split or block the others. Runs
+          // AFTER the UI has already recovered — pieces show up immediately
+          // (with their real boundary-label titles), summaries fill in a
+          // moment later.
+          const spin = app.startSpinner(t('split.summarizing'));
+          try {
+            await mapConcurrent(applied.pieces, 2, (p) => autoTagSession(p.id).catch(() => {}));
+          } finally {
+            spin.stop();
+          }
+          data.refreshMany(applied.pieces.map((p) => p.id));
+          reloadList();
           // Longer duration + the original's id: split is fully reversible
           // (`mycelium unsplit <id>` deletes the pieces, original untouched
           // the whole time) but that's only discoverable if this toast
           // actually says so — a bare "Split into N sessions" gave no hint
           // it could be undone at all, let alone how.
           app.notify(t('split.done', applied.pieces.length, r.id.slice(0, 8)), 6);
-          reloadFolders();
-          reloadList();
-          listBox.focus();
           app.render();
         }, { defaultAll: true });
       };
