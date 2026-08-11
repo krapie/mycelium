@@ -21,7 +21,7 @@ mycelium knowledge company/platform/auth
 
 # Reuse / Find
 mycelium context <session>
-mycelium inject --dir <project> --folder <folder> # inject knowledge into AGENTS.md
+mycelium inject --dir <project> --folder <folder> # inject knowledge into AGENTS.md (+ a CLAUDE.md bridge, since Claude Code doesn't read AGENTS.md on its own)
 mycelium handoff <session>                     # print a handoff prompt
 mycelium resume <session|prefix> [--copy|--exec] # print/copy/immediately run the resume command
 mycelium search "query" --tag infra --folder company

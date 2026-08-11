@@ -8,7 +8,7 @@ import { getLocale } from './i18n.js';
 // subprocess call takes anywhere from ~1 to 10+ seconds per call, several
 // times over in one tutorial run; (2) determinism — organize/classify.js's
 // prompt (and every other LLM prompt in this codebase) is hardcoded Korean
-// by deliberate design (see AGENT.md), so a freshly-proposed folder name
+// by deliberate design (see AGENTS.md), so a freshly-proposed folder name
 // with no existing folder to imitate comes back Korean even in an
 // English-locale demo. Canned English folder names sidestep that without
 // touching the real (intentionally Korean) production prompts at all.

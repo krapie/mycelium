@@ -236,7 +236,7 @@ test('mockSplit uses the active locale\'s splitLabels, still computed from the r
   // in Korean — the turn-count math is locale-independent, only the labels
   // (and the "턴 N [role]:" prompt format itself, which is already Korean
   // regardless of UI locale — split.js's real prompt is hardcoded Korean by
-  // design, see AGENT.md) should differ.
+  // design, see AGENTS.md) should differ.
   const cse = createTutorialMockProvider('cse', 'ko');
   const reply = JSON.parse(await cse(splitPrompt(12)));
   assert.deepEqual(reply.ranges, [

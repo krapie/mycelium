@@ -90,5 +90,6 @@ to add a new AI agent CLI.
 ## Working in this Repo with an AI Agent
 
 Using Claude Code, Codex, Cursor, or similar on Mycelium itself? Point it at
-[`AGENT.md`](./AGENT.md) first — a dense reference covering conventions, key
-bindings, and the contributing workflow.
+[`AGENTS.md`](./AGENTS.md) first — a dense reference covering conventions, key
+bindings, and the contributing workflow. (Claude Code doesn't read AGENTS.md
+on its own, so `CLAUDE.md` in this repo's root just imports it.)
