@@ -320,13 +320,34 @@ architectural coordination point in the file), `s` scan, `o` smart-organize
 (largest/most stateful handler: cached-vs-fresh branch, two sequential LLM
 phases, toast-dismiss race, multi-select review, always-clear-queue-on-close),
 `?` help, `g` re-show onboarding, `m`/`t` move/tag, `x` delete (sweeps
-backlinks across all targets), `n` launch new agent, `r` resume (falls back
-to handoff for merge/split products), `h` handoff (post-launch folds a
-merge/split product into the new real session), detail-panel `Enter`
+backlinks across all targets), `n` launch new agent, `Shift+N` same picker
+but copies the shell command instead of launching (see below), `r` resume
+(falls back to handoff for merge/split products), `h` handoff (post-launch
+folds a merge/split product into the new real session), detail-panel `Enter`
 resume-or-copy choice, `a` auto-tag (sequential batch with per-item
 progress + partial-failure tolerance), `e` rename title, `y` copy to
 clipboard, `d` digest reader (nested mini-screen), `c` view context, `i`
 inject AGENTS.md (preview-then-confirm, sibling to `w`). [untested]
+
+**`Shift+N`: copy-command escape hatch for launching a new session, so
+parallel sessions are possible at all.** `n`'s `launchAgent()` → `run()`
+hands the terminal over to the child agent process via `foreground()`
+(`spawn(..., {stdio: 'inherit'})`) — the SAME tty, blocking the whole TUI
+until that one session exits. There's no portable way for a terminal app to
+open a genuinely new tab/window across terminal emulators (Terminal.app,
+iTerm2, tmux, Windows Terminal, ...), so the only way to actually run
+several sessions at once is a separate terminal the human opens themselves.
+`launchAgent()` now takes a `copyOnly` option: same agent-picker →
+directory-picker flow as `n`, but instead of `run()`'s foreground handoff,
+`copyNewCommand()` builds a `cd <dir> && <bin> <args>` line
+(`agents.js`'s `newCommandLine()`, sharing its quoting helper with the
+existing `resumeCommandLine()` resume-detail-Enter already used for the
+same "copy command" idea on an *existing* session) and copies it to the
+clipboard — paste into as many tabs as you want. Still runs
+`injectAgentsMd()` first, same as `run()`, since skipping it just because
+this path doesn't itself launch anything would silently degrade whatever
+gets pasted. Bound as `Shift+N` (list level only, same scope as plain `n`)
+in `sessions.js`. [untested]
 
 **`asyncReviewFlowRunning` guards `o`/`w`/Shift+S against a double-press
 while the LLM call is still in flight.** All three are async: show a
