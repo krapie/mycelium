@@ -2,7 +2,7 @@ name: Publish to npm
 
 # Fires when a maintainer publishes a GitHub Release (not on every tag push,
 # so release notes get written deliberately). Requires an NPM_TOKEN repo
-# secret with publish rights for @krapi0314/mycelium — add it under
+# secret with publish rights for @kevinprk/mycelium — add it under
 # Settings → Secrets and variables → Actions before the first release.
 on:
   release:

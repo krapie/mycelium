@@ -1,6 +1,6 @@
 # Mycelium
 
-[![npm version](https://img.shields.io/npm/v/@krapi0314/mycelium)](https://www.npmjs.com/package/@krapi0314/mycelium)
+[![npm version](https://img.shields.io/npm/v/@kevinprk/mycelium)](https://www.npmjs.com/package/@kevinprk/mycelium)
 [![CI](https://github.com/krapie/mycelium/actions/workflows/ci.yml/badge.svg)](https://github.com/krapie/mycelium/actions/workflows/ci.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D22.13-brightgreen)](https://nodejs.org)
@@ -21,7 +21,7 @@ sessions (Claude Code + Codex + Kiro).
 ## Install
 
 ```sh
-npm install -g @krapi0314/mycelium   # then run `mycelium` from anywhere, like k9s
+npm install -g @kevinprk/mycelium   # then run `mycelium` from anywhere, like k9s
 ```
 
 To hack on it, clone instead:
