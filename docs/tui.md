@@ -80,7 +80,8 @@ Once a session is moved to `_archive`, re-scanning won't bring it back out —
 | `/` | Full-text search |
 | `v` | Switch to the **Calendar tab** — the Sessions screen becomes a monthly grid \| that day's session list \| detail, three panels (same k9s-style drill-down: `←`/`→` move the day cursor ±1 day and `↑`/`↓` ±1 week, both rolling into the adjacent month at the edges and refreshing the list/detail live, `Enter`/`→` into the right panel, `Esc`/`←` back). `PgUp`/`PgDn` jumps a whole month. Press `v` again (or `Esc` from the grid) to return to Sessions — folder selection, search terms, etc. are preserved |
 | `s` | **Scan** right from the TUI (same as `mycelium scan` — pulls in sessions left open in other tabs/terminals without leaving the TUI). Doesn't assign folders — new sessions land unfiled (`New`, `[New]`), sort with `o` above |
-| `w` / `c` / `i` / `d` | Extract folder knowledge (preview then confirm) / view context / inject AGENTS.md — also drops a one-line CLAUDE.md bridge so Claude Code actually reads it (preview then confirm) / read digests (`n`/`w` inside to generate today's/this week's; a "★ Review knowledge" row appears at the top when there's a proposal waiting — `Enter` on it to review, same as opening any digest — see below) |
+| `w` / `c` / `i` / `d` | Extract folder knowledge (preview then confirm) / view context / inject AGENTS.md — also drops a one-line CLAUDE.md bridge so Claude Code actually reads it (preview then confirm) / read digests (`n`/`w` inside to generate today's/this week's narrative summary) |
+| `k` | **Knowledge review** — see below. Unrelated to Digest (`d`) |
 | `g` | **Re-show the getting-started guide** — the short walkthrough (4-stage lifecycle + key shortcuts) that auto-shows once on first launch, any time |
 | `q` | Quit |
 
@@ -91,27 +92,29 @@ original (or, for merges, the hidden originals) shows a `[Linked]` tag.
 The detail screen shows which session something came from or went to as
 clickable-style links.
 
-## Day-end knowledge review
+## Knowledge review
 
 Keeping every active folder's KNOWLEDGE.md fresh by hand (`w`, folder by
-folder) is easy to fall behind on. Once a day, the background daemon (or
-the TUI's own in-process upkeep — see `docs/cli.md`) generates the day's
-digest and, for every folder that had filed activity that day, also
-pre-computes a knowledge-refresh proposal — the same `w` would produce, just
-computed ahead of time so reviewing it is instant. Nothing is written yet;
-each proposal sits as a `KNOWLEDGE.pending.md` next to that folder's real
-KNOWLEDGE.md until you review it.
+folder) is easy to fall behind on. `k` does it for every folder at once —
+unrelated to Digest (`d`, a separate narrative-summary feature; the two
+just happen to share the day-based idea). Pressing `k` mirrors `o` (smart
+organize) exactly: if the daemon already computed a proposal for you
+overnight, it opens instantly; if not, Mycelium computes one on the spot
+for whatever's active today, then opens the same review.
 
-If a proposal is still unreviewed the next time you open Mycelium, a toast
-points you at `d`. Inside the digest reader, a **"★ Review knowledge (N
-folders)"** row appears at the top of the list when one's waiting — `Enter`
-on it (same as opening any digest file) opens the same checkbox-list review
-`o` (smart organize) already uses: every folder starts checked, `Space` to
-uncheck one you don't want, `Enter` applies the checked ones. **Approving a
-folder is the confirmation**: it writes KNOWLEDGE.md and
+**`k` is the expected, primary way to do this** — normally at the end of
+your day. If you don't get to it, the daemon quietly catches up on
+yesterday's activity the next time it runs, so nothing's lost either way —
+same result whether a human or Mycelium triggered it, since both paths call
+the exact same underlying function.
+
+The review itself is the same checkbox-list `o` uses: every folder starts
+checked, `Space` to uncheck one you don't want, `Enter` applies the checked
+ones. **Approving a folder is the confirmation**: it writes KNOWLEDGE.md and
 immediately injects into every working directory that folder's sessions
 have used — the same trust level `n`/`h`'s own silent auto-inject-on-launch
 already operates at, since the content landing there is exactly what was
 just approved, nothing new. Whatever's left unchecked (or the whole batch,
 on `Esc`) is simply dismissed — it won't keep asking again, and a manual `w`
-can always regenerate it later.
+can always regenerate it later. If a proposal is still unreviewed the next
+time you open Mycelium, a toast points you at `k`.

@@ -33,7 +33,7 @@ const { createApp } = await import('../../src/tui/app.js');
 const { sessionsView } = await import('../../src/tui/views/sessions.js');
 const { seedMockSessions, startTutorial } = await import('../../src/tui/tutorial.js');
 const { setLocale } = await import('../../src/tui/i18n.js');
-const { writePendingKnowledgeText } = await import('../../src/insight.js');
+const { writePendingKnowledgeText, pendingKnowledgeReviews, dismissPendingKnowledge } = await import('../../src/insight.js');
 
 // seedMockSessions()/createTutorialMockProvider() default their locale to
 // i18n.js's getLocale() — setLocale('ko') (used by exactly one test below)
@@ -48,16 +48,16 @@ function findByKeyword(sessions, re) {
 }
 
 // Reads the narrator overlay's own step number straight off its blessed
-// label content (tutorial.js's `box.setLabel(...)`, e.g. " Step 3/14 ") —
+// label content (tutorial.js's `box.setLabel(...)`, e.g. " Step 3/16 ") —
 // not rendered pixel/ANSI output, just the plain string setLabel()/
 // setContent() already stored on the element (element.js's `_label.content`
 // / `.content`). Needed only for the skip-ahead regression test below,
 // where the thing actually under test IS which step the narrator thinks
 // it's on, not just whether some real handler ran.
 function narratorStepIndex(app) {
-  const box = app.screen.children.find((c) => c._label && /Step \d+\/14/.test(c._label.content || ''));
+  const box = app.screen.children.find((c) => c._label && /Step \d+\/16/.test(c._label.content || ''));
   if (!box) return null;
-  const m = /Step (\d+)\/14/.exec(box._label.content);
+  const m = /Step (\d+)\/16/.exec(box._label.content);
   return m ? Number(m[1]) : null;
 }
 
@@ -458,6 +458,16 @@ test('demo: finishing the tutorial on the actual last step reports completed:tru
     sendKey(input, 'escape');
     await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 1000 });
     await settle();
+    // Steps 9/10 — k: knowledge review (mirrors o's own two-step shape —
+    // see tutorial.js). Nothing was pre-queued, so this computes fresh for
+    // today via the mocked LLM before the review modal opens.
+    baseline = app.screen.children.length;
+    sendKey(input, 'k');
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 3000 });
+    await settle();
+    sendKey(input, 'enter'); // defaultAll:true
+    await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 2000 });
+    await settle();
     sendKey(input, 'space');
     sendKey(input, 'down');
     sendKey(input, 'space');
@@ -534,6 +544,16 @@ test('demo: pressing a later step\'s key early (skipping step 1) still lets the 
     sendKey(input, 'escape');
     await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 1000 });
     await settle();
+    // Steps 9/10 — k: knowledge review (mirrors o's own two-step shape —
+    // see tutorial.js). Nothing was pre-queued, so this computes fresh for
+    // today via the mocked LLM before the review modal opens.
+    baseline = app.screen.children.length;
+    sendKey(input, 'k');
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 3000 });
+    await settle();
+    sendKey(input, 'enter'); // defaultAll:true
+    await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 2000 });
+    await settle();
     sendKey(input, 'space');
     sendKey(input, 'down');
     sendKey(input, 'space');
@@ -599,32 +619,22 @@ test('demo: a stray Enter on step 1 does not falsely cascade the narrator forwar
   }
 });
 
-test('digest review (d, then Enter on the review row): approving a staged knowledge proposal writes KNOWLEDGE.md and injects AGENTS.md', async () => {
-  // Not part of the scripted tutorial (which deliberately uses `c`, not a
-  // real launch, for its Reuse step — see tutorial.js's own comment) — this
-  // exercises digestReader()'s review flow directly against a proposal
-  // staged the same way daemon/cycles.js's proposeKnowledgeRefreshes()
-  // would, without needing a real LLM call or waiting on the daemon's own
-  // once-per-day cadence.
+test('k (queued path): reuses an already-staged knowledge proposal instantly, writes KNOWLEDGE.md and injects AGENTS.md', async () => {
+  // Simulates what daemon/cycles.js's independent knowledgeReviewCycle would
+  // have already staged overnight — k should reuse it without a fresh LLM
+  // call (same "makes it instant when the daemon's been doing the work in
+  // the background" reasoning o's own runSmartOrganize() already documents).
+  // Deliberately not going through Digest (`d`) at all — the two features
+  // are unrelated now; this proves `k` alone is enough.
   const { app, input } = await mountDemo();
   try {
-    const settle = () => new Promise((r) => setTimeout(r, 320));
     const realDir = mkdtempSync(join(tmpdir(), 'mycelium-review-'));
     saveRaw({ ...emptyNeutral('review-sess-1', 'claude'), folder: 'review-folder', projectDir: realDir });
     writePendingKnowledgeText('review-folder', '# review-folder — Project Knowledge\n\nSome proposed knowledge text.\n');
 
     const baseline = app.screen.children.length;
-    sendKey(input, 'd');
+    sendKey(input, 'k');
     await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 1000 });
-    await settle();
-    const afterDigestOpen = app.screen.children.length;
-    // The review row is a synthetic first item (see digestReader()'s
-    // displayItems()), already the default cursor position on a freshly
-    // opened list — Enter selects it exactly like opening any digest file
-    // would, no dedicated keybinding.
-    sendKey(input, 'enter');
-    await waitFor(() => app.screen.children.length > afterDigestOpen, { timeoutMs: 1000 });
-    await settle();
     sendKey(input, 'enter'); // defaultAll:true — applies the one pending folder shown
     await waitFor(() => existsSync(join(TREE_DIR, 'review-folder', 'KNOWLEDGE.md')), { timeoutMs: 1000 });
 
@@ -634,6 +644,39 @@ test('digest review (d, then Enter on the review row): approving a staged knowle
 
     const agentsMd = readFileSync(join(realDir, 'AGENTS.md'), 'utf8');
     assert.match(agentsMd, /Some proposed knowledge text/, 'approval auto-injects into the folder\'s known working directory');
+  } finally {
+    cleanup(app);
+  }
+});
+
+test('k (fresh path): computes today\'s proposal on the spot when nothing was queued', async () => {
+  // k must fall back to computing one itself (proposeKnowledgeRefreshes
+  // (today), mocked LLM, real spinner) rather than just notifying "nothing
+  // to review".
+  const { app, input } = await mountDemo();
+  try {
+    // mountDemo() → seedMockSessions() itself pre-stages a proposal for the
+    // persona's merge-target folder (see tutorial.js) — clear it first so
+    // this test genuinely exercises the "nothing queued" branch, not the
+    // fast reuse-queued one.
+    for (const p of pendingKnowledgeReviews()) dismissPendingKnowledge(p.folder);
+    const realDir = mkdtempSync(join(tmpdir(), 'mycelium-review-'));
+    const today = new Date().toISOString().slice(0, 10);
+    saveRaw({
+      ...emptyNeutral('fresh-sess-1', 'claude'),
+      folder: 'fresh-folder',
+      projectDir: realDir,
+      startedAt: `${today}T09:00:00.000Z`,
+      extracted: { title: null, tags: [], summary: 'fresh folder activity today', decisions: [], todos: [] },
+    });
+
+    const baseline = app.screen.children.length;
+    sendKey(input, 'k');
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 3000 });
+    sendKey(input, 'enter');
+    await waitFor(() => existsSync(join(TREE_DIR, 'fresh-folder', 'KNOWLEDGE.md')), { timeoutMs: 1000 });
+
+    assert.ok(readFileSync(join(TREE_DIR, 'fresh-folder', 'KNOWLEDGE.md'), 'utf8').length > 0);
   } finally {
     cleanup(app);
   }

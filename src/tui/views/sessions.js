@@ -30,8 +30,15 @@ import { basename } from 'node:path';
 import { launchAgent } from '../launch.js';
 import { autoTagSession } from '../../learn.js';
 import { mapConcurrent } from '../../llm.js';
-import { buildKnowledgeText, writeKnowledgeText } from '../../insight.js';
-import { assembleContext, injectAgentsMd } from '../../reuse.js';
+import {
+  buildKnowledgeText,
+  writeKnowledgeText,
+  pendingKnowledgeReviews,
+  promoteKnowledge,
+  dismissPendingKnowledge,
+  proposeKnowledgeRefreshes,
+} from '../../insight.js';
+import { assembleContext, injectAgentsMd, dirsForFolder } from '../../reuse.js';
 import { textView, digestReader, confirmText, helpModal, welcomeModal } from '../widgets/viewers.js';
 import { textPrompt } from '../widgets/pickers.js';
 import { copyToClipboard } from '../clipboard.js';
@@ -907,6 +914,69 @@ export function sessionsView(opts = {}) {
           reloadFolders();
           reloadList();
           app.render();
+        }, { defaultAll: true });
+      }
+
+      // k: knowledge review — mirrors o's own shape exactly (reuse whatever
+      // the daemon already queued overnight if present, else compute fresh
+      // right now) rather than nesting inside Digest (`d`), a deliberately
+      // separate, unrelated feature. This is the expected, primary way a
+      // human reviews/approves a day's KNOWLEDGE.md refreshes; the daemon's
+      // independent knowledgeReviewCycle (daemon/cycles.js) is only the
+      // fallback for whenever a human didn't get to it — both call the same
+      // insight.js proposeKnowledgeRefreshes(), so either path produces an
+      // identical result.
+      screenKey(app, ['k'], async () => {
+        if (asyncReviewFlowRunning) return;
+        asyncReviewFlowRunning = true;
+        try {
+          await runKnowledgeReview();
+        } finally {
+          asyncReviewFlowRunning = false;
+        }
+      });
+      async function runKnowledgeReview() {
+        let pending = pendingKnowledgeReviews();
+        if (!pending.length) {
+          // Nothing queued from an overnight cycle — compute fresh for
+          // TODAY's active folders, right now. This is the "compute on the
+          // spot" branch o's own runSmartOrganize() also falls back to when
+          // nothing's pre-queued.
+          const today = new Date().toISOString().slice(0, 10);
+          const spin = app.startSpinner(t('knowledge.reviewRunning'));
+          await proposeKnowledgeRefreshes(today);
+          spin.stop();
+          pending = pendingKnowledgeReviews();
+          if (!pending.length) return app.notify(t('knowledge.reviewNone'), 3);
+        }
+        const items = pending.map((p) => ({
+          label: `${p.folder}  {${C.faint}-fg}${p.text.split('\n').find((l) => l.trim() && !l.startsWith('#'))?.trim().slice(0, 60) || ''}{/}`,
+          value: p.folder,
+        }));
+        multiSelectList(app, t('knowledge.reviewTitle'), items, (chosen) => {
+          const chosenSet = new Set(chosen || []);
+          let applied = 0;
+          for (const p of pending) {
+            if (!chosenSet.has(p.folder)) {
+              dismissPendingKnowledge(p.folder);
+              continue;
+            }
+            const res = promoteKnowledge(p.folder);
+            if (!res.ok) continue;
+            applied++;
+            // Approving the knowledge IS the confirmation — inject silently
+            // into every directory this folder's sessions actually used,
+            // same trust level n/h's own auto-inject-on-launch already
+            // operates at.
+            for (const dir of dirsForFolder(p.folder)) {
+              try {
+                injectAgentsMd(dir, p.folder);
+              } catch {
+                /* no reachable AGENTS.md target — fine, best-effort */
+              }
+            }
+          }
+          app.notify(applied ? t('knowledge.reviewApplied', applied) : t('knowledge.reviewSkipped'), 4);
         }, { defaultAll: true });
       }
 

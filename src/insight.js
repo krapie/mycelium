@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { writeFileSync, readFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
-import { complete } from './llm.js';
+import { complete, mapConcurrent } from './llm.js';
 import { allRaw } from './scanner.js';
 import { TREE_DIR, DIGEST_DIR, ensureDirs } from './paths.js';
 import { isSuperseded, isInSubtree, listTreeDirs } from './organize.js';
@@ -43,9 +43,11 @@ function sessionsForPeriod(period, target) {
 /**
  * Folders with at least one FILED session (unfiled/`_inbox` sessions are
  * deliberately excluded — a knowledge summary of an unsorted catch-all isn't
- * meaningful) that started on `date`. Used by digestCycle (daemon/cycles.js)
- * to decide which folders get a knowledge-refresh proposal after each day's
- * digest is generated — see that file and docs/features.md for the full flow.
+ * meaningful) that started on `date`. Used by proposeKnowledgeRefreshes()
+ * (below) to decide which folders get a knowledge-refresh proposal — see
+ * that function and docs/features.md for the full flow. Independent of
+ * generateDigest()/the Digest feature — this is a separate concept (`k`,
+ * not `d`), it just happens to reuse the same day-filter helper.
  */
 export function foldersActiveOn(date) {
   const sessions = sessionsForPeriod('day', date).filter((s) => s.folder);
@@ -162,11 +164,13 @@ function pendingKnowledgePath(folder) {
 
 /**
  * Stage an LLM-generated knowledge proposal without touching the real
- * KNOWLEDGE.md — written by digestCycle (daemon/cycles.js) after a day's
- * digest, reviewed by a human via the digest reader's `r` key, and only
- * promoted to KNOWLEDGE.md on explicit approval (promoteKnowledge() below).
- * The file's mere existence IS the review queue — no separate store, same
- * "plain file is the state" approach the rest of this codebase uses.
+ * KNOWLEDGE.md — written by proposeKnowledgeRefreshes() (below), called
+ * either by the daemon's independent knowledgeReviewCycle or by the TUI's
+ * `k` command computing fresh on demand, reviewed by a human via `k`, and
+ * only promoted to KNOWLEDGE.md on explicit approval (promoteKnowledge()
+ * below). The file's mere existence IS the review queue — no separate
+ * store, same "plain file is the state" approach the rest of this codebase
+ * uses.
  */
 export function writePendingKnowledgeText(folder, text) {
   ensureDirs();
@@ -201,6 +205,59 @@ export function dismissPendingKnowledge(folder) {
   const path = pendingKnowledgePath(folder);
   if (existsSync(path)) rmSync(path);
   return { ok: true, folder };
+}
+
+/**
+ * Stage a knowledge-refresh proposal (see writePendingKnowledgeText() above)
+ * for every folder active on `date` that doesn't already have an unreviewed
+ * one — same buildKnowledgeText() LLM call a manual `w` press makes, just
+ * computed here so a review is instant once someone actually looks. Two
+ * callers, both wanting the exact same behavior: the TUI's `k` command
+ * (sessions.js), computing fresh for TODAY the moment a human presses it —
+ * the expected, primary path — and the daemon's independent
+ * knowledgeReviewCycle (daemon/cycles.js), computing for YESTERDAY once a
+ * day, as the fallback for whenever a human didn't. Sharing this one
+ * function (rather than daemon/cycles.js owning its own copy) is what makes
+ * "did a human trigger this, or did Mycelium do it for them overnight"
+ * produce an identical result either way — the actual bug fixed by moving
+ * this here.
+ *
+ * Skips a folder with an existing unreviewed proposal (avoids both
+ * clobbering something not yet looked at and duplicate LLM spend). Bounded
+ * by `limit` (default `MYCELIUM_DIGEST_KNOWLEDGE_LIMIT`, same "gradual
+ * drain" reasoning as smart-organize's own batch limit) and `concurrency`
+ * (default `MYCELIUM_SUMMARIZE_CONCURRENCY` — the same shared ceiling every
+ * other daemon-triggered batch of LLM calls uses, see issue #3) — both
+ * env-defaulted here rather than by each caller, so a human-triggered `k`
+ * press is bound by the exact same safety limits an overnight cycle is.
+ */
+export async function proposeKnowledgeRefreshes(date, {
+  concurrency = Number(process.env.MYCELIUM_SUMMARIZE_CONCURRENCY || 3),
+  limit = Number(process.env.MYCELIUM_DIGEST_KNOWLEDGE_LIMIT || 10),
+} = {}) {
+  const alreadyPending = new Set(pendingKnowledgeReviews().map((p) => p.folder));
+  const folders = foldersActiveOn(date)
+    .filter((f) => !alreadyPending.has(f))
+    .slice(0, limit);
+  if (!folders.length) return { proposed: 0, failed: [] };
+  let proposed = 0;
+  const failed = [];
+  await mapConcurrent(folders, concurrency, async (folder) => {
+    try {
+      const gen = await buildKnowledgeText(folder);
+      if (gen.ok) {
+        writePendingKnowledgeText(folder, gen.text);
+        proposed++;
+      } else {
+        // buildKnowledgeText() already catches its own LLM failure and
+        // resolves ok:false rather than throwing.
+        failed.push({ folder, error: gen.error });
+      }
+    } catch (err) {
+      failed.push({ folder, error: err.message });
+    }
+  });
+  return { proposed, failed };
 }
 
 /**

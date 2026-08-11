@@ -5,9 +5,7 @@ import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { DIGEST_DIR } from '../../paths.js';
 import { copyToClipboard } from '../clipboard.js';
-import { generateDigest, pendingKnowledgeReviews, promoteKnowledge, dismissPendingKnowledge } from '../../insight.js';
-import { injectAgentsMd, dirsForFolder } from '../../reuse.js';
-import { multiSelectList } from './pickers.js';
+import { generateDigest } from '../../insight.js';
 import { t } from '../i18n.js';
 
 /**
@@ -100,17 +98,6 @@ export function digestReader(app) {
     }
   };
   let files = listFiles();
-  // A synthetic first row when a knowledge-refresh proposal is waiting (see
-  // insight.js's pendingKnowledgeReviews(), staged by daemon/cycles.js's
-  // digestCycle) — opened with the exact same Enter/`select` a real digest
-  // file already uses, not a separate keybinding. Mirrors `o` (smart
-  // organize): there's no distinct "now open the review" step there either,
-  // pressing the one key IS what shows the review.
-  let pendingCount = pendingKnowledgeReviews().length;
-  const displayItems = () => {
-    const base = files.length ? files : [t('digest.empty')];
-    return pendingCount ? [`{${C.spore}-fg}${t('digest.reviewEntry', pendingCount)}{/}`, ...base] : base;
-  };
 
   const box = blessed.list({
     parent: app.screen,
@@ -119,7 +106,7 @@ export function digestReader(app) {
     width: '50%',
     height: '60%',
     label: t('digest.label'),
-    items: displayItems(),
+    items: files.length ? files : [t('digest.empty')],
     tags: true,
     keys: true,
     mouse: true,
@@ -131,8 +118,7 @@ export function digestReader(app) {
 
   const refresh = () => {
     files = listFiles();
-    pendingCount = pendingKnowledgeReviews().length;
-    box.setItems(displayItems());
+    box.setItems(files.length ? files : [t('digest.empty')]);
     app.render();
   };
   const generate = async (period) => {
@@ -162,72 +148,12 @@ export function digestReader(app) {
   box.key('n', () => generate('day'));
   box.key('w', () => generate('week'));
   box.on('select', (_, idx) => {
-    if (pendingCount && idx === 0) return reviewKnowledge(app, box, refresh);
-    const fileIdx = pendingCount ? idx - 1 : idx;
     if (!files.length) return;
-    const path = join(DIGEST_DIR, files[fileIdx]);
+    const path = join(DIGEST_DIR, files[idx]);
     box.destroy();
     const md = existsSync(path) ? readFileSync(path, 'utf8') : t('digest.readFailed');
-    textView(app, files[fileIdx], md);
+    textView(app, files[idx], md);
   });
-}
-
-/**
- * Opened by selecting the digest reader's synthetic "review knowledge" row —
- * review knowledge-refresh proposals digestCycle (daemon/cycles.js) staged
- * overnight for folders that had activity that day (see insight.js's
- * pendingKnowledgeReviews()). Same multiSelectList shape sessions.js's `o`
- * (smart organize) review already uses: every folder starts checked, Enter
- * applies the checked ones, Esc cancels the whole batch — but either way
- * every folder shown here is cleared from the pending state (approved+
- * injected, or dismissed), so it won't keep nagging; a later manual `w` can
- * always regenerate a dismissed one from scratch. `refresh` is the digest
- * reader's own list-items refresh, so the synthetic row disappears/updates
- * its count once this resolves.
- */
-function reviewKnowledge(app, digestBox, refresh) {
-  const pending = pendingKnowledgeReviews();
-  if (!pending.length) return; // the row that opens this only shows when pending.length > 0
-  digestBox.hide();
-  app.render();
-  const items = pending.map((p) => ({
-    label: `${p.folder}  {${C.faint}-fg}${p.text.split('\n').find((l) => l.trim() && !l.startsWith('#'))?.trim().slice(0, 60) || ''}{/}`,
-    value: p.folder,
-  }));
-  multiSelectList(
-    app,
-    t('digest.reviewTitle'),
-    items,
-    (chosen) => {
-      const chosenSet = new Set(chosen || []);
-      let applied = 0;
-      for (const p of pending) {
-        if (!chosenSet.has(p.folder)) {
-          dismissPendingKnowledge(p.folder);
-          continue;
-        }
-        const res = promoteKnowledge(p.folder);
-        if (!res.ok) continue;
-        applied++;
-        // Approving the knowledge IS the confirmation — inject silently
-        // into every directory this folder's sessions actually used, same
-        // trust level n/h's own auto-inject-on-launch already operates at.
-        for (const dir of dirsForFolder(p.folder)) {
-          try {
-            injectAgentsMd(dir, p.folder);
-          } catch {
-            /* no reachable AGENTS.md target — fine, best-effort */
-          }
-        }
-      }
-      app.notify(applied ? t('digest.reviewApplied', applied) : t('digest.reviewSkipped'), 4);
-      refresh();
-      digestBox.show();
-      digestBox.focus();
-      app.render();
-    },
-    { defaultAll: true },
-  );
 }
 
 /**

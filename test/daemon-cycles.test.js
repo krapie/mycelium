@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { useTempHome } from './helpers.js';
 
 useTempHome();
@@ -7,7 +9,8 @@ useTempHome();
 const { emptyNeutral } = await import('../src/schema.js');
 const { saveRaw } = await import('../src/scanner.js');
 const { __setTestProvider, __clearTestProvider } = await import('../src/llm.js');
-const { digestCycle, proposeKnowledgeRefreshes } = await import('../src/daemon/cycles.js');
+const { DIGEST_DIR } = await import('../src/paths.js');
+const { digestCycle, knowledgeReviewCycle } = await import('../src/daemon/cycles.js');
 const { pendingKnowledgeReviews } = await import('../src/insight.js');
 
 function seed(id, overrides = {}) {
@@ -23,60 +26,36 @@ function fakeLog() {
 
 test.afterEach(() => __clearTestProvider());
 
-test('proposeKnowledgeRefreshes() stages a KNOWLEDGE.pending.md for every filed folder active on that date', async () => {
-  seed('pkr-1', { folder: 'pkr-folder-a', startedAt: '2026-07-01T09:00:00.000Z', extracted: { title: null, tags: [], summary: 'thing a', decisions: [], todos: [] } });
-  seed('pkr-2', { folder: 'pkr-folder-b', startedAt: '2026-07-01T09:00:00.000Z', extracted: { title: null, tags: [], summary: 'thing b', decisions: [], todos: [] } });
-  __setTestProvider(async () => 'generated knowledge text');
+// Each cycle function gates itself to once per real local calendar day (see
+// their own lastDigestDay/lastKnowledgeReviewDay module-level state) — that
+// makes driving either through more than one scenario within this single
+// test file impractical (node:test runs one process per file, so the gate
+// persists across every test here). Detailed per-folder scenario coverage
+// (skip-if-pending, limit, failure handling) lives in insight.test.js
+// against proposeKnowledgeRefreshes() directly, which has no such gate —
+// this file only proves each cycle's own first-run orchestration and that
+// the two are genuinely independent of each other.
 
-  await proposeKnowledgeRefreshes('2026-07-01', fakeLog());
-
-  const reviews = pendingKnowledgeReviews();
-  assert.ok(reviews.some((r) => r.folder === 'pkr-folder-a'));
-  assert.ok(reviews.some((r) => r.folder === 'pkr-folder-b'));
-});
-
-test('proposeKnowledgeRefreshes() skips a folder that already has an unreviewed pending proposal — no duplicate LLM call', async () => {
-  seed('pkr-skip-1', { folder: 'pkr-skip-folder', startedAt: '2026-07-02T09:00:00.000Z' });
-  let calls = 0;
-  __setTestProvider(async () => {
-    calls++;
-    return 'first proposal';
-  });
-  await proposeKnowledgeRefreshes('2026-07-02', fakeLog());
-  assert.equal(calls, 1);
-
-  // Same folder, same (or later) active date — already has a pending file.
-  await proposeKnowledgeRefreshes('2026-07-02', fakeLog());
-  assert.equal(calls, 1, 'no second LLM call for a folder still awaiting review');
-});
-
-test('proposeKnowledgeRefreshes() is a no-op (no LLM call) when no folder was active that date', async () => {
-  let called = false;
-  __setTestProvider(async () => {
-    called = true;
-    return 'x';
-  });
-  await proposeKnowledgeRefreshes('2020-01-01', fakeLog());
-  assert.equal(called, false);
-});
-
-test('proposeKnowledgeRefreshes() logs failures per folder without throwing', async () => {
-  seed('pkr-fail-1', { folder: 'pkr-fail-folder', startedAt: '2026-07-03T09:00:00.000Z' });
-  __setTestProvider(async () => {
-    throw new Error('llm boom');
-  });
-  const log = fakeLog();
-  await proposeKnowledgeRefreshes('2026-07-03', log);
-  assert.ok(log.lines.some((l) => /llm boom/.test(l)));
-  assert.equal(pendingKnowledgeReviews().some((r) => r.folder === 'pkr-fail-folder'), false);
-});
-
-test('digestCycle() generates the digest and proposes knowledge refreshes for yesterday\'s active folders, on its first run', async () => {
+test('digestCycle() generates yesterday\'s digest, on its first run — and nothing else (independent of knowledge review)', async () => {
   const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
   seed('dc-1', { folder: 'dc-folder', startedAt: `${yesterday}T09:00:00.000Z`, extracted: { title: null, tags: [], summary: 'dc summary', decisions: [], todos: [] } });
-  __setTestProvider(async () => 'dc knowledge');
+  __setTestProvider(async () => 'dc narrative');
 
   await digestCycle(fakeLog());
 
-  assert.ok(pendingKnowledgeReviews().some((r) => r.folder === 'dc-folder'));
+  assert.ok(existsSync(join(DIGEST_DIR, `${yesterday}.md`)));
+  assert.equal(pendingKnowledgeReviews().length, 0, 'digestCycle no longer stages any knowledge proposal — reverted, separate feature');
+});
+
+test('knowledgeReviewCycle() stages a proposal for yesterday\'s active folders, on its first run — fully independent of Digest', async () => {
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  seed('krc-1', { folder: 'krc-folder', startedAt: `${yesterday}T09:00:00.000Z`, extracted: { title: null, tags: [], summary: 'krc summary', decisions: [], todos: [] } });
+  __setTestProvider(async () => 'krc knowledge text');
+
+  // No digestCycle() call in this test at all — proves knowledgeReviewCycle
+  // doesn't depend on a digest having been generated first.
+  await knowledgeReviewCycle(fakeLog());
+
+  const reviews = pendingKnowledgeReviews();
+  assert.ok(reviews.some((r) => r.folder === 'krc-folder'));
 });

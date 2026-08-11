@@ -21,6 +21,7 @@ const {
   pendingKnowledgeReviews,
   promoteKnowledge,
   dismissPendingKnowledge,
+  proposeKnowledgeRefreshes,
 } = await import('../src/insight.js');
 
 function seed(id, overrides = {}) {
@@ -221,4 +222,66 @@ test('dismissPendingKnowledge() clears the pending file without ever writing KNO
 test('dismissPendingKnowledge() on a folder with no pending file is a harmless no-op', () => {
   const res = dismissPendingKnowledge('never-had-one');
   assert.equal(res.ok, true);
+});
+
+test('proposeKnowledgeRefreshes() stages a proposal for every filed folder active on that date', async () => {
+  seed('pkr-1', { folder: 'pkr-folder-a', startedAt: '2026-07-01T09:00:00.000Z', extracted: { title: null, tags: [], summary: 'thing a', decisions: [], todos: [] } });
+  seed('pkr-2', { folder: 'pkr-folder-b', startedAt: '2026-07-01T09:00:00.000Z', extracted: { title: null, tags: [], summary: 'thing b', decisions: [], todos: [] } });
+  __setTestProvider(async () => 'generated knowledge text');
+
+  const res = await proposeKnowledgeRefreshes('2026-07-01');
+
+  assert.equal(res.proposed, 2);
+  assert.equal(res.failed.length, 0);
+  const reviews = pendingKnowledgeReviews();
+  assert.ok(reviews.some((r) => r.folder === 'pkr-folder-a'));
+  assert.ok(reviews.some((r) => r.folder === 'pkr-folder-b'));
+});
+
+test('proposeKnowledgeRefreshes() skips a folder that already has an unreviewed pending proposal — no duplicate LLM call', async () => {
+  seed('pkr-skip-1', { folder: 'pkr-skip-folder', startedAt: '2026-07-02T09:00:00.000Z' });
+  let calls = 0;
+  __setTestProvider(async () => {
+    calls++;
+    return 'first proposal';
+  });
+  await proposeKnowledgeRefreshes('2026-07-02');
+  assert.equal(calls, 1);
+
+  await proposeKnowledgeRefreshes('2026-07-02');
+  assert.equal(calls, 1, 'no second LLM call for a folder still awaiting review');
+});
+
+test('proposeKnowledgeRefreshes() is a no-op (no LLM call, no error) when no folder was active that date', async () => {
+  let called = false;
+  __setTestProvider(async () => {
+    called = true;
+    return 'x';
+  });
+  const res = await proposeKnowledgeRefreshes('2020-01-01');
+  assert.equal(called, false);
+  assert.equal(res.proposed, 0);
+  assert.deepEqual(res.failed, []);
+});
+
+test('proposeKnowledgeRefreshes() reports per-folder failures without throwing', async () => {
+  seed('pkr-fail-1', { folder: 'pkr-fail-folder', startedAt: '2026-07-03T09:00:00.000Z' });
+  __setTestProvider(async () => {
+    throw new Error('llm boom');
+  });
+  const res = await proposeKnowledgeRefreshes('2026-07-03');
+  assert.equal(res.proposed, 0);
+  assert.ok(res.failed.some((f) => f.folder === 'pkr-fail-folder' && /llm boom/.test(f.error)));
+  assert.equal(pendingKnowledgeReviews().some((r) => r.folder === 'pkr-fail-folder'), false);
+});
+
+test('proposeKnowledgeRefreshes() respects an explicit limit, bounding how many folders get a proposal per call', async () => {
+  seed('pkr-lim-1', { folder: 'pkr-limit-a', startedAt: '2026-07-04T09:00:00.000Z' });
+  seed('pkr-lim-2', { folder: 'pkr-limit-b', startedAt: '2026-07-04T09:00:00.000Z' });
+  seed('pkr-lim-3', { folder: 'pkr-limit-c', startedAt: '2026-07-04T09:00:00.000Z' });
+  __setTestProvider(async () => 'text');
+
+  const res = await proposeKnowledgeRefreshes('2026-07-04', { limit: 2 });
+
+  assert.equal(res.proposed, 2);
 });
