@@ -267,7 +267,7 @@ export function sessionsView(opts = {}) {
         left: 0,
         width: '22%',
         bottom: 0,
-        label: ' Folders ',
+        label: t('sessions.foldersPanelLabel'),
         tags: true,
         keys: true,
         padding: { left: 1, right: 1 },
@@ -281,7 +281,7 @@ export function sessionsView(opts = {}) {
         left: '22%',
         width: '38%',
         bottom: 0,
-        label: ' Sessions ',
+        label: t('sessions.sessionsPanelLabel'),
         tags: true,
         keys: true,
         padding: { left: 1, right: 1 },
@@ -295,7 +295,7 @@ export function sessionsView(opts = {}) {
         left: '60%',
         right: 0,
         bottom: 0,
-        label: ' Detail ',
+        label: t('sessions.detailPanelLabel'),
         tags: true,
         scrollable: true,
         alwaysScroll: true,
@@ -343,10 +343,32 @@ export function sessionsView(opts = {}) {
       // instead of per-level nav hints — no free row anywhere on screen to
       // show both, and this is the more useful thing to have visible at all
       // times. Full keymap (incl. Enter/Esc nav) still lives in the ? modal.
+      // Factored out of setLevel() so reloadAll() can also refresh it — the
+      // status bar is otherwise only re-set on a level change, so it stayed
+      // in whatever language was active at mount time even after a later
+      // setLocale() call (e.g. index.js's language picker, which mounts the
+      // view BEFORE the human has actually picked a language, deliberately,
+      // so the persona picker shown right after has real chrome behind it —
+      // see index.js's pickLanguage()).
+      const updateStatusBar = () => {
+        app.setStatus(' ' + t('lifecycle.bar', C.text, C.faint, C.border) + '  ' + t('status.helpFallback'));
+      };
+      // Same staleness problem as updateStatusBar() above, same fix shape —
+      // these three border labels are blessed widget CONSTRUCTION options
+      // (`label: t(...)` passed to blessed.list()/blessed.box() once, at
+      // mount time), not something re-applied on every render the way row
+      // content is. A setLocale() call after mount (index.js's language
+      // picker, deliberately mounted before the human has picked a
+      // language) left them stuck in whatever was active at mount time.
+      const updatePanelLabels = () => {
+        foldersBox.setLabel(t('sessions.foldersPanelLabel'));
+        listBox.setLabel(t('sessions.sessionsPanelLabel'));
+        detailBox.setLabel(t('sessions.detailPanelLabel'));
+      };
       const setLevel = (lvl) => {
         state.level = lvl;
         applyLayout(lvl);
-        app.setStatus(' ' + t('lifecycle.bar', C.text, C.faint, C.border) + '  ' + t('status.helpFallback'));
+        updateStatusBar();
       };
 
       // Back from the Calendar tab: re-show Sessions' own panels and restore
@@ -1093,6 +1115,8 @@ export function sessionsView(opts = {}) {
           data.refresh();
           reloadFolders();
           reloadList();
+          updateStatusBar();
+          updatePanelLabels();
           app.render();
         },
         // Same reset mount()'s own tail does (Root, folders pane focused,

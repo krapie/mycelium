@@ -426,6 +426,35 @@ async function main() {
             // env got the MYCELIUM_HOME override above), so paths.js
             // resolves the user's actual ~/.mycelium here, not the demo
             // store — no separate spawn needed, just run it in-process.
+            //
+            // Carry the language picked during the demo into the real tool
+            // too, but ONLY here, on a full-completion handoff — continuing
+            // straight into real data in the same terminal right after
+            // finishing the demo should feel seamless, not switch back to
+            // whatever language was set before. An early Esc bail (no
+            // handoff, separate branch below) deliberately does NOT do
+            // this: exploring a different language just to preview/present
+            // the demo shouldn't silently change real settings unless you
+            // actually continue into real data right after. Read straight
+            // off the demo's own config.json (still on disk — only wiped at
+            // the START of a future `mycelium demo` run, not on exit),
+            // since loadConfig()/i18n.js's getLocale() in this process
+            // resolve against THIS process's own real MYCELIUM_HOME, not
+            // the child's isolated one.
+            try {
+              const demoConfigPath = join(demoHome, 'config.json');
+              if (existsSync(demoConfigPath)) {
+                const demoCfg = JSON.parse(readFileSync(demoConfigPath, 'utf8'));
+                if (demoCfg.locale) {
+                  const { setLocale } = await import('./tui/i18n.js');
+                  setLocale(demoCfg.locale);
+                }
+              }
+            } catch {
+              // Best-effort — a missing/malformed demo config just means
+              // the real tool keeps whatever language it already had, not
+              // a hard failure blocking the handoff itself.
+            }
             const { runTui } = await import('./tui/index.js');
             await runTui();
           } else {

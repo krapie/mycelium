@@ -34,12 +34,18 @@ mycelium daemon --stop          # stop it
 
 # interactive tutorial with fake sessions — the full lifecycle (organize, learn,
 # reuse, merge/split), LLM calls mocked so it's fast and deterministic;
-# separate ~/.mycelium-demo store, your real data is never touched.
+# separate ~/.mycelium-demo store, your real data is never touched. Asks for
+# a language and a persona (matching mock content) before seeding.
 # Finishing the whole tutorial hands off straight into a real TUI session
-# (your actual ~/.mycelium); Esc to bail early instead just exits.
+# (your actual ~/.mycelium) IN THE SAME LANGUAGE you picked for the demo —
+# only on a full finish, never on an early Esc bail, so previewing the demo
+# in a different language never silently changes your real setting.
 mycelium demo
 
-# TUI display language (default en) — takes effect on the next TUI launch
+# TUI display language (default en) — takes effect on the next TUI launch.
+# Also settable from inside a running TUI session with the `l` key (confirm,
+# then Mycelium restarts to apply it), or via the language picker shown on
+# first launch / before every `mycelium demo` persona pick.
 mycelium lang        # check current setting
 mycelium lang ko      # switch to Korean
 mycelium lang en      # switch to English

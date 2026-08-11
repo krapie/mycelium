@@ -42,11 +42,18 @@ or run `mycelium organize`, to sort new sessions by content.
 
 Re-run the tutorial (or use it as a demo) any time with `mycelium demo` — a
 separate `~/.mycelium-demo` store, your real data is never touched. You'll
-be asked to pick a persona first (software engineer, cloud support engineer,
-or solutions architect) so the walkthrough uses mock sessions that match
-your own kind of work. Finish the whole walkthrough and it hands off
-straight into your real sessions; press `Esc` to bail early instead and it
-just exits.
+be asked to pick a language (English or 한국어) and then a persona (software
+engineer, cloud support engineer, or solutions architect) so the walkthrough
+uses mock sessions that match your own kind of work, fully in the language
+you picked. Finish the whole walkthrough and it hands off straight into your
+real sessions, continuing in whichever language you picked for the demo
+(only on finishing — an early `Esc` bail just exits without touching your
+real settings, so previewing the demo in a different language never
+silently changes them).
+
+Display language defaults to English — switch any time with
+`mycelium lang <en|ko>`, the in-TUI `l` key, or the language picker shown on
+first launch.
 
 > Skipped `npm link`? Use `node src/cli.js <command>` instead.
 

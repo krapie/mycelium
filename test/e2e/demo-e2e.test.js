@@ -30,6 +30,15 @@ const { TREE_DIR } = await import('../../src/paths.js');
 const { createApp } = await import('../../src/tui/app.js');
 const { sessionsView } = await import('../../src/tui/views/sessions.js');
 const { seedMockSessions, startTutorial } = await import('../../src/tui/tutorial.js');
+const { setLocale } = await import('../../src/tui/i18n.js');
+
+// seedMockSessions()/createTutorialMockProvider() default their locale to
+// i18n.js's getLocale() — setLocale('ko') (used by exactly one test below)
+// mutates that same module-level state every other test in this process
+// would otherwise also see, since node's test runner shares one process per
+// file. Reset after every test, not just the one that sets it, so a test
+// order change can't leak Korean into an English-content assertion.
+test.afterEach(() => setLocale('en'));
 
 function findByKeyword(sessions, re) {
   return sessions.filter((s) => re.test(s.extracted.summary || ''));
@@ -232,6 +241,63 @@ test('demo (cse persona): 3-way merge across DX/VPC/ALB sessions, then split —
     for (const p of pieces) assert.equal(p.folder, 'cases/onprem-connectivity');
     const totalSplitTurns = pieces.reduce((n, p) => n + p.turns.length, 0);
     assert.equal(totalSplitTurns, 15, 'every one of the merged turns landed in a split piece — none silently dropped');
+  } finally {
+    cleanup(app);
+  }
+});
+
+test('demo (ko locale): organize + learn produces real Korean content, not just Korean chrome', async () => {
+  // index.js's language picker calls setLocale() BEFORE seedMockSessions(),
+  // which is what this test mirrors — seedMockSessions()/
+  // createTutorialMockProvider() both default their locale to i18n.js's
+  // getLocale() (see tutorial-data.js/tutorial-mock-llm.js), so setting it
+  // first is what makes the seeded session content, the classification
+  // keywords, and the knowledge text all resolve to Korean together,
+  // consistently. This test is about the actual demo CONTENT being
+  // Korean (session titles/summaries, extracted knowledge) — the
+  // surrounding narrator/menu chrome's own bilingual coverage lives in
+  // i18n.js and isn't re-tested here.
+  setLocale('ko');
+  // Earlier tests in this file leave their own demo:true sessions in the
+  // shared temp store (cleanup(app) only destroys the screen, not the
+  // data) — scope the "every title is Korean" check to just the sessions
+  // THIS test seeds, not whatever English-locale leftovers preceded it.
+  const beforeIds = new Set(allRaw().map((s) => s.id));
+  const { app, input, api } = await mountDemo('cse');
+  try {
+    sendKey(input, 'right');
+    await new Promise((r) => setTimeout(r, 30));
+    const seeded = allRaw().filter((s) => !beforeIds.has(s.id));
+    assert.equal(seeded.length, 5, 'cse persona seeds 5 sessions');
+    assert.ok(
+      seeded.every((s) => /[가-힣]/.test(s.extracted.title)),
+      'every seeded session title must be Korean when locale is ko',
+    );
+
+    const baseline = app.screen.children.length;
+    sendKey(input, 'o');
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 3000 });
+    const onprem = findByKeyword(allRaw(), /온프레미스/);
+    assert.equal(onprem.length, 3, 'all 3 onprem-connectivity sessions found via their Korean summary');
+    for (const s of onprem) assert.equal(s.suggestedFolder, 'cases/onprem-connectivity');
+
+    sendKey(input, 'enter'); // apply placements
+    await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 2000 });
+
+    sendKey(input, 'left');
+    await sendKeys(input, ['down', 'down', 'down'], 30);
+    await waitFor(() => api.state.folder === 'cases/onprem-connectivity', { timeoutMs: 1000 });
+    sendKey(input, 'enter');
+    await new Promise((r) => setTimeout(r, 30));
+
+    const baseline2 = app.screen.children.length;
+    sendKey(input, 'w');
+    await waitFor(() => app.screen.children.length > baseline2, { timeoutMs: 3000 });
+    sendKey(input, 'enter');
+    await waitFor(() => app.screen.children.length === baseline2, { timeoutMs: 2000 });
+    const knowledge = readFileSync(join(TREE_DIR, 'cases', 'onprem-connectivity', 'KNOWLEDGE.md'), 'utf8');
+    assert.match(knowledge, /온프레미스/);
+    assert.ok(/[가-힣]/.test(knowledge), 'saved KNOWLEDGE.md must actually contain Korean text');
   } finally {
     cleanup(app);
   }

@@ -1,7 +1,7 @@
 import pkg from 'neo-blessed';
 const blessed = pkg.default || pkg;
 import { C } from './theme.js';
-import { t } from './i18n.js';
+import { t, getLocale, setLocale } from './i18n.js';
 
 // blessed mis-compiles some xterm-256color capabilities (notably `Setulc`,
 // set-underline-color) into JS with a syntax error, then dumps the generated
@@ -253,10 +253,67 @@ export function createApp({ input, output } = {}) {
     screen.on('keypress', onKey);
   };
 
+  // l: switch UI language (en <-> ko — only two exist, so a toggle rather
+  // than another picker menu). No live re-render: sessionsView() doesn't
+  // clean up its own screen.key() bindings on unmount (a real bug this
+  // codebase already hit once — re-mounting it in place left stale closures
+  // capturing already-detached boxes), so the safe way to apply a new
+  // locale to everything already on screen is to persist it and restart,
+  // same as the existing `mycelium lang <en|ko>` CLI command already
+  // requires. setLocale() itself does take effect immediately for any t()
+  // call made AFTER this point, which is what already-updates-live things
+  // like the confirm box below rely on, and what the whole demo/first-run
+  // language-picker flow (index.js) leans on to avoid needing this
+  // restart at all — this key is specifically for an ALREADY-RUNNING
+  // real session someone wants to switch on the fly.
+  let langConfirmBox = null;
+  const confirmLanguageSwitch = () => {
+    if (langConfirmBox) return; // already showing — a second l while it's up is the confirm itself, handled below
+    const next = getLocale() === 'ko' ? 'en' : 'ko';
+    const label = next === 'ko' ? '한국어' : 'English';
+    langConfirmBox = blessed.box({
+      parent: screen,
+      top: 'center',
+      left: 'center',
+      width: '50%',
+      height: 'shrink',
+      tags: true,
+      padding: { left: 1, right: 1 },
+      border: { type: 'line' },
+      style: { border: { fg: C.fox }, fg: C.text },
+      label: ` ${t('app.confirmLanguageTitle')} `,
+    });
+    langConfirmBox.setContent(t('app.confirmLanguageHint', C.fox, label));
+    screen.render();
+    const onKey = (ch, key) => {
+      if (!key || key.name === 'return') return;
+      screen.removeListener('keypress', onKey);
+      langConfirmBox.destroy();
+      langConfirmBox = null;
+      screen.render();
+      if (key.name === 'l') {
+        setLocale(next);
+        app.quit();
+      }
+    };
+    screen.on('keypress', onKey);
+  };
+
   // Global keys. View-local keys are attached by each view on its own widgets.
   screen.key(['q'], () => {
     if (app.quitGuard && app.quitGuard()) return;
     confirmQuit();
+  });
+  // Same quitGuard reuse as q above — quitGuard() is unconditionally `() =>
+  // true` for a tutorial's entire duration (see tutorial.js), not just at
+  // the moment q is pressed, so gating l on it too blocks a language switch
+  // for as long as a tutorial/demo is actively running. Not worth the
+  // complexity of re-seeding mock content mid-run in a new language —
+  // demo language is a deliberate, locked-in choice made once at the
+  // persona-picker step (index.js), same as the persona itself.
+  screen.key(['l'], () => {
+    if (app.quitGuard && app.quitGuard()) return;
+    confirmLanguageSwitch();
   });
   // C-c: unconditional hard exit, on top of q — never gated by quitGuard,
   // never asks first. The standard "just kill it" expectation for Ctrl+C
