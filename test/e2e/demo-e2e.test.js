@@ -681,3 +681,51 @@ test('k (fresh path): computes today\'s proposal on the spot when nothing was qu
     cleanup(app);
   }
 });
+
+test('k: a folder spanning 2+ real directories asks which ones to inject into, instead of writing to all of them silently', async () => {
+  // Regression test: dirsForFolder() returns every directory ANY session in
+  // a folder happened to run in — including a one-off session asked from an
+  // unrelated repo's terminal, content-classified into a real project
+  // folder alongside genuine project sessions. Auto-injecting into all of
+  // them (the original behavior) silently wrote AGENTS.md into directories
+  // that had nothing to do with the actual project.
+  const { app, input } = await mountDemo();
+  try {
+    for (const p of pendingKnowledgeReviews()) dismissPendingKnowledge(p.folder);
+    const realProjectDir = mkdtempSync(join(tmpdir(), 'mycelium-real-project-'));
+    const unrelatedDir = mkdtempSync(join(tmpdir(), 'mycelium-unrelated-'));
+    writePendingKnowledgeText('ambiguous-folder', '# ambiguous-folder — Project Knowledge\n\nSome proposed knowledge text.\n');
+    saveRaw({ ...emptyNeutral('amb-sess-1', 'claude'), folder: 'ambiguous-folder', projectDir: realProjectDir });
+    saveRaw({ ...emptyNeutral('amb-sess-2', 'claude'), folder: 'ambiguous-folder', projectDir: unrelatedDir });
+
+    const baseline = app.screen.children.length;
+    sendKey(input, 'k');
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 1000 });
+    sendKey(input, 'enter'); // defaultAll:true — approves the one folder shown
+    // The folder-review modal destroys itself and the directory-checklist
+    // modal opens synchronously in the same handler — screen.children.length
+    // ends up right back at the same count (one destroyed, one created), so
+    // this can't be detected via the count-delta trick other steps use.
+    // KNOWLEDGE.md existing is the reliable signal that applyKnowledgeApprovals()
+    // actually ran (this is also the core regression check: the two used to
+    // be one inseparable step, so KNOWLEDGE.md existing with NEITHER
+    // directory injected into yet is what proves the fix).
+    await waitFor(() => existsSync(join(TREE_DIR, 'ambiguous-folder', 'KNOWLEDGE.md')), { timeoutMs: 1000 });
+
+    assert.equal(existsSync(join(realProjectDir, 'AGENTS.md')), false);
+    assert.equal(existsSync(join(unrelatedDir, 'AGENTS.md')), false);
+
+    // defaultAll:true — a bare Enter here still injects into both (same
+    // trust level as before for the common "yes, all of these" case);
+    // selectively unchecking one is multiSelectList's own generic
+    // Space-to-toggle behavior, already covered where that widget is
+    // tested elsewhere (`o`'s own review flow).
+    sendKey(input, 'enter');
+    await waitFor(() => existsSync(join(realProjectDir, 'AGENTS.md')), { timeoutMs: 1000 });
+
+    assert.match(readFileSync(join(realProjectDir, 'AGENTS.md'), 'utf8'), /Some proposed knowledge text/);
+    assert.match(readFileSync(join(unrelatedDir, 'AGENTS.md'), 'utf8'), /Some proposed knowledge text/);
+  } finally {
+    cleanup(app);
+  }
+});

@@ -413,17 +413,38 @@ already computed it overnight, `daemon/cycles.js`), else compute fresh for
 *today* via `proposeKnowledgeRefreshes()` with a spinner (`o`'s own
 "compute on the spot" fallback branch, same shape). Either way opens the
 same `multiSelectList` review `o` uses — all pre-checked, `Enter` applies,
-`Esc`/unchecking dismisses. Approving a folder is the confirmation: writes
-KNOWLEDGE.md (`promoteKnowledge()`) and injects AGENTS.md into every
-working directory that folder's sessions have used (`dirsForFolder()` +
-`injectAgentsMd()`), same trust level `n`/`h`'s own auto-inject-on-launch
-already operates at. An earlier version nested this inside the digest
-reader (a synthetic "★ Review knowledge" list row) — reworked into its own
-top-level command after review: the two features have nothing to do with
-each other, and nesting one inside the other made the manual-vs-automatic
-symmetry (see `knowledgeReviewCycle`'s own entry, Daemon section) harder to
-reason about than it needed to be. [tested] (`test/e2e/demo-e2e.test.js`'s
-`k (queued path)`/`k (fresh path)`)
+`Esc`/unchecking dismisses. Approving a folder writes its KNOWLEDGE.md
+(`promoteKnowledge()`) — that's the content decision, kept separate from
+which directories actually receive it. An earlier version nested this
+inside the digest reader (a synthetic "★ Review knowledge" list row) —
+reworked into its own top-level command after review: the two features
+have nothing to do with each other, and nesting one inside the other made
+the manual-vs-automatic symmetry (see `knowledgeReviewCycle`'s own entry,
+Daemon section) harder to reason about than it needed to be. [tested]
+(`test/e2e/demo-e2e.test.js`'s `k (queued path)`/`k (fresh path)`)
+
+**`applyKnowledgeApprovals()`: a folder's directories are a second,
+separate decision from approving its knowledge.** `dirsForFolder(folder)`
+returns every distinct directory *any* session in that folder happened to
+run in — which isn't the same as "the project's directory". A folder
+groups by content topic, not by repo: a one-off question asked from an
+unrelated repo's terminal (its `cwd`/`projectDir` at capture time) still
+gets classified into the real project's folder if the content matches,
+so `dirsForFolder()` can return a real project directory *and* an
+unrelated one side by side. The original version injected into all of
+them unconditionally on approval — silently writing AGENTS.md into
+directories that had nothing to do with the actual project (found via a
+real user's store: an "OpenTelemetry" folder with 3 sessions in 3 entirely
+different directories, one of them this very repo, from a session that
+was just a general "what is OpenTelemetry" question asked while sitting in
+its terminal). Fixed by splitting the decision: 0 or 1 directory injects
+straight through (no ambiguity, same trust level as before); 2+ opens a
+second `multiSelectList` (all pre-checked) so a directory that doesn't
+belong can be unchecked before anything is written — mirroring `n`'s own
+directory picker (`launch.js`'s `resolveDir()`), which already lets a
+human choose from exactly these same candidates instead of guessing.
+[tested] (`test/e2e/demo-e2e.test.js`'s "a folder spanning 2+ real
+directories asks which ones to inject into")
 
 **`n`: one flow for launching a new session, either here or as a copyable
 command — no separate `Shift+N` keybinding.** `launchAgent()`'s

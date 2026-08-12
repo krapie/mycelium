@@ -955,25 +955,62 @@ export function sessionsView(opts = {}) {
         }));
         multiSelectList(app, t('knowledge.reviewTitle'), items, (chosen) => {
           const chosenSet = new Set(chosen || []);
-          let applied = 0;
+          const toPromote = [];
           for (const p of pending) {
-            if (!chosenSet.has(p.folder)) {
-              dismissPendingKnowledge(p.folder);
-              continue;
-            }
-            const res = promoteKnowledge(p.folder);
-            if (!res.ok) continue;
-            applied++;
-            // Approving the knowledge IS the confirmation — inject silently
-            // into every directory this folder's sessions actually used,
-            // same trust level n/h's own auto-inject-on-launch already
-            // operates at.
-            for (const dir of dirsForFolder(p.folder)) {
+            if (chosenSet.has(p.folder)) toPromote.push(p);
+            else dismissPendingKnowledge(p.folder);
+          }
+          applyKnowledgeApprovals(toPromote);
+        }, { defaultAll: true });
+      }
+
+      // Approving the KNOWLEDGE.md content is one decision; which real
+      // project directories actually get it is a separate one — a folder
+      // can span several directories a session merely happened to run in
+      // (e.g. a quick "what is X" question asked from an unrelated repo's
+      // terminal, content-classified into a real project folder), and
+      // dirsForFolder() has no way to tell "the project" from "somewhere a
+      // session incidentally ran". Auto-injecting into all of them
+      // regardless — the original behavior — silently wrote into
+      // directories that had nothing to do with the actual project. `n`'s
+      // own directory picker already lets a human choose from exactly
+      // these candidates instead of guessing; this mirrors that: 0 or 1
+      // directory (no ambiguity) injects straight through same as before,
+      // 2+ shows a checklist (all pre-checked, same trust level as the
+      // knowledge approval itself) so a stray directory can be unchecked.
+      function applyKnowledgeApprovals(toPromote) {
+        let applied = 0;
+        const ambiguous = [];
+        for (const p of toPromote) {
+          const res = promoteKnowledge(p.folder);
+          if (!res.ok) continue;
+          applied++;
+          const dirs = dirsForFolder(p.folder);
+          if (dirs.length <= 1) {
+            for (const dir of dirs) {
               try {
                 injectAgentsMd(dir, p.folder);
               } catch {
                 /* no reachable AGENTS.md target — fine, best-effort */
               }
+            }
+          } else {
+            for (const dir of dirs) ambiguous.push({ folder: p.folder, dir });
+          }
+        }
+        if (!ambiguous.length) {
+          return app.notify(applied ? t('knowledge.reviewApplied', applied) : t('knowledge.reviewSkipped'), 4);
+        }
+        const items = ambiguous.map((c) => ({
+          label: `${c.folder}  {${C.faint}-fg}→ ${c.dir}{/}`,
+          value: c,
+        }));
+        multiSelectList(app, t('knowledge.injectDirsTitle'), items, (chosenDirs) => {
+          for (const c of chosenDirs || []) {
+            try {
+              injectAgentsMd(c.dir, c.folder);
+            } catch {
+              /* no reachable AGENTS.md target — fine, best-effort */
             }
           }
           app.notify(applied ? t('knowledge.reviewApplied', applied) : t('knowledge.reviewSkipped'), 4);

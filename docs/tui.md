@@ -110,11 +110,20 @@ the exact same underlying function.
 
 The review itself is the same checkbox-list `o` uses: every folder starts
 checked, `Space` to uncheck one you don't want, `Enter` applies the checked
-ones. **Approving a folder is the confirmation**: it writes KNOWLEDGE.md and
-immediately injects into every working directory that folder's sessions
-have used — the same trust level `n`/`h`'s own silent auto-inject-on-launch
-already operates at, since the content landing there is exactly what was
-just approved, nothing new. Whatever's left unchecked (or the whole batch,
-on `Esc`) is simply dismissed — it won't keep asking again, and a manual `w`
-can always regenerate it later. If a proposal is still unreviewed the next
-time you open Mycelium, a toast points you at `k`.
+ones. **Approving a folder writes its KNOWLEDGE.md** — that's the content
+decision. Whatever's left unchecked (or the whole batch, on `Esc`) is
+simply dismissed — it won't keep asking again, and a manual `w` can always
+regenerate it later.
+
+**Which directories actually get the injection is a separate question.** A
+folder groups sessions by *topic*, and a topic isn't always one project —
+a quick question asked from an unrelated repo's terminal still gets
+content-classified into the real project's folder alongside genuine
+project sessions, so the folder ends up spanning directories that have
+nothing to do with each other. If an approved folder's sessions only ever
+ran in one directory, `k` injects straight through, no extra prompt — same
+trust level `n`/`h`'s own silent auto-inject-on-launch already operates at.
+If they ran in **more than one**, a second checklist opens (all pre-checked)
+so you can uncheck whichever directory doesn't actually belong before
+anything gets written. If a proposal is still unreviewed the next time you
+open Mycelium, a toast points you at `k`.
