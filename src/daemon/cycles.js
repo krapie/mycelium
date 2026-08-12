@@ -2,7 +2,7 @@ import { scan } from '../scanner.js';
 import { reindex } from '../index-db.js';
 import { summarizeCandidates, suggestPlacements, applyPlacements, queueSuggestions, pendingSuggestions } from '../organize.js';
 import { tagAll } from '../learn.js';
-import { generateDigest } from '../insight.js';
+import { generateDigest, proposeKnowledgeRefreshes } from '../insight.js';
 import { loadConfig } from '../config.js';
 
 // The cadence/policy layer: what runs, how often, and in what order — kept
@@ -122,15 +122,39 @@ export async function digestCycle(log) {
 }
 
 /**
+ * Independent of digestCycle above — a separate feature (`k` in the TUI,
+ * not `d`) that happens to share the same "once per local day, for
+ * yesterday" cadence for the same reason: the TUI's `k` command is the
+ * expected, primary way to review a day's knowledge-refresh proposals
+ * (computed fresh, for TODAY, the moment a human presses it — see
+ * insight.js's proposeKnowledgeRefreshes() and sessions.js's `k` handler);
+ * this cycle is the fallback for whenever a human didn't get to it before
+ * the day rolled over, catching up on YESTERDAY once it's complete. Both
+ * paths call the exact same insight.js function, so which one actually ran
+ * produces an identical result — that's the whole point of sharing it
+ * rather than each having its own copy.
+ */
+let lastKnowledgeReviewDay = null;
+export async function knowledgeReviewCycle(log) {
+  const today = new Date().toISOString().slice(0, 10);
+  if (lastKnowledgeReviewDay === today) return;
+  lastKnowledgeReviewDay = today;
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const res = await proposeKnowledgeRefreshes(yesterday);
+  if (res.proposed) log.log(`[knowledge] ${res.proposed} folder(s) have knowledge ready for review`);
+  for (const f of res.failed) log.error(`[knowledge] proposal failed for ${f.folder}: ${f.error}`);
+}
+
+/**
  * The actual upkeep loop (scan → organize → tag, smart-organize, digest) on
- * its three cadences. Used both by the standalone `mycelium daemon` process
+ * its four cadences. Used both by the standalone `mycelium daemon` process
  * and by the TUI's own in-process routine (see process.js's startTuiRoutine())
  * — `log` defaults to the real console for the former; the TUI passes a file
  * logger instead, since blessed owns the terminal and raw stdout writes
  * would corrupt the screen.
  */
 export async function runDaemon({ log = console } = {}) {
-  log.log('Mycelium daemon starting (background upkeep: scan + digest + smart organize).');
+  log.log('Mycelium daemon starting (background upkeep: scan + digest + knowledge review + smart organize).');
   log.log(`  scan interval: ${SCAN_INTERVAL_MS}ms (tag batch limit ${TAG_BATCH_LIMIT})`);
   log.log(
     `  smart organize interval: ${SMART_ORGANIZE_INTERVAL_MS}ms (batch limit ${SMART_ORGANIZE_BATCH_LIMIT}, cooldown ${SMART_ORGANIZE_COOLDOWN_MS}ms, concurrency ${SUMMARIZE_CONCURRENCY})`,
@@ -138,9 +162,11 @@ export async function runDaemon({ log = console } = {}) {
 
   await scanCycle(log);
   await digestCycle(log);
+  await knowledgeReviewCycle(log);
   await smartOrganizeCycle(log);
 
   setInterval(() => scanCycle(log), SCAN_INTERVAL_MS);
   setInterval(() => digestCycle(log), 60 * 60 * 1000); // hourly check; fires once/day
+  setInterval(() => knowledgeReviewCycle(log), 60 * 60 * 1000); // same cadence, independent gate
   setInterval(() => smartOrganizeCycle(log), SMART_ORGANIZE_INTERVAL_MS);
 }

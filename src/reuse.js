@@ -1,11 +1,31 @@
 import { join } from 'node:path';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { TREE_DIR } from './paths.js';
-import { loadRaw } from './scanner.js';
+import { loadRaw, allRaw } from './scanner.js';
+import { isInSubtree } from './organize.js';
 
 const BEGIN = '<!-- mycelium:begin -->';
 const END = '<!-- mycelium:end -->';
 const CLAUDE_BRIDGE = '@AGENTS.md';
+
+/**
+ * Distinct existing working directories of the sessions in a folder subtree
+ * — moved here from tui/launch.js (which still uses it for `n`/`Shift+N`'s
+ * launch-target picker) because daemon/cycles.js's digestCycle needs it too,
+ * for auto-injecting an approved knowledge refresh into every directory a
+ * folder's sessions actually ran in — and core (daemon/**) must never import
+ * from tui/**.
+ */
+export function dirsForFolder(folder) {
+  if (!folder) return [];
+  const set = new Set();
+  for (const n of allRaw()) {
+    if (!isInSubtree(n.folder, folder)) continue;
+    const d = n.projectDir || n.cwd;
+    if (d && existsSync(d)) set.add(d);
+  }
+  return [...set];
+}
 
 /**
  * Walk a folder path from the node up to the root, collecting each ancestor's

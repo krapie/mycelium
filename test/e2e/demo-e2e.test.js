@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync, mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 import { useTempHome } from '../helpers.js';
 import { createTestApp, sendKey, sendKeys, waitFor } from '../tui-helpers.js';
 
@@ -25,12 +26,14 @@ import { createTestApp, sendKey, sendKeys, waitFor } from '../tui-helpers.js';
 useTempHome();
 process.env.MYCELIUM_DEMO_MOCK_DELAY_MS = '15';
 
-const { allRaw } = await import('../../src/scanner.js');
+const { allRaw, saveRaw } = await import('../../src/scanner.js');
+const { emptyNeutral } = await import('../../src/schema.js');
 const { TREE_DIR } = await import('../../src/paths.js');
 const { createApp } = await import('../../src/tui/app.js');
 const { sessionsView } = await import('../../src/tui/views/sessions.js');
 const { seedMockSessions, startTutorial } = await import('../../src/tui/tutorial.js');
 const { setLocale } = await import('../../src/tui/i18n.js');
+const { writePendingKnowledgeText, pendingKnowledgeReviews, dismissPendingKnowledge } = await import('../../src/insight.js');
 
 // seedMockSessions()/createTutorialMockProvider() default their locale to
 // i18n.js's getLocale() — setLocale('ko') (used by exactly one test below)
@@ -45,16 +48,16 @@ function findByKeyword(sessions, re) {
 }
 
 // Reads the narrator overlay's own step number straight off its blessed
-// label content (tutorial.js's `box.setLabel(...)`, e.g. " Step 3/14 ") —
+// label content (tutorial.js's `box.setLabel(...)`, e.g. " Step 3/16 ") —
 // not rendered pixel/ANSI output, just the plain string setLabel()/
 // setContent() already stored on the element (element.js's `_label.content`
 // / `.content`). Needed only for the skip-ahead regression test below,
 // where the thing actually under test IS which step the narrator thinks
 // it's on, not just whether some real handler ran.
 function narratorStepIndex(app) {
-  const box = app.screen.children.find((c) => c._label && /Step \d+\/14/.test(c._label.content || ''));
+  const box = app.screen.children.find((c) => c._label && /Step \d+\/16/.test(c._label.content || ''));
   if (!box) return null;
-  const m = /Step (\d+)\/14/.exec(box._label.content);
+  const m = /Step (\d+)\/16/.exec(box._label.content);
   return m ? Number(m[1]) : null;
 }
 
@@ -455,6 +458,16 @@ test('demo: finishing the tutorial on the actual last step reports completed:tru
     sendKey(input, 'escape');
     await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 1000 });
     await settle();
+    // Steps 9/10 — k: knowledge review (mirrors o's own two-step shape —
+    // see tutorial.js). Nothing was pre-queued, so this computes fresh for
+    // today via the mocked LLM before the review modal opens.
+    baseline = app.screen.children.length;
+    sendKey(input, 'k');
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 3000 });
+    await settle();
+    sendKey(input, 'enter'); // defaultAll:true
+    await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 2000 });
+    await settle();
     sendKey(input, 'space');
     sendKey(input, 'down');
     sendKey(input, 'space');
@@ -531,6 +544,16 @@ test('demo: pressing a later step\'s key early (skipping step 1) still lets the 
     sendKey(input, 'escape');
     await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 1000 });
     await settle();
+    // Steps 9/10 — k: knowledge review (mirrors o's own two-step shape —
+    // see tutorial.js). Nothing was pre-queued, so this computes fresh for
+    // today via the mocked LLM before the review modal opens.
+    baseline = app.screen.children.length;
+    sendKey(input, 'k');
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 3000 });
+    await settle();
+    sendKey(input, 'enter'); // defaultAll:true
+    await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 2000 });
+    await settle();
     sendKey(input, 'space');
     sendKey(input, 'down');
     sendKey(input, 'space');
@@ -591,6 +614,151 @@ test('demo: a stray Enter on step 1 does not falsely cascade the narrator forwar
     await new Promise((r) => setTimeout(r, 320));
     assert.equal(narratorStepIndex(app), 3, 'o still correctly skips ahead once the real organize modal opens');
     assert.equal(doneArg, undefined, 'tutorial is still running');
+  } finally {
+    cleanup(app);
+  }
+});
+
+test('k (queued path): reuses an already-staged knowledge proposal instantly, writes KNOWLEDGE.md and injects AGENTS.md', async () => {
+  // Simulates what daemon/cycles.js's independent knowledgeReviewCycle would
+  // have already staged overnight — k should reuse it without a fresh LLM
+  // call (same "makes it instant when the daemon's been doing the work in
+  // the background" reasoning o's own runSmartOrganize() already documents).
+  // Deliberately not going through Digest (`d`) at all — the two features
+  // are unrelated now; this proves `k` alone is enough.
+  const { app, input } = await mountDemo();
+  try {
+    const realDir = mkdtempSync(join(tmpdir(), 'mycelium-review-'));
+    saveRaw({ ...emptyNeutral('review-sess-1', 'claude'), folder: 'review-folder', projectDir: realDir });
+    writePendingKnowledgeText('review-folder', '# review-folder — Project Knowledge\n\nSome proposed knowledge text.\n');
+
+    const baseline = app.screen.children.length;
+    sendKey(input, 'k');
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 1000 });
+    sendKey(input, 'enter'); // defaultAll:true — applies the one pending folder shown
+    await waitFor(() => existsSync(join(TREE_DIR, 'review-folder', 'KNOWLEDGE.md')), { timeoutMs: 1000 });
+
+    const knowledge = readFileSync(join(TREE_DIR, 'review-folder', 'KNOWLEDGE.md'), 'utf8');
+    assert.match(knowledge, /Some proposed knowledge text/);
+    assert.equal(existsSync(join(TREE_DIR, 'review-folder', 'KNOWLEDGE.pending.md')), false, 'pending file cleared after promotion');
+
+    const agentsMd = readFileSync(join(realDir, 'AGENTS.md'), 'utf8');
+    assert.match(agentsMd, /Some proposed knowledge text/, 'approval auto-injects into the folder\'s known working directory');
+  } finally {
+    cleanup(app);
+  }
+});
+
+test('k: p opens a full preview of the proposed knowledge before approving, not just the one-line label snippet', async () => {
+  // Regression test: the checklist label truncates to ~60 chars, nowhere
+  // near enough to actually review content bound for a real project's
+  // AGENTS.md — p must open the full text (confirmText()'s "see it before
+  // it lands on disk" principle, applied per-item here).
+  const { app, input } = await mountDemo();
+  try {
+    for (const p of pendingKnowledgeReviews()) dismissPendingKnowledge(p.folder);
+    const longText = `# preview-folder — Project Knowledge\n\n${'A'.repeat(40)} distinctive marker text that is definitely longer than sixty characters and would never fully fit in the checklist's own one-line label.`;
+    writePendingKnowledgeText('preview-folder', longText);
+
+    const baseline = app.screen.children.length;
+    sendKey(input, 'k');
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 1000 });
+    const afterReviewOpen = app.screen.children.length;
+    sendKey(input, 'p');
+    await waitFor(() => app.screen.children.length > afterReviewOpen, { timeoutMs: 1000 });
+
+    // Nothing approved/written yet — pure preview, no side effect.
+    assert.equal(existsSync(join(TREE_DIR, 'preview-folder', 'KNOWLEDGE.md')), false);
+
+    // Close the preview (p again, per its own extraCloseKeys) — the
+    // checklist underneath must still be usable afterwards.
+    sendKey(input, 'p');
+    await waitFor(() => app.screen.children.length === afterReviewOpen, { timeoutMs: 1000 });
+    sendKey(input, 'enter'); // defaultAll:true
+    await waitFor(() => existsSync(join(TREE_DIR, 'preview-folder', 'KNOWLEDGE.md')), { timeoutMs: 1000 });
+
+    assert.match(readFileSync(join(TREE_DIR, 'preview-folder', 'KNOWLEDGE.md'), 'utf8'), /distinctive marker text/);
+  } finally {
+    cleanup(app);
+  }
+});
+
+test('k (fresh path): computes today\'s proposal on the spot when nothing was queued', async () => {
+  // k must fall back to computing one itself (proposeKnowledgeRefreshes
+  // (today), mocked LLM, real spinner) rather than just notifying "nothing
+  // to review".
+  const { app, input } = await mountDemo();
+  try {
+    // mountDemo() → seedMockSessions() itself pre-stages a proposal for the
+    // persona's merge-target folder (see tutorial.js) — clear it first so
+    // this test genuinely exercises the "nothing queued" branch, not the
+    // fast reuse-queued one.
+    for (const p of pendingKnowledgeReviews()) dismissPendingKnowledge(p.folder);
+    const realDir = mkdtempSync(join(tmpdir(), 'mycelium-review-'));
+    const today = new Date().toISOString().slice(0, 10);
+    saveRaw({
+      ...emptyNeutral('fresh-sess-1', 'claude'),
+      folder: 'fresh-folder',
+      projectDir: realDir,
+      startedAt: `${today}T09:00:00.000Z`,
+      extracted: { title: null, tags: [], summary: 'fresh folder activity today', decisions: [], todos: [] },
+    });
+
+    const baseline = app.screen.children.length;
+    sendKey(input, 'k');
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 3000 });
+    sendKey(input, 'enter');
+    await waitFor(() => existsSync(join(TREE_DIR, 'fresh-folder', 'KNOWLEDGE.md')), { timeoutMs: 1000 });
+
+    assert.ok(readFileSync(join(TREE_DIR, 'fresh-folder', 'KNOWLEDGE.md'), 'utf8').length > 0);
+  } finally {
+    cleanup(app);
+  }
+});
+
+test('k: a folder spanning 2+ real directories asks which ones to inject into, instead of writing to all of them silently', async () => {
+  // Regression test: dirsForFolder() returns every directory ANY session in
+  // a folder happened to run in — including a one-off session asked from an
+  // unrelated repo's terminal, content-classified into a real project
+  // folder alongside genuine project sessions. Auto-injecting into all of
+  // them (the original behavior) silently wrote AGENTS.md into directories
+  // that had nothing to do with the actual project.
+  const { app, input } = await mountDemo();
+  try {
+    for (const p of pendingKnowledgeReviews()) dismissPendingKnowledge(p.folder);
+    const realProjectDir = mkdtempSync(join(tmpdir(), 'mycelium-real-project-'));
+    const unrelatedDir = mkdtempSync(join(tmpdir(), 'mycelium-unrelated-'));
+    writePendingKnowledgeText('ambiguous-folder', '# ambiguous-folder — Project Knowledge\n\nSome proposed knowledge text.\n');
+    saveRaw({ ...emptyNeutral('amb-sess-1', 'claude'), folder: 'ambiguous-folder', projectDir: realProjectDir });
+    saveRaw({ ...emptyNeutral('amb-sess-2', 'claude'), folder: 'ambiguous-folder', projectDir: unrelatedDir });
+
+    const baseline = app.screen.children.length;
+    sendKey(input, 'k');
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 1000 });
+    sendKey(input, 'enter'); // defaultAll:true — approves the one folder shown
+    // The folder-review modal destroys itself and the directory-checklist
+    // modal opens synchronously in the same handler — screen.children.length
+    // ends up right back at the same count (one destroyed, one created), so
+    // this can't be detected via the count-delta trick other steps use.
+    // KNOWLEDGE.md existing is the reliable signal that applyKnowledgeApprovals()
+    // actually ran (this is also the core regression check: the two used to
+    // be one inseparable step, so KNOWLEDGE.md existing with NEITHER
+    // directory injected into yet is what proves the fix).
+    await waitFor(() => existsSync(join(TREE_DIR, 'ambiguous-folder', 'KNOWLEDGE.md')), { timeoutMs: 1000 });
+
+    assert.equal(existsSync(join(realProjectDir, 'AGENTS.md')), false);
+    assert.equal(existsSync(join(unrelatedDir, 'AGENTS.md')), false);
+
+    // defaultAll:true — a bare Enter here still injects into both (same
+    // trust level as before for the common "yes, all of these" case);
+    // selectively unchecking one is multiSelectList's own generic
+    // Space-to-toggle behavior, already covered where that widget is
+    // tested elsewhere (`o`'s own review flow).
+    sendKey(input, 'enter');
+    await waitFor(() => existsSync(join(realProjectDir, 'AGENTS.md')), { timeoutMs: 1000 });
+
+    assert.match(readFileSync(join(realProjectDir, 'AGENTS.md'), 'utf8'), /Some proposed knowledge text/);
+    assert.match(readFileSync(join(unrelatedDir, 'AGENTS.md'), 'utf8'), /Some proposed knowledge text/);
   } finally {
     cleanup(app);
   }

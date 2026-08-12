@@ -124,6 +124,34 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   from the LLM material. Prompt explicitly forbids meta-report phrasing
   since the output is injected verbatim into AGENTS.md later. [untested]
 - **List which folders have sessions.** `foldersWithSessions()`. [untested]
+- **Knowledge-refresh proposals, staged for review — a separate feature
+  from Digest above, despite living in the same file.** `foldersActiveOn(date)`
+  (filed folders — unfiled/`_inbox` excluded — with a session that started
+  that day; shares its day-filter with `generateDigest()` via an internal
+  `sessionsForPeriod()` helper, purely to avoid a second copy of that
+  filter — the two features are otherwise unrelated). `writePendingKnowledgeText(folder, text)`
+  stages a proposal at `KNOWLEDGE.pending.md`, next to (not overwriting)
+  the real `KNOWLEDGE.md`. `pendingKnowledgeReviews()` lists every folder
+  currently carrying one. `promoteKnowledge(folder)` writes it as the real
+  `KNOWLEDGE.md` (via `writeKnowledgeText()`) and clears the pending file;
+  `dismissPendingKnowledge(folder)` clears it without promoting — either
+  way the folder stops being returned by `pendingKnowledgeReviews()`. The
+  pending file's mere existence *is* the review queue, no separate store —
+  same "plain file is the state" shape as `organize/classify.js`'s
+  session-level `suggestedFolder` queue, just folder-scoped.
+  `proposeKnowledgeRefreshes(date, {concurrency, limit})` orchestrates the
+  above for every active folder on `date`, skipping one with an existing
+  unreviewed proposal; `concurrency`/`limit` default from
+  `MYCELIUM_SUMMARIZE_CONCURRENCY`/`MYCELIUM_DIGEST_KNOWLEDGE_LIMIT` so
+  every caller shares the same issue-#3 safety ceiling without each
+  reimplementing it. Two callers, both wanting identical behavior: the
+  TUI's `k` command (`sessions.js`), computing fresh for *today* the
+  instant a human presses it — the expected, primary path — and the
+  daemon's independent `knowledgeReviewCycle` (below), computing for
+  *yesterday* once a day, as the fallback for whenever a human didn't.
+  Sharing one function rather than each having its own copy is what makes
+  "did a human trigger this, or did Mycelium do it overnight" produce an
+  identical result either way. [tested]
 
 ## Reuse — Context inheritance (`src/reuse.js`)
 
@@ -157,6 +185,11 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   existing-content, and no-duplication-on-repeat all covered in
   `test/reuse.test.js`, same pattern as `AGENTS.md`'s own marker-block tests)
 - **Preview what a session would inherit.** `contextForSession(sessionId)`. [tested]
+- **Distinct existing working directories a folder's sessions have used.**
+  `dirsForFolder(folder)` — moved here from `tui/launch.js` (which still
+  uses it for `n`'s directory picker) so `daemon/cycles.js`'s digest-review
+  auto-inject can use it too, without core importing from `tui/**`. Filters
+  to directories that still `existsSync()`. [tested]
 
 ## Handoff (`src/handoff.js`)
 
@@ -194,17 +227,41 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
 
 ## Daemon / Background Upkeep (`src/daemon.js`)
 
-- **Automatic scan/organize/digest cycles.** `runDaemon({log})` =
-  `scanCycle` + `smartOrganizeCycle` + `digestCycle`. **Reentrancy guards**
-  (`scanRunning`/`organizeRunning`) prevent overlapping ticks — the direct
-  fix for the historical "20+ concurrent LLM processes" incident (issue #3).
-  `smartOrganizeCycle` also refuses to run while a suggestion batch is
-  already queued/unreviewed. `digestCycle` runs at most once per local
-  calendar day, always for **yesterday**. Auto-apply vs. queue-for-review
-  branches on `config.autoApproveSmartOrganize` (default `false`). Every
-  cadence/limit is env-tunable (`MYCELIUM_SCAN_MS`,
-  `MYCELIUM_SMART_ORGANIZE_MS`, `_LIMIT`, `_COOLDOWN_MS`,
-  `MYCELIUM_TAG_BATCH_LIMIT`, `MYCELIUM_SUMMARIZE_CONCURRENCY`). [untested]
+- **Automatic scan/organize/digest/knowledge-review cycles.** `runDaemon({log})` =
+  `scanCycle` + `smartOrganizeCycle` + `digestCycle` + `knowledgeReviewCycle`.
+  **Reentrancy guards** (`scanRunning`/`organizeRunning`) prevent overlapping
+  ticks — the direct fix for the historical "20+ concurrent LLM processes"
+  incident (issue #3). `smartOrganizeCycle` also refuses to run while a
+  suggestion batch is already queued/unreviewed. `digestCycle`/
+  `knowledgeReviewCycle` each run at most once per local calendar day,
+  always for **yesterday** — two genuinely independent cycles (own
+  `lastDigestDay`/`lastKnowledgeReviewDay` gates), not one calling the
+  other; see the dedicated entry below for why Knowledge Review isn't
+  digest-coupled. Auto-apply vs. queue-for-review branches on
+  `config.autoApproveSmartOrganize` (default `false`). Every cadence/limit
+  is env-tunable (`MYCELIUM_SCAN_MS`, `MYCELIUM_SMART_ORGANIZE_MS`,
+  `_LIMIT`, `_COOLDOWN_MS`, `MYCELIUM_TAG_BATCH_LIMIT`,
+  `MYCELIUM_SUMMARIZE_CONCURRENCY`, `MYCELIUM_DIGEST_KNOWLEDGE_LIMIT`).
+  [partial] (`scanCycle`/`smartOrganizeCycle` themselves still untested;
+  `digestCycle`/`knowledgeReviewCycle`'s own first-run orchestration is
+  covered in `test/daemon-cycles.test.js`, detailed per-folder scenario
+  coverage lives in `test/insight.test.js` against
+  `proposeKnowledgeRefreshes()` directly)
+- **`knowledgeReviewCycle` — independent of Digest, the daemon-side fallback
+  for the TUI's `k` command.** `knowledgeReviewCycle(log)` calls
+  `insight.js`'s `proposeKnowledgeRefreshes(yesterday)` — the exact same
+  function `k` calls for *today* the moment a human presses it (see the
+  TUI Sessions panel entry below) — so whichever one actually ran produces
+  an identical result. Deliberately a *separate* cycle/gate from
+  `digestCycle`, not called from or calling it: an earlier version of this
+  feature stapled the knowledge-proposal step onto `digestCycle` itself,
+  which broke the moment a human manually generated *today's* digest via
+  `n` (see Insight's own digestReader entry above) — that path never went
+  through `digestCycle` at all, so the manual and automatic paths silently
+  produced different results despite being "the same trigger, sort of."
+  Splitting them (and moving the shared logic to `insight.js`, called
+  identically by both) fixed that for good. [tested]
+  (`test/daemon-cycles.test.js`)
 - **Run upkeep inside the TUI process (no separate daemon).**
   `startTuiRoutine()` — replaced an earlier detached-process design that
   kept running stale code across restarts. Opt-out via
@@ -338,34 +395,92 @@ architectural coordination point in the file), `s` scan, `o` smart-organize
 (largest/most stateful handler: cached-vs-fresh branch, two sequential LLM
 phases, toast-dismiss race, multi-select review, always-clear-queue-on-close),
 `?` help, `g` re-show onboarding, `m`/`t` move/tag, `x` delete (sweeps
-backlinks across all targets), `n` launch new agent, `Shift+N` same picker
-but copies the shell command instead of launching (see below), `r` resume
-(falls back to handoff for merge/split products), `h` handoff (post-launch
-folds a merge/split product into the new real session), detail-panel `Enter`
-resume-or-copy choice, `a` auto-tag (sequential batch with per-item
-progress + partial-failure tolerance), `e` rename title, `y` copy to
-clipboard, `d` digest reader (nested mini-screen), `c` view context, `i`
-inject AGENTS.md (preview-then-confirm, sibling to `w`). [untested]
+backlinks across all targets), `n` launch new agent (open-here-or-copy
+choice, see below), `r` resume (falls back to handoff for merge/split
+products), `h` handoff (post-launch folds a merge/split product into the
+new real session), detail-panel `Enter` resume-or-copy choice, `a` auto-tag
+(sequential batch with per-item progress + partial-failure tolerance), `e`
+rename title, `y` copy to clipboard, `d` digest reader (nested mini-screen,
+plain narrative summary — no knowledge coupling, see `k` below), `k`
+knowledge review (see below), `c` view context, `i` inject AGENTS.md
+(preview-then-confirm, sibling to `w`). [untested]
 
-**`Shift+N`: copy-command escape hatch for launching a new session, so
-parallel sessions are possible at all.** `n`'s `launchAgent()` → `run()`
-hands the terminal over to the child agent process via `foreground()`
-(`spawn(..., {stdio: 'inherit'})`) — the SAME tty, blocking the whole TUI
-until that one session exits. There's no portable way for a terminal app to
-open a genuinely new tab/window across terminal emulators (Terminal.app,
-iTerm2, tmux, Windows Terminal, ...), so the only way to actually run
-several sessions at once is a separate terminal the human opens themselves.
-`launchAgent()` now takes a `copyOnly` option: same agent-picker →
-directory-picker flow as `n`, but instead of `run()`'s foreground handoff,
-`copyNewCommand()` builds a `cd <dir> && <bin> <args>` line
-(`agents.js`'s `newCommandLine()`, sharing its quoting helper with the
-existing `resumeCommandLine()` resume-detail-Enter already used for the
-same "copy command" idea on an *existing* session) and copies it to the
-clipboard — paste into as many tabs as you want. Still runs
-`injectAgentsMd()` first, same as `run()`, since skipping it just because
-this path doesn't itself launch anything would silently degrade whatever
-gets pasted. Bound as `Shift+N` (list level only, same scope as plain `n`)
-in `sessions.js`. [untested]
+**`k`: knowledge review, deliberately unrelated to Digest (`d`) — mirrors
+`o` (smart organize) exactly, not the digest reader.** `runKnowledgeReview()`:
+reuse whatever `insight.js`'s `pendingKnowledgeReviews()` already has
+(fast path — the daemon's independent `knowledgeReviewCycle` may have
+already computed it overnight, `daemon/cycles.js`), else compute fresh for
+*today* via `proposeKnowledgeRefreshes()` with a spinner (`o`'s own
+"compute on the spot" fallback branch, same shape). Either way opens the
+same `multiSelectList` review `o` uses — all pre-checked, `Enter` applies,
+`Esc`/unchecking dismisses. Approving a folder writes its KNOWLEDGE.md
+(`promoteKnowledge()`) — that's the content decision, kept separate from
+which directories actually receive it. An earlier version nested this
+inside the digest reader (a synthetic "★ Review knowledge" list row) —
+reworked into its own top-level command after review: the two features
+have nothing to do with each other, and nesting one inside the other made
+the manual-vs-automatic symmetry (see `knowledgeReviewCycle`'s own entry,
+Daemon section) harder to reason about than it needed to be. [tested]
+(`test/e2e/demo-e2e.test.js`'s `k (queued path)`/`k (fresh path)`)
+
+**`applyKnowledgeApprovals()`: a folder's directories are a second,
+separate decision from approving its knowledge.** `dirsForFolder(folder)`
+returns every distinct directory *any* session in that folder happened to
+run in — which isn't the same as "the project's directory". A folder
+groups by content topic, not by repo: a one-off question asked from an
+unrelated repo's terminal (its `cwd`/`projectDir` at capture time) still
+gets classified into the real project's folder if the content matches,
+so `dirsForFolder()` can return a real project directory *and* an
+unrelated one side by side. The original version injected into all of
+them unconditionally on approval — silently writing AGENTS.md into
+directories that had nothing to do with the actual project (found via a
+real user's store: an "OpenTelemetry" folder with 3 sessions in 3 entirely
+different directories, one of them this very repo, from a session that
+was just a general "what is OpenTelemetry" question asked while sitting in
+its terminal). Fixed by splitting the decision: 0 or 1 directory injects
+straight through (no ambiguity, same trust level as before); 2+ opens a
+second `multiSelectList` (all pre-checked) so a directory that doesn't
+belong can be unchecked before anything is written — mirroring `n`'s own
+directory picker (`launch.js`'s `resolveDir()`), which already lets a
+human choose from exactly these same candidates instead of guessing.
+[tested] (`test/e2e/demo-e2e.test.js`'s "a folder spanning 2+ real
+directories asks which ones to inject into")
+
+**`multiSelectList`'s optional `previewText`, and `p` inside the knowledge
+review — the actual `confirmText()` checkpoint the review checklist was
+missing.** The checklist's own item label truncates to ~60 chars (just
+enough to recognize which folder), nowhere near enough to actually judge
+content bound for a real project's AGENTS.md — `k`'s review let a folder
+get approved (and injected) on the strength of a one-line snippet alone.
+`multiSelectList(app, label, items, cb, { previewText })` (`widgets/pickers.js`)
+is a generic, opt-in addition: `p` opens a full scrollable `textView` of
+`previewText(currentItem.value)` for whichever row is highlighted, closes
+back to the (still-live, unaffected) checklist on `p`/`q`/`Escape` again.
+Only `k`'s folder-approval checklist wires it up (`sessions.js`) — the
+directory checklist right after it doesn't need its own preview (the
+content was already reviewed one step earlier), and `o`'s placement
+suggestions already show enough inline context without one. [tested]
+(`test/e2e/demo-e2e.test.js`'s "p opens a full preview...")
+
+**`n`: one flow for launching a new session, either here or as a copyable
+command — no separate `Shift+N` keybinding.** `launchAgent()`'s
+agent-picker → directory-picker is followed by a third choice — "open here"
+or "copy command" — the exact same shape `resume-handoff.js`'s
+`onDetailEnter()` already offers for resuming an *existing* session (same
+`resume.openHere`/`resume.copyCommand` i18n strings, reused rather than
+duplicated). "Open here" hands the terminal over to the child agent process
+via `foreground()` (`spawn(..., {stdio: 'inherit'})`) — the SAME tty,
+blocking the whole TUI until that one session exits. "Copy command" instead
+builds a `cd <dir> && <bin> <args>` line (`agents.js`'s `newCommandLine()`)
+and copies it to the clipboard — paste into as many separate terminal tabs
+as you want, since there's no portable way for a terminal app to open a
+genuinely new tab/window across terminal emulators (Terminal.app, iTerm2,
+tmux, Windows Terminal, ...). Both branches run `injectAgentsMd()` first —
+skipping it on the copy path just because it doesn't itself launch anything
+would silently degrade whatever gets pasted. A previous version bound the
+copy path to a separate `Shift+N` key, decided *before* the agent/directory
+picker instead of after; folded into `n` itself as one shared choice.
+[untested]
 
 **`asyncReviewFlowRunning` guards `o`/`w`/Shift+S against a double-press
 while the LLM call is still in flight.** All three are async: show a
@@ -424,7 +539,7 @@ source instead of maintaining separate, independently-hardcoded copies of
 the same folder names/keywords (a real bug class earlier in this feature's
 history — folder-name mismatches between the two files broke merge/split).
 `seedMockSessions(personaId)`/`startTutorial(app, onDone, personaId)` thread
-the choice through; `i18n.js`'s step2/4/5/11 body strings take extra
+the choice through; `i18n.js`'s step2/4/5/13 body strings take extra
 interpolation args (session count, merge-target folder) via `t()`'s existing
 `(fg, ...args)` support, rather than each persona needing its own copy of
 those strings. `personaId` defaults to `'swe'` wherever omitted (existing
@@ -432,6 +547,23 @@ direct callers, e.g. tests). [tested] (`test/tutorial-data.test.js`,
 `test/tutorial-mock-llm.test.js` cover all three personas' data/classification/
 knowledge/split output; `test/e2e/demo-e2e.test.js` has a dedicated case driving
 the CSE persona's real 3-way merge → split through the fake-terminal harness)
+
+`seedMockSessions()` also pre-stages a knowledge-refresh proposal
+(`insight.js`'s `writePendingKnowledgeText()`, using the merge storyline's
+own canned `knowledge[locale]` text — the same content `w`'s mock preview
+would show for that folder) for the merge-target folder, as if the
+daemon's independent `knowledgeReviewCycle` had already computed it
+overnight. This lets step 9 (`k`) hit the same "reuse whatever's queued"
+fast path a real user gets when the daemon beat them to it, and sidesteps
+a genuine problem: every persona's mock session dates are backdated
+(`daysAgo: 1`–`10`, see `personas.js`) for calendar-tab realism, so `k`'s
+own "compute fresh for *today*" fallback would find zero active folders
+during a scripted run — nothing's actually dated today. Cleanup is
+automatic, not special-cased: `endTutorial()`'s existing
+`pruneEmptyFolders()` call removes any folder directory with no real
+session left in it once demo sessions are swept, taking a leftover
+pending file (or an unreviewed real `KNOWLEDGE.md` from `w`, already true
+before this) with it — same mechanism, no new cleanup path needed.
 
 **Bilingual (en/ko) persona content, not just bilingual chrome.** Every
 persona's `title`/`summary`/`turns` (per session) and `knowledge`/
@@ -489,11 +621,12 @@ persona — see above); a narrator overlay runs its OWN
 sessions.js's real handlers, inferring "did a real action's modal open/close"
 by polling `app.screen.children.length` against a captured baseline — a
 generic heuristic that works because every picker/viewer in the codebase
-parents itself to `app.screen`. 14-step script covering panel navigation
+parents itself to `app.screen`. 16-step script covering panel navigation
 (← → between Folders/Sessions/Detail) then the full lifecycle — Organize
-(`o`) → Learn (`w`) → Reuse (`c`) → session lineage (Shift+M merge,
-Shift+S split) → freeform explore — mixing `waitFor`+`thenWait` (poll for a
-real modal), plain `waitFor` (a literal key), a `shift: true` flag (blessed's
+(`o`) → Learn (`w`) → Reuse (`c`) → Knowledge review (`k`) → session
+lineage (Shift+M merge, Shift+S split) → freeform explore — mixing
+`waitFor`+`thenWait` (poll for a real modal), plain `waitFor` (a literal
+key), a `shift: true` flag (blessed's
 raw keypress reports Shift+M as `key.name: 'm'` + `key.shift: true`, not the
 `'S-m'` combo-string form only `element.key()` bindings understand — the
 merge/split steps need this to avoid matching a stray plain `m`/`s`),

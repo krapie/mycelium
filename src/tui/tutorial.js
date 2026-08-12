@@ -1,7 +1,7 @@
 import pkg from 'neo-blessed';
 const blessed = pkg.default || pkg;
 import { C } from './theme.js';
-import { t } from './i18n.js';
+import { t, getLocale } from './i18n.js';
 import { saveRaw, deleteRaw, allRaw } from '../scanner.js';
 import { reindex } from '../index-db.js';
 import { pruneEmptyFolders } from '../cleanup.js';
@@ -9,18 +9,19 @@ import { buildMockSessions } from './tutorial-data.js';
 import { __setTestProvider, __clearTestProvider } from '../llm.js';
 import { createTutorialMockProvider } from './tutorial-mock-llm.js';
 import { findPersona } from './personas.js';
+import { writePendingKnowledgeText } from '../insight.js';
 
 /**
  * First-run interactive tutorial (and `mycelium demo`'s engine) — mock
  * sessions dropped into the real store just long enough to walk through
  * 3-column panel navigation (← →) then Organize (`o`) → Learn (`w`) →
- * Reuse (`c`) → session lineage (Shift+M merge, Shift+S split), using the
- * TUI's own real key handlers (sessions.js is never touched or hooked
- * into: this module just ALSO listens for the same keypresses, purely to
- * advance its own narration, alongside whatever sessions.js's real
- * handlers do with them). `o`/`w`/Shift+S all call llm.js's complete()
- * under the hood — seedMockSessions() swaps that over to
- * tutorialMockProvider() (fast, deterministic, English — see
+ * Reuse (`c`) → Knowledge review (`k`) → session lineage (Shift+M merge,
+ * Shift+S split), using the TUI's own real key handlers (sessions.js is
+ * never touched or hooked into: this module just ALSO listens for the same
+ * keypresses, purely to advance its own narration, alongside whatever
+ * sessions.js's real handlers do with them). `o`/`w`/`k`/Shift+S all call
+ * llm.js's complete() under the hood — seedMockSessions() swaps that over
+ * to tutorialMockProvider() (fast, deterministic, English — see
  * tutorial-mock-llm.js for why, including why it's deliberately not
  * instant) for as long as the mock sessions are in the store, so the
  * tutorial stays fast without depending on a real claude/codex subprocess.
@@ -77,6 +78,19 @@ const STEPS = [
   // data.
   { titleKey: 'tutorial.step7Title', bodyKey: 'tutorial.step7Body', waitFor: 'c', thenWait: 'open', waitingKey: 'tutorial.waitingContext' },
   { titleKey: 'tutorial.step8Title', bodyKey: 'tutorial.step8Body', pollOnEntry: 'close' },
+  // Knowledge review (`k`) — deliberately its own unrelated feature from
+  // Digest (`d`), not a step in the w/c sequence above; positioned right
+  // after it anyway since it's the natural "faster way to do this across
+  // every active folder at once" follow-up. Structurally IDENTICAL to
+  // steps 2/3 (o's own two steps) on purpose: k either reuses whatever the
+  // daemon's independent knowledgeReviewCycle already queued overnight, or
+  // computes fresh right then — either way a real multiSelectList opens,
+  // so the exact same thenWait:'open'/'close' pair works with zero new
+  // mechanism, unlike an earlier draft of this feature that nested the
+  // review inside Digest and needed a bespoke poll (see git history/PR
+  // discussion if that ever resurfaces — this shape is the one that shipped).
+  { titleKey: 'tutorial.step9Title', bodyKey: 'tutorial.step9Body', waitFor: 'k', thenWait: 'open', waitingKey: 'tutorial.waitingKnowledgeReview' },
+  { titleKey: 'tutorial.step10Title', bodyKey: 'tutorial.step10Body', waitFor: 'enter', thenWait: 'close', waitingKey: 'tutorial.waitingApply' },
   // Session lineage: merge the two payment sessions (they're genuinely one
   // story — investigate, then fix), then split the result back apart by
   // topic. Both fully reversible (`mycelium unmerge`/`unsplit`), same as the
@@ -86,26 +100,42 @@ const STEPS = [
   // ≥2 sessions are already Space-selected — that's on the human to have
   // done per this step's own text; nothing here can verify it, same
   // accepted-risk shape as every other step's instructions.
-  { titleKey: 'tutorial.step9Title', bodyKey: 'tutorial.step9Body', waitFor: 'm', shift: true, thenWait: 'open', waitingKey: 'tutorial.waitingMerge' },
-  { titleKey: 'tutorial.step10Title', bodyKey: 'tutorial.step10Body', pollOnEntry: 'close' },
-  { titleKey: 'tutorial.step11Title', bodyKey: 'tutorial.step11Body', waitFor: 's', shift: true, thenWait: 'open', waitingKey: 'tutorial.waitingSplit' },
-  { titleKey: 'tutorial.step12Title', bodyKey: 'tutorial.step12Body', waitFor: 'enter', thenWait: 'close', waitingKey: 'tutorial.waitingApply' },
+  { titleKey: 'tutorial.step11Title', bodyKey: 'tutorial.step11Body', waitFor: 'm', shift: true, thenWait: 'open', waitingKey: 'tutorial.waitingMerge' },
+  { titleKey: 'tutorial.step12Title', bodyKey: 'tutorial.step12Body', pollOnEntry: 'close' },
+  { titleKey: 'tutorial.step13Title', bodyKey: 'tutorial.step13Body', waitFor: 's', shift: true, thenWait: 'open', waitingKey: 'tutorial.waitingSplit' },
+  { titleKey: 'tutorial.step14Title', bodyKey: 'tutorial.step14Body', waitFor: 'enter', thenWait: 'close', waitingKey: 'tutorial.waitingApply' },
   // This step's whole point is "go try the real thing" (v for the calendar,
   // / for search) — both of those use Escape themselves for normal back-
   // navigation (calendar/detail → sessions), which just works: Escape is
   // never intercepted by the tutorial at all (see onKeypress below), on any
   // step, not just this one.
-  { titleKey: 'tutorial.step13Title', bodyKey: 'tutorial.step13Body', waitFor: 'enter' },
+  { titleKey: 'tutorial.step15Title', bodyKey: 'tutorial.step15Body', waitFor: 'enter' },
   // No waitFor at all — q is handled once, globally, at the top of
   // onKeypress, the same way on every step including this one. This step is
   // just the last thing shown before that q lands.
-  { titleKey: 'tutorial.step14Title', bodyKey: 'tutorial.step14Body' },
+  { titleKey: 'tutorial.step16Title', bodyKey: 'tutorial.step16Body' },
 ];
 
 export function seedMockSessions(personaId = 'swe') {
   for (const n of buildMockSessions(personaId)) saveRaw(n);
   reindex();
   __setTestProvider(createTutorialMockProvider(personaId));
+  // Pre-stage a knowledge-refresh proposal for the merge-target folder, as
+  // if the daemon's independent knowledgeReviewCycle had already computed
+  // it overnight — step 9 (`k`) then hits the fast "reuse whatever's
+  // queued" path instantly, same experience a real user gets when the
+  // daemon beat them to it. Using persona.js's own canned per-folder
+  // knowledge text (same content `w`'s mock preview would show for this
+  // folder) keeps the demo internally consistent. Written directly (not
+  // via a real LLM call) since this is tutorial-side setup, same as
+  // buildMockSessions() itself being synthetic rather than a real capture.
+  // Cleaned up automatically by endTutorial()'s pruneEmptyFolders() call —
+  // once every demo session is removed, that folder has no real sessions
+  // left, so the whole directory (including any leftover pending file) is
+  // removed with it, same as an unreviewed KNOWLEDGE.md from `w` already is.
+  const persona = findPersona(personaId);
+  const mergeStoryline = persona.storylines[persona.mergeStorylineIndex];
+  writePendingKnowledgeText(mergeStoryline.folder, mergeStoryline.knowledge[getLocale()]);
 }
 
 /** Remove every mock session (and whatever empty folders o/w created along

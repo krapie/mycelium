@@ -30,8 +30,15 @@ import { basename } from 'node:path';
 import { launchAgent } from '../launch.js';
 import { autoTagSession } from '../../learn.js';
 import { mapConcurrent } from '../../llm.js';
-import { buildKnowledgeText, writeKnowledgeText } from '../../insight.js';
-import { assembleContext, injectAgentsMd } from '../../reuse.js';
+import {
+  buildKnowledgeText,
+  writeKnowledgeText,
+  pendingKnowledgeReviews,
+  promoteKnowledge,
+  dismissPendingKnowledge,
+  proposeKnowledgeRefreshes,
+} from '../../insight.js';
+import { assembleContext, injectAgentsMd, dirsForFolder } from '../../reuse.js';
 import { textView, digestReader, confirmText, helpModal, welcomeModal } from '../widgets/viewers.js';
 import { textPrompt } from '../widgets/pickers.js';
 import { copyToClipboard } from '../clipboard.js';
@@ -910,6 +917,112 @@ export function sessionsView(opts = {}) {
         }, { defaultAll: true });
       }
 
+      // k: knowledge review — mirrors o's own shape exactly (reuse whatever
+      // the daemon already queued overnight if present, else compute fresh
+      // right now) rather than nesting inside Digest (`d`), a deliberately
+      // separate, unrelated feature. This is the expected, primary way a
+      // human reviews/approves a day's KNOWLEDGE.md refreshes; the daemon's
+      // independent knowledgeReviewCycle (daemon/cycles.js) is only the
+      // fallback for whenever a human didn't get to it — both call the same
+      // insight.js proposeKnowledgeRefreshes(), so either path produces an
+      // identical result.
+      screenKey(app, ['k'], async () => {
+        if (asyncReviewFlowRunning) return;
+        asyncReviewFlowRunning = true;
+        try {
+          await runKnowledgeReview();
+        } finally {
+          asyncReviewFlowRunning = false;
+        }
+      });
+      async function runKnowledgeReview() {
+        let pending = pendingKnowledgeReviews();
+        if (!pending.length) {
+          // Nothing queued from an overnight cycle — compute fresh for
+          // TODAY's active folders, right now. This is the "compute on the
+          // spot" branch o's own runSmartOrganize() also falls back to when
+          // nothing's pre-queued.
+          const today = new Date().toISOString().slice(0, 10);
+          const spin = app.startSpinner(t('knowledge.reviewRunning'));
+          await proposeKnowledgeRefreshes(today);
+          spin.stop();
+          pending = pendingKnowledgeReviews();
+          if (!pending.length) return app.notify(t('knowledge.reviewNone'), 3);
+        }
+        const items = pending.map((p) => ({
+          label: `${p.folder}  {${C.faint}-fg}${p.text.split('\n').find((l) => l.trim() && !l.startsWith('#'))?.trim().slice(0, 60) || ''}{/}`,
+          value: p.folder,
+        }));
+        multiSelectList(app, t('knowledge.reviewTitle'), items, (chosen) => {
+          const chosenSet = new Set(chosen || []);
+          const toPromote = [];
+          for (const p of pending) {
+            if (chosenSet.has(p.folder)) toPromote.push(p);
+            else dismissPendingKnowledge(p.folder);
+          }
+          applyKnowledgeApprovals(toPromote);
+        }, {
+          defaultAll: true,
+          // Full-content review before approving — the one-line label
+          // snippet isn't enough to actually judge what's about to land in
+          // KNOWLEDGE.md (and from there, some real project's AGENTS.md).
+          previewText: (folder) => pending.find((p) => p.folder === folder)?.text || '',
+        });
+      }
+
+      // Approving the KNOWLEDGE.md content is one decision; which real
+      // project directories actually get it is a separate one — a folder
+      // can span several directories a session merely happened to run in
+      // (e.g. a quick "what is X" question asked from an unrelated repo's
+      // terminal, content-classified into a real project folder), and
+      // dirsForFolder() has no way to tell "the project" from "somewhere a
+      // session incidentally ran". Auto-injecting into all of them
+      // regardless — the original behavior — silently wrote into
+      // directories that had nothing to do with the actual project. `n`'s
+      // own directory picker already lets a human choose from exactly
+      // these candidates instead of guessing; this mirrors that: 0 or 1
+      // directory (no ambiguity) injects straight through same as before,
+      // 2+ shows a checklist (all pre-checked, same trust level as the
+      // knowledge approval itself) so a stray directory can be unchecked.
+      function applyKnowledgeApprovals(toPromote) {
+        let applied = 0;
+        const ambiguous = [];
+        for (const p of toPromote) {
+          const res = promoteKnowledge(p.folder);
+          if (!res.ok) continue;
+          applied++;
+          const dirs = dirsForFolder(p.folder);
+          if (dirs.length <= 1) {
+            for (const dir of dirs) {
+              try {
+                injectAgentsMd(dir, p.folder);
+              } catch {
+                /* no reachable AGENTS.md target — fine, best-effort */
+              }
+            }
+          } else {
+            for (const dir of dirs) ambiguous.push({ folder: p.folder, dir });
+          }
+        }
+        if (!ambiguous.length) {
+          return app.notify(applied ? t('knowledge.reviewApplied', applied) : t('knowledge.reviewSkipped'), 4);
+        }
+        const items = ambiguous.map((c) => ({
+          label: `${c.folder}  {${C.faint}-fg}→ ${c.dir}{/}`,
+          value: c,
+        }));
+        multiSelectList(app, t('knowledge.injectDirsTitle'), items, (chosenDirs) => {
+          for (const c of chosenDirs || []) {
+            try {
+              injectAgentsMd(c.dir, c.folder);
+            } catch {
+              /* no reachable AGENTS.md target — fine, best-effort */
+            }
+          }
+          app.notify(applied ? t('knowledge.reviewApplied', applied) : t('knowledge.reviewSkipped'), 4);
+        }, { defaultAll: true });
+      }
+
       // ?: full keymap reference — status bar only shows a short breadcrumb now.
       screenKey(app, ['?'], () => helpModal(app));
 
@@ -987,25 +1100,18 @@ export function sessionsView(opts = {}) {
       detailBox.key('x', doDelete);
 
       // Capture: launch a new agent session in the current folder's context.
+      // Once an agent/directory are picked, launchAgent() (launch.js) itself
+      // asks "open here or copy command (new tab)" — same choice
+      // resume-handoff.js's onDetailEnter offers for an existing session.
+      // "Copy command" doesn't actually capture anything here (no real
+      // launch, no scan()), so reloadFolders()/reloadList() below are a
+      // harmless no-op refresh in that case, not a bug.
       listBox.key('n', () => {
         // launchAgent() (launch.js) already reindexes exactly what scan()
         // captured internally — no need to also reindex the whole store here.
         launchAgent(app, { folder: state.folder }, () => {
           reloadFolders();
           reloadList();
-          listBox.focus();
-          app.render();
-        });
-      });
-      // Shift+N: same agent/directory picker as n, but copies the equivalent
-      // shell command to the clipboard instead of taking over this terminal
-      // — n's foreground() hands over the SAME tty and blocks the whole TUI
-      // until that one session exits, so it's the only way to have several
-      // new sessions going in parallel (paste into as many separate tabs as
-      // you want). Nothing was actually captured here (no real launch, no
-      // scan()), so no reloadFolders()/reloadList() — just refocus.
-      listBox.key('S-n', () => {
-        launchAgent(app, { folder: state.folder, copyOnly: true }, () => {
           listBox.focus();
           app.render();
         });

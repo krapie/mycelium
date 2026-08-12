@@ -52,7 +52,7 @@ mycelium lang en      # switch to English
 ```
 
 **Opening `mycelium` (the TUI) normally already runs background upkeep
-(scan/organize/digest) inside the TUI process itself** — no need to run
+(scan/organize/digest/knowledge review) inside the TUI process itself** — no need to run
 `mycelium daemon` or any script separately. **Closing the TUI stops upkeep
 too** — no process is left behind, so the next launch always starts fresh
 with whatever code is currently installed. Turn this auto-upkeep off with
@@ -112,3 +112,4 @@ caused Claude's console window to keep popping up on Windows, [#3](https://githu
 | `MYCELIUM_SMART_ORGANIZE_LIMIT` | 100 | Max sessions classified per smart-organize cycle |
 | `MYCELIUM_SMART_ORGANIZE_COOLDOWN_MS` | 24 h | Wait time before retrying an unmatched session |
 | `MYCELIUM_SUMMARIZE_CONCURRENCY` | 3 | Concurrent `claude`/`codex` processes the auto smart-organize cycle spawns |
+| `MYCELIUM_DIGEST_KNOWLEDGE_LIMIT` | 10 | Max folders proposed for a knowledge refresh per call, whether triggered by the daemon's independent overnight cycle or the TUI's `k` command computing fresh — unrelated to Digest (`d`) despite the env var's name |

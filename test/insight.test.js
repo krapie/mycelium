@@ -10,7 +10,19 @@ const { emptyNeutral } = await import('../src/schema.js');
 const { saveRaw } = await import('../src/scanner.js');
 const { __setTestProvider, __clearTestProvider } = await import('../src/llm.js');
 const { DIGEST_DIR, TREE_DIR } = await import('../src/paths.js');
-const { generateDigest, buildKnowledgeText, writeKnowledgeText, extractKnowledge, foldersWithSessions } = await import('../src/insight.js');
+const {
+  generateDigest,
+  buildKnowledgeText,
+  writeKnowledgeText,
+  extractKnowledge,
+  foldersWithSessions,
+  foldersActiveOn,
+  writePendingKnowledgeText,
+  pendingKnowledgeReviews,
+  promoteKnowledge,
+  dismissPendingKnowledge,
+  proposeKnowledgeRefreshes,
+} = await import('../src/insight.js');
 
 function seed(id, overrides = {}) {
   const n = { ...emptyNeutral(id, 'claude'), ...overrides };
@@ -159,4 +171,117 @@ test('foldersWithSessions() lists every distinct folder that currently has a ses
   assert.ok(folders.includes('alpha-folder'));
   assert.ok(folders.includes('beta-folder'));
   assert.equal(folders.includes(null), false);
+});
+
+test('foldersActiveOn() returns filed folders with a session that day, excluding unfiled ones', async () => {
+  seed('active-1', { folder: 'active-folder-a', startedAt: '2026-06-01T09:00:00.000Z' });
+  seed('active-2', { folder: 'active-folder-a', startedAt: '2026-06-01T11:00:00.000Z' }); // same folder, same day — no duplicate
+  seed('active-3', { folder: 'active-folder-b', startedAt: '2026-06-01T09:00:00.000Z' });
+  seed('active-4', { folder: null, startedAt: '2026-06-01T09:00:00.000Z' }); // unfiled — excluded
+  seed('active-5', { folder: 'active-folder-c', startedAt: '2026-06-02T09:00:00.000Z' }); // different day — excluded
+
+  const folders = foldersActiveOn('2026-06-01');
+
+  assert.deepEqual([...folders].sort(), ['active-folder-a', 'active-folder-b']);
+});
+
+test('writePendingKnowledgeText()/pendingKnowledgeReviews() round-trip a staged proposal without touching KNOWLEDGE.md', () => {
+  const res = writePendingKnowledgeText('pending-folder', 'proposed knowledge text');
+  assert.equal(res.ok, true);
+  assert.ok(existsSync(res.path));
+  assert.equal(existsSync(join(TREE_DIR, 'pending-folder', 'KNOWLEDGE.md')), false);
+
+  const reviews = pendingKnowledgeReviews();
+  const mine = reviews.find((r) => r.folder === 'pending-folder');
+  assert.ok(mine);
+  assert.equal(mine.text, 'proposed knowledge text');
+});
+
+test('promoteKnowledge() writes the pending text as the real KNOWLEDGE.md and clears the pending file', () => {
+  writePendingKnowledgeText('promote-folder', 'text to promote');
+  const res = promoteKnowledge('promote-folder');
+  assert.equal(res.ok, true);
+  const kPath = join(TREE_DIR, 'promote-folder', 'KNOWLEDGE.md');
+  assert.ok(existsSync(kPath));
+  assert.equal(readFileSync(kPath, 'utf8'), 'text to promote');
+  assert.equal(pendingKnowledgeReviews().some((r) => r.folder === 'promote-folder'), false);
+});
+
+test('promoteKnowledge() fails cleanly when there is no pending proposal for that folder', () => {
+  const res = promoteKnowledge('no-such-pending-folder');
+  assert.equal(res.ok, false);
+});
+
+test('dismissPendingKnowledge() clears the pending file without ever writing KNOWLEDGE.md', () => {
+  writePendingKnowledgeText('dismiss-folder', 'text to reject');
+  dismissPendingKnowledge('dismiss-folder');
+  assert.equal(pendingKnowledgeReviews().some((r) => r.folder === 'dismiss-folder'), false);
+  assert.equal(existsSync(join(TREE_DIR, 'dismiss-folder', 'KNOWLEDGE.md')), false);
+});
+
+test('dismissPendingKnowledge() on a folder with no pending file is a harmless no-op', () => {
+  const res = dismissPendingKnowledge('never-had-one');
+  assert.equal(res.ok, true);
+});
+
+test('proposeKnowledgeRefreshes() stages a proposal for every filed folder active on that date', async () => {
+  seed('pkr-1', { folder: 'pkr-folder-a', startedAt: '2026-07-01T09:00:00.000Z', extracted: { title: null, tags: [], summary: 'thing a', decisions: [], todos: [] } });
+  seed('pkr-2', { folder: 'pkr-folder-b', startedAt: '2026-07-01T09:00:00.000Z', extracted: { title: null, tags: [], summary: 'thing b', decisions: [], todos: [] } });
+  __setTestProvider(async () => 'generated knowledge text');
+
+  const res = await proposeKnowledgeRefreshes('2026-07-01');
+
+  assert.equal(res.proposed, 2);
+  assert.equal(res.failed.length, 0);
+  const reviews = pendingKnowledgeReviews();
+  assert.ok(reviews.some((r) => r.folder === 'pkr-folder-a'));
+  assert.ok(reviews.some((r) => r.folder === 'pkr-folder-b'));
+});
+
+test('proposeKnowledgeRefreshes() skips a folder that already has an unreviewed pending proposal — no duplicate LLM call', async () => {
+  seed('pkr-skip-1', { folder: 'pkr-skip-folder', startedAt: '2026-07-02T09:00:00.000Z' });
+  let calls = 0;
+  __setTestProvider(async () => {
+    calls++;
+    return 'first proposal';
+  });
+  await proposeKnowledgeRefreshes('2026-07-02');
+  assert.equal(calls, 1);
+
+  await proposeKnowledgeRefreshes('2026-07-02');
+  assert.equal(calls, 1, 'no second LLM call for a folder still awaiting review');
+});
+
+test('proposeKnowledgeRefreshes() is a no-op (no LLM call, no error) when no folder was active that date', async () => {
+  let called = false;
+  __setTestProvider(async () => {
+    called = true;
+    return 'x';
+  });
+  const res = await proposeKnowledgeRefreshes('2020-01-01');
+  assert.equal(called, false);
+  assert.equal(res.proposed, 0);
+  assert.deepEqual(res.failed, []);
+});
+
+test('proposeKnowledgeRefreshes() reports per-folder failures without throwing', async () => {
+  seed('pkr-fail-1', { folder: 'pkr-fail-folder', startedAt: '2026-07-03T09:00:00.000Z' });
+  __setTestProvider(async () => {
+    throw new Error('llm boom');
+  });
+  const res = await proposeKnowledgeRefreshes('2026-07-03');
+  assert.equal(res.proposed, 0);
+  assert.ok(res.failed.some((f) => f.folder === 'pkr-fail-folder' && /llm boom/.test(f.error)));
+  assert.equal(pendingKnowledgeReviews().some((r) => r.folder === 'pkr-fail-folder'), false);
+});
+
+test('proposeKnowledgeRefreshes() respects an explicit limit, bounding how many folders get a proposal per call', async () => {
+  seed('pkr-lim-1', { folder: 'pkr-limit-a', startedAt: '2026-07-04T09:00:00.000Z' });
+  seed('pkr-lim-2', { folder: 'pkr-limit-b', startedAt: '2026-07-04T09:00:00.000Z' });
+  seed('pkr-lim-3', { folder: 'pkr-limit-c', startedAt: '2026-07-04T09:00:00.000Z' });
+  __setTestProvider(async () => 'text');
+
+  const res = await proposeKnowledgeRefreshes('2026-07-04', { limit: 2 });
+
+  assert.equal(res.proposed, 2);
 });

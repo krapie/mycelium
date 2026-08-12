@@ -69,8 +69,7 @@ Once a session is moved to `_archive`, re-scanning won't bring it back out —
 | `r` | **Resume** that exact session in its original agent, right here. In the detail screen, `Enter` instead of `r` lets you choose "open here" (and, for ordinary sessions, "copy command" for pasting into a new tab). **Merged/split sessions can't be resumed directly** (there's no real id an actual agent knows about), so `h` (handoff) is offered instead — pick an agent and it starts a new session. **Once you return to that newly-created real session, the merged/split session's content is folded into it and the merge/split session itself disappears** — from then on, only that real session remains, resumable with `r` like any ordinary session (which is also why "copy command" isn't offered on merge/split sessions in the first place — there's no real id to resume) |
 | `o` | **Smart organize** — the only way sessions get assigned to a folder (capture never auto-files). Reviews **only what's currently in view** (the whole store from `Root`, only unfiled sessions from `New`, or that folder + subfolders from inside one). Summarizes the target sessions, then compares them against already-organized folders (store-wide) to suggest a good existing folder or a **new subfolder to create**. Suggestions arrive **all pre-checked**, so `Enter` alone applies everything — uncheck the wrong ones with `Space` (unchecking still marks them reviewed and drops them from the queue), or `Esc` to cancel the whole batch (also drops from the queue — press `o` again to recompute fresh). New folders are labeled "new" in the list |
 | `h` | **Start a new session** on a different agent, handing off context |
-| `n` | Launch a new agent session with this folder's context. Hands over this same terminal (`foreground()`, `stdio: 'inherit'`) and blocks the whole TUI until that session exits — only one at a time |
-| `Shift+N` | Same agent/directory picker as `n`, but copies the equivalent `cd <dir> && <bin> ...` shell command to the clipboard instead of opening it here. Paste into as many separate terminal tabs as you want to run several sessions in parallel — there's no portable way for Mycelium itself to open a new tab across terminal emulators, so this is the escape hatch |
+| `n` | Launch a new agent session with this folder's context. After picking an agent and directory, asks **"open here"** (hands over this same terminal — `foreground()`, `stdio: 'inherit'` — and blocks the whole TUI until that session exits, only one at a time) or **"copy command"** (copies the equivalent `cd <dir> && <bin> ...` shell command to the clipboard instead, to paste into a separate terminal tab and run several sessions in parallel — there's no portable way for Mycelium itself to open a new tab across terminal emulators, so this is the escape hatch). Same choice `Enter` already offers when resuming an existing session |
 | `m` / `t` | Move folder / edit tags |
 | `x` | Delete the session (from Mycelium's own store only — the original log stays put, and it's recorded so a future scan won't re-capture it) |
 | `y` | Copy the session (title + summary + transcript) to the clipboard |
@@ -81,7 +80,8 @@ Once a session is moved to `_archive`, re-scanning won't bring it back out —
 | `/` | Full-text search |
 | `v` | Switch to the **Calendar tab** — the Sessions screen becomes a monthly grid \| that day's session list \| detail, three panels (same k9s-style drill-down: `←`/`→` move the day cursor ±1 day and `↑`/`↓` ±1 week, both rolling into the adjacent month at the edges and refreshing the list/detail live, `Enter`/`→` into the right panel, `Esc`/`←` back). `PgUp`/`PgDn` jumps a whole month. Press `v` again (or `Esc` from the grid) to return to Sessions — folder selection, search terms, etc. are preserved |
 | `s` | **Scan** right from the TUI (same as `mycelium scan` — pulls in sessions left open in other tabs/terminals without leaving the TUI). Doesn't assign folders — new sessions land unfiled (`New`, `[New]`), sort with `o` above |
-| `w` / `c` / `i` / `d` | Extract folder knowledge (preview then confirm) / view context / inject AGENTS.md — also drops a one-line CLAUDE.md bridge so Claude Code actually reads it (preview then confirm) / read digests (`n`/`w` inside to generate today's/this week's) |
+| `w` / `c` / `i` / `d` | Extract folder knowledge (preview then confirm) / view context / inject AGENTS.md — also drops a one-line CLAUDE.md bridge so Claude Code actually reads it (preview then confirm) / read digests (`n`/`w` inside to generate today's/this week's narrative summary) |
+| `k` | **Knowledge review** — see below. Unrelated to Digest (`d`) |
 | `g` | **Re-show the getting-started guide** — the short walkthrough (4-stage lifecycle + key shortcuts) that auto-shows once on first launch, any time |
 | `q` | Quit |
 
@@ -91,3 +91,42 @@ show `[Merged]` (merge result) / `[Split]` (split result) tags; a split
 original (or, for merges, the hidden originals) shows a `[Linked]` tag.
 The detail screen shows which session something came from or went to as
 clickable-style links.
+
+## Knowledge review
+
+Keeping every active folder's KNOWLEDGE.md fresh by hand (`w`, folder by
+folder) is easy to fall behind on. `k` does it for every folder at once —
+unrelated to Digest (`d`, a separate narrative-summary feature; the two
+just happen to share the day-based idea). Pressing `k` mirrors `o` (smart
+organize) exactly: if the daemon already computed a proposal for you
+overnight, it opens instantly; if not, Mycelium computes one on the spot
+for whatever's active today, then opens the same review.
+
+**`k` is the expected, primary way to do this** — normally at the end of
+your day. If you don't get to it, the daemon quietly catches up on
+yesterday's activity the next time it runs, so nothing's lost either way —
+same result whether a human or Mycelium triggered it, since both paths call
+the exact same underlying function.
+
+The review itself is the same checkbox-list `o` uses: every folder starts
+checked, `Space` to uncheck one you don't want, `Enter` applies the checked
+ones. The list only shows a short one-line snippet per folder — press `p`
+on the highlighted row to open the **full** proposed KNOWLEDGE.md text
+before deciding, then `p`/`Esc`/`q` again to go back to the checklist.
+**Approving a folder writes its KNOWLEDGE.md** — that's the content
+decision. Whatever's left unchecked (or the whole batch, on `Esc`) is
+simply dismissed — it won't keep asking again, and a manual `w` can always
+regenerate it later.
+
+**Which directories actually get the injection is a separate question.** A
+folder groups sessions by *topic*, and a topic isn't always one project —
+a quick question asked from an unrelated repo's terminal still gets
+content-classified into the real project's folder alongside genuine
+project sessions, so the folder ends up spanning directories that have
+nothing to do with each other. If an approved folder's sessions only ever
+ran in one directory, `k` injects straight through, no extra prompt — same
+trust level `n`/`h`'s own silent auto-inject-on-launch already operates at.
+If they ran in **more than one**, a second checklist opens (all pre-checked)
+so you can uncheck whichever directory doesn't actually belong before
+anything gets written. If a proposal is still unreviewed the next time you
+open Mycelium, a toast points you at `k`.
