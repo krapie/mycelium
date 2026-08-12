@@ -961,7 +961,13 @@ export function sessionsView(opts = {}) {
             else dismissPendingKnowledge(p.folder);
           }
           applyKnowledgeApprovals(toPromote);
-        }, { defaultAll: true });
+        }, {
+          defaultAll: true,
+          // Full-content review before approving — the one-line label
+          // snippet isn't enough to actually judge what's about to land in
+          // KNOWLEDGE.md (and from there, some real project's AGENTS.md).
+          previewText: (folder) => pending.find((p) => p.folder === folder)?.text || '',
+        });
       }
 
       // Approving the KNOWLEDGE.md content is one decision; which real

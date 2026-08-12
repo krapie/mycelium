@@ -3,6 +3,7 @@ const blessed = pkg.default || pkg;
 import { C } from '../theme.js';
 import * as data from '../data.js';
 import { t } from '../i18n.js';
+import { textView } from './viewers.js';
 
 /**
  * Folder picker: choose an existing folder or create a new path. Returns the
@@ -133,9 +134,19 @@ export function menu(app, label, choices, cb, { width = '40%' } = {}) {
  * to select good ones one at a time). Enter applies the checked items;
  * Esc applies nothing.
  */
-export function multiSelectList(app, label, items, cb, { defaultAll = false } = {}) {
+// `previewText(value)` (optional): when given, `p` opens a full scrollable
+// textView of that content for whichever row is currently highlighted —
+// for content bound for somewhere as consequential as an external
+// project's AGENTS.md (the knowledge review, `k`), the one-line label
+// truncation isn't enough to actually review before approving; this is
+// the confirmText()-style "see it before it lands on disk" checkpoint
+// applied to a per-item preview instead of a single whole-batch one.
+// Optional (not every multiSelectList caller has long-form content per
+// item worth a dedicated preview — o's placement suggestions don't).
+export function multiSelectList(app, label, items, cb, { defaultAll = false, previewText } = {}) {
   const selected = new Set(defaultAll ? items.map((_, i) => i) : []);
   const render = (it, i) => `${selected.has(i) ? `{${C.fox}-fg}✓{/} ` : '  '}${it.label}`;
+  const hintTail = previewText ? 'p preview, enter apply, esc cancel' : 'enter apply, esc cancel';
   const box = blessed.list({
     parent: app.screen,
     top: 'center',
@@ -143,8 +154,8 @@ export function multiSelectList(app, label, items, cb, { defaultAll = false } = 
     width: '70%',
     height: Math.min(items.length + 4, 20),
     label: defaultAll
-      ? ` ${label} — all checked, space to uncheck, enter apply, esc cancel `
-      : ` ${label} — space select, * all, enter apply, esc cancel `,
+      ? ` ${label} — all checked, space to uncheck, ${hintTail} `
+      : ` ${label} — space select, * all, ${hintTail} `,
     tags: true,
     keys: true,
     mouse: true,
@@ -169,6 +180,12 @@ export function multiSelectList(app, label, items, cb, { defaultAll = false } = 
     else items.forEach((_, i) => selected.add(i));
     refresh();
   });
+  if (previewText) {
+    box.key(['p'], () => {
+      const it = items[box.selected];
+      if (it) textView(app, it.label.replace(/\{[^}]*\}/g, ''), previewText(it.value), ['p']);
+    });
+  }
   box.key(['escape'], () => {
     box.destroy();
     app.render();

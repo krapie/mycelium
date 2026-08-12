@@ -446,6 +446,22 @@ human choose from exactly these same candidates instead of guessing.
 [tested] (`test/e2e/demo-e2e.test.js`'s "a folder spanning 2+ real
 directories asks which ones to inject into")
 
+**`multiSelectList`'s optional `previewText`, and `p` inside the knowledge
+review — the actual `confirmText()` checkpoint the review checklist was
+missing.** The checklist's own item label truncates to ~60 chars (just
+enough to recognize which folder), nowhere near enough to actually judge
+content bound for a real project's AGENTS.md — `k`'s review let a folder
+get approved (and injected) on the strength of a one-line snippet alone.
+`multiSelectList(app, label, items, cb, { previewText })` (`widgets/pickers.js`)
+is a generic, opt-in addition: `p` opens a full scrollable `textView` of
+`previewText(currentItem.value)` for whichever row is highlighted, closes
+back to the (still-live, unaffected) checklist on `p`/`q`/`Escape` again.
+Only `k`'s folder-approval checklist wires it up (`sessions.js`) — the
+directory checklist right after it doesn't need its own preview (the
+content was already reviewed one step earlier), and `o`'s placement
+suggestions already show enough inline context without one. [tested]
+(`test/e2e/demo-e2e.test.js`'s "p opens a full preview...")
+
 **`n`: one flow for launching a new session, either here or as a copyable
 command — no separate `Shift+N` keybinding.** `launchAgent()`'s
 agent-picker → directory-picker is followed by a third choice — "open here"

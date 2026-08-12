@@ -110,7 +110,10 @@ the exact same underlying function.
 
 The review itself is the same checkbox-list `o` uses: every folder starts
 checked, `Space` to uncheck one you don't want, `Enter` applies the checked
-ones. **Approving a folder writes its KNOWLEDGE.md** — that's the content
+ones. The list only shows a short one-line snippet per folder — press `p`
+on the highlighted row to open the **full** proposed KNOWLEDGE.md text
+before deciding, then `p`/`Esc`/`q` again to go back to the checklist.
+**Approving a folder writes its KNOWLEDGE.md** — that's the content
 decision. Whatever's left unchecked (or the whole batch, on `Esc`) is
 simply dismissed — it won't keep asking again, and a manual `w` can always
 regenerate it later.

@@ -649,6 +649,40 @@ test('k (queued path): reuses an already-staged knowledge proposal instantly, wr
   }
 });
 
+test('k: p opens a full preview of the proposed knowledge before approving, not just the one-line label snippet', async () => {
+  // Regression test: the checklist label truncates to ~60 chars, nowhere
+  // near enough to actually review content bound for a real project's
+  // AGENTS.md — p must open the full text (confirmText()'s "see it before
+  // it lands on disk" principle, applied per-item here).
+  const { app, input } = await mountDemo();
+  try {
+    for (const p of pendingKnowledgeReviews()) dismissPendingKnowledge(p.folder);
+    const longText = `# preview-folder — Project Knowledge\n\n${'A'.repeat(40)} distinctive marker text that is definitely longer than sixty characters and would never fully fit in the checklist's own one-line label.`;
+    writePendingKnowledgeText('preview-folder', longText);
+
+    const baseline = app.screen.children.length;
+    sendKey(input, 'k');
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 1000 });
+    const afterReviewOpen = app.screen.children.length;
+    sendKey(input, 'p');
+    await waitFor(() => app.screen.children.length > afterReviewOpen, { timeoutMs: 1000 });
+
+    // Nothing approved/written yet — pure preview, no side effect.
+    assert.equal(existsSync(join(TREE_DIR, 'preview-folder', 'KNOWLEDGE.md')), false);
+
+    // Close the preview (p again, per its own extraCloseKeys) — the
+    // checklist underneath must still be usable afterwards.
+    sendKey(input, 'p');
+    await waitFor(() => app.screen.children.length === afterReviewOpen, { timeoutMs: 1000 });
+    sendKey(input, 'enter'); // defaultAll:true
+    await waitFor(() => existsSync(join(TREE_DIR, 'preview-folder', 'KNOWLEDGE.md')), { timeoutMs: 1000 });
+
+    assert.match(readFileSync(join(TREE_DIR, 'preview-folder', 'KNOWLEDGE.md'), 'utf8'), /distinctive marker text/);
+  } finally {
+    cleanup(app);
+  }
+});
+
 test('k (fresh path): computes today\'s proposal on the spot when nothing was queued', async () => {
   // k must fall back to computing one itself (proposeKnowledgeRefreshes
   // (today), mocked LLM, real spinner) rather than just notifying "nothing
