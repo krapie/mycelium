@@ -48,16 +48,16 @@ function findByKeyword(sessions, re) {
 }
 
 // Reads the narrator overlay's own step number straight off its blessed
-// label content (tutorial.js's `box.setLabel(...)`, e.g. " Step 3/16 ") —
+// label content (tutorial.js's `box.setLabel(...)`, e.g. " Step 3/17 ") —
 // not rendered pixel/ANSI output, just the plain string setLabel()/
 // setContent() already stored on the element (element.js's `_label.content`
 // / `.content`). Needed only for the skip-ahead regression test below,
 // where the thing actually under test IS which step the narrator thinks
 // it's on, not just whether some real handler ran.
 function narratorStepIndex(app) {
-  const box = app.screen.children.find((c) => c._label && /Step \d+\/16/.test(c._label.content || ''));
+  const box = app.screen.children.find((c) => c._label && /Step \d+\/17/.test(c._label.content || ''));
   if (!box) return null;
-  const m = /Step (\d+)\/16/.exec(box._label.content);
+  const m = /Step (\d+)\/17/.exec(box._label.content);
   return m ? Number(m[1]) : null;
 }
 
@@ -430,6 +430,8 @@ test('demo: finishing the tutorial on the actual last step reports completed:tru
 
     // Full key sequence, mirroring the walkthrough test above, all the way
     // through the tutorial's own final step.
+    sendKey(input, 'escape'); // the intro step's own real advance — Esc, not Enter (see tutorial.js)
+    await settle();
     sendKey(input, 'right');
     await settle();
     let baseline = app.screen.children.length;
@@ -601,18 +603,25 @@ test('demo: a stray Enter on step 1 does not falsely cascade the narrator forwar
       doneArg = completed;
     });
     await new Promise((r) => setTimeout(r, 50));
-    assert.equal(narratorStepIndex(app), 1, 'starts on step 1');
+    assert.equal(narratorStepIndex(app), 1, 'starts on the intro step');
+
+    // Its own real waitFor (Esc, not Enter — see tutorial.js) — advances
+    // legitimately onto the panel-nav lesson (a plain no-thenWait step, so
+    // this settles synchronously).
+    sendKey(input, 'escape');
+    await new Promise((r) => setTimeout(r, 50));
+    assert.equal(narratorStepIndex(app), 2, 'the intro step\'s own Esc is a real advance, onto the panel-nav lesson');
 
     sendKey(input, 'enter');
     await new Promise((r) => setTimeout(r, 400));
-    assert.equal(narratorStepIndex(app), 1, 'a stray Enter must not advance the narrator past step 1');
+    assert.equal(narratorStepIndex(app), 2, 'a stray Enter on the panel-nav lesson (waitFor: right) must not advance it');
 
     // The actual skip-ahead fix (a distinctive key like `o`) must still work.
     const baseline = app.screen.children.length;
     sendKey(input, 'o');
     await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 3000 });
     await new Promise((r) => setTimeout(r, 320));
-    assert.equal(narratorStepIndex(app), 3, 'o still correctly skips ahead once the real organize modal opens');
+    assert.equal(narratorStepIndex(app), 4, 'o still correctly skips ahead once the real organize modal opens');
     assert.equal(doneArg, undefined, 'tutorial is still running');
   } finally {
     cleanup(app);

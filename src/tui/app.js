@@ -104,6 +104,35 @@ export function createApp({ input, output } = {}) {
     hidden: true,
   });
 
+  // Separate from `toast`: a real filling bar for the two smart-organize
+  // phases (summarize, classify) that already know a true total up front
+  // (see sessions.js's runSmartOrganize()) — unlike the spinner, which
+  // exists precisely because most LLM-bound calls elsewhere DON'T know a
+  // total. Kept as its own persistent widget (not built/destroyed per
+  // call) for the same flicker/re-arm reasons `toast` is — see
+  // startSpinner()'s comments just below.
+  const progressBox = blessed.box({
+    parent: screen,
+    top: 'center',
+    left: 'center',
+    width: '50%',
+    height: 4,
+    tags: true,
+    border: { type: 'line' },
+    style: { border: { fg: C.fox }, fg: C.text },
+    hidden: true,
+  });
+  const progressBar = blessed.progressbar({
+    parent: progressBox,
+    top: 1,
+    left: 0,
+    right: 0,
+    height: 1,
+    orientation: 'horizontal',
+    pch: ' ',
+    style: { bar: { bg: C.fox } },
+  });
+
   const app = {
     screen,
     body,
@@ -188,6 +217,32 @@ export function createApp({ input, output } = {}) {
           clearInterval(timer);
           clearInterval(rearm);
           toast.hide();
+          screen.render();
+        },
+      };
+    },
+    // Real progress, for the two runSmartOrganize() phases that already
+    // track a true total (summarize count, placement chunk count) rather
+    // than an open-ended LLM wait — startSpinner()'s animated-but-fake
+    // motion is the right call when there's no total to show; this is for
+    // when there is one. `label` is a static prefix (no counts baked in —
+    // update() appends "(current/total)" itself so every caller formats
+    // the same way); progressBar is a child of progressBox, so hiding the
+    // box on stop() takes the bar with it.
+    startProgressBar(label) {
+      progressBar.setProgress(0);
+      progressBox.setContent(`{bold}${label}{/}`);
+      progressBox.show();
+      screen.render();
+      return {
+        update(current, total) {
+          const pct = total > 0 ? Math.min(100, Math.floor((current / total) * 100)) : 0;
+          progressBox.setContent(`{bold}${label}{/} (${current}/${total})`);
+          progressBar.setProgress(pct);
+          screen.render();
+        },
+        stop() {
+          progressBox.hide();
           screen.render();
         },
       };

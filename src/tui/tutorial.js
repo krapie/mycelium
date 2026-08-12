@@ -38,6 +38,28 @@ import { writePendingKnowledgeText } from '../insight.js';
 // waits again for it to close once the matching confirm step's key fires.
 // See isModalOpen() below.
 const STEPS = [
+  // What Mycelium actually is, before any mechanics — mirrors README.md's
+  // own opening line so the two stay consistent. Deliberately just
+  // `tutorial.introTitle`/`introBody`, not renumbered into the stepN
+  // sequence below: render() computes the visible "Step N/Total" from this
+  // array's length/index now (see render()), so inserting a step here
+  // never requires renaming every key after it — only this file's own
+  // array order matters.
+  //
+  // waitFor is 'escape', NOT 'enter' — this is the one step where that
+  // matters: at this exact moment (nothing navigated yet, focus still on
+  // the initial Folders panel), Enter/Right both trigger sessions.js's own
+  // real drillIntoSessions() (foldersBox.key('enter'/'right', ...)),
+  // silently drilling into whatever's highlighted and moving focus to the
+  // Sessions list — completely derailing step 2's own "→ moves focus"
+  // lesson (which now finds focus already moved) and everything
+  // choreographed after it. Escape has no binding at all on the initial
+  // Folders panel (only detailBox binds it, see sessions.js) — genuinely
+  // inert, and since this step is always index 0, forward-only skip-ahead
+  // scanning from any later step can never re-match it by accident either.
+  // Found by watching the "full lifecycle" e2e test derail at the `w` step
+  // several actions later, not by reasoning about this step in isolation.
+  { titleKey: 'tutorial.introTitle', bodyKey: 'tutorial.introBody', waitFor: 'escape' },
   // Panel focus: → walks Folders → Sessions → Detail, ← walks back — the
   // very first thing worth knowing before any of the lifecycle steps below,
   // since several of them (browsing into a folder, opening a session) rely
@@ -207,10 +229,16 @@ export function startTutorial(app, onDone, personaId = 'swe') {
 
   const render = () => {
     const step = STEPS[i];
+    // "Step N/Total" is computed here, from this array's own length/index,
+    // rather than baked into each titleKey's own string — every prior
+    // change to STEPS' length used to mean hand-editing "Step N/16" into
+    // every single title across both locales (and renaming stepNTitle keys
+    // for everything after the insertion point). i18n titleKey strings now
+    // hold only the subtitle (' — Organize', or '' for steps without one).
     // t() calls bodyKey's entry with (fg) if it's a function (all step
     // bodies are, to color-highlight the key they're waiting for) and
     // just returns it as-is if it's a plain string — safe either way.
-    box.setLabel(` ${t(step.titleKey)} `);
+    box.setLabel(` ${t('tutorial.stepCounter', i + 1, STEPS.length)}${t(step.titleKey)} `);
     // Extra args (sessionCount, mergeFolder) are passed uniformly to every
     // step body — most step bodies are plain (fg) => ... functions that
     // simply ignore the trailing args; only step2/4/5/11 (see i18n.js)

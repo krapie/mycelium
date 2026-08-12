@@ -7,10 +7,12 @@ Sessions | Detail**, three columns, drilled into k9s-style — start at
 folders, `Enter` into sessions, `Enter` into detail, `Esc` to go back. The
 focused column widens.
 
-The status bar always shows a **Capture·s → Organize·m/t/o → Learn·a/w →
-Reuse·n/h/r** lifecycle strip — a static reference for which key belongs to
-which stage (it doesn't highlight the current stage in real time). Press
-**`?`** anywhere for the full shortcut reference.
+The status bar always shows the short **Context Flywheel** loop — `s · o · d
+· n` (capture → organize → check in on the day → start the next session) —
+not the full stage-by-stage breakdown; there's no room for that on a
+one-line status bar someone sees on every single screen. Press **`?`**
+anywhere for the full shortcut reference, which leads with the same loop
+before the complete key-by-key breakdown (every stage, every key).
 
 **Display language defaults to English.** You're asked to pick a language
 the first time you launch Mycelium (and every time you run `mycelium demo`,
