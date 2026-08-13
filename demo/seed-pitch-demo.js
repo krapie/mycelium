@@ -1,14 +1,19 @@
 #!/usr/bin/env node
-// Seeds demo/pitch-data.js's 12 sessions into MYCELIUM_HOME (must already be
-// set in the environment — paths.js resolves it once at import time) for
-// the flagship pitch video (demo/tapes/pitch-en.tape / pitch-ko.tape).
+// Seeds demo/pitch-data.js's 12 sessions (4 storylines x 3 sessions) into
+// MYCELIUM_HOME (must already be set in the environment — paths.js resolves
+// it once at import time) for the flagship pitch video
+// (demo/tapes/pitch-en.tape / pitch-ko.tape).
 //
-// Deliberately does NOT pre-fill extracted.title/summary the way
-// tutorial-data.js's buildMockSessions() does for the interactive
-// tutorial — this video wants the real summarize-then-classify pipeline
-// (organize.js's summarizeCandidates()/suggestPlacements(), called for
-// real against the user's actual claude/codex CLI, no mock provider) to
-// run on camera, not skip past it on pre-summarized content.
+// Pre-fills extracted.title/summary/tags — the same shortcut
+// src/tui/tutorial-data.js's buildMockSessions() takes for the interactive
+// tutorial — so organize/classify.js's summarizeCandidates() (filters on
+// `!n.extracted.summary`) finds nothing left to summarize and the `o` press
+// goes straight to classification. This video now runs entirely against the
+// mocked provider demo/pitch-launch.js installs (see that file), not real
+// claude/codex calls — an earlier version of this file deliberately left
+// extracted blank so a real LLM would summarize on camera, but that made
+// organize alone take 110-150s+ per render. See demo/README.md's "pitch
+// video" section for the full rationale.
 //
 // Usage: MYCELIUM_HOME=/tmp/whatever node demo/seed-pitch-demo.js <en|ko>
 
@@ -20,7 +25,8 @@ import { emptyNeutral } from '../src/schema.js';
 import { reindex } from '../src/index-db.js';
 import { loadConfig, saveConfig } from '../src/config.js';
 import { RAW_DIR, TREE_DIR, DIGEST_DIR, ensureDirs } from '../src/paths.js';
-import { PITCH_SESSIONS } from './pitch-data.js';
+import { writePendingKnowledgeText } from '../src/insight.js';
+import { PITCH_STORYLINES, PITCH_MERGE_STORYLINE_INDEX } from './pitch-data.js';
 
 const locale = process.argv[2];
 if (locale !== 'en' && locale !== 'ko') {
@@ -56,14 +62,33 @@ function daysAgo(n, hour = 10) {
   return d.toISOString();
 }
 
-for (const s of PITCH_SESSIONS) {
+const sessions = PITCH_STORYLINES.flatMap((s) => s.sessions);
+for (const s of sessions) {
   const n = emptyNeutral(randomUUID(), s.source);
   n.startedAt = daysAgo(s.daysAgo);
   n.endedAt = daysAgo(s.daysAgo, 11);
   n.turns = s.turns.map((t) => ({ role: t.role, text: t[locale] }));
+  n.extracted.title = s.title[locale];
+  n.extracted.summary = s.summary[locale];
+  n.extracted.tags = s.tags;
+  n.summarizedTurnCount = n.turns.length;
   saveRaw(n);
 }
 const total = reindex();
+
+// Pre-stage a knowledge-refresh proposal for the merge-target folder, as if
+// the daemon's independent knowledgeReviewCycle had already computed it
+// overnight — same trick src/tui/tutorial.js's seedMockSessions() uses so
+// the tape's `k` (knowledge review) press hits the fast "reuse whatever's
+// queued" path instantly instead of proposeKnowledgeRefreshes()'s fresh-
+// compute path, which only picks up folders with a session that actually
+// STARTED today (src/insight.js's foldersActiveOn()) — none of this video's
+// sessions are dated today (they're all `daysAgo`-relative, for a realistic
+// "been working on this for a while" feel), so without this the `k` step
+// would silently find nothing to review.
+const mergeFolder = PITCH_STORYLINES[PITCH_MERGE_STORYLINE_INDEX].folder;
+const mergeKnowledge = PITCH_STORYLINES[PITCH_MERGE_STORYLINE_INDEX].knowledge[locale];
+writePendingKnowledgeText(mergeFolder, mergeKnowledge);
 
 // First-scan onboarding (language/tour picker, welcomeModal) only fires
 // when config.onboarded is false — a real returning user's store has it
@@ -73,4 +98,4 @@ const total = reindex();
 // what actually fires here, not the bigger modal), not a first-run flow.
 saveConfig({ ...loadConfig(), onboarded: true, locale });
 
-console.log(`seeded ${PITCH_SESSIONS.length} pitch-demo sessions (${locale}), ${total} total in store`);
+console.log(`seeded ${sessions.length} pitch-demo sessions (${locale}), ${total} total in store`);

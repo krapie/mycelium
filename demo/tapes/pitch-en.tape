@@ -1,16 +1,21 @@
 # Flagship ~3-minute pitch video (English) — why Mycelium exists, what it
-# is, how to run it, then a live demo against a richer 12-session/4-folder
-# dataset than the per-persona tutorial recordings use. See demo/README.md
-# for the full rationale (real LLM calls, no tutorial narrator, safety
-# design) and how to regenerate.
+# is, how to run it, then a live demo of the FULL lifecycle (organize,
+# learn, reuse, knowledge review, merge, split) against a richer 12-session/
+# 4-folder dataset than the per-persona tutorial recordings use. See
+# demo/README.md for the full rationale and how to regenerate.
 #
-# Real LLM calls: this tape makes genuine calls to your claude/codex CLI —
-# organize's summarize+classify phase alone took ~110-150s for 12 sessions
-# across several real test renders. Total render still lands comfortably
-# under the 3-minute cap without needing any post-processing time-lapse
-# (verified: 141-164s end to end across those same renders) — the
-# non-LLM segments (intro/how-to/outro banners, navigation) are short
-# enough on their own that no artificial speed-up was needed after all.
+# Mocked, not real LLM calls: an earlier version of this tape used the real
+# claude/codex CLI — organize alone (12 sessions) took 110-150s+ per render,
+# most of a 3-minute video spent watching a progress bar, and made showing
+# more than organize+learn+reuse impractical. This version runs entirely
+# against demo/pitch-data.js's own mocked provider (same __setTestProvider()
+# seam the persona tutorial uses — see demo/pitch-launch.js), which is what
+# makes showing the FULL lifecycle in under 3 minutes possible at all. Every
+# key sequence below (organize -> navigate -> learn -> context -> knowledge
+# review -> merge -> split) was verified against real resulting state (not
+# just visually) via a one-off headless dry run using test/tui-helpers.js's
+# own createTestApp()/sendKey() harness before this tape was written — same
+# method test/e2e/demo-e2e.test.js uses, not guessed.
 #
 # Safety: mounts sessionsView() directly via demo/pitch-launch.js, which
 # deliberately skips runTui()'s startTuiRoutine() call — that call runs a
@@ -31,14 +36,6 @@ Set Height 900
 Set Theme "Dracula"
 Set Padding 0
 Set TypingSpeed 40ms
-# Modest safety margin against real-LLM timing variance across renders —
-# the Korean take came in at 203s on one real run (organize alone can
-# range ~110-150s+ for 12 sessions), overshooting the 3-minute cap even
-# though this same script's earlier English renders landed at 141-164s.
-# 1.25x plus the tighter holds below gives real headroom either way,
-# still comfortably watchable (most viewers already play tutorial videos
-# at 1.25-1.5x).
-Set PlaybackSpeed 1.25
 
 # ── Setup (hidden): seed the richer dataset, alias `mycelium` to the real
 # launcher against an isolated store so the rest of this tape can type the
@@ -46,18 +43,21 @@ Set PlaybackSpeed 1.25
 #
 # MYCELIUM_HOME is set via Env — BEFORE the seed script runs, not just for
 # the later mycelium() function — so the seed itself lands in the isolated
-# /tmp store too. An earlier version of this tape only set it on the
-# function definition; the seed command ran with no MYCELIUM_HOME at all
-# and silently wrote straight into the real ~/.mycelium (paths.js's own
-# default) — caught and cleaned up by hand, not by anything in the tape
-# itself. Never repeat that: every command that touches the data layer in
-# this tape must run under this same Env, no exceptions. ──
+# /tmp store too. Every command that touches the data layer in this tape
+# must run under this same Env, no exceptions — an earlier version of this
+# tape got this wrong once and silently wrote into the real ~/.mycelium; see
+# demo/README.md's "pitch video" section for the full incident writeup.
+#
+# MYCELIUM_DEMO_MOCK_DELAY_MS matches the persona tapes' own value — long
+# enough for the spinner to visibly animate a few frames, short enough that
+# 12 sessions' worth of mocked calls still finish in a couple of seconds. ──
 Hide
 Env MYCELIUM_HOME "/tmp/mycelium-vhs-pitch-en"
+Env MYCELIUM_DEMO_MOCK_DELAY_MS "1200"
 Type "node demo/seed-pitch-demo.js en"
 Enter
-Sleep 2s
-Type "mycelium() { node demo/pitch-launch.js; }"
+Sleep 1s
+Type "mycelium() { node demo/pitch-launch.js en; }"
 Enter
 Type "clear"
 Enter
@@ -68,69 +68,110 @@ Hide
 Type "cat demo/banners/intro-en.txt"
 Enter
 Show
-Sleep 10s
+Sleep 9s
 Hide
 Type "clear"
 Enter
 Show
 
-# ── How to run ──
+# ── How to run ── (typed, deliberately never Entered — showing the install
+# command without actually running a real global install during recording)
 Type "npm install -g @kevinprk/mycelium"
 Sleep 1500ms
 Hide
+# Ctrl+C cancels the still-unsent line above before clearing — without it,
+# the next "clear" keystrokes append to that same unsent buffer instead of
+# starting fresh (harmless since it's inside Hide, but worth doing right).
+Ctrl+C
 Type "clear"
 Enter
 Show
 Type "mycelium"
 Enter
 
-# ── Live demo ──
+# ── Live demo: the full lifecycle ──
 Wait+Screen@10s /mycelium/
-Sleep 2s
+Sleep 1s
 
+# Organize — o classifies all 12 unfiled sessions into 4 folders (mocked,
+# deterministic — see demo/pitch-data.js's keywords per storyline).
 Type "o"
-Wait+Screen@180s /Suggested placements/
-Sleep 2s
-Enter
-Sleep 2s
-
-# Back to Folders, walk down into a newly-organized folder
-# (Root → New → auth → token-refresh — 3 downs).
-Left
-Sleep 500ms
-Down
-Sleep 300ms
-Down
-Sleep 300ms
-Down
-Sleep 500ms
+Wait+Screen@15s /Suggested placements/
+Sleep 1s
 Enter
 Sleep 1s
 
-Type "w"
-Wait+Screen@120s /Project Knowledge/
-Sleep 2s
+# Back to Folders, walk down into auth/token-refresh specifically — 3 downs
+# from Root (Root, New, auth, auth/token-refresh, alphabetical), confirmed
+# via the dry run referenced above, not guessed.
+Left
+Sleep 300ms
+Down
+Sleep 300ms
+Down
+Sleep 300ms
+Down
+Sleep 500ms
 Enter
-Sleep 2s
+Sleep 500ms
 
+# Learn — w extracts this folder's KNOWLEDGE.md.
+Type "w"
+Wait+Screen@10s /Project Knowledge/
+Sleep 1s
+Enter
+Sleep 500ms
+
+# Reuse — c shows the context this folder would hand to the next session.
 Type "c"
 Wait+Screen@10s /Context ·/
-Sleep 3s
+Sleep 2s
 Escape
+Sleep 500ms
 
-# ── Outro ──
-# Quit the still-running app FIRST — everything typed after `mycelium`
-# launched has been going to the app itself (its own alternate-screen
-# fullscreen view), not a shell. An earlier version of this tape skipped
-# this and typed `clear`/`cat outro...` straight into the still-running
-# app instead of an actual shell prompt — those became random keystrokes
-# the app mostly ignored, and the "outro" never appeared in the output at
-# all. `q` then `q` again confirms the quit (app.js's confirmQuit()).
+# Knowledge review — k reviews/approves knowledge updates across every
+# active folder at once (a pending proposal was pre-staged at seed time,
+# same trick the interactive tutorial uses — see seed-pitch-demo.js).
+Type "k"
+Wait+Screen@10s /Review knowledge updates/
 Sleep 1s
+Enter
+Sleep 500ms
+
+# Merge — select the first 2 sessions in this folder (proactive refresh +
+# retry/backoff), Shift+M.
+Space
+Down
+Space
+Type "M"
+Wait+Screen@10s /Title for the merged session/
+Sleep 1s
+Enter
+Sleep 1500ms
+
+# Split the merged product back into its 2 halves. 5 Ups guarantees landing
+# on the merged row regardless of where focus was left — its startedAt
+# deliberately sorts ahead of the one untouched session in this folder (see
+# pitch-data.js's comment on that session's daysAgo), so Up-to-top is
+# reliable rather than guessed.
+Up
+Up
+Up
+Up
+Up
+Type "S"
+Wait+Screen@10s /Proposed split/
+Sleep 1s
+Enter
+Sleep 1500ms
+
+# ── Outro (quit first — the app runs fullscreen; anything typed before
+# quitting goes to the app itself, not a shell) ──
+Sleep 500ms
 Type "q"
 Sleep 500ms
 Type "q"
-Sleep 1500ms
+Sleep 1s
 Hide
 Type "clear"
 Enter

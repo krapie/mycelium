@@ -1,13 +1,12 @@
 # Flagship ~3-minute pitch video (Korean) — mirrors pitch-en.tape exactly
 # except the seeded locale, the banner files, and the Wait markers that
-# need to match real Korean UI text (organize/classify.js's suggestPlacements
-# review modal title is genuinely Korean when locale is ko — config.js's
-# contentLocale() — and so is i18n.js's context.title). The generated
-# KNOWLEDGE.md's own "# <folder> — Project Knowledge" header stays English
-# in both locales (insight.js never localized that one static wrapper
-# line), so that Wait marker is identical to the English tape. See
-# pitch-en.tape's own header comment for the full rationale (real LLM
-# calls, no post-processing needed, safety design) — not repeated here.
+# need to match real Korean UI text (suggestPlacements()'s review modal
+# title, the context viewer's title, the knowledge-review modal title, the
+# merge title prompt, and the split review modal title are all genuinely
+# Korean when locale is ko — config.js's contentLocale()). See
+# pitch-en.tape's own header comment for the full rationale (mocked, not
+# real LLM calls; full lifecycle; verified via a headless dry run) — not
+# repeated here.
 
 Output "demo/out/pitch-ko.mp4"
 
@@ -19,18 +18,15 @@ Set Height 900
 Set Theme "Dracula"
 Set Padding 0
 Set TypingSpeed 40ms
-# Safety margin against real-LLM timing variance — see pitch-en.tape's own
-# comment (one real Korean render came in at 203s, over the 3-minute cap,
-# even though English renders of the same script landed at 141-164s).
-Set PlaybackSpeed 1.25
 
 # ── Setup (hidden) ──
 Hide
 Env MYCELIUM_HOME "/tmp/mycelium-vhs-pitch-ko"
+Env MYCELIUM_DEMO_MOCK_DELAY_MS "1200"
 Type "node demo/seed-pitch-demo.js ko"
 Enter
-Sleep 2s
-Type "mycelium() { node demo/pitch-launch.js; }"
+Sleep 1s
+Type "mycelium() { node demo/pitch-launch.js ko; }"
 Enter
 Type "clear"
 Enter
@@ -41,7 +37,7 @@ Hide
 Type "cat demo/banners/intro-ko.txt"
 Enter
 Show
-Sleep 10s
+Sleep 9s
 Hide
 Type "clear"
 Enter
@@ -51,54 +47,80 @@ Show
 Type "npm install -g @kevinprk/mycelium"
 Sleep 1500ms
 Hide
+Ctrl+C
 Type "clear"
 Enter
 Show
 Type "mycelium"
 Enter
 
-# ── Live demo ──
+# ── Live demo: the full lifecycle ──
 Wait+Screen@10s /mycelium/
-Sleep 2s
+Sleep 1s
 
 Type "o"
-Wait+Screen@180s /제안된 폴더 배치/
-Sleep 2s
-Enter
-Sleep 2s
-
-# Back to Folders, walk down into a newly-organized folder — same
-# generic 3-downs approach as the English tape (real LLM classification
-# isn't perfectly reproducible run to run, so this doesn't assume any
-# specific folder name, just "the 3rd item alphabetically").
-Left
-Sleep 500ms
-Down
-Sleep 300ms
-Down
-Sleep 300ms
-Down
-Sleep 500ms
+Wait+Screen@15s /제안된 폴더 배치/
+Sleep 1s
 Enter
 Sleep 1s
 
-Type "w"
-Wait+Screen@120s /Project Knowledge/
-Sleep 2s
+# Root -> New -> auth -> auth/token-refresh — 3 downs, same folder structure
+# as the English tape (folder names stay ASCII in both locales).
+Left
+Sleep 300ms
+Down
+Sleep 300ms
+Down
+Sleep 300ms
+Down
+Sleep 500ms
 Enter
-Sleep 2s
+Sleep 500ms
+
+Type "w"
+Wait+Screen@10s /Project Knowledge/
+Sleep 1s
+Enter
+Sleep 500ms
 
 Type "c"
 Wait+Screen@10s /컨텍스트 ·/
-Sleep 3s
+Sleep 2s
 Escape
+Sleep 500ms
 
-# ── Outro (quit first — see pitch-en.tape's comment for why) ──
+Type "k"
+Wait+Screen@10s /지식 업데이트 검토/
 Sleep 1s
+Enter
+Sleep 500ms
+
+Space
+Down
+Space
+Type "M"
+Wait+Screen@10s /병합된 세션의 제목/
+Sleep 1s
+Enter
+Sleep 1500ms
+
+Up
+Up
+Up
+Up
+Up
+Type "S"
+Wait+Screen@10s /분할 제안/
+Sleep 1s
+Enter
+Sleep 1500ms
+
+# ── Outro (quit first) ──
+Sleep 500ms
 Type "q"
 Sleep 500ms
 Type "q"
-Sleep 1500ms
+Sleep 1s
 Hide
 Type "clear"
 Enter

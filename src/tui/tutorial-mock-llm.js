@@ -45,8 +45,10 @@ import { getLocale } from './i18n.js';
 // personas.js's keywords/knowledge/splitLabels are `{en, ko}` — resolved
 // once per createTutorialMockProvider() call against the active locale, so
 // every function below keeps working against plain values exactly as
-// before locale support existed.
-function resolveStorylines(storylines, locale) {
+// before locale support existed. Exported so demo/pitch-launch.js can reuse
+// it against demo/pitch-data.js's own storylines, which use this exact same
+// {en, ko}-per-field shape.
+export function resolveStorylines(storylines, locale) {
   return storylines.map((s) => ({
     folder: s.folder,
     keywords: s.keywords[locale],
@@ -143,6 +145,23 @@ function delayed(value) {
   return new Promise((resolve) => setTimeout(() => resolve(value), MOCK_DELAY_MS));
 }
 
+// Low-level factory, independent of personas.js's persona/id lookup — takes
+// already-resolved storylines (folder/keywords/knowledge as plain values,
+// not {en,ko}) plus the one storyline merge/split operates on. Pulled out of
+// createTutorialMockProvider() below so demo/pitch-launch.js's flagship
+// pitch video can build its own mock provider from demo/pitch-data.js's own
+// (differently-shaped) storyline bundle without duplicating this dispatch/
+// parsing logic in a second file — see AGENTS.md's own documented history of
+// exactly that kind of duplication drifting out of sync.
+export function createMockProvider(storylines, mergeStoryline, locale) {
+  return function mockProvider(prompt) {
+    if (prompt.includes('"placements"')) return delayed(mockPlacements(storylines, prompt, locale));
+    if (prompt.includes('"ranges"')) return delayed(mockSplit(mergeStoryline, prompt, locale));
+    if (prompt.includes('"decisions"')) return delayed(mockAutotag(prompt, locale));
+    return delayed(mockKnowledge(storylines, prompt, locale));
+  };
+}
+
 // Factory rather than a single stateless function: which storyline set (and
 // therefore which folder names/knowledge/split labels) applies depends on
 // which persona AND language the user picked before the tutorial started —
@@ -154,11 +173,5 @@ export function createTutorialMockProvider(personaId = 'swe', locale = getLocale
   const persona = findPersona(personaId);
   const storylines = resolveStorylines(persona.storylines, locale);
   const mergeStoryline = storylines[persona.mergeStorylineIndex];
-
-  return function tutorialMockProvider(prompt) {
-    if (prompt.includes('"placements"')) return delayed(mockPlacements(storylines, prompt, locale));
-    if (prompt.includes('"ranges"')) return delayed(mockSplit(mergeStoryline, prompt, locale));
-    if (prompt.includes('"decisions"')) return delayed(mockAutotag(prompt, locale));
-    return delayed(mockKnowledge(storylines, prompt, locale));
-  };
+  return createMockProvider(storylines, mergeStoryline, locale);
 }

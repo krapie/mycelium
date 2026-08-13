@@ -18,7 +18,7 @@ import { useTempHome } from './helpers.js';
 // English-content assertions assume.
 useTempHome();
 process.env.MYCELIUM_DEMO_MOCK_DELAY_MS = '30';
-const { createTutorialMockProvider } = await import('../src/tui/tutorial-mock-llm.js');
+const { createTutorialMockProvider, createMockProvider } = await import('../src/tui/tutorial-mock-llm.js');
 
 // Prompt fragments below mirror the REAL shapes organize/classify.js, split.js,
 // and insight.js build (see those files) — including their real per-locale
@@ -337,4 +337,20 @@ test('provider resolves after a deliberate delay, not instantly', async () => {
   // (30ms), not the real 5s production default — this only needs to prove
   // the delay mechanism fires at all, not what the demo actually feels like.
   assert.ok(Date.now() - start >= 20, 'mock output should not resolve near-instantly (spinner needs frames to animate)');
+});
+
+// createMockProvider() is the low-level factory createTutorialMockProvider()
+// itself delegates to (extracted so demo/pitch-launch.js's flagship pitch
+// video can drive its own, differently-shaped storyline bundle through the
+// same dispatch/parsing logic instead of a second hand-rolled mock — see
+// that function's own doc comment). Every test above already exercises this
+// same logic indirectly through createTutorialMockProvider(); this is its
+// own direct coverage against a storyline shape a caller builds itself,
+// not persona.js's.
+test('createMockProvider() classifies against a caller-supplied storyline set, not just personas.js', async () => {
+  const storylines = [{ folder: 'widgets/build', keywords: /widget/i, knowledge: '## Widgets\n\nBuild notes.' }];
+  const provider = createMockProvider(storylines, storylines[0], 'en');
+  const reply = await provider(placementsPrompt([{ id: 'a1', summary: 'Building a new widget for the toolbar.' }]));
+  const parsed = JSON.parse(reply);
+  assert.equal(parsed.placements[0].folder, 'widgets/build');
 });
