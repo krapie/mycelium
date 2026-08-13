@@ -541,6 +541,7 @@ en['help.text'] = (fg, spore) => `{bold}The Context Flywheel{/}
 Day to day, it's a simple loop: {${fg}-fg}s{/} capture → {${fg}-fg}o{/} organize → {${fg}-fg}k{/} learn → {${fg}-fg}n{/} start the next session with everything it needs. Most of that already runs by itself in the background (capture every 5 min, organize suggestions queued, knowledge updates prepared) — pressing these keys is mostly reviewing/confirming what's already waiting, not starting from scratch. Everything below is the full detail behind that loop.
 
 {bold}Global{/}
+
   {${fg}-fg}s{/}       Scan (mycelium scan, no CLI needed — captures new/changed sessions, no auto-filing; use \`o\` or \`mycelium organize\` to file them)
   {${fg}-fg}o{/}       Smart organize — scoped to wherever you're browsing (Root = unfiled only, a folder = itself + subfolders); suggests folders by content, may propose new folders too — all pre-checked, Enter applies everything, Space to uncheck any
   {${fg}-fg}k{/}       Knowledge review — reviews/refreshes KNOWLEDGE.md across every active folder at once and injects AGENTS.md on approval; reuses whatever the daemon already queued overnight, or computes fresh on the spot. Unrelated to Digest (d)
@@ -552,6 +553,7 @@ Day to day, it's a simple loop: {${fg}-fg}s{/} capture → {${fg}-fg}o{/} organi
   {${fg}-fg}q{/}       Quit
 
 {bold}Folders panel{/}
+
   {${fg}-fg}Enter / →{/}   View this folder's sessions
   {${fg}-fg}a{/}       New (sub)folder
   {${fg}-fg}e{/}       Rename
@@ -560,6 +562,7 @@ Day to day, it's a simple loop: {${fg}-fg}s{/} capture → {${fg}-fg}o{/} organi
   {${fg}-fg}w{/}       Extract folder knowledge (KNOWLEDGE.md) — preview then confirm
 
 {bold}Sessions panel{/}
+
   {${fg}-fg}Enter / →{/}   View detail
   {${fg}-fg}Esc / ←{/}     Back to folders
   {${fg}-fg}a{/}       Generate summary + tags (LLM, batches over multi-select)
@@ -580,6 +583,7 @@ Day to day, it's a simple loop: {${fg}-fg}s{/} capture → {${fg}-fg}o{/} organi
   {${fg}-fg}Shift+O{/} Cycle sort order — recent (default) → title A-Z → agent
 
 {bold}Detail panel{/}
+
   {${fg}-fg}↑↓{/}      Scroll
   {${fg}-fg}Enter{/}   Resume — choose "open here" or "copy command" (r in the sessions panel always opens here)
   {${fg}-fg}Esc / ←{/}     Back to sessions
@@ -613,6 +617,7 @@ ko['help.text'] = (fg, spore) => `{bold}Context Flywheel{/}
 일상적으로는 단순한 반복입니다: {${fg}-fg}s{/} 캡처 → {${fg}-fg}o{/} 정리 → {${fg}-fg}k{/} 학습 → {${fg}-fg}n{/} 필요한 모든 게 준비된 채로 다음 세션 시작. 대부분은 이미 백그라운드에서 저절로 돌아갑니다(5분마다 캡처, 정리 제안 대기, 지식 업데이트 준비) — 이 키들을 누르는 건 대부분 처음부터 시작시키는 게 아니라 이미 준비된 걸 검토/확인하는 것에 가깝습니다. 아래는 그 흐름 뒤의 전체 상세입니다.
 
 {bold}전역{/}
+
   {${fg}-fg}s{/}       스캔 (mycelium scan, CLI 없이 — 새/변경된 세션 캡처만, 자동 배치는 안 함; 배치는 o 또는 mycelium organize로)
   {${fg}-fg}o{/}       스마트 정리 — 지금 보고 있는 범위로 한정(Root=미분류만, 폴더 안=그 폴더+하위만), 새 폴더 제안도 가능 — 전부 체크된 채로 떠서 Enter만으로 전체 적용, 잘못된 것만 Space로 해제
   {${fg}-fg}k{/}       지식 검토 — 활동이 있었던 모든 폴더의 KNOWLEDGE.md를 한 번에 검토/갱신하고 승인 시 AGENTS.md에 주입. 데몬이 밤새 미리 계산해둔 게 있으면 재사용하고, 없으면 그 자리에서 계산. Digest(d)와는 무관
@@ -624,6 +629,7 @@ ko['help.text'] = (fg, spore) => `{bold}Context Flywheel{/}
   {${fg}-fg}q{/}       종료
 
 {bold}폴더 패널{/}
+
   {${fg}-fg}Enter / →{/}   이 폴더의 세션 보기
   {${fg}-fg}a{/}       새 (하위)폴더
   {${fg}-fg}e{/}       이름 변경
@@ -632,6 +638,7 @@ ko['help.text'] = (fg, spore) => `{bold}Context Flywheel{/}
   {${fg}-fg}w{/}       폴더 지식(KNOWLEDGE.md) 추출 — 미리보기 후 확인
 
 {bold}세션 패널{/}
+
   {${fg}-fg}Enter / →{/}   상세 보기
   {${fg}-fg}Esc / ←{/}     폴더 패널로
   {${fg}-fg}a{/}       요약·태그 생성 (LLM, 다중 선택 시 일괄)
@@ -652,6 +659,7 @@ ko['help.text'] = (fg, spore) => `{bold}Context Flywheel{/}
   {${fg}-fg}Shift+O{/} 정렬 순서 전환 — 최신순(기본) → 제목순(A-Z) → 에이전트순
 
 {bold}상세 패널{/}
+
   {${fg}-fg}↑↓{/}      스크롤
   {${fg}-fg}Enter{/}   이어열기 — "여기서 열기" 또는 "명령어 복사" 선택 (세션 패널의 r은 항상 바로 열기)
   {${fg}-fg}Esc / ←{/}     세션 패널로
