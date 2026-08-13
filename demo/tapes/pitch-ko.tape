@@ -37,7 +37,7 @@ Hide
 Type "cat demo/banners/intro-ko.txt"
 Enter
 Show
-Sleep 9s
+Sleep 12s
 Hide
 Type "clear"
 Enter
@@ -45,7 +45,7 @@ Show
 
 # ── How to run ──
 Type "npm install -g @kevinprk/mycelium"
-Sleep 1500ms
+Sleep 2s
 Hide
 Ctrl+C
 Type "clear"
@@ -54,55 +54,60 @@ Show
 Type "mycelium"
 Enter
 
-# ── Live demo: the full lifecycle ──
+# ── Live demo: the full lifecycle ── (pacing rationale: see pitch-en.tape's
+# own comment — holds are sized to actually read the screen, not just to
+# satisfy the Wait marker; target ~100-120s total)
 Wait+Screen@10s /mycelium/
-Sleep 1s
+Sleep 2s
 
 Type "o"
 Wait+Screen@15s /제안된 폴더 배치/
-Sleep 1s
+Sleep 6s
 Enter
-Sleep 1s
+Sleep 3s
 
 # Root -> New -> auth -> auth/token-refresh — 3 downs, same folder structure
 # as the English tape (folder names stay ASCII in both locales).
 Left
-Sleep 300ms
+Sleep 600ms
 Down
-Sleep 300ms
+Sleep 600ms
 Down
-Sleep 300ms
+Sleep 600ms
 Down
-Sleep 500ms
-Enter
-Sleep 500ms
-
-Type "w"
-Wait+Screen@10s /Project Knowledge/
-Sleep 1s
-Enter
-Sleep 500ms
-
-Type "c"
-Wait+Screen@10s /컨텍스트 ·/
-Sleep 2s
-Escape
-Sleep 500ms
-
-Type "k"
-Wait+Screen@10s /지식 업데이트 검토/
-Sleep 1s
-Enter
-Sleep 500ms
-
-Space
-Down
-Space
-Type "M"
-Wait+Screen@10s /병합된 세션의 제목/
 Sleep 1s
 Enter
 Sleep 1500ms
+
+Type "w"
+Wait+Screen@10s /Project Knowledge/
+Sleep 6s
+Enter
+Sleep 2500ms
+
+Type "c"
+Wait+Screen@10s /컨텍스트 ·/
+Sleep 6s
+Escape
+Sleep 1500ms
+
+Type "k"
+Wait+Screen@10s /지식 업데이트 검토/
+Sleep 5s
+Enter
+Sleep 2s
+
+Space
+Sleep 400ms
+Down
+Sleep 400ms
+Space
+Sleep 400ms
+Type "M"
+Wait+Screen@10s /병합된 세션의 제목/
+Sleep 5s
+Enter
+Sleep 4s
 
 Up
 Up
@@ -111,20 +116,20 @@ Up
 Up
 Type "S"
 Wait+Screen@10s /분할 제안/
-Sleep 1s
+Sleep 5s
 Enter
-Sleep 1500ms
+Sleep 4s
 
 # ── Outro (quit first) ──
-Sleep 500ms
+Sleep 800ms
 Type "q"
-Sleep 500ms
+Sleep 800ms
 Type "q"
-Sleep 1s
+Sleep 2s
 Hide
 Type "clear"
 Enter
 Show
 Type "cat demo/banners/outro-ko.txt"
 Enter
-Sleep 8s
+Sleep 13s

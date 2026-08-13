@@ -68,7 +68,7 @@ Hide
 Type "cat demo/banners/intro-en.txt"
 Enter
 Show
-Sleep 9s
+Sleep 12s
 Hide
 Type "clear"
 Enter
@@ -77,7 +77,7 @@ Show
 # ── How to run ── (typed, deliberately never Entered — showing the install
 # command without actually running a real global install during recording)
 Type "npm install -g @kevinprk/mycelium"
-Sleep 1500ms
+Sleep 2s
 Hide
 # Ctrl+C cancels the still-unsent line above before clearing — without it,
 # the next "clear" keystrokes append to that same unsent buffer instead of
@@ -90,64 +90,75 @@ Type "mycelium"
 Enter
 
 # ── Live demo: the full lifecycle ──
+# Pacing note: every hold below is sized to actually READ the screen's
+# content (a 12-item list, a KNOWLEDGE.md draft, a review modal), not just
+# to satisfy the Wait marker — mocked calls resolve in ~1-2s regardless, so
+# the deliberate Sleep after each Wait is what gives a human time to read
+# before the next key fires. See demo/README.md's "pitch video" section for
+# the full pacing rationale (target ~100-120s total, well under the 180s cap).
 Wait+Screen@10s /mycelium/
-Sleep 1s
+Sleep 2s
 
 # Organize — o classifies all 12 unfiled sessions into 4 folders (mocked,
-# deterministic — see demo/pitch-data.js's keywords per storyline).
+# deterministic — see demo/pitch-data.js's keywords per storyline). Long
+# hold before applying — this list is the first real content on screen.
 Type "o"
 Wait+Screen@15s /Suggested placements/
-Sleep 1s
+Sleep 6s
 Enter
-Sleep 1s
+Sleep 3s
 
 # Back to Folders, walk down into auth/token-refresh specifically — 3 downs
 # from Root (Root, New, auth, auth/token-refresh, alphabetical), confirmed
 # via the dry run referenced above, not guessed.
 Left
-Sleep 300ms
+Sleep 600ms
 Down
-Sleep 300ms
+Sleep 600ms
 Down
-Sleep 300ms
+Sleep 600ms
 Down
-Sleep 500ms
+Sleep 1s
 Enter
-Sleep 500ms
+Sleep 1500ms
 
 # Learn — w extracts this folder's KNOWLEDGE.md.
 Type "w"
 Wait+Screen@10s /Project Knowledge/
-Sleep 1s
+Sleep 6s
 Enter
-Sleep 500ms
+Sleep 2500ms
 
 # Reuse — c shows the context this folder would hand to the next session.
 Type "c"
 Wait+Screen@10s /Context ·/
-Sleep 2s
+Sleep 6s
 Escape
-Sleep 500ms
+Sleep 1500ms
 
 # Knowledge review — k reviews/approves knowledge updates across every
 # active folder at once (a pending proposal was pre-staged at seed time,
 # same trick the interactive tutorial uses — see seed-pitch-demo.js).
 Type "k"
 Wait+Screen@10s /Review knowledge updates/
-Sleep 1s
+Sleep 5s
 Enter
-Sleep 500ms
+Sleep 2s
 
 # Merge — select the first 2 sessions in this folder (proactive refresh +
-# retry/backoff), Shift+M.
+# retry/backoff), Shift+M. Brief pauses between selection keys so each
+# checkmark is visible landing, not just the end state.
 Space
+Sleep 400ms
 Down
+Sleep 400ms
 Space
+Sleep 400ms
 Type "M"
 Wait+Screen@10s /Title for the merged session/
-Sleep 1s
+Sleep 5s
 Enter
-Sleep 1500ms
+Sleep 4s
 
 # Split the merged product back into its 2 halves. 5 Ups guarantees landing
 # on the merged row regardless of where focus was left — its startedAt
@@ -161,21 +172,21 @@ Up
 Up
 Type "S"
 Wait+Screen@10s /Proposed split/
-Sleep 1s
+Sleep 5s
 Enter
-Sleep 1500ms
+Sleep 4s
 
 # ── Outro (quit first — the app runs fullscreen; anything typed before
 # quitting goes to the app itself, not a shell) ──
-Sleep 500ms
+Sleep 800ms
 Type "q"
-Sleep 500ms
+Sleep 800ms
 Type "q"
-Sleep 1s
+Sleep 2s
 Hide
 Type "clear"
 Enter
 Show
 Type "cat demo/banners/outro-en.txt"
 Enter
-Sleep 8s
+Sleep 13s
