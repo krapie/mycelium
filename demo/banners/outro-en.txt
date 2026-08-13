@@ -1,0 +1,7 @@
+[1m[38;2;127;224;196mThat's the loop:[0m Capture → Organize → Learn → Reuse.
+
+Try it yourself:
+  [1mnpm install -g @kevinprk/mycelium[0m
+  [1mmycelium demo[0m
+
+[38;2;127;224;196mgithub.com/krapie/mycelium[0m

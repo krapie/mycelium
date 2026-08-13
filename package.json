@@ -11,7 +11,8 @@
     "test": "node --test",
     "test:unit": "node --test test/*.test.js",
     "test:e2e": "node --test test/e2e/*.test.js",
-    "record": "vhs demo/tapes/swe-highlight.tape && vhs demo/tapes/swe-full.tape && vhs demo/tapes/cse-highlight.tape && vhs demo/tapes/cse-full.tape && vhs demo/tapes/sa-highlight.tape && vhs demo/tapes/sa-full.tape"
+    "record": "vhs demo/tapes/swe-highlight.tape && vhs demo/tapes/swe-full.tape && vhs demo/tapes/cse-highlight.tape && vhs demo/tapes/cse-full.tape && vhs demo/tapes/sa-highlight.tape && vhs demo/tapes/sa-full.tape",
+    "record:pitch": "vhs demo/tapes/pitch-en.tape && vhs demo/tapes/pitch-ko.tape"
   },
   "files": [
     "src",

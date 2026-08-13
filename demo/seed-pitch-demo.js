@@ -13,16 +13,40 @@
 // Usage: MYCELIUM_HOME=/tmp/whatever node demo/seed-pitch-demo.js <en|ko>
 
 import { randomUUID } from 'node:crypto';
+import { readdirSync, rmSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { saveRaw } from '../src/scanner.js';
 import { emptyNeutral } from '../src/schema.js';
 import { reindex } from '../src/index-db.js';
 import { loadConfig, saveConfig } from '../src/config.js';
+import { RAW_DIR, TREE_DIR, DIGEST_DIR, ensureDirs } from '../src/paths.js';
 import { PITCH_SESSIONS } from './pitch-data.js';
 
 const locale = process.argv[2];
 if (locale !== 'en' && locale !== 'ko') {
   console.error('Usage: MYCELIUM_HOME=/tmp/whatever node demo/seed-pitch-demo.js <en|ko>');
   process.exit(1);
+}
+
+// Idempotent, not additive: each session gets a fresh randomUUID() (no
+// stable id to overwrite by), so re-running this against a MYCELIUM_HOME
+// that already has a prior run's data would otherwise just pile up more
+// sessions on top (found by hand — a second render reused the same /tmp
+// path and ended up with 24 sessions instead of 12). Clearing RAW_DIR
+// alone isn't enough either — TREE_DIR (real folder directories, created
+// by a previous run's applyPlacements()) survives that and left stale
+// EMPTY folders (e.g. a leftover "ci" with 0 sessions) sitting alongside
+// this run's real ones; a tape's alphabetical down-navigation landed on
+// one of those by chance and pressing `w` found nothing to summarize,
+// timing out waiting for a real KNOWLEDGE.md draft that was never going to
+// come. DIGEST_DIR cleared too for the same "fully reset, not merged with
+// a prior run" reasoning, though nothing in this tape generates a digest.
+// Safe here because this only ever runs against a disposable /tmp path a
+// tape's Env command set up moments earlier, never ~/.mycelium.
+ensureDirs();
+for (const dir of [RAW_DIR, TREE_DIR, DIGEST_DIR]) {
+  if (!existsSync(dir)) continue;
+  for (const f of readdirSync(dir)) rmSync(join(dir, f), { recursive: true });
 }
 
 function daysAgo(n, hour = 10) {

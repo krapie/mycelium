@@ -1,0 +1,10 @@
+[1m[38;2;127;224;196m🍄 Mycelium[0m
+
+[1mAI coding sessions lose context fast:[0m
+  [38;2;127;224;196m•[0m Model boundaries — switch agents, lose everything
+  [38;2;127;224;196m•[0m Time — a session from 3 weeks ago is unfindable
+  [38;2;127;224;196m•[0m Space — nothing links related work across a project
+
+Mycelium captures every session, organizes it with AI,
+learns from it, and hands that knowledge to your next
+session — automatically.
