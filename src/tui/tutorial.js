@@ -197,7 +197,14 @@ export function startTutorial(app, onDone, personaId = 'swe') {
     bottom: 1,
     left: 0,
     right: 0,
-    height: 4,
+    // 'shrink', not a fixed height: most step bodies are 1-2 lines and a
+    // fixed height sized for those truncated the final step's much longer
+    // Context Flywheel recap paragraph (no border/scroll indication either
+    // — it just silently cut off mid-sentence). Anchored at `bottom` with no
+    // `top`, so a taller step grows the box upward instead of pushing
+    // anything below it. render()'s setContent() below recalculates this on
+    // every step change, so short steps stay compact again right after.
+    height: 'shrink',
     tags: true,
     padding: { left: 1, right: 1 },
     border: { type: 'line' },
