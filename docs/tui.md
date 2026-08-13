@@ -7,8 +7,9 @@ Sessions | Detail**, three columns, drilled into k9s-style — start at
 folders, `Enter` into sessions, `Enter` into detail, `Esc` to go back. The
 focused column widens.
 
-The status bar always shows the short **Context Flywheel** loop — `s · o · d
-· n` (capture → organize → check in on the day → start the next session) —
+The status bar always shows the short **Context Flywheel** loop —
+`Capture·s → Organize·o → Learn·k → Reuse·n`, the same four canonical
+stages as the rest of this doc, each paired with its one flywheel key —
 not the full stage-by-stage breakdown; there's no room for that on a
 one-line status bar someone sees on every single screen. Press **`?`**
 anywhere for the full shortcut reference, which leads with the same loop

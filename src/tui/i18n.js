@@ -99,11 +99,15 @@ const en = {
   // breakdown on every single screen (Capture·s → Organize·m/t/o →
   // Learn·a/w → Reuse·n/h/r/i) — a permanent status bar is the wrong place
   // to teach the whole model every render; that detail now lives in the ?
-  // modal (help.text's new leading section) instead. The footer just names
-  // the day-to-day loop — the Context Flywheel — kept as short as the
-  // help-fallback hint next to it. `key` is still the only color passed in
-  // (stage/arrow no longer needed for this short a string).
-  'lifecycle.bar': (key) => `{${key}-fg}s{/} · {${key}-fg}o{/} · {${key}-fg}d{/} · {${key}-fg}n{/}`,
+  // modal (help.text's new leading section) instead. The footer now names
+  // the day-to-day loop's four stages by their canonical names (matching
+  // README.md/AGENTS.md's own Capture → Organize → Learn → Reuse), each
+  // paired with its one flywheel key — s (capture/scan), o (organize),
+  // k (learn — knowledge review), n (reuse — new session). Digest (`d`) is
+  // real and still listed in its own Global line below, it's just not one
+  // of these four canonical stages, so it isn't part of this loop.
+  'lifecycle.bar': (fg) =>
+    `Capture·{${fg}-fg}s{/} → Organize·{${fg}-fg}o{/} → Learn·{${fg}-fg}k{/} → Reuse·{${fg}-fg}n{/}`,
   'status.helpFallback': '? all shortcuts   q quit',
 
   // sessions.js — scan
@@ -208,7 +212,7 @@ const en = {
     `Press {${fg}-fg}/{/} and search for a keyword you remember from these sessions, then press {${fg}-fg}v{/} to check the calendar and find the date they're on. Press {${fg}-fg}Enter{/} to continue.`,
   'tutorial.step16Title': ' — Complete!',
   'tutorial.step16Body': (fg) =>
-    `That's the full lifecycle. Day to day, it's a simple loop — the {bold}Context Flywheel{/}: {${fg}-fg}s{/} capture → {${fg}-fg}o{/} organize → {${fg}-fg}d{/} check in on the day → {${fg}-fg}n{/} start the next session with everything it needs. Most of that already happens by itself in the background — Mycelium keeps capturing, organizing, and preparing your daily digest and knowledge updates on its own; pressing these keys is mostly just reviewing and confirming what's already waiting for you, not starting the work from scratch. Press {${fg}-fg}q{/} when you're done — the mock sessions get cleaned up and you're back to your own, existing data.`,
+    `That's the full lifecycle. Day to day, it's a simple loop — the {bold}Context Flywheel{/}: {${fg}-fg}s{/} capture → {${fg}-fg}o{/} organize → {${fg}-fg}k{/} learn → {${fg}-fg}n{/} start the next session with everything it needs. Most of that already happens by itself in the background — Mycelium keeps capturing, organizing, and refreshing what it's learned on its own; pressing these keys is mostly just reviewing and confirming what's already waiting for you, not starting the work from scratch. Press {${fg}-fg}q{/} when you're done — the mock sessions get cleaned up and you're back to your own, existing data.`,
   // Interim text shown while a real handler is in flight (o/w/k/Shift+S's
   // LLM calls are mocked during the tutorial — see tutorial-mock-llm.js —
   // so these resolve almost instantly, but the narrator still has to wait
@@ -359,7 +363,8 @@ const ko = {
   'detail.superseded': (labels) => `대체됨: ${labels}`,
   'detail.splitInto': (n, labels) => `${n}개로 분할됨: ${labels}`,
 
-  'lifecycle.bar': (key) => `{${key}-fg}s{/} · {${key}-fg}o{/} · {${key}-fg}d{/} · {${key}-fg}n{/}`,
+  'lifecycle.bar': (fg) =>
+    `캡처·{${fg}-fg}s{/} → 정리·{${fg}-fg}o{/} → 학습·{${fg}-fg}k{/} → 재사용·{${fg}-fg}n{/}`,
 
   'status.helpFallback': '? 전체 단축키   q 종료',
 
@@ -454,7 +459,7 @@ const ko = {
     `{${fg}-fg}/{/}를 눌러 방금 본 세션들에서 기억나는 키워드로 검색해보고, {${fg}-fg}v{/}를 눌러 캘린더에서 해당 세션이 있는 날짜를 확인해보세요. {${fg}-fg}Enter{/}로 계속하세요.`,
   'tutorial.step16Title': ' — 완료!',
   'tutorial.step16Body': (fg) =>
-    `전체 라이프사이클을 다 보셨습니다. 일상적으로는 단순한 반복입니다 — {bold}Context Flywheel{/}: {${fg}-fg}s{/} 캡처 → {${fg}-fg}o{/} 정리 → {${fg}-fg}d{/} 하루 확인 → {${fg}-fg}n{/} 필요한 모든 게 준비된 채로 다음 세션 시작. 대부분은 이미 백그라운드에서 저절로 돌아갑니다 — Mycelium이 알아서 캡처하고 정리하고 매일의 다이제스트와 지식 업데이트를 준비해둡니다. 이 키들을 누르는 건 대부분 처음부터 뭔가 시작시키는 게 아니라 이미 준비된 걸 검토/확인하는 것에 가깝습니다. 다 보셨으면 {${fg}-fg}q{/}를 누르세요 — 데모 세션이 정리되고 원래(기존) 데이터로 돌아갑니다.`,
+    `전체 라이프사이클을 다 보셨습니다. 일상적으로는 단순한 반복입니다 — {bold}Context Flywheel{/}: {${fg}-fg}s{/} 캡처 → {${fg}-fg}o{/} 정리 → {${fg}-fg}k{/} 학습 → {${fg}-fg}n{/} 필요한 모든 게 준비된 채로 다음 세션 시작. 대부분은 이미 백그라운드에서 저절로 돌아갑니다 — Mycelium이 알아서 캡처하고 정리하고 배운 것을 갱신해둡니다. 이 키들을 누르는 건 대부분 처음부터 뭔가 시작시키는 게 아니라 이미 준비된 걸 검토/확인하는 것에 가깝습니다. 다 보셨으면 {${fg}-fg}q{/}를 누르세요 — 데모 세션이 정리되고 원래(기존) 데이터로 돌아갑니다.`,
   'tutorial.waitingOrganize': '세션을 읽고 폴더를 제안하는 중…',
   'tutorial.waitingApply': '적용하는 중…',
   'tutorial.waitingKnowledge': '이 폴더의 세션들을 지식 초안으로 압축하는 중…',
@@ -532,7 +537,7 @@ const ko = {
 // from dozens of sub-keys — it's read as a single reference sheet, and
 // splitting it further would add ceremony without adding maintainability.
 en['help.text'] = (fg, spore) => `{bold}The Context Flywheel{/}
-  Day to day, it's a simple loop: {${fg}-fg}s{/} capture → {${fg}-fg}o{/} organize → {${fg}-fg}d{/} check in on the day → {${fg}-fg}n{/} start the next session with everything it needs. Most of that already runs by itself in the background (capture every 5 min, organize suggestions queued, daily digest + knowledge updates prepared) — pressing these keys is mostly reviewing/confirming what's already waiting, not starting from scratch. Everything below is the full detail behind that loop.
+  Day to day, it's a simple loop: {${fg}-fg}s{/} capture → {${fg}-fg}o{/} organize → {${fg}-fg}k{/} learn → {${fg}-fg}n{/} start the next session with everything it needs. Most of that already runs by itself in the background (capture every 5 min, organize suggestions queued, knowledge updates prepared) — pressing these keys is mostly reviewing/confirming what's already waiting, not starting from scratch. Everything below is the full detail behind that loop.
 
 {bold}Global{/}
   {${fg}-fg}s{/}       Scan (mycelium scan, no CLI needed — captures new/changed sessions, no auto-filing; use \`o\` or \`mycelium organize\` to file them)
@@ -603,7 +608,7 @@ press {${fg}-fg}s{/} first. Full keymap anytime: {${fg}-fg}?{/}. This won't pop 
 its own — press {${fg}-fg}g{/} whenever you want to see it again.`;
 
 ko['help.text'] = (fg, spore) => `{bold}Context Flywheel{/}
-  일상적으로는 단순한 반복입니다: {${fg}-fg}s{/} 캡처 → {${fg}-fg}o{/} 정리 → {${fg}-fg}d{/} 하루 확인 → {${fg}-fg}n{/} 필요한 모든 게 준비된 채로 다음 세션 시작. 대부분은 이미 백그라운드에서 저절로 돌아갑니다(5분마다 캡처, 정리 제안 대기, 매일 다이제스트+지식 업데이트 준비) — 이 키들을 누르는 건 대부분 처음부터 시작시키는 게 아니라 이미 준비된 걸 검토/확인하는 것에 가깝습니다. 아래는 그 흐름 뒤의 전체 상세입니다.
+  일상적으로는 단순한 반복입니다: {${fg}-fg}s{/} 캡처 → {${fg}-fg}o{/} 정리 → {${fg}-fg}k{/} 학습 → {${fg}-fg}n{/} 필요한 모든 게 준비된 채로 다음 세션 시작. 대부분은 이미 백그라운드에서 저절로 돌아갑니다(5분마다 캡처, 정리 제안 대기, 지식 업데이트 준비) — 이 키들을 누르는 건 대부분 처음부터 시작시키는 게 아니라 이미 준비된 걸 검토/확인하는 것에 가깝습니다. 아래는 그 흐름 뒤의 전체 상세입니다.
 
 {bold}전역{/}
   {${fg}-fg}s{/}       스캔 (mycelium scan, CLI 없이 — 새/변경된 세션 캡처만, 자동 배치는 안 함; 배치는 o 또는 mycelium organize로)

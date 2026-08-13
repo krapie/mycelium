@@ -347,9 +347,10 @@ export function sessionsView(opts = {}) {
       });
 
       // ── k9s-style drill-down: Folders → Sessions → Detail, Enter=in, Esc=out ──
-      // Status bar shows the short Context Flywheel loop (s · o · d · n)
-      // instead of per-level nav hints or the full stage-by-stage
-      // breakdown — no free row anywhere on screen to show more than this,
+      // Status bar shows the short Context Flywheel loop (Capture·s →
+      // Organize·o → Learn·k → Reuse·n) instead of per-level nav hints or
+      // the full stage-by-stage breakdown — no free row anywhere on screen
+      // to show more than this,
       // and the detailed version now lives in the ? modal (help.text) where
       // someone can actually read it once instead of relearning the whole
       // model from a permanent status line on every screen. Factored out of

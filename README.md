@@ -39,10 +39,10 @@ mycelium demo   # try it risk-free first — separate store, your real data unto
 
 Sessions from Claude Code, Codex, and Kiro are captured automatically in the
 background — no manual scan needed. Day to day it's a simple loop, the
-**Context Flywheel**: `s` capture → `o` organize → `d` check in on the day →
-`n` start the next session with everything it needs. Most of that already
-runs by itself in the background; pressing these keys is mostly reviewing
-and confirming what's already waiting for you.
+**Context Flywheel**: `s` capture → `o` organize → `k` learn → `n` start the
+next session with everything it needs. Most of that already runs by itself
+in the background; pressing these keys is mostly reviewing and confirming
+what's already waiting for you.
 
 `mycelium demo` walks through that same loop against mock sessions, in your
 choice of language and persona, then hands off straight into your real

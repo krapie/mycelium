@@ -513,11 +513,17 @@ picker instead of after; folded into `n` itself as one shared choice.
 
 **Status bar shows the short Context Flywheel loop, not the full
 stage-by-stage breakdown.** `updateStatusBar()` renders `i18n.js`'s
-`lifecycle.bar` — `s · o · d · n` — plus the `?`/`q` hint; it used to spell
-out all four stages and every key belonging to each (`Capture·s →
-Organize·m/t/o → Learn·a/w → Reuse·n/h/r`), which was the only thing trying
-to teach the whole model on a permanent one-line status bar visible on every
-screen. The full breakdown moved into `help.text` (`?` modal) as a leading
+`lifecycle.bar` — `Capture·s → Organize·o → Learn·k → Reuse·n` — plus the
+`?`/`q` hint; it used to spell out all four stages and every key belonging
+to each (`Capture·s → Organize·m/t/o → Learn·a/w → Reuse·n/h/r`), which was
+the only thing trying to teach the whole model on a permanent one-line
+status bar visible on every screen. The current form keeps the same four
+canonical stage names but pairs each with just its one flywheel key —
+`k` (knowledge review) stands in for Learn here, not `a`/`w` — matching the
+day-to-day loop the tutorial's own recap teaches, not the full key
+inventory. Digest (`d`) is real and still documented in its own line below;
+it just isn't one of these four canonical stages, so it's not part of this
+loop. The full breakdown moved into `help.text` (`?` modal) as a leading
 section, framed the same way as the tutorial's own closing recap — the loop
 first, the complete key-by-key reference below it. Factored out of
 `setLevel()` so `reloadAll()` can also refresh it (a language switch via
@@ -669,7 +675,7 @@ the panel-navigation lesson (← → between Folders/Sessions/Detail) — see
 below for why those two are one step, not two — then the full lifecycle —
 Organize (`o`) → Learn (`w`) → Reuse (`c`) → Knowledge review (`k`) →
 session lineage (Shift+M merge, Shift+S split) → freeform explore, closing
-on a recap of the day-to-day loop (`s`/`o`/`d`/`n`, framed as "the Context
+on a recap of the day-to-day loop (`s`/`o`/`k`/`n`, framed as "the Context
 Flywheel," noting that most of it already runs on its own in the
 background — see the daemon cycles below — so pressing those keys is mostly
 reviewing/confirming, not starting from scratch). `render()` computes the
