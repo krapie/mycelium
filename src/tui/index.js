@@ -61,7 +61,10 @@ const FIRST_SCAN_MODAL_THRESHOLD = 20;
 // smart-organize suggestions first (something already computed, waiting on
 // a decision), otherwise the unfiled-backlog nudge for a store that hasn't
 // been organized at all yet (most likely a new user's first real session).
-function notifyPostMount(app) {
+// Exported so demo/pitch-launch.mjs can reuse this exact logic without
+// pulling in runTui()'s unconditional startTuiRoutine() call — see that
+// file's own header comment for why.
+export function notifyPostMount(app) {
   const pending = pendingSuggestions().length;
   if (pending) return app.notify(t('smart.pendingOnOpen', pending), 5);
   // Same tier as the smart-organize toast above: something the daemon's
