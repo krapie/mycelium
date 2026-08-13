@@ -60,6 +60,33 @@ test('generateDigest({period:"day"}) groups by exact day and writes DIGEST_DIR/<
   assert.match(content, /did thing A/);
 });
 
+test('generateDigest() sends an English prompt by default, Korean when locale is ko, and headers the digest file to match', async () => {
+  const { loadConfig, saveConfig } = await import('../src/config.js');
+  try {
+    seed('dig-locale-en', { startedAt: '2026-04-01T09:00:00.000Z', folder: 'work', extracted: { title: null, tags: [], summary: 'did thing A', decisions: [], todos: [] } });
+    let seenPrompt;
+    __setTestProvider(async (prompt) => {
+      seenPrompt = prompt;
+      return 'a narrative summary';
+    });
+    const enRes = await generateDigest({ period: 'day', date: '2026-04-01' });
+    assert.doesNotMatch(seenPrompt, /[가-힣]/, 'default locale (en) prompt must not contain Korean instructions');
+    assert.match(readFileSync(enRes.path, 'utf8'), /# 2026-04-01 Digest/);
+
+    saveConfig({ ...loadConfig(), locale: 'ko' });
+    seed('dig-locale-ko', { startedAt: '2026-04-02T09:00:00.000Z', folder: 'work', extracted: { title: null, tags: [], summary: 'did thing A', decisions: [], todos: [] } });
+    __setTestProvider(async (prompt) => {
+      seenPrompt = prompt;
+      return '하루 요약';
+    });
+    const koRes = await generateDigest({ period: 'day', date: '2026-04-02' });
+    assert.match(seenPrompt, /[가-힣]/, 'ko locale prompt must contain Korean instructions');
+    assert.match(readFileSync(koRes.path, 'utf8'), /# 2026-04-02 다이제스트/);
+  } finally {
+    saveConfig({ ...loadConfig(), locale: 'en' });
+  }
+});
+
 test('generateDigest() falls back to the first REAL user turn (skipping synthetic ones) when a session has no summary', async () => {
   seed('dig-synthetic', {
     startedAt: '2026-05-01T09:00:00.000Z',
@@ -134,6 +161,30 @@ test('buildKnowledgeText() excludes superseded sessions from the material sent t
   assert.equal(res.count, 1);
   assert.match(seenPrompt, /visible summary text/);
   assert.doesNotMatch(seenPrompt, /HIDDEN summary text/);
+});
+
+test('buildKnowledgeText() sends an English prompt by default, Korean when locale is ko', async () => {
+  const { loadConfig, saveConfig } = await import('../src/config.js');
+  try {
+    seed('know-locale-en', { folder: 'kf-locale', extracted: { title: null, tags: [], summary: 'visible summary text', decisions: [], todos: [] } });
+    let seenPrompt;
+    __setTestProvider(async (prompt) => {
+      seenPrompt = prompt;
+      return 'compiled knowledge';
+    });
+    await buildKnowledgeText('kf-locale');
+    assert.doesNotMatch(seenPrompt, /[가-힣]/, 'default locale (en) prompt must not contain Korean instructions');
+
+    saveConfig({ ...loadConfig(), locale: 'ko' });
+    __setTestProvider(async (prompt) => {
+      seenPrompt = prompt;
+      return '지식 요약';
+    });
+    await buildKnowledgeText('kf-locale');
+    assert.match(seenPrompt, /[가-힣]/, 'ko locale prompt must contain Korean instructions');
+  } finally {
+    saveConfig({ ...loadConfig(), locale: 'en' });
+  }
 });
 
 test('buildKnowledgeText() generates without writing; writeKnowledgeText() writes separately', async () => {

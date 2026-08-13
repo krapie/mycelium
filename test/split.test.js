@@ -8,6 +8,7 @@ const { emptyNeutral } = await import('../src/schema.js');
 const { loadRaw, saveRaw } = await import('../src/scanner.js');
 const { __setTestProvider, __clearTestProvider } = await import('../src/llm.js');
 const { applySplit, unsplit, suggestSplitBoundaries } = await import('../src/split.js');
+const { loadConfig, saveConfig } = await import('../src/config.js');
 
 function seed(id, overrides = {}) {
   const n = { ...emptyNeutral(id, 'claude'), ...overrides };
@@ -15,7 +16,14 @@ function seed(id, overrides = {}) {
   return n;
 }
 
-test.afterEach(() => __clearTestProvider());
+// contentLocale() (config.js) reads config.json fresh on every call — reset
+// after every test, not just the one that sets 'ko', so a locale change
+// can't leak into a later test the way i18n.js's own module-level locale
+// cache warns about elsewhere in this codebase.
+test.afterEach(() => {
+  __clearTestProvider();
+  saveConfig({ ...loadConfig(), locale: 'en' });
+});
 
 function turns(n) {
   return Array.from({ length: n }, (_, i) => ({ role: i % 2 === 0 ? 'user' : 'assistant', text: `turn ${i + 1}` }));
@@ -172,12 +180,29 @@ test('suggestSplitBoundaries() drops out-of-bounds and non-integer ranges from t
   assert.deepEqual(res.ranges[0], { from: 1, to: 2, label: 'valid' });
 });
 
-test('suggestSplitBoundaries() falls back to a "턴 N-M" label when the LLM omits one', async () => {
+test('suggestSplitBoundaries() falls back to a "Turn N-M" label when the LLM omits one', async () => {
+  // Default locale (config.js's contentLocale() falls back to 'en' —
+  // see split.js/contentLocale() for why prompts and this fallback label
+  // now follow config.json's locale instead of being Korean-only).
   seed('sb-nolabel', { turns: turns(4) });
   __setTestProvider(async () => JSON.stringify({ ranges: [{ from: 1, to: 4 }] }));
   const res = await suggestSplitBoundaries('sb-nolabel');
   assert.equal(res.ok, true);
+  assert.equal(res.ranges[0].label, 'Turn 1-4');
+});
+
+test('suggestSplitBoundaries() falls back to a "턴 N-M" label when locale is ko', async () => {
+  saveConfig({ ...loadConfig(), locale: 'ko' });
+  seed('sb-nolabel-ko', { turns: turns(4) });
+  let seenPrompt;
+  __setTestProvider(async (prompt) => {
+    seenPrompt = prompt;
+    return JSON.stringify({ ranges: [{ from: 1, to: 4 }] });
+  });
+  const res = await suggestSplitBoundaries('sb-nolabel-ko');
+  assert.equal(res.ok, true);
   assert.equal(res.ranges[0].label, '턴 1-4');
+  assert.match(seenPrompt, /[가-힣]/, 'the prompt sent to the LLM is Korean when locale is ko');
 });
 
 test('suggestSplitBoundaries() fails when every proposed range is invalid', async () => {

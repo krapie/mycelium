@@ -784,11 +784,14 @@ subprocess call. The returned provider still resolves after a deliberate ~5s del
 stuck waiting on it), not instantly — a 0ms response is its own regression,
 since `app.js`'s animated spinner never gets a frame to actually animate
 and the wait reads as "did that run at all?" rather than a real (much
-faster) stand-in for the production wait. This is also what keeps the
-tutorial's folder/knowledge output in English regardless of locale, since
-the real classification/knowledge prompts are
-Korean by design (see `AGENTS.md`) and would otherwise mirror that language
-back for any newly-proposed folder name.
+faster) stand-in for the production wait. The mock's own dispatch/parsing
+(`mockPlacements()`/`mockKnowledge()`/`mockSplit()`) now branches on the
+same `locale` the real prompts follow (`config.js`'s `contentLocale()`, see
+AGENTS.md) so a demo run stays internally consistent — an earlier version
+of this note described the mock as specifically working around always-
+Korean real prompts mirroring back into an English-locale demo; that's no
+longer the reason (real prompts follow locale too now), the mock is kept
+for speed/determinism alone.
 
 **Demo → real handoff.** Finishing the tutorial's final step (`completed:
 true` — `q` pressed on the actual last step, not an early exit) no longer
@@ -936,6 +939,14 @@ turned out to be exactly this timing gap).
    grep that `daemon.js` is never executed directly.
 9. **`llm.js` mixes** subprocess spawning with pure text utilities
    (`extractText`, `parseJsonReply`) that have zero dependency on it.
-10. **`config.locale` is honored only by the TUI** — every LLM prompt in
+10. ~~**`config.locale` is honored only by the TUI** — every LLM prompt in
     the core layer (`learn.js`, `insight.js`, `organize.js`, `split.js`) is
-    hardcoded Korean regardless of locale setting.
+    hardcoded Korean regardless of locale setting.~~ **FIXED** —
+    `config.js`'s new `contentLocale()` (`loadConfig().locale === 'ko' ?
+    'ko' : 'en'`, same fallback `i18n.js`'s own `getLocale()` uses) is now
+    read by all four; each hardcoded-Korean prompt/error string gained an
+    English branch alongside the original (unchanged) Korean one. A locale
+    switch now affects generated *content* (auto-tag titles/summaries,
+    classification reasons, digest narrative, KNOWLEDGE.md text, split
+    labels) the same way it already affected UI chrome, not just the screen
+    around it.

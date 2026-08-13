@@ -30,3 +30,15 @@ export function saveConfig(cfg) {
   ensureDirs();
   writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
 }
+
+// Which language LLM-generated content (auto-tag titles/summaries,
+// classification reasons, digests, KNOWLEDGE.md) should come out in —
+// learn.js/organize/classify.js/insight.js/split.js all read this instead
+// of hardcoding one language, so a locale switch (`mycelium lang ko`, the
+// TUI's own `l` key) affects generated CONTENT the same way it already
+// affects UI chrome (src/tui/i18n.js's t()), not just the screen around it.
+// Same fallback rule as i18n.js's own getLocale(): 'en' for anything that
+// isn't explicitly 'ko'.
+export function contentLocale() {
+  return loadConfig().locale === 'ko' ? 'ko' : 'en';
+}

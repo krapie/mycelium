@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { complete, parseJsonReply } from './llm.js';
 import { loadRaw, saveRaw, deleteRaw } from './scanner.js';
 import { emptyNeutral } from './schema.js';
+import { contentLocale } from './config.js';
 
 // Cap per-turn text sent to the LLM (not a head/tail slice like learn.js's
 // sessionExcerpt — split needs every turn's INDEX to stay visible so the
@@ -9,9 +10,10 @@ import { emptyNeutral } from './schema.js';
 // individually truncated).
 const MAX_TURN_CHARS = 300;
 
-function numberedTurns(turns) {
+function numberedTurns(turns, locale) {
+  const label = locale === 'ko' ? '턴' : 'Turn';
   return turns
-    .map((t, i) => `턴 ${i + 1} [${t.role}]: ${(t.text || '').replace(/\s+/g, ' ').slice(0, MAX_TURN_CHARS)}`)
+    .map((t, i) => `${label} ${i + 1} [${t.role}]: ${(t.text || '').replace(/\s+/g, ' ').slice(0, MAX_TURN_CHARS)}`)
     .join('\n');
 }
 
@@ -22,18 +24,33 @@ function numberedTurns(turns) {
  * organize.js's suggestPlacements()) before applySplit() commits any of it.
  */
 export async function suggestSplitBoundaries(sessionId) {
+  const locale = contentLocale();
   const n = loadRaw(sessionId);
   if (!n) return { ok: false, error: `no session ${sessionId}` };
-  if (n.turns.length < 4) return { ok: false, error: '분할하기엔 세션이 너무 짧습니다' };
+  if (n.turns.length < 4) {
+    return { ok: false, error: locale === 'ko' ? '분할하기엔 세션이 너무 짧습니다' : 'Session is too short to split' };
+  }
 
-  const prompt = `아래는 하나의 AI 작업 세션의 전체 대화 기록이다. 턴 번호가 매겨져 있다(1부터 시작, user/assistant 메시지 하나가 턴 하나).
+  // Korean branch is the original prompt, unchanged — see contentLocale()
+  // (config.js).
+  const prompt =
+    locale === 'ko'
+      ? `아래는 하나의 AI 작업 세션의 전체 대화 기록이다. 턴 번호가 매겨져 있다(1부터 시작, user/assistant 메시지 하나가 턴 하나).
 
 이 세션이 다루는 주제들을 파악해서, 각 주제가 시작~끝나는 턴 범위로 나눠라(주제가 하나뿐이면 구간도 하나만). 모든 턴을 빠짐없이, 겹치지 않게 순서대로 커버해야 한다. label은 12~30자 명사구로 그 구간이 무엇에 관한 것인지 나타내라.
 
-${numberedTurns(n.turns)}
+${numberedTurns(n.turns, locale)}
 
 출력 형식(JSON만, 다른 설명 없이):
-{"ranges":[{"from":1,"to":8,"label":"짧은 주제 설명"}]}`;
+{"ranges":[{"from":1,"to":8,"label":"짧은 주제 설명"}]}`
+      : `Below is the full transcript of one AI work session. Turns are numbered (starting at 1, one turn per user/assistant message).
+
+Identify the topics this session covers, and split it into turn ranges where each topic starts and ends (if there's only one topic, use a single range). Every turn must be covered, in order, with no gaps or overlaps. label is a 12-30 character noun phrase naming what that range is about.
+
+${numberedTurns(n.turns, locale)}
+
+Output format (JSON only, no other explanation):
+{"ranges":[{"from":1,"to":8,"label":"short topic label"}]}`;
 
   let reply;
   try {
@@ -42,10 +59,13 @@ ${numberedTurns(n.turns)}
     return { ok: false, error: `LLM failed: ${err.message}` };
   }
   const parsed = parseJsonReply(reply);
+  const fallbackLabel = locale === 'ko' ? '턴' : 'Turn';
   const ranges = (parsed?.ranges || [])
     .filter((r) => Number.isInteger(r.from) && Number.isInteger(r.to) && r.from >= 1 && r.to >= r.from && r.to <= n.turns.length)
-    .map((r) => ({ from: r.from, to: r.to, label: (r.label || '').trim() || `턴 ${r.from}-${r.to}` }));
-  if (!ranges.length) return { ok: false, error: '분할 지점을 찾지 못했습니다' };
+    .map((r) => ({ from: r.from, to: r.to, label: (r.label || '').trim() || `${fallbackLabel} ${r.from}-${r.to}` }));
+  if (!ranges.length) {
+    return { ok: false, error: locale === 'ko' ? '분할 지점을 찾지 못했습니다' : 'No split boundaries found' };
+  }
   return { ok: true, ranges, session: n };
 }
 
@@ -65,9 +85,10 @@ ${numberedTurns(n.turns)}
  * any piece at all.
  */
 export function applySplit(sessionId, ranges) {
+  const locale = contentLocale();
   const original = loadRaw(sessionId);
   if (!original) return { ok: false, error: `no session ${sessionId}` };
-  if (!ranges?.length) return { ok: false, error: '분할할 구간이 없습니다' };
+  if (!ranges?.length) return { ok: false, error: locale === 'ko' ? '분할할 구간이 없습니다' : 'No ranges to split' };
 
   const pieces = [];
   for (const r of ranges) {
@@ -104,7 +125,7 @@ export function applySplit(sessionId, ranges) {
     saveRaw(piece);
     pieces.push(piece);
   }
-  if (!pieces.length) return { ok: false, error: '유효한 구간이 없습니다' };
+  if (!pieces.length) return { ok: false, error: locale === 'ko' ? '유효한 구간이 없습니다' : 'No valid ranges' };
 
   original.splitInto = pieces.map((p) => p.id);
   saveRaw(original);
@@ -113,9 +134,12 @@ export function applySplit(sessionId, ranges) {
 
 /** Reverse of applySplit(): delete the pieces, clear the original's split marker. */
 export function unsplit(originalId) {
+  const locale = contentLocale();
   const original = loadRaw(originalId);
   if (!original) return { ok: false, error: `no session ${originalId}` };
-  if (!original.splitInto?.length) return { ok: false, error: '분할된 세션이 아닙니다' };
+  if (!original.splitInto?.length) {
+    return { ok: false, error: locale === 'ko' ? '분할된 세션이 아닙니다' : 'Not a split session' };
+  }
 
   const removed = [];
   for (const id of original.splitInto) {

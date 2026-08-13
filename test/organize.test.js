@@ -396,6 +396,31 @@ test('suggestPlacements() matches a known folder and stamps lastClassifiedAt reg
   assert.ok(loadRaw('sp-nomatch').lastClassifiedAt);
 });
 
+test('suggestPlacements() sends an English prompt by default, Korean when locale is ko', async () => {
+  const { loadConfig, saveConfig } = await import('../src/config.js');
+  try {
+    seed('sp-locale-en', { folder: null, organizedBy: 'auto', extracted: { title: 'x', tags: [], summary: 'about backend auth work', decisions: [], todos: [] } });
+    let seenPrompt;
+    __setTestProvider(async (prompt) => {
+      seenPrompt = prompt;
+      return JSON.stringify({ placements: [{ id: 'sp-locale-en', folder: null, reason: 'no fit' }] });
+    });
+    await suggestPlacements({ folder: null });
+    assert.doesNotMatch(seenPrompt, /[가-힣]/, 'default locale (en) prompt must not contain Korean instructions');
+
+    saveConfig({ ...loadConfig(), locale: 'ko' });
+    seed('sp-locale-ko', { folder: null, organizedBy: 'auto', extracted: { title: 'x', tags: [], summary: 'about backend auth work', decisions: [], todos: [] } });
+    __setTestProvider(async (prompt) => {
+      seenPrompt = prompt;
+      return JSON.stringify({ placements: [{ id: 'sp-locale-ko', folder: null, reason: 'no fit' }] });
+    });
+    await suggestPlacements({ folder: null });
+    assert.match(seenPrompt, /[가-힣]/, 'ko locale prompt must contain Korean instructions');
+  } finally {
+    saveConfig({ ...loadConfig(), locale: 'en' });
+  }
+});
+
 test('suggestPlacements() rejects an unsafe proposed folder path (e.g. containing "..")', async () => {
   seed('sp-unsafe', { folder: null, organizedBy: 'auto', extracted: { title: 'x', tags: [], summary: 'some summary text', decisions: [], todos: [] } });
   __setTestProvider(async () => JSON.stringify({ placements: [{ id: 'sp-unsafe', folder: '../../etc', reason: 'sneaky' }] }));

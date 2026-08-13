@@ -8,6 +8,7 @@ const { emptyNeutral } = await import('../src/schema.js');
 const { saveRaw, loadRaw, deleteRaw } = await import('../src/scanner.js');
 const { __setTestProvider, __clearTestProvider } = await import('../src/llm.js');
 const { autoTagSession, tagAll } = await import('../src/learn.js');
+const { loadConfig, saveConfig } = await import('../src/config.js');
 
 function seed(id, overrides = {}) {
   const n = { ...emptyNeutral(id, 'claude'), ...overrides };
@@ -19,7 +20,32 @@ function mockReply({ title = 'A Title', tags = ['tag-a'], summary = 'a summary',
   return JSON.stringify({ title, tags, summary, decisions, todos });
 }
 
-test.afterEach(() => __clearTestProvider());
+// contentLocale() (config.js) reads config.json fresh each call — reset
+// after every test so a locale change can't leak into a later one.
+test.afterEach(() => {
+  __clearTestProvider();
+  saveConfig({ ...loadConfig(), locale: 'en' });
+});
+
+test('autoTagSession() sends an English prompt by default, Korean when locale is ko', async () => {
+  seed('learn-locale-en', { turns: [{ role: 'user', text: 'help me fix the bug' }] });
+  let seenPrompt;
+  __setTestProvider(async (prompt) => {
+    seenPrompt = prompt;
+    return mockReply();
+  });
+  await autoTagSession('learn-locale-en');
+  assert.doesNotMatch(seenPrompt, /[가-힣]/, 'default locale (en) prompt must not contain Korean instructions');
+
+  saveConfig({ ...loadConfig(), locale: 'ko' });
+  seed('learn-locale-ko', { turns: [{ role: 'user', text: 'help me fix the bug' }] });
+  __setTestProvider(async (prompt) => {
+    seenPrompt = prompt;
+    return mockReply();
+  });
+  await autoTagSession('learn-locale-ko');
+  assert.match(seenPrompt, /[가-힣]/, 'ko locale prompt must contain Korean instructions');
+});
 
 test('autoTagSession() writes title/tags/summary/decisions/todos and stamps summarizedTurnCount', async () => {
   seed('learn-1', { turns: [{ role: 'user', text: 'help me fix the bug' }] });
