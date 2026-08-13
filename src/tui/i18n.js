@@ -537,7 +537,7 @@ const ko = {
 // from dozens of sub-keys — it's read as a single reference sheet, and
 // splitting it further would add ceremony without adding maintainability.
 en['help.text'] = (fg, spore) => `{bold}The Context Flywheel{/}
-  Day to day, it's a simple loop: {${fg}-fg}s{/} capture → {${fg}-fg}o{/} organize → {${fg}-fg}k{/} learn → {${fg}-fg}n{/} start the next session with everything it needs. Most of that already runs by itself in the background (capture every 5 min, organize suggestions queued, knowledge updates prepared) — pressing these keys is mostly reviewing/confirming what's already waiting, not starting from scratch. Everything below is the full detail behind that loop.
+Day to day, it's a simple loop: {${fg}-fg}s{/} capture → {${fg}-fg}o{/} organize → {${fg}-fg}k{/} learn → {${fg}-fg}n{/} start the next session with everything it needs. Most of that already runs by itself in the background (capture every 5 min, organize suggestions queued, knowledge updates prepared) — pressing these keys is mostly reviewing/confirming what's already waiting, not starting from scratch. Everything below is the full detail behind that loop.
 
 {bold}Global{/}
   {${fg}-fg}s{/}       Scan (mycelium scan, no CLI needed — captures new/changed sessions, no auto-filing; use \`o\` or \`mycelium organize\` to file them)
@@ -608,7 +608,7 @@ press {${fg}-fg}s{/} first. Full keymap anytime: {${fg}-fg}?{/}. This won't pop 
 its own — press {${fg}-fg}g{/} whenever you want to see it again.`;
 
 ko['help.text'] = (fg, spore) => `{bold}Context Flywheel{/}
-  일상적으로는 단순한 반복입니다: {${fg}-fg}s{/} 캡처 → {${fg}-fg}o{/} 정리 → {${fg}-fg}k{/} 학습 → {${fg}-fg}n{/} 필요한 모든 게 준비된 채로 다음 세션 시작. 대부분은 이미 백그라운드에서 저절로 돌아갑니다(5분마다 캡처, 정리 제안 대기, 지식 업데이트 준비) — 이 키들을 누르는 건 대부분 처음부터 시작시키는 게 아니라 이미 준비된 걸 검토/확인하는 것에 가깝습니다. 아래는 그 흐름 뒤의 전체 상세입니다.
+일상적으로는 단순한 반복입니다: {${fg}-fg}s{/} 캡처 → {${fg}-fg}o{/} 정리 → {${fg}-fg}k{/} 학습 → {${fg}-fg}n{/} 필요한 모든 게 준비된 채로 다음 세션 시작. 대부분은 이미 백그라운드에서 저절로 돌아갑니다(5분마다 캡처, 정리 제안 대기, 지식 업데이트 준비) — 이 키들을 누르는 건 대부분 처음부터 시작시키는 게 아니라 이미 준비된 걸 검토/확인하는 것에 가깝습니다. 아래는 그 흐름 뒤의 전체 상세입니다.
 
 {bold}전역{/}
   {${fg}-fg}s{/}       스캔 (mycelium scan, CLI 없이 — 새/변경된 세션 캡처만, 자동 배치는 안 함; 배치는 o 또는 mycelium organize로)
