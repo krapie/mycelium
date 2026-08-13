@@ -13,6 +13,15 @@ space.
 POC stage — all four lifecycle stages are verified against real local
 sessions (Claude Code + Codex + Kiro).
 
+## Demo
+
+![mycelium demo — Organize, Learn, Reuse](https://github.com/krapie/mycelium/releases/download/demo-assets/swe-highlight.gif)
+
+`mycelium demo` walks through the same loop interactively — try it with
+`npm install -g @kevinprk/mycelium && mycelium demo`, or see it as a
+Cloud Support Engineer / Solutions Architect instead of a Software
+Engineer by picking a different persona when it asks.
+
 ## Requirements
 
 - Node.js ≥ 22.13, git
