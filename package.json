@@ -10,7 +10,8 @@
     "lint": "eslint .",
     "test": "node --test",
     "test:unit": "node --test test/*.test.js",
-    "test:e2e": "node --test test/e2e/*.test.js"
+    "test:e2e": "node --test test/e2e/*.test.js",
+    "record": "vhs demo/tapes/swe-highlight.tape && vhs demo/tapes/swe-full.tape && vhs demo/tapes/cse-highlight.tape && vhs demo/tapes/cse-full.tape && vhs demo/tapes/sa-highlight.tape && vhs demo/tapes/sa-full.tape"
   },
   "files": [
     "src",
