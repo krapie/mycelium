@@ -1,6 +1,6 @@
 import { createApp } from './app.js';
 import { sessionsView } from './views/sessions.js';
-import { welcomeModal } from './widgets/viewers.js';
+import { welcomeModal, firstScanModal } from './widgets/viewers.js';
 import { menu } from './widgets/pickers.js';
 import { seedMockSessions, startTutorial, DEMO_HANDOFF_EXIT_CODE } from './tutorial.js';
 import { PERSONAS } from './personas.js';
@@ -51,6 +51,12 @@ function pickPersona(app, cb) {
   );
 }
 
+// Below this many unfiled sessions, the lightweight toast is enough —
+// above it, a real first scan can mean minutes of classification once `o`
+// is pressed, which deserves the proper modal (firstScanModal) instead. See
+// notifyPostMount() below.
+const FIRST_SCAN_MODAL_THRESHOLD = 20;
+
 // Toast(s) that make sense once the view is up and settled — pending
 // smart-organize suggestions first (something already computed, waiting on
 // a decision), otherwise the unfiled-backlog nudge for a store that hasn't
@@ -69,6 +75,19 @@ function notifyPostMount(app) {
   if (knowledgePending) return app.notify(t('knowledge.pendingOnOpen', knowledgePending), 5);
   const unfiled = data.sessions({ folder: null }).length;
   if (!data.folders().list.length && unfiled >= 3) {
+    // A real first-scan-sized backlog: promote to the one-time modal
+    // (guidance + "this takes a while, go do something else") instead of
+    // the toast — gated on config.json's firstScanModalShown so it only
+    // ever shows once, ever, even across restarts. Below the threshold
+    // (or once already shown), the original lightweight toast still
+    // covers it.
+    if (unfiled >= FIRST_SCAN_MODAL_THRESHOLD) {
+      const cfg = loadConfig();
+      if (!cfg.firstScanModalShown) {
+        saveConfig({ ...cfg, firstScanModalShown: true });
+        return firstScanModal(app, unfiled);
+      }
+    }
     app.notify(t('sessions.unfiledHint', unfiled), 8);
   }
 }

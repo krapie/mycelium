@@ -363,8 +363,37 @@ argument-parsing/routing/output-formatting layer itself is not). [untested]
   run). [untested]
 - **First-run onboarding prompt** — offers the interactive tutorial or a
   static overview; `config.onboarded` set on first answer either way. [untested]
-- **Post-mount notification** — pending-suggestion toast takes priority
-  over the unfiled-backlog hint. [untested]
+- **Post-mount notification** — pending-suggestion toast takes priority over
+  the pending-knowledge-review toast, which takes priority over the
+  unfiled-backlog hint. Below `FIRST_SCAN_MODAL_THRESHOLD` (20) unfiled
+  sessions, that last one is the original lightweight `sessions.unfiledHint`
+  toast; at/above it, `notifyPostMount()` promotes to `firstScanModal()`
+  (`widgets/viewers.js`) instead — a real first scan can mean minutes of
+  classification once `o` is pressed, so a spinner-only toast undersells it.
+  Guidance: press `o`, it takes real time for a backlog this size, feel free
+  to switch away and come back to review. Gated on `config.json`'s
+  `firstScanModalShown` so it only ever shows once, ever, even across
+  restarts (unlike the toast it replaces, which just re-fires the small-
+  backlog nudge on every mount until folders exist). [partial]
+  (`test/e2e/onboarding-e2e.test.js` covers `firstScanModal()` itself —
+  content, Enter/Escape dismiss, `onDismiss` firing; `notifyPostMount()`'s
+  own threshold/gating branch that decides when to show it is untested,
+  verify manually)
+- **Real progress bar for the two smart-organize phases.**
+  `app.startProgressBar(label)` — sibling to `startSpinner()`, same
+  `{update(current, total), stop()}` shape, backed by a real
+  `blessed.progressbar` (`.setProgress(percent)`) instead of an animated-but-
+  fake spinner frame. `sessions.js`'s `runSmartOrganize()` swaps its two
+  `startSpinner` calls (summarize phase, placement phase) to this — both
+  already track a true total up front (pending-summary count; placement
+  chunk count from `suggestPlacements`'s `onProgress(batch, total)`), which
+  is exactly what a filling bar needs and a spinner can't show. Other
+  `startSpinner` callers (`w`, `k`, merge/split summarize) are untouched —
+  they don't have a meaningful total. [partial] (`test/e2e/
+  onboarding-e2e.test.js` covers `app.startProgressBar()` itself — real
+  `.filled` percentage, label text, stop() hiding it; the `runSmartOrganize()`
+  call sites are exercised indirectly by demo-e2e.test.js's `o` steps, which
+  only assert the resulting review modal opens, not the bar's fill)
 
 ## TUI — Detail rendering (`src/tui/render.js`)
 
@@ -481,6 +510,25 @@ would silently degrade whatever gets pasted. A previous version bound the
 copy path to a separate `Shift+N` key, decided *before* the agent/directory
 picker instead of after; folded into `n` itself as one shared choice.
 [untested]
+
+**Status bar shows the short Context Flywheel loop, not the full
+stage-by-stage breakdown.** `updateStatusBar()` renders `i18n.js`'s
+`lifecycle.bar` — `Capture·s → Organize·o → Learn·k → Reuse·n` — plus the
+`?`/`q` hint; it used to spell out all four stages and every key belonging
+to each (`Capture·s → Organize·m/t/o → Learn·a/w → Reuse·n/h/r`), which was
+the only thing trying to teach the whole model on a permanent one-line
+status bar visible on every screen. The current form keeps the same four
+canonical stage names but pairs each with just its one flywheel key —
+`k` (knowledge review) stands in for Learn here, not `a`/`w` — matching the
+day-to-day loop the tutorial's own recap teaches, not the full key
+inventory. Digest (`d`) is real and still documented in its own line below;
+it just isn't one of these four canonical stages, so it's not part of this
+loop. The full breakdown moved into `help.text` (`?` modal) as a leading
+section, framed the same way as the tutorial's own closing recap — the loop
+first, the complete key-by-key reference below it. Factored out of
+`setLevel()` so `reloadAll()` can also refresh it (a language switch via
+`l`/the first-run picker otherwise left it in whichever language was active
+at mount time). [untested]
 
 **`asyncReviewFlowRunning` guards `o`/`w`/Shift+S against a double-press
 while the LLM call is still in flight.** All three are async: show a
@@ -621,10 +669,34 @@ persona — see above); a narrator overlay runs its OWN
 sessions.js's real handlers, inferring "did a real action's modal open/close"
 by polling `app.screen.children.length` against a captured baseline — a
 generic heuristic that works because every picker/viewer in the codebase
-parents itself to `app.screen`. 16-step script covering panel navigation
-(← → between Folders/Sessions/Detail) then the full lifecycle — Organize
-(`o`) → Learn (`w`) → Reuse (`c`) → Knowledge review (`k`) → session
-lineage (Shift+M merge, Shift+S split) → freeform explore — mixing
+parents itself to `app.screen`. 16-step script: an opening step stating
+what Mycelium actually is (Capture → Organize → Learn → Reuse), merged with
+the panel-navigation lesson (← → between Folders/Sessions/Detail) — see
+below for why those two are one step, not two — then the full lifecycle —
+Organize (`o`) → Learn (`w`) → Reuse (`c`) → Knowledge review (`k`) →
+session lineage (Shift+M merge, Shift+S split) → freeform explore, closing
+on a recap of the day-to-day loop (`s`/`o`/`k`/`n`, framed as "the Context
+Flywheel," noting that most of it already runs on its own in the
+background — see the daemon cycles below — so pressing those keys is mostly
+reviewing/confirming, not starting from scratch). `render()` computes the
+visible `Step N/Total` label from `STEPS.length`/the current index rather
+than baking a number into each title string (`i18n.js`'s `tutorial.
+stepCounter`) — inserting/removing a step is a pure array edit, no
+coordinated renumbering across every subsequent title key (the fixed
+`tutorial.stepNTitle`/`stepNBody` key *names* referenced throughout this
+section are unaffected by the step's on-screen position either way — they
+identify a step's content, not its ordinal). The opening step's `waitFor` is
+`'enter'` — on that exact screen (nothing navigated yet, focus still on the
+initial Folders panel), Enter is ALSO `sessions.js`'s own real
+`foldersBox.key('enter', drillIntoSessions)`, so pressing it doesn't just
+advance the narrator, it performs the literal "step into Sessions" action
+the lesson describes — one keypress doing both, which is why the nav lesson
+is folded into this step rather than kept separate. An earlier version used
+`'escape'` instead specifically to dodge that real side effect (keeping the
+nav lesson as its own follow-up step) — reverted: `Esc` as a "press to
+continue" key read as inconsistent with every other step's Enter, and nudged
+by a maintainer report that it felt less seamless than just letting Enter do
+what it already does elsewhere in the app. Mixing
 `waitFor`+`thenWait` (poll for a real modal), plain `waitFor` (a literal
 key), a `shift: true` flag (blessed's
 raw keypress reports Shift+M as `key.name: 'm'` + `key.shift: true`, not the
@@ -660,9 +732,11 @@ always corresponds to that specific real handler having actually run.
 constantly for reasons that have nothing to do with the tutorial script
 (confirming an unrelated dialog, plain panel/detail navigation), and an
 earlier version of this feature that didn't exclude them was a real
-regression: `enter` alone is step 3/6/12/13's `waitFor`, and step 3/6/12
-are all `thenWait: 'close'` — since `isModalOpen()` is already `false`
-whenever nothing happens to be open, a false-positive match on one of
+regression: `enter` alone is the opening step's/step3's/step6's/step10's/
+step14's `waitFor` (plus step15's, a plain freeform advance with no
+`thenWait`), and step3/6/10/14 are all `thenWait: 'close'` — since
+`isModalOpen()` is already `false` whenever nothing happens to be open, a
+false-positive match on one of
 those resolved its "wait for close" **instantly**, landing on the step
 after that with zero corresponding real action; one stray Enter could
 silently jump the narrator several steps ahead. [tested]

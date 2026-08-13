@@ -38,13 +38,27 @@ import { writePendingKnowledgeText } from '../insight.js';
 // waits again for it to close once the matching confirm step's key fires.
 // See isModalOpen() below.
 const STEPS = [
-  // Panel focus: → walks Folders → Sessions → Detail, ← walks back — the
-  // very first thing worth knowing before any of the lifecycle steps below,
-  // since several of them (browsing into a folder, opening a session) rely
-  // on it. No thenWait — this is plain focus movement within the persistent
-  // 3-column layout, not a real handler that opens a new modal, so there's
-  // nothing for isModalOpen() to poll for.
-  { titleKey: 'tutorial.step1Title', bodyKey: 'tutorial.step1Body', waitFor: 'right' },
+  // What Mycelium actually is, before any mechanics — mirrors README.md's
+  // own opening line so the two stay consistent — merged with the
+  // panel-navigation lesson (→ walks Folders → Sessions → Detail, ← walks
+  // back) that used to be its own separate step. render() computes the
+  // visible "Step N/Total" from this array's own length/index (see
+  // render()), so inserting/removing a step here never means renumbering
+  // anything else.
+  //
+  // waitFor is 'enter': on this exact screen (nothing navigated yet, focus
+  // still on the initial Folders panel), Enter is ALSO sessions.js's own
+  // real foldersBox.key('enter', drillIntoSessions) — so pressing it here
+  // doesn't just advance the narrator, it performs the exact "step into
+  // Sessions" action this step describes, one keypress doing both. An
+  // earlier version used 'escape' instead, specifically to dodge that real
+  // side effect, and kept the nav lesson as its own separate step 2 — but
+  // 'Esc' as a "press to continue" key reads as inconsistent with every
+  // other step's Enter, and the side effect was never actually wrong here,
+  // just untaught; folding the lesson INTO this step (rather than avoiding
+  // the side effect) fixes both at once. Always index 0, so forward-only
+  // skip-ahead scanning from any later step can never re-match it either.
+  { titleKey: 'tutorial.introTitle', bodyKey: 'tutorial.introBody', waitFor: 'enter' },
   { titleKey: 'tutorial.step2Title', bodyKey: 'tutorial.step2Body', waitFor: 'o', thenWait: 'open', waitingKey: 'tutorial.waitingOrganize' },
   { titleKey: 'tutorial.step3Title', bodyKey: 'tutorial.step3Body', waitFor: 'enter', thenWait: 'close', waitingKey: 'tutorial.waitingApply' },
   // waitFor is 'left' here, not 'down' — applying placements (previous
@@ -175,7 +189,14 @@ export function startTutorial(app, onDone, personaId = 'swe') {
     bottom: 1,
     left: 0,
     right: 0,
-    height: 4,
+    // 'shrink', not a fixed height: most step bodies are 1-2 lines and a
+    // fixed height sized for those truncated the final step's much longer
+    // Context Flywheel recap paragraph (no border/scroll indication either
+    // — it just silently cut off mid-sentence). Anchored at `bottom` with no
+    // `top`, so a taller step grows the box upward instead of pushing
+    // anything below it. render()'s setContent() below recalculates this on
+    // every step change, so short steps stay compact again right after.
+    height: 'shrink',
     tags: true,
     padding: { left: 1, right: 1 },
     border: { type: 'line' },
@@ -207,10 +228,16 @@ export function startTutorial(app, onDone, personaId = 'swe') {
 
   const render = () => {
     const step = STEPS[i];
+    // "Step N/Total" is computed here, from this array's own length/index,
+    // rather than baked into each titleKey's own string — every prior
+    // change to STEPS' length used to mean hand-editing "Step N/16" into
+    // every single title across both locales (and renaming stepNTitle keys
+    // for everything after the insertion point). i18n titleKey strings now
+    // hold only the subtitle (' — Organize', or '' for steps without one).
     // t() calls bodyKey's entry with (fg) if it's a function (all step
     // bodies are, to color-highlight the key they're waiting for) and
     // just returns it as-is if it's a plain string — safe either way.
-    box.setLabel(` ${t(step.titleKey)} `);
+    box.setLabel(` ${t('tutorial.stepCounter', i + 1, STEPS.length)}${t(step.titleKey)} `);
     // Extra args (sessionCount, mergeFolder) are passed uniformly to every
     // step body — most step bodies are plain (fg) => ... functions that
     // simply ignore the trailing args; only step2/4/5/11 (see i18n.js)

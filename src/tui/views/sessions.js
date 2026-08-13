@@ -347,19 +347,22 @@ export function sessionsView(opts = {}) {
       });
 
       // ── k9s-style drill-down: Folders → Sessions → Detail, Enter=in, Esc=out ──
-      // Status bar shows the lifecycle bar (which keys belong to which stage)
-      // instead of per-level nav hints — no free row anywhere on screen to
-      // show both, and this is the more useful thing to have visible at all
-      // times. Full keymap (incl. Enter/Esc nav) still lives in the ? modal.
-      // Factored out of setLevel() so reloadAll() can also refresh it — the
-      // status bar is otherwise only re-set on a level change, so it stayed
-      // in whatever language was active at mount time even after a later
-      // setLocale() call (e.g. index.js's language picker, which mounts the
-      // view BEFORE the human has actually picked a language, deliberately,
-      // so the persona picker shown right after has real chrome behind it —
+      // Status bar shows the short Context Flywheel loop (Capture·s →
+      // Organize·o → Learn·k → Reuse·n) instead of per-level nav hints or
+      // the full stage-by-stage breakdown — no free row anywhere on screen
+      // to show more than this,
+      // and the detailed version now lives in the ? modal (help.text) where
+      // someone can actually read it once instead of relearning the whole
+      // model from a permanent status line on every screen. Factored out of
+      // setLevel() so reloadAll() can also refresh it — the status bar is
+      // otherwise only re-set on a level change, so it stayed in whatever
+      // language was active at mount time even after a later setLocale()
+      // call (e.g. index.js's language picker, which mounts the view
+      // BEFORE the human has actually picked a language, deliberately, so
+      // the persona picker shown right after has real chrome behind it —
       // see index.js's pickLanguage()).
       const updateStatusBar = () => {
-        app.setStatus(' ' + t('lifecycle.bar', C.text, C.faint, C.border) + '  ' + t('status.helpFallback'));
+        app.setStatus(' ' + t('lifecycle.bar', C.text) + '    ' + t('status.helpFallback'));
       };
       // Same staleness problem as updateStatusBar() above, same fix shape —
       // these three border labels are blessed widget CONSTRUCTION options
@@ -859,20 +862,26 @@ export function sessionsView(opts = {}) {
           const pending = classificationCandidates({ cooldownMs: 0, folder: state.folder }).filter(
             (n) => !n.extracted.summary,
           ).length;
-          const summarizeSpin = pending ? app.startSpinner(t('sessions.summarizing', 0, pending)) : null;
+          // Real progress bars, not the animated-but-fake spinner — both
+          // phases already know a true total up front (pending count,
+          // chunk count), which is exactly what startProgressBar() is for
+          // (see app.js). A large first scan can mean minutes of real work
+          // here, so a filling bar sets honest expectations instead of
+          // looking hung.
+          const summarizeSpin = pending ? app.startProgressBar(t('sessions.summarizingLabel')) : null;
           const summarized = [];
           let summarizedDone = 0;
           await summarizeCandidates({
             folder: state.folder,
             onProgress: (s) => {
               if (s) summarized.push(s.id);
-              summarizeSpin?.update(t('sessions.summarizing', ++summarizedDone, pending));
+              summarizeSpin?.update(++summarizedDone, pending);
             },
           });
           summarizeSpin?.stop();
           // Only the just-summarized sessions actually changed.
           if (summarized.length) data.refreshMany(summarized);
-          const placeSpin = app.startSpinner(t('smart.running'));
+          const placeSpin = app.startProgressBar(t('smart.running'));
           const res = await suggestPlacements({
             cooldownMs: 0,
             folder: state.folder,
@@ -880,7 +889,7 @@ export function sessionsView(opts = {}) {
             // large backlog could otherwise mean hundreds of LLM calls in
             // one `o` press.
             limit: 200,
-            onProgress: (batch, total) => total > 1 && placeSpin.update(`${t('smart.running')} (${batch}/${total})`),
+            onProgress: (batch, total) => placeSpin.update(batch, total),
           });
           placeSpin.stop();
           if (!res.ok) return app.notify(res.error, 4);

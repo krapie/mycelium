@@ -193,6 +193,46 @@ export function welcomeModal(app, onDismiss) {
   return box;
 }
 
+/**
+ * One-time, real-usage-only overlay (not the demo/tutorial) for a large
+ * first-scan backlog — index.js's notifyPostMount() opens this instead of
+ * the lightweight sessions.unfiledHint toast once the unfiled count clears
+ * a threshold, since a spinner-only "press o" undersells how long
+ * classifying hundreds of sessions actually takes. Gated on config.json's
+ * firstScanModalShown (set by the caller, not here — same split as
+ * welcomeModal()/onDismiss above) so it only ever shows once, ever, even
+ * across restarts.
+ */
+export function firstScanModal(app, count, onDismiss) {
+  const box = blessed.box({
+    parent: app.screen,
+    top: 'center',
+    left: 'center',
+    width: '70%',
+    height: 'shrink',
+    label: t('sessions.firstScanModalLabel'),
+    content: t('sessions.firstScanBody', count, C.fox),
+    tags: true,
+    scrollable: true,
+    alwaysScroll: true,
+    keys: true,
+    mouse: true,
+    padding: { left: 1, right: 1 },
+    scrollbar: { ch: ' ', style: { bg: C.border } },
+    border: { type: 'line' },
+    style: { border: { fg: C.fox }, fg: C.text },
+  });
+  box.focus();
+  app.render();
+  const close = () => {
+    box.destroy();
+    app.render();
+    if (onDismiss) onDismiss();
+  };
+  box.key(['escape', 'enter', 'q'], close);
+  return box;
+}
+
 /** Full keymap reference — bound to `?` from anywhere. */
 export function helpModal(app) {
   const box = blessed.box({

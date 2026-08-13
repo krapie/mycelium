@@ -33,23 +33,21 @@ cd mycelium && npm install && npm link
 ## Getting Started
 
 ```sh
-mycelium scan   # import Claude/Codex/Kiro sessions from this machine
-mycelium        # launch the TUI — first run offers a quick interactive tutorial
+mycelium        # launch the TUI — first run offers a guided tour
+mycelium demo   # try it risk-free first — separate store, your real data untouched
 ```
 
-Capture never auto-assigns a folder — press `o` (smart organize) in the TUI,
-or run `mycelium organize`, to sort new sessions by content.
+Sessions from Claude Code, Codex, and Kiro are captured automatically in the
+background — no manual scan needed. Day to day it's a simple loop, the
+**Context Flywheel**: `s` capture → `o` organize → `k` learn → `n` start the
+next session with everything it needs. Most of that already runs by itself
+in the background; pressing these keys is mostly reviewing and confirming
+what's already waiting for you.
 
-Re-run the tutorial (or use it as a demo) any time with `mycelium demo` — a
-separate `~/.mycelium-demo` store, your real data is never touched. You'll
-be asked to pick a language (English or 한국어) and then a persona (software
-engineer, cloud support engineer, or solutions architect) so the walkthrough
-uses mock sessions that match your own kind of work, fully in the language
-you picked. Finish the whole walkthrough and it hands off straight into your
-real sessions, continuing in whichever language you picked for the demo
-(only on finishing — an early `Esc` bail just exits without touching your
-real settings, so previewing the demo in a different language never
-silently changes them).
+`mycelium demo` walks through that same loop against mock sessions, in your
+choice of language and persona, then hands off straight into your real
+sessions once you finish it — an early `Esc` bail just exits, your actual
+`~/.mycelium` store untouched either way.
 
 Display language defaults to English — switch any time with
 `mycelium lang <en|ko>`, the in-TUI `l` key, or the language picker shown on
