@@ -170,10 +170,7 @@ const en = {
   'tutorial.stepCounter': (n, total) => `Step ${n}/${total}`,
   'tutorial.introTitle': '',
   'tutorial.introBody': (fg) =>
-    `{bold}Welcome to Mycelium{/} — a Context Lifecycle platform for AI collaboration: {${fg}-fg}Capture → Organize → Learn → Reuse{/}. Every session from Claude Code, Codex, or Kiro gets captured automatically; this tour shows you the loop that keeps them useful instead of lost. Press {${fg}-fg}Esc{/} to start.`,
-  'tutorial.step1Title': ' — Navigate',
-  'tutorial.step1Body': (fg) =>
-    `{${fg}-fg}→{/} moves focus right — Folders → Sessions → Detail — and {${fg}-fg}←{/} moves back. Press {${fg}-fg}→{/} now to continue.`,
+    `{bold}Welcome to Mycelium{/} — a Context Lifecycle platform for AI collaboration: {${fg}-fg}Capture → Organize → Learn → Reuse{/}. Every session from Claude Code, Codex, or Kiro gets captured automatically; this tour shows you the loop that keeps them useful instead of lost. Three panels — Folders → Sessions → Detail — walked with {${fg}-fg}→{/}/{${fg}-fg}←{/}. Press {${fg}-fg}Enter{/} now to step into your first folder and begin.`,
   'tutorial.step2Title': ' — Organize',
   'tutorial.step2Body': (fg, count) => `${count} fresh, unfiled sessions are sitting below. Press {${fg}-fg}o{/} to have Mycelium read them and suggest folders.`,
   'tutorial.step3Title': '',
@@ -419,10 +416,7 @@ const ko = {
   'tutorial.stepCounter': (n, total) => `${n}/${total}단계`,
   'tutorial.introTitle': '',
   'tutorial.introBody': (fg) =>
-    `{bold}Mycelium에 오신 걸 환영합니다{/} — AI 협업을 위한 Context Lifecycle 플랫폼입니다: {${fg}-fg}Capture → Organize → Learn → Reuse{/}. Claude Code, Codex, Kiro의 모든 세션이 자동으로 캡처됩니다 — 이 투어는 그 세션들을 잃어버리지 않고 계속 쓸모 있게 만드는 흐름을 보여줍니다. {${fg}-fg}Esc{/}를 눌러 시작하세요.`,
-  'tutorial.step1Title': ' — 이동',
-  'tutorial.step1Body': (fg) =>
-    `{${fg}-fg}→{/}로 포커스를 오른쪽으로 이동합니다 — 폴더 → 세션 → 상세 — {${fg}-fg}←{/}로 되돌아갑니다. 지금 {${fg}-fg}→{/}를 눌러 계속하세요.`,
+    `{bold}Mycelium에 오신 걸 환영합니다{/} — AI 협업을 위한 Context Lifecycle 플랫폼입니다: {${fg}-fg}Capture → Organize → Learn → Reuse{/}. Claude Code, Codex, Kiro의 모든 세션이 자동으로 캡처됩니다 — 이 투어는 그 세션들을 잃어버리지 않고 계속 쓸모 있게 만드는 흐름을 보여줍니다. 세 개의 패널 — 폴더 → 세션 → 상세 — 은 {${fg}-fg}→{/}/{${fg}-fg}←{/}로 이동합니다. 지금 {${fg}-fg}Enter{/}를 눌러 첫 폴더로 들어가 시작하세요.`,
   'tutorial.step2Title': ' — 조직화',
   'tutorial.step2Body': (fg, count) => `아직 정리 안 된 세션 ${count}개가 아래에 있습니다. {${fg}-fg}o{/}를 눌러 Mycelium이 내용을 읽고 폴더를 제안하게 해보세요.`,
   'tutorial.step3Title': '',

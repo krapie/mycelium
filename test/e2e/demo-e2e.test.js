@@ -48,16 +48,16 @@ function findByKeyword(sessions, re) {
 }
 
 // Reads the narrator overlay's own step number straight off its blessed
-// label content (tutorial.js's `box.setLabel(...)`, e.g. " Step 3/17 ") —
+// label content (tutorial.js's `box.setLabel(...)`, e.g. " Step 3/16 ") —
 // not rendered pixel/ANSI output, just the plain string setLabel()/
 // setContent() already stored on the element (element.js's `_label.content`
 // / `.content`). Needed only for the skip-ahead regression test below,
 // where the thing actually under test IS which step the narrator thinks
 // it's on, not just whether some real handler ran.
 function narratorStepIndex(app) {
-  const box = app.screen.children.find((c) => c._label && /Step \d+\/17/.test(c._label.content || ''));
+  const box = app.screen.children.find((c) => c._label && /Step \d+\/16/.test(c._label.content || ''));
   if (!box) return null;
-  const m = /Step (\d+)\/17/.exec(box._label.content);
+  const m = /Step (\d+)\/16/.exec(box._label.content);
   return m ? Number(m[1]) : null;
 }
 
@@ -384,7 +384,7 @@ test('demo: q exits the tutorial immediately from any step, no confirm dialog', 
     startTutorial(app, (completed) => {
       doneArg = completed;
     });
-    // Step 1 (panel navigation) — q here is an early exit, not a completed run.
+    // The opening step — q here is an early exit, not a completed run.
     sendKey(input, 'q');
     await waitFor(() => doneArg !== undefined, { timeoutMs: 1000 });
     assert.equal(doneArg, false, 'q on an early step is not a "completed" run — no demo→real handoff');
@@ -430,9 +430,7 @@ test('demo: finishing the tutorial on the actual last step reports completed:tru
 
     // Full key sequence, mirroring the walkthrough test above, all the way
     // through the tutorial's own final step.
-    sendKey(input, 'escape'); // the intro step's own real advance — Esc, not Enter (see tutorial.js)
-    await settle();
-    sendKey(input, 'right');
+    sendKey(input, 'enter'); // the opening step's own real advance — also the real drillIntoSessions() (see tutorial.js)
     await settle();
     let baseline = app.screen.children.length;
     sendKey(input, 'o');
@@ -519,7 +517,7 @@ test('demo: pressing a later step\'s key early (skipping step 1) still lets the 
     });
     const settle = () => new Promise((r) => setTimeout(r, 320));
 
-    // No `right` here — step 1's own key is skipped entirely.
+    // No `enter` here — step 1's own key is skipped entirely.
     let baseline = app.screen.children.length;
     sendKey(input, 'o');
     await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 3000 });
@@ -585,17 +583,23 @@ test('demo: pressing a later step\'s key early (skipping step 1) still lets the 
 
 test('demo: a stray Enter on step 1 does not falsely cascade the narrator forward', async () => {
   // Regression test for a bug the skip-ahead fix above (allowing `o` to
-  // reach step 2/3 early) itself introduced: 'enter' is step 3/6/12/13's
-  // waitFor too, so scanning forward for ANY future step sharing the
-  // pressed key's name let a completely unrelated Enter (e.g. drilling
-  // into a row, dismissing something) falsely match one of those later
-  // steps. Worse, step 3/6/12 are all thenWait:'close', and isModalOpen()
-  // is already false whenever nothing happens to be open — so that
-  // false-positive match resolved its "wait for close" instantly (no real
-  // modal ever had to close), landing on the step after that with zero
-  // corresponding real action. `enter`/`left`/`right` are now excluded
-  // from the forward scan entirely (see tutorial.js's AMBIGUOUS_KEYS) —
-  // only an exact match on the CURRENT step counts for those.
+  // reach later steps early) itself introduced: 'enter' is several other
+  // steps' waitFor too (the opening step itself, plus step3/6/10/14 — all
+  // thenWait:'close', see tutorial.js), so scanning forward for ANY future
+  // step sharing the pressed key's name let a completely unrelated Enter
+  // (e.g. drilling into a row, dismissing something) falsely match one of
+  // those later steps. Worse, isModalOpen() is already false whenever
+  // nothing happens to be open — so that false-positive match resolved a
+  // thenWait:'close' wait instantly (no real modal ever had to close),
+  // landing on the step after that with zero corresponding real action:
+  // a stray Enter pressed while on the Organize lesson (step index1,
+  // waitFor:'o') used to forward-match step3 (index2, waitFor:'enter',
+  // thenWait:'close') and, since nothing was open yet, resolve THAT
+  // instantly too — jumping the narrator straight to step4 (index3) with
+  // neither Organize nor Apply ever having actually happened.
+  // `enter`/`left`/`right` are now excluded from the forward scan entirely
+  // (see tutorial.js's AMBIGUOUS_KEYS) — only an exact match on the
+  // CURRENT step counts for those.
   const { app, input } = await mountDemo();
   try {
     let doneArg;
@@ -603,25 +607,29 @@ test('demo: a stray Enter on step 1 does not falsely cascade the narrator forwar
       doneArg = completed;
     });
     await new Promise((r) => setTimeout(r, 50));
-    assert.equal(narratorStepIndex(app), 1, 'starts on the intro step');
+    assert.equal(narratorStepIndex(app), 1, 'starts on the opening step');
 
-    // Its own real waitFor (Esc, not Enter — see tutorial.js) — advances
-    // legitimately onto the panel-nav lesson (a plain no-thenWait step, so
-    // this settles synchronously).
-    sendKey(input, 'escape');
+    // The opening step's own waitFor is Enter — which, on this exact
+    // screen, is ALSO sessions.js's real drillIntoSessions() (see
+    // tutorial.js), so one press both advances the narrator for real and
+    // performs the "step into Sessions" action it describes (a plain
+    // no-thenWait step, so this settles synchronously) — landing on the
+    // Organize lesson.
+    sendKey(input, 'enter');
     await new Promise((r) => setTimeout(r, 50));
-    assert.equal(narratorStepIndex(app), 2, 'the intro step\'s own Esc is a real advance, onto the panel-nav lesson');
+    assert.equal(narratorStepIndex(app), 2, 'the opening step\'s own Enter is a real advance, onto the Organize lesson');
 
     sendKey(input, 'enter');
     await new Promise((r) => setTimeout(r, 400));
-    assert.equal(narratorStepIndex(app), 2, 'a stray Enter on the panel-nav lesson (waitFor: right) must not advance it');
+    assert.equal(narratorStepIndex(app), 2, 'a stray Enter on the Organize lesson (waitFor: o) must not advance it');
 
-    // The actual skip-ahead fix (a distinctive key like `o`) must still work.
+    // The step's own real key still resolves it normally once the real
+    // suggestPlacements() call's review modal actually opens.
     const baseline = app.screen.children.length;
     sendKey(input, 'o');
     await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 3000 });
     await new Promise((r) => setTimeout(r, 320));
-    assert.equal(narratorStepIndex(app), 4, 'o still correctly skips ahead once the real organize modal opens');
+    assert.equal(narratorStepIndex(app), 3, 'o resolves the Organize step once the real modal opens');
     assert.equal(doneArg, undefined, 'tutorial is still running');
   } finally {
     cleanup(app);

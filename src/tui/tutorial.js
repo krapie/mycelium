@@ -39,34 +39,26 @@ import { writePendingKnowledgeText } from '../insight.js';
 // See isModalOpen() below.
 const STEPS = [
   // What Mycelium actually is, before any mechanics — mirrors README.md's
-  // own opening line so the two stay consistent. Deliberately just
-  // `tutorial.introTitle`/`introBody`, not renumbered into the stepN
-  // sequence below: render() computes the visible "Step N/Total" from this
-  // array's length/index now (see render()), so inserting a step here
-  // never requires renaming every key after it — only this file's own
-  // array order matters.
+  // own opening line so the two stay consistent — merged with the
+  // panel-navigation lesson (→ walks Folders → Sessions → Detail, ← walks
+  // back) that used to be its own separate step. render() computes the
+  // visible "Step N/Total" from this array's own length/index (see
+  // render()), so inserting/removing a step here never means renumbering
+  // anything else.
   //
-  // waitFor is 'escape', NOT 'enter' — this is the one step where that
-  // matters: at this exact moment (nothing navigated yet, focus still on
-  // the initial Folders panel), Enter/Right both trigger sessions.js's own
-  // real drillIntoSessions() (foldersBox.key('enter'/'right', ...)),
-  // silently drilling into whatever's highlighted and moving focus to the
-  // Sessions list — completely derailing step 2's own "→ moves focus"
-  // lesson (which now finds focus already moved) and everything
-  // choreographed after it. Escape has no binding at all on the initial
-  // Folders panel (only detailBox binds it, see sessions.js) — genuinely
-  // inert, and since this step is always index 0, forward-only skip-ahead
-  // scanning from any later step can never re-match it by accident either.
-  // Found by watching the "full lifecycle" e2e test derail at the `w` step
-  // several actions later, not by reasoning about this step in isolation.
-  { titleKey: 'tutorial.introTitle', bodyKey: 'tutorial.introBody', waitFor: 'escape' },
-  // Panel focus: → walks Folders → Sessions → Detail, ← walks back — the
-  // very first thing worth knowing before any of the lifecycle steps below,
-  // since several of them (browsing into a folder, opening a session) rely
-  // on it. No thenWait — this is plain focus movement within the persistent
-  // 3-column layout, not a real handler that opens a new modal, so there's
-  // nothing for isModalOpen() to poll for.
-  { titleKey: 'tutorial.step1Title', bodyKey: 'tutorial.step1Body', waitFor: 'right' },
+  // waitFor is 'enter': on this exact screen (nothing navigated yet, focus
+  // still on the initial Folders panel), Enter is ALSO sessions.js's own
+  // real foldersBox.key('enter', drillIntoSessions) — so pressing it here
+  // doesn't just advance the narrator, it performs the exact "step into
+  // Sessions" action this step describes, one keypress doing both. An
+  // earlier version used 'escape' instead, specifically to dodge that real
+  // side effect, and kept the nav lesson as its own separate step 2 — but
+  // 'Esc' as a "press to continue" key reads as inconsistent with every
+  // other step's Enter, and the side effect was never actually wrong here,
+  // just untaught; folding the lesson INTO this step (rather than avoiding
+  // the side effect) fixes both at once. Always index 0, so forward-only
+  // skip-ahead scanning from any later step can never re-match it either.
+  { titleKey: 'tutorial.introTitle', bodyKey: 'tutorial.introBody', waitFor: 'enter' },
   { titleKey: 'tutorial.step2Title', bodyKey: 'tutorial.step2Body', waitFor: 'o', thenWait: 'open', waitingKey: 'tutorial.waitingOrganize' },
   { titleKey: 'tutorial.step3Title', bodyKey: 'tutorial.step3Body', waitFor: 'enter', thenWait: 'close', waitingKey: 'tutorial.waitingApply' },
   // waitFor is 'left' here, not 'down' — applying placements (previous

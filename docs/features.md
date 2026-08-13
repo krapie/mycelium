@@ -581,7 +581,7 @@ source instead of maintaining separate, independently-hardcoded copies of
 the same folder names/keywords (a real bug class earlier in this feature's
 history — folder-name mismatches between the two files broke merge/split).
 `seedMockSessions(personaId)`/`startTutorial(app, onDone, personaId)` thread
-the choice through; `i18n.js`'s step3/5/6/14 body strings take extra
+the choice through; `i18n.js`'s step2/4/5/13 body strings take extra
 interpolation args (session count, merge-target folder) via `t()`'s existing
 `(fg, ...args)` support, rather than each persona needing its own copy of
 those strings. `personaId` defaults to `'swe'` wherever omitted (existing
@@ -595,7 +595,7 @@ the CSE persona's real 3-way merge → split through the fake-terminal harness)
 own canned `knowledge[locale]` text — the same content `w`'s mock preview
 would show for that folder) for the merge-target folder, as if the
 daemon's independent `knowledgeReviewCycle` had already computed it
-overnight. This lets step 10 (`k`) hit the same "reuse whatever's queued"
+overnight. This lets step 9 (`k`) hit the same "reuse whatever's queued"
 fast path a real user gets when the daemon beat them to it, and sidesteps
 a genuine problem: every persona's mock session dates are backdated
 (`daysAgo: 1`–`10`, see `personas.js`) for calendar-tab realism, so `k`'s
@@ -663,26 +663,34 @@ persona — see above); a narrator overlay runs its OWN
 sessions.js's real handlers, inferring "did a real action's modal open/close"
 by polling `app.screen.children.length` against a captured baseline — a
 generic heuristic that works because every picker/viewer in the codebase
-parents itself to `app.screen`. 17-step script: an opening step (`waitFor:
-'escape'`, deliberately not `'enter'` — see below) stating what Mycelium
-actually is (Capture → Organize → Learn → Reuse) before any mechanics, then
-panel navigation (← → between Folders/Sessions/Detail), then the full
-lifecycle — Organize (`o`) → Learn (`w`) → Reuse (`c`) → Knowledge review
-(`k`) → session lineage (Shift+M merge, Shift+S split) → freeform explore,
-closing on a recap of the day-to-day loop (`s`/`o`/`d`/`n`, framed as "the
-Context Flywheel," noting that most of it already runs on its own in the
+parents itself to `app.screen`. 16-step script: an opening step stating
+what Mycelium actually is (Capture → Organize → Learn → Reuse), merged with
+the panel-navigation lesson (← → between Folders/Sessions/Detail) — see
+below for why those two are one step, not two — then the full lifecycle —
+Organize (`o`) → Learn (`w`) → Reuse (`c`) → Knowledge review (`k`) →
+session lineage (Shift+M merge, Shift+S split) → freeform explore, closing
+on a recap of the day-to-day loop (`s`/`o`/`d`/`n`, framed as "the Context
+Flywheel," noting that most of it already runs on its own in the
 background — see the daemon cycles below — so pressing those keys is mostly
 reviewing/confirming, not starting from scratch). `render()` computes the
 visible `Step N/Total` label from `STEPS.length`/the current index rather
 than baking a number into each title string (`i18n.js`'s `tutorial.
 stepCounter`) — inserting/removing a step is a pure array edit, no
-coordinated renumbering across every subsequent title key. The intro step
-specifically uses `waitFor: 'escape'`, not `'enter'`: at that exact moment
-(nothing navigated yet, focus still on the initial Folders panel),
-`sessions.js` binds real `foldersBox.key('enter'/'right', drillIntoSessions)`
-handlers, so a first keypress of Enter would silently drill into a folder
-and derail every step choreographed after it — Escape has no binding at all
-on the initial Folders panel, so it's genuinely inert there. Mixing
+coordinated renumbering across every subsequent title key (the fixed
+`tutorial.stepNTitle`/`stepNBody` key *names* referenced throughout this
+section are unaffected by the step's on-screen position either way — they
+identify a step's content, not its ordinal). The opening step's `waitFor` is
+`'enter'` — on that exact screen (nothing navigated yet, focus still on the
+initial Folders panel), Enter is ALSO `sessions.js`'s own real
+`foldersBox.key('enter', drillIntoSessions)`, so pressing it doesn't just
+advance the narrator, it performs the literal "step into Sessions" action
+the lesson describes — one keypress doing both, which is why the nav lesson
+is folded into this step rather than kept separate. An earlier version used
+`'escape'` instead specifically to dodge that real side effect (keeping the
+nav lesson as its own follow-up step) — reverted: `Esc` as a "press to
+continue" key read as inconsistent with every other step's Enter, and nudged
+by a maintainer report that it felt less seamless than just letting Enter do
+what it already does elsewhere in the app. Mixing
 `waitFor`+`thenWait` (poll for a real modal), plain `waitFor` (a literal
 key), a `shift: true` flag (blessed's
 raw keypress reports Shift+M as `key.name: 'm'` + `key.shift: true`, not the
@@ -718,9 +726,11 @@ always corresponds to that specific real handler having actually run.
 constantly for reasons that have nothing to do with the tutorial script
 (confirming an unrelated dialog, plain panel/detail navigation), and an
 earlier version of this feature that didn't exclude them was a real
-regression: `enter` alone is step 4/7/13/14's `waitFor`, and step 4/7/13
-are all `thenWait: 'close'` — since `isModalOpen()` is already `false`
-whenever nothing happens to be open, a false-positive match on one of
+regression: `enter` alone is the opening step's/step3's/step6's/step10's/
+step14's `waitFor` (plus step15's, a plain freeform advance with no
+`thenWait`), and step3/6/10/14 are all `thenWait: 'close'` — since
+`isModalOpen()` is already `false` whenever nothing happens to be open, a
+false-positive match on one of
 those resolved its "wait for close" **instantly**, landing on the step
 after that with zero corresponding real action; one stray Enter could
 silently jump the narrator several steps ahead. [tested]
