@@ -18,7 +18,7 @@
 // Usage: MYCELIUM_HOME=/tmp/whatever node demo/seed-pitch-demo.js <en|ko>
 
 import { randomUUID } from 'node:crypto';
-import { readdirSync, rmSync, existsSync } from 'node:fs';
+import { readdirSync, rmSync, existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { saveRaw } from '../src/scanner.js';
 import { emptyNeutral } from '../src/schema.js';
@@ -62,17 +62,39 @@ function daysAgo(n, hour = 10) {
   return d.toISOString();
 }
 
-const sessions = PITCH_STORYLINES.flatMap((s) => s.sessions);
-for (const s of sessions) {
-  const n = emptyNeutral(randomUUID(), s.source);
-  n.startedAt = daysAgo(s.daysAgo);
-  n.endedAt = daysAgo(s.daysAgo, 11);
-  n.turns = s.turns.map((t) => ({ role: t.role, text: t[locale] }));
-  n.extracted.title = s.title[locale];
-  n.extracted.summary = s.summary[locale];
-  n.extracted.tags = s.tags;
-  n.summarizedTurnCount = n.turns.length;
-  saveRaw(n);
+// Real, existing (but fake) project directories, one per top-level folder —
+// so reuse.js's dirsForFolder() (backing launch.js's `n`/`h` directory
+// picker) finds a real directory automatically instead of falling back to a
+// typed-path prompt, and so injectAgentsMd() has somewhere real to write
+// AGENTS.md when the tape presses `h`. Derived from MYCELIUM_HOME rather
+// than a separate Env line, so the tape doesn't need to know about this.
+// Cleared and recreated every run, same idempotent-seeding reasoning as
+// RAW_DIR/TREE_DIR/DIGEST_DIR above — a stale AGENTS.md from a prior run
+// would otherwise make the `h` demo's "cat the injected file" beat show
+// leftover content instead of a clean write.
+const reposDir = `${process.env.MYCELIUM_HOME}-repos`;
+if (existsSync(reposDir)) rmSync(reposDir, { recursive: true });
+function repoDirFor(folder) {
+  const dir = join(reposDir, folder.replace(/\//g, '-'));
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+for (const storyline of PITCH_STORYLINES) {
+  const dir = repoDirFor(storyline.folder);
+  for (const s of storyline.sessions) {
+    const n = emptyNeutral(randomUUID(), s.source);
+    n.startedAt = daysAgo(s.daysAgo);
+    n.endedAt = daysAgo(s.daysAgo, 11);
+    n.turns = s.turns.map((t) => ({ role: t.role, text: t[locale] }));
+    n.extracted.title = s.title[locale];
+    n.extracted.summary = s.summary[locale];
+    n.extracted.tags = s.tags;
+    n.summarizedTurnCount = n.turns.length;
+    n.cwd = dir;
+    n.projectDir = dir;
+    saveRaw(n);
+  }
 }
 const total = reindex();
 
@@ -98,4 +120,5 @@ writePendingKnowledgeText(mergeFolder, mergeKnowledge);
 // what actually fires here, not the bigger modal), not a first-run flow.
 saveConfig({ ...loadConfig(), onboarded: true, locale });
 
-console.log(`seeded ${sessions.length} pitch-demo sessions (${locale}), ${total} total in store`);
+const seededCount = PITCH_STORYLINES.reduce((sum, s) => sum + s.sessions.length, 0);
+console.log(`seeded ${seededCount} pitch-demo sessions (${locale}), ${total} total in store`);

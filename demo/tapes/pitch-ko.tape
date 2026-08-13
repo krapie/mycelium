@@ -2,11 +2,12 @@
 # except the seeded locale, the banner files, and the Wait markers that
 # need to match real Korean UI text (suggestPlacements()'s review modal
 # title, the context viewer's title, the knowledge-review modal title, the
-# merge title prompt, and the split review modal title are all genuinely
+# merge title prompt, the split review modal title, and the handoff
+# agent/directory/action pickers + copy notification are all genuinely
 # Korean when locale is ko — config.js's contentLocale()). See
 # pitch-en.tape's own header comment for the full rationale (mocked, not
-# real LLM calls; full lifecycle; verified via a headless dry run) — not
-# repeated here.
+# real LLM calls; full lifecycle including handoff; verified via a headless
+# dry run) — not repeated here.
 
 Output "demo/out/pitch-ko.mp4"
 
@@ -22,7 +23,7 @@ Set TypingSpeed 40ms
 # ── Setup (hidden) ──
 Hide
 Env MYCELIUM_HOME "/tmp/mycelium-vhs-pitch-ko"
-Env MYCELIUM_DEMO_MOCK_DELAY_MS "1200"
+Env MYCELIUM_DEMO_MOCK_DELAY_MS "5000"
 Type "node demo/seed-pitch-demo.js ko"
 Enter
 Sleep 1s
@@ -120,12 +121,50 @@ Sleep 5s
 Enter
 Sleep 4s
 
+# Handoff — see pitch-en.tape's own comment for the full rationale. 3 downs
+# from the merged row reaches the one real, untouched session in this
+# folder.
+Down
+Sleep 500ms
+Down
+Sleep 500ms
+Down
+Sleep 1s
+Type "h"
+
+Wait+Screen@10s /에이전트 선택/
+Sleep 2500ms
+Enter
+
+Wait+Screen@10s /작업 디렉토리 선택/
+Sleep 2500ms
+Enter
+
+Wait+Screen@10s /세션 시작/
+Sleep 2s
+Down
+Enter
+
+Wait+Screen@10s /클립보드에 복사됨/
+Sleep 3s
+
 # ── Outro (quit first) ──
 Sleep 800ms
 Type "q"
 Sleep 800ms
 Type "q"
 Sleep 2s
+
+# Proof: the AGENTS.md the handoff just wrote into the real (fake-repo)
+# project directory.
+Hide
+Type "clear"
+Enter
+Show
+Type "cat /tmp/mycelium-vhs-pitch-ko-repos/auth-token-refresh/AGENTS.md"
+Enter
+Sleep 7s
+
 Hide
 Type "clear"
 Enter

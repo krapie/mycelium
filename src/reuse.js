@@ -3,6 +3,7 @@ import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { TREE_DIR } from './paths.js';
 import { loadRaw, allRaw } from './scanner.js';
 import { isInSubtree } from './organize.js';
+import { contentLocale } from './config.js';
 
 const BEGIN = '<!-- mycelium:begin -->';
 const END = '<!-- mycelium:end -->';
@@ -69,7 +70,15 @@ export function injectAgentsMd(targetDir, folderPath) {
   const context = assembleContext(folderPath);
   if (!context) return { ok: false, error: `no KNOWLEDGE.md along ${folderPath}` };
 
-  const block = `${BEGIN}\n<!-- Mycelium이 관리하는 영역입니다. 직접 수정하지 마세요. -->\n\n${context}\n${END}`;
+  // Follows config.js's contentLocale(), same convention as the LLM prompts
+  // (AGENTS.md's "Human-facing text") — this one line is the only part of
+  // the injected block Mycelium itself writes rather than quoting verbatim
+  // from a KNOWLEDGE.md the user/LLM already produced in their locale.
+  const marker =
+    contentLocale() === 'ko'
+      ? '<!-- Mycelium이 관리하는 영역입니다. 직접 수정하지 마세요. -->'
+      : '<!-- Managed by Mycelium. Do not edit directly. -->';
+  const block = `${BEGIN}\n${marker}\n\n${context}\n${END}`;
   const path = join(targetDir, 'AGENTS.md');
 
   let content = '';

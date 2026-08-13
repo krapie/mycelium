@@ -1,8 +1,9 @@
 # Flagship ~3-minute pitch video (English) — why Mycelium exists, what it
 # is, how to run it, then a live demo of the FULL lifecycle (organize,
-# learn, reuse, knowledge review, merge, split) against a richer 12-session/
-# 4-folder dataset than the per-persona tutorial recordings use. See
-# demo/README.md for the full rationale and how to regenerate.
+# learn, reuse/context, knowledge review, merge, split, handoff) against a
+# richer 12-session/4-folder dataset than the per-persona tutorial
+# recordings use. See demo/README.md for the full rationale and how to
+# regenerate.
 #
 # Mocked, not real LLM calls: an earlier version of this tape used the real
 # claude/codex CLI — organize alone (12 sessions) took 110-150s+ per render,
@@ -12,10 +13,10 @@
 # seam the persona tutorial uses — see demo/pitch-launch.js), which is what
 # makes showing the FULL lifecycle in under 3 minutes possible at all. Every
 # key sequence below (organize -> navigate -> learn -> context -> knowledge
-# review -> merge -> split) was verified against real resulting state (not
-# just visually) via a one-off headless dry run using test/tui-helpers.js's
-# own createTestApp()/sendKey() harness before this tape was written — same
-# method test/e2e/demo-e2e.test.js uses, not guessed.
+# review -> merge -> split -> handoff) was verified against real resulting
+# state (not just visually) via a one-off headless dry run using
+# test/tui-helpers.js's own createTestApp()/sendKey() harness before this
+# tape was written — same method test/e2e/demo-e2e.test.js uses, not guessed.
 #
 # Safety: mounts sessionsView() directly via demo/pitch-launch.js, which
 # deliberately skips runTui()'s startTuiRoutine() call — that call runs a
@@ -48,12 +49,16 @@ Set TypingSpeed 40ms
 # tape got this wrong once and silently wrote into the real ~/.mycelium; see
 # demo/README.md's "pitch video" section for the full incident writeup.
 #
-# MYCELIUM_DEMO_MOCK_DELAY_MS matches the persona tapes' own value — long
-# enough for the spinner to visibly animate a few frames, short enough that
-# 12 sessions' worth of mocked calls still finish in a couple of seconds. ──
+# MYCELIUM_DEMO_MOCK_DELAY_MS is the real production default (see
+# tutorial-mock-llm.js's own MOCK_DELAY_MS constant — the persona tutorial/
+# `mycelium demo` uses exactly this when nothing overrides it), not a video-
+# only speed-up — a call resolving near-instantly next to real claude/codex
+# latency read as suspiciously fast, like a corner was cut. 5s is long
+# enough to feel like genuine work happening, still short next to the
+# generous reading holds already around it. ──
 Hide
 Env MYCELIUM_HOME "/tmp/mycelium-vhs-pitch-en"
-Env MYCELIUM_DEMO_MOCK_DELAY_MS "1200"
+Env MYCELIUM_DEMO_MOCK_DELAY_MS "5000"
 Type "node demo/seed-pitch-demo.js en"
 Enter
 Sleep 1s
@@ -176,6 +181,47 @@ Sleep 5s
 Enter
 Sleep 4s
 
+# Handoff — h hands the one real, untouched session left in this folder
+# ("Fix duplicate refresh race near token expiry") to a DIFFERENT agent than
+# the one that originally worked on it (kiro). 3 downs from the merged row
+# (still selected post-split) reaches it — confirmed via the same dry-run
+# harness, not guessed (see demo/README.md's "pitch video" section).
+Down
+Sleep 500ms
+Down
+Sleep 500ms
+Down
+Sleep 1s
+Type "h"
+
+# Agent picker — Claude Code is first (AGENTS registry order) and isn't
+# kiro, so a bare Enter here is already a genuine "switch agents" choice.
+Wait+Screen@10s /Choose agent/
+Sleep 2500ms
+Enter
+
+# Directory picker — resolves automatically to the one real fake-repo
+# directory seed-pitch-demo.js created for this folder (no typed path).
+Wait+Screen@10s /Choose working directory/
+Sleep 2500ms
+Enter
+
+# Action picker — "Copy command (new tab)", never "Open here": the latter
+# would foreground a REAL interactive claude/codex/kiro subprocess mid-
+# recording, the same safety reasoning that already ruled it out elsewhere
+# in this tape.
+Wait+Screen@10s /Start session/
+Sleep 2s
+Down
+Enter
+
+# The copied command embeds the full handoff prompt (buildHandoff() —
+# original request, summary, last message, inherited KNOWLEDGE.md) as a
+# single quoted argument — long, so this hold is brief; the real payoff is
+# the AGENTS.md file itself, shown next.
+Wait+Screen@10s /Command copied to clipboard/
+Sleep 3s
+
 # ── Outro (quit first — the app runs fullscreen; anything typed before
 # quitting goes to the app itself, not a shell) ──
 Sleep 800ms
@@ -183,6 +229,18 @@ Type "q"
 Sleep 800ms
 Type "q"
 Sleep 2s
+
+# Proof: the AGENTS.md the handoff just wrote into the real (fake-repo)
+# project directory — concrete, on-disk evidence the folder's knowledge
+# actually got injected for the next agent, not just a toast claiming it did.
+Hide
+Type "clear"
+Enter
+Show
+Type "cat /tmp/mycelium-vhs-pitch-en-repos/auth-token-refresh/AGENTS.md"
+Enter
+Sleep 7s
+
 Hide
 Type "clear"
 Enter

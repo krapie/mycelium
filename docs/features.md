@@ -163,7 +163,9 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   app: edits a file Mycelium doesn't own**, outside `~/.mycelium`. Only
   touches content between `<!-- mycelium:begin -->`/`<!-- mycelium:end -->`
   markers; replaces in place if present, appends (preserving existing
-  content) if not; no-ops if no `KNOWLEDGE.md` exists in the ancestor path. [tested]
+  content) if not; no-ops if no `KNOWLEDGE.md` exists in the ancestor path.
+  The one marker comment Mycelium itself writes (not quoted from a
+  `KNOWLEDGE.md`) follows `contentLocale()` too. [tested]
   (including the repeated-call/no-duplication invariant — no longer the
   untested riskiest write in the app)
 - **`CLAUDE.md` bridge, so Claude Code actually sees any of this.**
@@ -193,11 +195,15 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
 
 ## Handoff (`src/handoff.js`)
 
-- **Generate a cross-agent handoff prompt.** `buildHandoff(sessionId)` —
-  composes original request, summary, files changed (capped 30), decisions,
-  todos, last assistant message (capped 600 chars), inherited knowledge.
-  Every optional section is omitted (not blanked) if empty. [tested] (inherited
-  `assembleContext()` knowledge section itself covered separately under Reuse)
+- **Generate a cross-agent handoff prompt.** `buildHandoff(sessionId, locale =
+  contentLocale())` — composes original request, summary, files changed
+  (capped 30), decisions, todos, last assistant message (capped 600 chars),
+  inherited knowledge. Every optional section is omitted (not blanked) if
+  empty. Follows `config.js`'s `contentLocale()` (AGENTS.md's "Human-facing
+  text" convention) — this human-facing seed prompt for the *next* agent
+  matches whichever locale the user picked instead of always coming back
+  Korean. [tested] (inherited `assembleContext()` knowledge section itself
+  covered separately under Reuse)
 
 ## Split (`src/split.js`)
 
