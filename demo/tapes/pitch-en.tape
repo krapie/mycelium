@@ -165,46 +165,41 @@ Sleep 5s
 Enter
 Sleep 2s
 
-# 5 Ups guarantees landing on the merged row regardless of where focus was
-# left — its startedAt deliberately sorts ahead of the one untouched session
-# in this folder (see pitch-data.js's comment on that session's daysAgo), so
-# Up-to-top is reliable rather than guessed.
+# The real "entering the session" moment: sessions.js's drillIntoDetail()
+# (Enter on a list row) doesn't open anything new — it only shifts keyboard
+# focus (detailBox.focus() + setLevel('detail')); the Detail panel already
+# continuously previews whatever row is selected (listBox's own keypress
+# handler calls showDetail() on every Up/Down). An earlier version of this
+# tape pressed Enter here expecting a reveal — it's a total no-op, so that
+# beat just sat on an unchanging screen for 6+ seconds, reading as leftover
+# KNOWLEDGE.md/context text still lingering rather than a new "merge"
+# capability being shown. The ACTUAL reveal is the navigation itself: 5 Ups
+# guarantees landing on the merged row regardless of where focus was left
+# (its startedAt deliberately sorts ahead of the untouched session — see
+# pitch-data.js's comment), and the Detail panel visibly updates to the
+# real "Merged from 2: <source> #id, <source> #id" lineage line
+# (formatSessionDetail(), genuinely produced by mergeSessions()) as that
+# happens. Hold generously on the settled result, no Enter/Escape needed.
 Up
 Up
 Up
 Up
 Up
-Sleep 500ms
-
-# Drill into the merged session's own detail — the actual entered session,
-# not just the [Merged] badge glimpsed in the list row: real title/summary
-# (mockAutotag's own auto-summary of the combined content) plus the real
-# "Merged from 2: <source> #id, <source> #id" lineage line render.js always
-# renders for a merged session (formatSessionDetail()) — genuinely produced
-# by mergeSessions(), not staged. Purely synchronous (no LLM call, no Wait
-# needed) — Enter opens it instantly.
-Enter
 Sleep 6s
-Escape
-Sleep 500ms
 
 # Split the merged product back into its 2 halves.
 Type "S"
 Wait+Screen@10s /Proposed split/
 Sleep 5s
 Enter
-Sleep 2s
+Sleep 1500ms
 
-# Drill into one of the two split pieces — its own real "Split from: <the
-# merged session>" lineage line and its own share of the content, not just
-# the [Split] badge. 1 down from the merged row (still selected post-split,
-# confirmed via the same dry-run harness) reaches the first piece.
+# Same reveal-by-navigation principle: 1 down from the merged row (still
+# selected post-split, confirmed via the same dry-run harness) lands on the
+# first split piece, and the Detail panel visibly updates to ITS real
+# "Split from: <the merged session>" lineage line — not a re-opened modal.
 Down
-Sleep 500ms
-Enter
 Sleep 6s
-Escape
-Sleep 500ms
 
 # Handoff — h hands the one real, untouched session left in this folder
 # ("Fix duplicate refresh race near token expiry") to a DIFFERENT agent than

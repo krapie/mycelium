@@ -110,32 +110,24 @@ Sleep 5s
 Enter
 Sleep 2s
 
+# Reveal-by-navigation, not Enter — see pitch-en.tape's own comment for the
+# full rationale (drillIntoDetail() is a no-op; the Detail panel already
+# previews every row continuously, so the real reveal is landing on the row).
 Up
 Up
 Up
 Up
 Up
-Sleep 500ms
-
-# Merge/split detail drill-ins — see pitch-en.tape's own comment for the
-# full rationale (real stitched/sliced content, not just the badge).
-Enter
 Sleep 6s
-Escape
-Sleep 500ms
 
 Type "S"
 Wait+Screen@10s /분할 제안/
 Sleep 5s
 Enter
-Sleep 2s
+Sleep 1500ms
 
 Down
-Sleep 500ms
-Enter
 Sleep 6s
-Escape
-Sleep 500ms
 
 # Handoff — see pitch-en.tape's own comment for the full rationale. 2 downs
 # from the split piece reaches the one real, untouched session in this
