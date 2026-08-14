@@ -110,15 +110,15 @@ Sleep 5s
 Enter
 Sleep 2s
 
-# Reveal-by-navigation, not Enter — see pitch-en.tape's own comment for the
-# full rationale (drillIntoDetail() is a no-op; the Detail panel already
-# previews every row continuously, so the real reveal is landing on the row).
+# No drill-in beat here — see pitch-en.tape's own comment for the full
+# rationale. 5 Ups is still functionally required (Shift+S below acts on
+# whatever's selected, and it must be the merged row).
 Up
 Up
 Up
 Up
 Up
-Sleep 6s
+Sleep 500ms
 
 Type "S"
 Wait+Screen@10s /분할 제안/
@@ -126,14 +126,13 @@ Sleep 5s
 Enter
 Sleep 1500ms
 
+# Handoff — see pitch-en.tape's own comment for the full rationale. Split
+# doesn't move the cursor, so it's still on the merged row (index 0) — 3
+# downs reaches the untouched session (index 3).
 Down
-Sleep 6s
-
-# Handoff — see pitch-en.tape's own comment for the full rationale. 2 downs
-# from the split piece reaches the one real, untouched session in this
-# folder.
+Sleep 300ms
 Down
-Sleep 500ms
+Sleep 300ms
 Down
 Sleep 1s
 Type "h"
@@ -173,6 +172,8 @@ Show
 Wait+Screen@10s /mycelium/
 Sleep 1500ms
 
+# No drill-in beat here either — see pitch-en.tape's own comment (the
+# [Resumed] badge and continuationOf link are already visible on landing).
 Left
 Sleep 600ms
 Down
@@ -182,12 +183,7 @@ Sleep 600ms
 Down
 Sleep 1s
 Enter
-Sleep 2500ms
-
-Enter
-Sleep 6s
-Escape
-Sleep 500ms
+Sleep 5s
 
 # Back to Root scope first — see pitch-en.tape's own comment for why
 # (search filters within the current folder, not guessed).

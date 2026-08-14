@@ -3,54 +3,55 @@
 // the intro/outro banners (they already carry their own full text on
 // screen — a caption would just repeat it).
 //
-// `start` is when the STEP ACTUALLY BEGINS (the keypress that starts it —
-// for LLM-backed steps, that's when the loading spinner first appears, e.g.
-// "Summarizing + classifying sessions…" — not when the spinner finishes and
-// the result modal settles). An earlier version of this file used the
-// "already settled" timestamp for every cue, which reads as the caption
-// trailing 4-10s behind the actual step — confirmed by checking frames
-// right at and shortly after each keypress (e.g. organize's spinner is
-// already visible at t=18, well before the "Suggested placements" list
-// itself appears around t=23). `holdSeconds` deliberately spans through
-// that spinner-to-result window, so the caption is still up when the result
-// lands, not just during the wait.
+// Instructional, not marketing copy: each cue names the actual key pressed
+// (matching the tutorial's own voice — i18n.js's tutorial.step2Body etc.,
+// "Press o to have Mycelium read them and suggest folders") so the video
+// doubles as a how-to-use-it guide, not just a feature pitch. An earlier
+// version read like ad copy ("Organize — AI reads unfiled sessions and
+// suggests folders") with no mention of the key that actually does it.
 //
-// Every timestamp confirmed against real extracted frames
-// (`ffmpeg -ss <t> -vframes 1` + visual check) from the final pitch-en.mp4
-// render — not hand-computed from the tape script, which drifts from
-// reality (see git history). EN and KO renders land within 0.5s of each
-// other in total duration and share an identical structure, so the same
-// timestamps are reused for both rather than re-deriving a separate KO
-// timeline.
+// `start` is when the STEP ACTUALLY BEGINS (the keypress that starts it —
+// for LLM-backed steps, that's when the loading spinner first appears, not
+// when it resolves — see git history for why: an earlier pass anchored
+// every cue to the settled result and read as trailing 4-11s behind).
+// `holdSeconds` spans through the spinner-to-result window. Every timestamp
+// confirmed against real extracted frames (`ffmpeg -ss <t> -vframes 1` +
+// visual check) from the final render, re-verified after the merge/split/
+// continuation drill-in beats were removed (see pitch-en.tape) — not
+// hand-computed from the tape script, which drifts from reality.
+//
+// EN and KO renders land within 0.5s of each other in total duration and
+// share an identical structure, so the same timestamps are reused for both
+// rather than re-deriving a separate KO timeline.
 
 const CUES_EN = [
-  { start: 13, holdSeconds: 3, text: 'Install once, then just run `mycelium`' },
-  { start: 18, holdSeconds: 6, text: 'Organize — AI reads unfiled sessions and suggests folders' },
-  { start: 37, holdSeconds: 6, text: "Learn — extracts a folder's KNOWLEDGE.md from its sessions" },
-  { start: 49, holdSeconds: 5, text: 'Reuse — the context a new session in this folder would inherit' },
-  { start: 58, holdSeconds: 5, text: 'Review knowledge updates across every active folder at once' },
-  { start: 69, holdSeconds: 5, text: 'Merge — combine related sessions, see the real result on entering it' },
-  { start: 80, holdSeconds: 5, text: 'Split — back into topic-sized pieces, each real on its own' },
-  { start: 96, holdSeconds: 4, text: 'Handoff — send this session to a different agent, with context' },
-  { start: 105, holdSeconds: 4, text: "The folder's knowledge, injected into a real AGENTS.md" },
-  { start: 114, holdSeconds: 5, text: 'The other agent picks up — linked back automatically' },
-  { start: 120, holdSeconds: 4, text: 'Search — find sessions by content, across folders' },
-  { start: 129, holdSeconds: 6, text: 'Calendar — browse by day, not just by folder' },
+  { start: 13, holdSeconds: 3, text: 'Install with `npm install -g @kevinprk/mycelium`, then run `mycelium`' },
+  { start: 18, holdSeconds: 6, text: 'Press `o` to organize — AI reads unfiled sessions and suggests folders' },
+  { start: 37, holdSeconds: 6, text: "Press `w` to learn — extracts this folder's KNOWLEDGE.md" },
+  { start: 49, holdSeconds: 5, text: 'Press `c` to see the context a new session here would inherit' },
+  { start: 58, holdSeconds: 5, text: 'Press `k` to review knowledge updates across every active folder' },
+  { start: 69, holdSeconds: 4, text: 'Select sessions, press Shift+M to merge them for review' },
+  { start: 73, holdSeconds: 5, text: 'Press Shift+S to split work back into topic-sized pieces' },
+  { start: 85, holdSeconds: 5, text: 'Press `h` to hand this session to a different agent, with context' },
+  { start: 92, holdSeconds: 5, text: 'That context is injected into a real AGENTS.md for the next agent' },
+  { start: 97, holdSeconds: 6, text: 'The next agent picks up automatically — linked back to the original' },
+  { start: 108, holdSeconds: 4, text: 'Press `/` to search sessions by content, across folders' },
+  { start: 114, holdSeconds: 6, text: 'Press `v` to browse sessions by calendar day' },
 ];
 
 const CUES_KO = [
-  { start: 13, holdSeconds: 3, text: '한 번 설치하면, 그다음은 `mycelium` 실행만 하면 됩니다' },
-  { start: 18, holdSeconds: 6, text: '정리 — AI가 미분류 세션을 읽고 폴더를 제안합니다' },
-  { start: 37, holdSeconds: 6, text: '학습 — 폴더의 세션들로부터 KNOWLEDGE.md를 추출합니다' },
-  { start: 49, holdSeconds: 5, text: '재사용 — 이 폴더의 새 세션이 물려받을 컨텍스트' },
-  { start: 58, holdSeconds: 5, text: '모든 활성 폴더의 지식 업데이트를 한 번에 검토합니다' },
-  { start: 69, holdSeconds: 5, text: '병합 — 관련 세션을 합치고, 실제 들어가서 결과를 확인합니다' },
-  { start: 80, holdSeconds: 5, text: '분할 — 주제 단위로 다시 나누고, 각각 실제로 확인합니다' },
-  { start: 96, holdSeconds: 4, text: '핸드오프 — 컨텍스트와 함께 다른 에이전트로 세션을 넘깁니다' },
-  { start: 105, holdSeconds: 4, text: '폴더의 지식이 실제 AGENTS.md 파일에 주입됩니다' },
-  { start: 114, holdSeconds: 5, text: '다른 에이전트가 이어받음 — 자동으로 연결됩니다' },
-  { start: 120, holdSeconds: 4, text: '검색 — 폴더를 넘나들며 내용으로 세션을 찾습니다' },
-  { start: 129, holdSeconds: 6, text: '캘린더 — 폴더가 아니라 날짜로 둘러봅니다' },
+  { start: 13, holdSeconds: 3, text: '`npm install -g @kevinprk/mycelium`로 설치한 뒤 `mycelium`을 실행하세요' },
+  { start: 18, holdSeconds: 6, text: '`o`를 눌러 정리 — AI가 미분류 세션을 읽고 폴더를 제안합니다' },
+  { start: 37, holdSeconds: 6, text: '`w`를 눌러 학습 — 이 폴더의 KNOWLEDGE.md를 추출합니다' },
+  { start: 49, holdSeconds: 5, text: '`c`를 눌러 이 폴더의 새 세션이 물려받을 컨텍스트를 확인하세요' },
+  { start: 58, holdSeconds: 5, text: '`k`를 눌러 모든 활성 폴더의 지식 업데이트를 검토하세요' },
+  { start: 69, holdSeconds: 4, text: '세션을 선택하고 Shift+M으로 검토를 위해 병합하세요' },
+  { start: 73, holdSeconds: 5, text: 'Shift+S로 작업을 다시 주제 단위로 분할하세요' },
+  { start: 85, holdSeconds: 5, text: '`h`를 눌러 컨텍스트와 함께 다른 에이전트로 세션을 넘기세요' },
+  { start: 92, holdSeconds: 5, text: '그 컨텍스트가 다음 에이전트를 위해 실제 AGENTS.md에 주입됩니다' },
+  { start: 97, holdSeconds: 6, text: '다음 에이전트가 자동으로 이어받아 원본과 연결됩니다' },
+  { start: 108, holdSeconds: 4, text: '`/`를 눌러 폴더를 넘나들며 내용으로 세션을 검색하세요' },
+  { start: 114, holdSeconds: 6, text: '`v`를 눌러 날짜별로 세션을 둘러보세요' },
 ];
 
 export const CAPTIONS = { en: CUES_EN, ko: CUES_KO };

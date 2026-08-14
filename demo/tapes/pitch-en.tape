@@ -165,27 +165,19 @@ Sleep 5s
 Enter
 Sleep 2s
 
-# The real "entering the session" moment: sessions.js's drillIntoDetail()
-# (Enter on a list row) doesn't open anything new — it only shifts keyboard
-# focus (detailBox.focus() + setLevel('detail')); the Detail panel already
-# continuously previews whatever row is selected (listBox's own keypress
-# handler calls showDetail() on every Up/Down). An earlier version of this
-# tape pressed Enter here expecting a reveal — it's a total no-op, so that
-# beat just sat on an unchanging screen for 6+ seconds, reading as leftover
-# KNOWLEDGE.md/context text still lingering rather than a new "merge"
-# capability being shown. The ACTUAL reveal is the navigation itself: 5 Ups
-# guarantees landing on the merged row regardless of where focus was left
-# (its startedAt deliberately sorts ahead of the untouched session — see
-# pitch-data.js's comment), and the Detail panel visibly updates to the
-# real "Merged from 2: <source> #id, <source> #id" lineage line
-# (formatSessionDetail(), genuinely produced by mergeSessions()) as that
-# happens. Hold generously on the settled result, no Enter/Escape needed.
+# No drill-in beat here anymore — an earlier version navigated onto the
+# merged row and held on its Detail-panel preview to "show entering the
+# session." Cut on request: keep the list-level result (the [Merged] badge
+# is already visible above) without the extra navigation/hold ceremony.
+# 5 Ups is still functionally required, not cosmetic — Shift+S below acts
+# on whatever row is currently selected, and it must be the merged one, not
+# wherever focus happened to land after the merge confirm.
 Up
 Up
 Up
 Up
 Up
-Sleep 6s
+Sleep 500ms
 
 # Split the merged product back into its 2 halves.
 Type "S"
@@ -194,20 +186,16 @@ Sleep 5s
 Enter
 Sleep 1500ms
 
-# Same reveal-by-navigation principle: 1 down from the merged row (still
-# selected post-split, confirmed via the same dry-run harness) lands on the
-# first split piece, and the Detail panel visibly updates to ITS real
-# "Split from: <the merged session>" lineage line — not a re-opened modal.
-Down
-Sleep 6s
-
 # Handoff — h hands the one real, untouched session left in this folder
 # ("Fix duplicate refresh race near token expiry") to a DIFFERENT agent than
-# the one that originally worked on it (kiro). 2 downs from the split piece
-# (still selected) reaches it — confirmed via the same dry-run harness, not
-# guessed (see demo/README.md's "pitch video" section).
+# the one that originally worked on it (kiro). Split doesn't move the
+# cursor (confirmed via the same dry-run harness), so it's still on the
+# merged row (index 0) — 3 downs reaches the untouched session (index 3:
+# merged, 2 split pieces, then it).
 Down
-Sleep 500ms
+Sleep 300ms
+Down
+Sleep 300ms
 Down
 Sleep 1s
 Type "h"
@@ -268,6 +256,10 @@ Sleep 1500ms
 
 # Back into auth/token-refresh — the new continuation session sorts first
 # (most recent), so it's already the top row, no extra navigation needed.
+# Its real [Resumed] badge (sessions.resumedBadge) is visible immediately —
+# no drill-in beat here either (same reasoning as merge/split above): the
+# Detail panel already auto-previews the top row, continuationOf link
+# included, the moment we land in the folder.
 Left
 Sleep 600ms
 Down
@@ -277,15 +269,7 @@ Sleep 600ms
 Down
 Sleep 1s
 Enter
-Sleep 2500ms
-
-# Its real [Resumed] badge (sessions.resumedBadge) is already visible in the
-# list above — drilling in shows the real continuationOf link back to the
-# session that was handed off.
-Enter
-Sleep 6s
-Escape
-Sleep 500ms
+Sleep 5s
 
 # Back to Root scope first — search filters WITHIN whatever folder is
 # currently selected (reloadList() passes state.folder alongside
