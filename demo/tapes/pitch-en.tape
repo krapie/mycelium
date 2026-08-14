@@ -163,31 +163,54 @@ Type "M"
 Wait+Screen@10s /Title for the merged session/
 Sleep 5s
 Enter
-Sleep 4s
+Sleep 2s
 
-# Split the merged product back into its 2 halves. 5 Ups guarantees landing
-# on the merged row regardless of where focus was left — its startedAt
-# deliberately sorts ahead of the one untouched session in this folder (see
-# pitch-data.js's comment on that session's daysAgo), so Up-to-top is
-# reliable rather than guessed.
+# 5 Ups guarantees landing on the merged row regardless of where focus was
+# left — its startedAt deliberately sorts ahead of the one untouched session
+# in this folder (see pitch-data.js's comment on that session's daysAgo), so
+# Up-to-top is reliable rather than guessed.
 Up
 Up
 Up
 Up
 Up
+Sleep 500ms
+
+# Drill into the merged session's own detail — the actual entered session,
+# not just the [Merged] badge glimpsed in the list row: real title/summary
+# (mockAutotag's own auto-summary of the combined content) plus the real
+# "Merged from 2: <source> #id, <source> #id" lineage line render.js always
+# renders for a merged session (formatSessionDetail()) — genuinely produced
+# by mergeSessions(), not staged. Purely synchronous (no LLM call, no Wait
+# needed) — Enter opens it instantly.
+Enter
+Sleep 6s
+Escape
+Sleep 500ms
+
+# Split the merged product back into its 2 halves.
 Type "S"
 Wait+Screen@10s /Proposed split/
 Sleep 5s
 Enter
-Sleep 4s
+Sleep 2s
+
+# Drill into one of the two split pieces — its own real "Split from: <the
+# merged session>" lineage line and its own share of the content, not just
+# the [Split] badge. 1 down from the merged row (still selected post-split,
+# confirmed via the same dry-run harness) reaches the first piece.
+Down
+Sleep 500ms
+Enter
+Sleep 6s
+Escape
+Sleep 500ms
 
 # Handoff — h hands the one real, untouched session left in this folder
 # ("Fix duplicate refresh race near token expiry") to a DIFFERENT agent than
-# the one that originally worked on it (kiro). 3 downs from the merged row
-# (still selected post-split) reaches it — confirmed via the same dry-run
-# harness, not guessed (see demo/README.md's "pitch video" section).
-Down
-Sleep 500ms
+# the one that originally worked on it (kiro). 2 downs from the split piece
+# (still selected) reaches it — confirmed via the same dry-run harness, not
+# guessed (see demo/README.md's "pitch video" section).
 Down
 Sleep 500ms
 Down
@@ -222,17 +245,120 @@ Enter
 Wait+Screen@10s /Command copied to clipboard/
 Sleep 3s
 
-# ── Outro (quit first — the app runs fullscreen; anything typed before
-# quitting goes to the app itself, not a shell) ──
+# ── The handoff's real result ──
+# Quit first (the app runs fullscreen — anything typed before quitting goes
+# to the app itself, not a shell), seed one more session depicting the
+# handed-off work coming back (demo/seed-pitch-continuation.js), then
+# relaunch. This is a SEPARATE process seeding a file the just-quit process
+# never sees live — a fresh mount is what actually picks up the change; see
+# demo/README.md's "pitch video" section for why (the same reason `s`/scan()
+# is never pressed in this tape). linkContinuation() inside that script is
+# the exact real function a genuine handoff-and-capture would call.
+Sleep 800ms
+Type "q"
+Sleep 800ms
+Type "q"
+Sleep 1s
+Hide
+Type "clear"
+Enter
+Type "node demo/seed-pitch-continuation.js en"
+Enter
+Sleep 1s
+Type "mycelium"
+Enter
+Show
+Wait+Screen@10s /mycelium/
+Sleep 1500ms
+
+# Back into auth/token-refresh — the new continuation session sorts first
+# (most recent), so it's already the top row, no extra navigation needed.
+Left
+Sleep 600ms
+Down
+Sleep 600ms
+Down
+Sleep 600ms
+Down
+Sleep 1s
+Enter
+Sleep 2500ms
+
+# Its real [Resumed] badge (sessions.resumedBadge) is already visible in the
+# list above — drilling in shows the real continuationOf link back to the
+# session that was handed off.
+Enter
+Sleep 6s
+Escape
+Sleep 500ms
+
+# Back to Root scope first — search filters WITHIN whatever folder is
+# currently selected (reloadList() passes state.folder alongside
+# state.query), so searching from inside auth/token-refresh would only ever
+# show auth/token-refresh's own matches, not the cross-folder proof this
+# beat is for. Left (folders panel) + 3 ups (auth/token-refresh -> auth ->
+# New -> Root) + Enter commits Root scope — confirmed via the same dry-run
+# harness, not guessed.
+Left
+Sleep 500ms
+Up
+Sleep 300ms
+Up
+Sleep 300ms
+Up
+Sleep 500ms
+Enter
+Sleep 1s
+
+# ── Search — find sessions by content, across folders, not just within the
+# one you're browsing. "retry" matches sessions in both auth/token-refresh
+# and ci/flaky-tests (confirmed via the same dry-run harness).
+Type "/"
+Wait+Screen@10s /Search/
+Sleep 1s
+Type "retry"
+Sleep 500ms
+Enter
+Sleep 4s
+
+# ── Calendar — the intro banner's other stated pain point ("Time — a
+# session from 3 weeks ago is unfindable") answered directly, same as
+# handoff answered "Model boundaries". v toggles to the Calendar tab; the
+# grid cursor starts on today. 4 Lefts reaches a day with 2 real sessions
+# (both ci/flaky-tests — confirmed via the same dry-run harness), avoiding
+# repeating the continuation session just shown.
+Type "v"
+Wait+Screen@10s /Calendar/
+Sleep 2s
+Left
+Sleep 400ms
+Left
+Sleep 400ms
+Left
+Sleep 400ms
+Left
+Sleep 2s
+Enter
+Sleep 2500ms
+Enter
+Sleep 4s
+Escape
+Sleep 500ms
+Escape
+Sleep 500ms
+Type "v"
+Sleep 500ms
+
+# ── Outro (quit first) ──
 Sleep 800ms
 Type "q"
 Sleep 800ms
 Type "q"
 Sleep 2s
 
-# Proof: the AGENTS.md the handoff just wrote into the real (fake-repo)
-# project directory — concrete, on-disk evidence the folder's knowledge
-# actually got injected for the next agent, not just a toast claiming it did.
+# Proof: the AGENTS.md the handoff wrote into the real (fake-repo) project
+# directory — concrete, on-disk evidence the folder's knowledge actually got
+# injected for the next agent, not just a toast claiming it did.
 Hide
 Type "clear"
 Enter
