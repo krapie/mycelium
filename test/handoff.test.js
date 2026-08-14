@@ -56,14 +56,25 @@ test('buildHandoff() skips a synthetic first turn and uses the first REAL user m
   assert.doesNotMatch(res.prompt, /local-command-caveat/);
 });
 
-test('buildHandoff() falls back to "(원 요청 없음)" when every user turn is synthetic', () => {
+test('buildHandoff() falls back to "(no original request)" when every user turn is synthetic', () => {
   seed('hb-all-synthetic', {
     turns: [{ role: 'user', text: '<system-reminder>only synthetic</system-reminder>' }],
   });
 
   const res = buildHandoff('hb-all-synthetic');
 
+  assert.match(res.prompt, /no original request/);
+});
+
+test('buildHandoff() falls back to the Korean "(원 요청 없음)" when locale is ko', () => {
+  seed('hb-all-synthetic-ko', {
+    turns: [{ role: 'user', text: '<system-reminder>only synthetic</system-reminder>' }],
+  });
+
+  const res = buildHandoff('hb-all-synthetic-ko', 'ko');
+
   assert.match(res.prompt, /원 요청 없음/);
+  assert.doesNotMatch(res.prompt, /no original request/);
 });
 
 test('buildHandoff() omits optional sections that are empty rather than blanking them', () => {
@@ -71,8 +82,30 @@ test('buildHandoff() omits optional sections that are empty rather than blanking
 
   const res = buildHandoff('hb-minimal');
 
-  assert.doesNotMatch(res.prompt, /지금까지 한 일/);
-  assert.doesNotMatch(res.prompt, /건드린 파일/);
-  assert.doesNotMatch(res.prompt, /내려진 결정/);
-  assert.doesNotMatch(res.prompt, /남은 할 일/);
+  assert.doesNotMatch(res.prompt, /Work so far/);
+  assert.doesNotMatch(res.prompt, /Files touched/);
+  assert.doesNotMatch(res.prompt, /Decisions made/);
+  assert.doesNotMatch(res.prompt, /Remaining todos/);
+});
+
+test('buildHandoff(sessionId, "ko") returns the Korean prompt, same shape as English', () => {
+  seed('hb-full-ko', {
+    cwd: '/repo',
+    turns: [
+      { role: 'user', text: 'please fix the login bug' },
+      { role: 'assistant', text: 'looking into it' },
+      { role: 'assistant', text: 'fixed, see the diff' },
+    ],
+    extracted: { title: 'x', tags: [], summary: 'fixed the login bug', decisions: ['use bcrypt'], todos: ['add a test'] },
+    artifacts: { filesChanged: ['src/auth.js'], diffSummary: null },
+  });
+
+  const res = buildHandoff('hb-full-ko', 'ko');
+
+  assert.equal(res.ok, true);
+  assert.match(res.prompt, /지금까지 한 일/);
+  assert.match(res.prompt, /건드린 파일/);
+  assert.match(res.prompt, /내려진 결정/);
+  assert.match(res.prompt, /남은 할 일/);
+  assert.doesNotMatch(res.prompt, /Work so far/);
 });

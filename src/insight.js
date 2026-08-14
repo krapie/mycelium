@@ -5,6 +5,7 @@ import { allRaw } from './scanner.js';
 import { TREE_DIR, DIGEST_DIR, ensureDirs } from './paths.js';
 import { isSuperseded, isInSubtree, listTreeDirs } from './organize.js';
 import { firstUserTurn } from './schema.js';
+import { contentLocale } from './config.js';
 
 function dayOf(iso) {
   return iso ? iso.slice(0, 10) : null;
@@ -64,6 +65,8 @@ export function foldersActiveOn(date) {
  */
 export async function generateDigest({ period = 'day', date } = {}) {
   ensureDirs();
+  const locale = contentLocale();
+  const noSummary = locale === 'ko' ? '(요약 없음)' : '(no summary)';
   const target = date || new Date().toISOString().slice(0, 10);
   const keyed = period === 'week' ? isoWeek(`${target}T00:00:00Z`) : target;
 
@@ -75,27 +78,41 @@ export async function generateDigest({ period = 'day', date } = {}) {
   const blocks = [];
   for (const [folder, ss] of byFolder) {
     const items = ss
-      .map((s) => `- [${folder}] ${s.extracted.summary || firstUserTurn(s)?.text?.slice(0, 80) || '(요약 없음)'}`)
+      .map((s) => `- [${folder}] ${s.extracted.summary || firstUserTurn(s)?.text?.slice(0, 80) || noSummary}`)
       .join('\n');
     blocks.push(items);
   }
 
-  const prompt = `아래는 ${keyed} 기간 동안의 AI 작업 세션 요약 목록이다(폴더별). 이걸 사람이 아침에 읽는 인수인계 메모처럼 서사형으로 정리해라. 상태 카운트 말고, 무슨 일이 있었고 무엇이 결정됐고 뭐가 남았는지 3~6문장. 한국어.
+  // Korean branch is the original prompt, unchanged — see contentLocale()
+  // (config.js).
+  const prompt =
+    locale === 'ko'
+      ? `아래는 ${keyed} 기간 동안의 AI 작업 세션 요약 목록이다(폴더별). 이걸 사람이 아침에 읽는 인수인계 메모처럼 서사형으로 정리해라. 상태 카운트 말고, 무슨 일이 있었고 무엇이 결정됐고 뭐가 남았는지 3~6문장. 한국어.
 
 ${blocks.join('\n')}
 
-출력은 마크다운 본문만.`;
+출력은 마크다운 본문만.`
+      : `Below is a list of AI work session summaries (by folder) for the period ${keyed}. Write these up narratively, the way a colleague's morning handoff note reads. Not a status count — 3-6 sentences on what happened, what was decided, and what's left.
+
+${blocks.join('\n')}
+
+Output markdown body only.`;
 
   let narrative;
   try {
     narrative = await complete(prompt);
   } catch (err) {
-    return { ok: false, error: `LLM 실패: ${err.message}` };
+    return { ok: false, error: locale === 'ko' ? `LLM 실패: ${err.message}` : `LLM failed: ${err.message}` };
   }
 
-  const md = `# ${keyed} 다이제스트\n\n${narrative.trim()}\n\n---\n\n## 세션 (${sessions.length})\n\n${[...byFolder]
-    .map(([f, ss]) => `### ${f}\n${ss.map((s) => `- ${s.extracted.summary || '(요약 없음)'}`).join('\n')}`)
-    .join('\n\n')}\n`;
+  const md =
+    locale === 'ko'
+      ? `# ${keyed} 다이제스트\n\n${narrative.trim()}\n\n---\n\n## 세션 (${sessions.length})\n\n${[...byFolder]
+          .map(([f, ss]) => `### ${f}\n${ss.map((s) => `- ${s.extracted.summary || noSummary}`).join('\n')}`)
+          .join('\n\n')}\n`
+      : `# ${keyed} Digest\n\n${narrative.trim()}\n\n---\n\n## Sessions (${sessions.length})\n\n${[...byFolder]
+          .map(([f, ss]) => `### ${f}\n${ss.map((s) => `- ${s.extracted.summary || noSummary}`).join('\n')}`)
+          .join('\n\n')}\n`;
 
   const path = join(DIGEST_DIR, `${keyed}.md`);
   writeFileSync(path, md);
@@ -112,6 +129,9 @@ ${blocks.join('\n')}
  * raw logs.
  */
 export async function buildKnowledgeText(folder) {
+  const locale = contentLocale();
+  const noSummary = locale === 'ko' ? '(요약 없음)' : '(no summary)';
+  const decisionLabel = locale === 'ko' ? '결정' : 'Decision';
   const sessions = allRaw().filter((s) => {
     if (isSuperseded(s)) return false; // its content now lives in the merge/split product instead
     const f = s.folder || '_inbox';
@@ -121,13 +141,17 @@ export async function buildKnowledgeText(folder) {
 
   const material = sessions
     .map((s) => {
-      const parts = [`- ${s.extracted.summary || '(요약 없음)'}`];
-      for (const d of s.extracted.decisions || []) parts.push(`  · 결정: ${d}`);
+      const parts = [`- ${s.extracted.summary || noSummary}`];
+      for (const d of s.extracted.decisions || []) parts.push(`  · ${decisionLabel}: ${d}`);
       return parts.join('\n');
     })
     .join('\n');
 
-  const prompt = `아래는 "${folder}" 작업 공간에서 있었던 세션 요약과 결정들이다. 이 공간에서 새 작업을 시작하는 AI가 미리 알아야 할 "프로젝트 지식"을 정리해라. 반복되는 컨벤션, 확정된 결정, 자주 나오는 용어, 주의할 점 위주로. 개별 세션 나열이 아니라 정제된 지식으로.
+  // Korean branch is the original prompt, unchanged — see contentLocale()
+  // (config.js).
+  const prompt =
+    locale === 'ko'
+      ? `아래는 "${folder}" 작업 공간에서 있었던 세션 요약과 결정들이다. 이 공간에서 새 작업을 시작하는 AI가 미리 알아야 할 "프로젝트 지식"을 정리해라. 반복되는 컨벤션, 확정된 결정, 자주 나오는 용어, 주의할 점 위주로. 개별 세션 나열이 아니라 정제된 지식으로.
 
 금지: "완료했습니다", "정리하여 저장했습니다", "다음 작업 시 참고됩니다" 같은
 작업 보고/메타 서술로 시작하거나 끝내지 마라. 이 출력은 다음 세션의
@@ -135,13 +159,19 @@ AGENTS.md에 그대로 주입될 지식 본문이지, 방금 한 일에 대한 �
 아니다. 첫 줄부터 바로 실제 지식(컨벤션/결정/용어)으로 시작해라.
 한국어 마크다운 본문만 출력.
 
+${material}`
+      : `Below are the session summaries and decisions from the "${folder}" workspace. Distill the "project knowledge" an AI starting new work in this space should already know — recurring conventions, settled decisions, frequently-used terms, and things to watch out for. Not a list of individual sessions — refined knowledge instead.
+
+Forbidden: don't open or close with a status-report/meta phrase like "Done", "Organized and saved", "This will be referenced in future work". This output is knowledge that gets injected verbatim into the next session's AGENTS.md, not a report on what you just did. Start from the very first line with the actual knowledge (conventions/decisions/terms) itself.
+Output markdown body only.
+
 ${material}`;
 
   let knowledge;
   try {
     knowledge = await complete(prompt);
   } catch (err) {
-    return { ok: false, error: `LLM 실패: ${err.message}` };
+    return { ok: false, error: locale === 'ko' ? `LLM 실패: ${err.message}` : `LLM failed: ${err.message}` };
   }
 
   const text = `# ${folder} — Project Knowledge\n\n${knowledge.trim()}\n`;

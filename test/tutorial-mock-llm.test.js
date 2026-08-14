@@ -18,21 +18,23 @@ import { useTempHome } from './helpers.js';
 // English-content assertions assume.
 useTempHome();
 process.env.MYCELIUM_DEMO_MOCK_DELAY_MS = '30';
-const { createTutorialMockProvider } = await import('../src/tui/tutorial-mock-llm.js');
+const { createTutorialMockProvider, createMockProvider } = await import('../src/tui/tutorial-mock-llm.js');
 
 // Prompt fragments below mirror the REAL shapes organize/classify.js, split.js,
-// and insight.js build (see those files), not just what this module itself
-// assumes, so a drift in either side would actually break a test here.
-// The provider resolves after a deliberate short delay (see its own
-// comment) so the demo's spinner has something to animate — every test
-// here awaits it.
+// and insight.js build (see those files) — including their real per-locale
+// label text (config.js's contentLocale() — these prompts are no longer
+// hardcoded Korean regardless of locale, see AGENTS.md) — not just what
+// this module itself assumes, so a drift in either side would actually
+// break a test here. `locale` defaults to 'en', matching
+// createTutorialMockProvider()'s own default. The provider resolves after a
+// deliberate short delay (see its own comment) so the demo's spinner has
+// something to animate — every test here awaits it.
 
-function placementsPrompt(candidates) {
-  const folderBlock = '(아직 정리된 폴더 없음)';
-  const sessionBlock = candidates
-    .map((c) => `- id:${c.id} 현재폴더:(없음) 요약:${c.summary}`)
-    .join('\n');
-  return `아래는 이미 사람이 정리해 둔 폴더들과 그 안 세션 요약이다.
+function placementsPrompt(candidates, locale = 'en') {
+  if (locale === 'ko') {
+    const folderBlock = '(아직 정리된 폴더 없음)';
+    const sessionBlock = candidates.map((c) => `- id:${c.id} 현재폴더:(없음) 요약:${c.summary}`).join('\n');
+    return `아래는 이미 사람이 정리해 둔 폴더들과 그 안 세션 요약이다.
 
 ${folderBlock}
 
@@ -42,24 +44,51 @@ ${sessionBlock}
 
 출력 형식(JSON만, 다른 설명 없이):
 {"placements":[{"id":"...", "folder":"..."|null, "reason":"짧은 이유"}]}`;
+  }
+  const folderBlock = '(no folders organized yet)';
+  const sessionBlock = candidates.map((c) => `- id:${c.id} current folder:(none) summary:${c.summary}`).join('\n');
+  return `Below are the folders a human has already organized, and the session summaries inside each.
+
+${folderBlock}
+
+---
+Below are sessions that need (re)classifying.
+${sessionBlock}
+
+Output format (JSON only, no other explanation):
+{"placements":[{"id":"...", "folder":"..."|null, "reason":"short reason"}]}`;
 }
 
 // totalTurns lets each test build a prompt with exactly as many numbered
 // turns as the persona/storyline under test actually has, so the dynamic
 // turn-count parsing in mockSplit() gets genuinely exercised rather than
 // only ever seeing the same fixed count.
-function splitPrompt(totalTurns) {
-  const turns = Array.from({ length: totalTurns }, (_, i) => `턴 ${i + 1} [${i % 2 === 0 ? 'user' : 'assistant'}]: turn ${i + 1}`).join('\n');
-  return `아래는 하나의 AI 작업 세션의 전체 대화 기록이다.
+function splitPrompt(totalTurns, locale = 'en') {
+  const label = locale === 'ko' ? '턴' : 'Turn';
+  const turns = Array.from({ length: totalTurns }, (_, i) => `${label} ${i + 1} [${i % 2 === 0 ? 'user' : 'assistant'}]: turn ${i + 1}`).join(
+    '\n',
+  );
+  if (locale === 'ko') {
+    return `아래는 하나의 AI 작업 세션의 전체 대화 기록이다.
 
 ${turns}
 
 출력 형식(JSON만, 다른 설명 없이):
 {"ranges":[{"from":1,"to":8,"label":"짧은 주제 설명"}]}`;
+  }
+  return `Below is the full transcript of one AI work session.
+
+${turns}
+
+Output format (JSON only, no other explanation):
+{"ranges":[{"from":1,"to":8,"label":"short topic label"}]}`;
 }
 
-function knowledgePrompt(folder) {
-  return `아래는 "${folder}" 작업 공간에서 있었던 세션 요약과 결정들이다. 이 공간에서 새 작업을 시작하는 AI가 미리 알아야 할 "프로젝트 지식"을 정리해라.`;
+function knowledgePrompt(folder, locale = 'en') {
+  if (locale === 'ko') {
+    return `아래는 "${folder}" 작업 공간에서 있었던 세션 요약과 결정들이다. 이 공간에서 새 작업을 시작하는 AI가 미리 알아야 할 "프로젝트 지식"을 정리해라.`;
+  }
+  return `Below are the session summaries and decisions from the "${folder}" workspace. Distill the "project knowledge" an AI starting new work in this space should already know.`;
 }
 
 // Mirrors learn.js's buildPrompt()/sessionExcerpt() shape closely enough to
@@ -208,11 +237,14 @@ test('every persona\'s canned knowledge text is English, not Korean', async () =
 test('createTutorialMockProvider(personaId, "ko") classifies placement candidates against Korean summaries', async () => {
   const swe = createTutorialMockProvider('swe', 'ko');
   const sweReply = await swe(
-    placementsPrompt([
-      { id: 'a', summary: '주문 내역 페이지에 재주문 버튼을 구현했다.' },
-      { id: 'b', summary: '장바구니 합계 반올림 버그를 수정했다.' },
-      { id: 'c', summary: '알 수 없는 세션에 대한 요약.' },
-    ]),
+    placementsPrompt(
+      [
+        { id: 'a', summary: '주문 내역 페이지에 재주문 버튼을 구현했다.' },
+        { id: 'b', summary: '장바구니 합계 반올림 버그를 수정했다.' },
+        { id: 'c', summary: '알 수 없는 세션에 대한 요약.' },
+      ],
+      'ko',
+    ),
   );
   const sweById = Object.fromEntries(JSON.parse(sweReply).placements.map((p) => [p.id, p.folder]));
   assert.equal(sweById.a, 'retail-website/express-reorder');
@@ -221,10 +253,13 @@ test('createTutorialMockProvider(personaId, "ko") classifies placement candidate
 
   const cse = createTutorialMockProvider('cse', 'ko');
   const cseReply = await cse(
-    placementsPrompt([
-      { id: 'a', summary: '온프레미스 링크의 BGP 세션을 점검했다.' },
-      { id: 'b', summary: 'S3 계정 간 AccessDenied 문제를 조사했다.' },
-    ]),
+    placementsPrompt(
+      [
+        { id: 'a', summary: '온프레미스 링크의 BGP 세션을 점검했다.' },
+        { id: 'b', summary: 'S3 계정 간 AccessDenied 문제를 조사했다.' },
+      ],
+      'ko',
+    ),
   );
   const cseById = Object.fromEntries(JSON.parse(cseReply).placements.map((p) => [p.id, p.folder]));
   assert.equal(cseById.a, 'cases/onprem-connectivity');
@@ -233,16 +268,16 @@ test('createTutorialMockProvider(personaId, "ko") classifies placement candidate
 
 test('createTutorialMockProvider(personaId, "ko") returns Korean canned knowledge text, per persona', async () => {
   const swe = createTutorialMockProvider('swe', 'ko');
-  const sweReply = await swe(knowledgePrompt('retail-website/express-reorder'));
+  const sweReply = await swe(knowledgePrompt('retail-website/express-reorder', 'ko'));
   assert.match(sweReply, /익스프레스 재주문/);
   assert.ok(/[가-힣]/.test(sweReply), 'ko knowledge output must actually contain Korean');
 
   const cse = createTutorialMockProvider('cse', 'ko');
-  const cseReply = await cse(knowledgePrompt('cases/onprem-connectivity'));
+  const cseReply = await cse(knowledgePrompt('cases/onprem-connectivity', 'ko'));
   assert.match(cseReply, /온프레미스/);
 
   const sa = createTutorialMockProvider('sa', 'ko');
-  const saReply = await sa(knowledgePrompt('customers/nimbustech'));
+  const saReply = await sa(knowledgePrompt('customers/nimbustech', 'ko'));
   assert.match(saReply, /NimbusTech/);
   assert.ok(/[가-힣]/.test(saReply), 'ko knowledge output must actually contain Korean even with an English proper noun in it');
 });
@@ -250,11 +285,10 @@ test('createTutorialMockProvider(personaId, "ko") returns Korean canned knowledg
 test('mockSplit uses the active locale\'s splitLabels, still computed from the real turn count', async () => {
   // Same CSE 3-way-merge scenario (12 turns) as the English test above, but
   // in Korean — the turn-count math is locale-independent, only the labels
-  // (and the "턴 N [role]:" prompt format itself, which is already Korean
-  // regardless of UI locale — split.js's real prompt is hardcoded Korean by
-  // design, see AGENTS.md) should differ.
+  // (and the "턴 N [role]:" prompt format itself, which now follows locale
+  // too — config.js's contentLocale(), see AGENTS.md) should differ.
   const cse = createTutorialMockProvider('cse', 'ko');
-  const reply = JSON.parse(await cse(splitPrompt(12)));
+  const reply = JSON.parse(await cse(splitPrompt(12, 'ko')));
   assert.deepEqual(reply.ranges, [
     { from: 1, to: 6, label: 'DX/VPC/ALB 전반 조사' },
     { from: 7, to: 12, label: 'MTU 근본 원인과 해결' },
@@ -303,4 +337,20 @@ test('provider resolves after a deliberate delay, not instantly', async () => {
   // (30ms), not the real 5s production default — this only needs to prove
   // the delay mechanism fires at all, not what the demo actually feels like.
   assert.ok(Date.now() - start >= 20, 'mock output should not resolve near-instantly (spinner needs frames to animate)');
+});
+
+// createMockProvider() is the low-level factory createTutorialMockProvider()
+// itself delegates to (extracted so demo/pitch-launch.js's flagship pitch
+// video can drive its own, differently-shaped storyline bundle through the
+// same dispatch/parsing logic instead of a second hand-rolled mock — see
+// that function's own doc comment). Every test above already exercises this
+// same logic indirectly through createTutorialMockProvider(); this is its
+// own direct coverage against a storyline shape a caller builds itself,
+// not persona.js's.
+test('createMockProvider() classifies against a caller-supplied storyline set, not just personas.js', async () => {
+  const storylines = [{ folder: 'widgets/build', keywords: /widget/i, knowledge: '## Widgets\n\nBuild notes.' }];
+  const provider = createMockProvider(storylines, storylines[0], 'en');
+  const reply = await provider(placementsPrompt([{ id: 'a1', summary: 'Building a new widget for the toolbar.' }]));
+  const parsed = JSON.parse(reply);
+  assert.equal(parsed.placements[0].folder, 'widgets/build');
 });

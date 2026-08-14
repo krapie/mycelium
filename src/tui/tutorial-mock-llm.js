@@ -6,12 +6,19 @@ import { getLocale } from './i18n.js';
 // mock session store (see tutorial.js's seedMockSessions()/endTutorial()).
 // Two problems this solves at once: (1) speed — a real claude/codex
 // subprocess call takes anywhere from ~1 to 10+ seconds per call, several
-// times over in one tutorial run; (2) determinism — organize/classify.js's
-// prompt (and every other LLM prompt in this codebase) is hardcoded Korean
-// by deliberate design (see AGENTS.md), so a freshly-proposed folder name
-// with no existing folder to imitate comes back Korean even in an
-// English-locale demo. Canned English folder names sidestep that without
-// touching the real (intentionally Korean) production prompts at all.
+// times over in one tutorial run; (2) determinism — a real call's output
+// isn't scripted/repeatable the way a demo needs. Canned English/Korean
+// folder names (matching whichever locale the demo is running in) sidestep
+// that without needing a real subprocess at all.
+//
+// organize/classify.js's/learn.js's/insight.js's/split.js's real prompts
+// now follow config.json's locale themselves (config.js's contentLocale()
+// — no longer hardcoded Korean regardless of locale, see AGENTS.md), so the
+// parsing below (mockPlacements()'s id/summary regex, mockKnowledge()'s
+// folder-name regex, mockSplit()'s turn-number regex) has to recognize
+// BOTH language's label text now, not just Korean — each takes the same
+// `locale` this factory already resolves once, matching the real prompt's
+// own choice of label exactly.
 //
 // Dispatch is by a substring unique to each call site's own JSON response
 // schema: classify.js's suggestPlacements() prompt asks for `{"placements":
@@ -38,8 +45,10 @@ import { getLocale } from './i18n.js';
 // personas.js's keywords/knowledge/splitLabels are `{en, ko}` — resolved
 // once per createTutorialMockProvider() call against the active locale, so
 // every function below keeps working against plain values exactly as
-// before locale support existed.
-function resolveStorylines(storylines, locale) {
+// before locale support existed. Exported so demo/pitch-launch.js can reuse
+// it against demo/pitch-data.js's own storylines, which use this exact same
+// {en, ko}-per-field shape.
+export function resolveStorylines(storylines, locale) {
   return storylines.map((s) => ({
     folder: s.folder,
     keywords: s.keywords[locale],
@@ -52,9 +61,9 @@ function storylineForText(storylines, text) {
   return storylines.find((s) => s.keywords.test(text)) || null;
 }
 
-function mockPlacements(storylines, prompt) {
+function mockPlacements(storylines, prompt, locale) {
   const placements = [];
-  const re = /- id:(\S+) 현재폴더:\S+ 요약:(.+)/g;
+  const re = locale === 'ko' ? /- id:(\S+) 현재폴더:\S+ 요약:(.+)/g : /- id:(\S+) current folder:\S+ summary:(.+)/g;
   let m;
   while ((m = re.exec(prompt))) {
     const [, id, summary] = m;
@@ -64,8 +73,8 @@ function mockPlacements(storylines, prompt) {
   return JSON.stringify({ placements });
 }
 
-function mockKnowledge(storylines, prompt) {
-  const folderMatch = prompt.match(/"([^"]+)" 작업 공간/);
+function mockKnowledge(storylines, prompt, locale) {
+  const folderMatch = locale === 'ko' ? prompt.match(/"([^"]+)" 작업 공간/) : prompt.match(/"([^"]+)" workspace/);
   const requested = folderMatch?.[1];
   // isInSubtree-equivalent match, not strict equality: buildKnowledgeText()
   // itself is scoped by subtree (organize/folders.js's isInSubtree()), so a
@@ -100,13 +109,15 @@ function mockAutotag(prompt, locale) {
 }
 
 // The real prompt (split.js's suggestSplitBoundaries()) numbers every turn
-// as `턴 N [role]: text`, 1-indexed, no gaps — so the actual turn count is
-// read straight out of the prompt instead of assuming a fixed number.
-// Needed once storyline session lengths stopped all being the same (the CSE
-// persona's 3-way merge produces more total turns than a 2-way one), and a
-// hardcoded {1,2}/{3,4} split silently dropped everything past turn 4.
-function mockSplit(mergeStoryline, prompt) {
-  const turnNumbers = [...prompt.matchAll(/턴 (\d+) \[/g)].map((m) => Number(m[1]));
+// as `턴 N [role]: text` (ko) / `Turn N [role]: text` (en), 1-indexed, no
+// gaps — so the actual turn count is read straight out of the prompt
+// instead of assuming a fixed number. Needed once storyline session lengths
+// stopped all being the same (the CSE persona's 3-way merge produces more
+// total turns than a 2-way one), and a hardcoded {1,2}/{3,4} split silently
+// dropped everything past turn 4.
+function mockSplit(mergeStoryline, prompt, locale) {
+  const re = locale === 'ko' ? /턴 (\d+) \[/g : /Turn (\d+) \[/g;
+  const turnNumbers = [...prompt.matchAll(re)].map((m) => Number(m[1]));
   const total = turnNumbers.length ? Math.max(...turnNumbers) : 2;
   const mid = Math.max(1, Math.floor(total / 2));
   const [firstLabel, secondLabel] = mergeStoryline.splitLabels || ['Part 1', 'Part 2'];
@@ -134,6 +145,23 @@ function delayed(value) {
   return new Promise((resolve) => setTimeout(() => resolve(value), MOCK_DELAY_MS));
 }
 
+// Low-level factory, independent of personas.js's persona/id lookup — takes
+// already-resolved storylines (folder/keywords/knowledge as plain values,
+// not {en,ko}) plus the one storyline merge/split operates on. Pulled out of
+// createTutorialMockProvider() below so demo/pitch-launch.js's flagship
+// pitch video can build its own mock provider from demo/pitch-data.js's own
+// (differently-shaped) storyline bundle without duplicating this dispatch/
+// parsing logic in a second file — see AGENTS.md's own documented history of
+// exactly that kind of duplication drifting out of sync.
+export function createMockProvider(storylines, mergeStoryline, locale) {
+  return function mockProvider(prompt) {
+    if (prompt.includes('"placements"')) return delayed(mockPlacements(storylines, prompt, locale));
+    if (prompt.includes('"ranges"')) return delayed(mockSplit(mergeStoryline, prompt, locale));
+    if (prompt.includes('"decisions"')) return delayed(mockAutotag(prompt, locale));
+    return delayed(mockKnowledge(storylines, prompt, locale));
+  };
+}
+
 // Factory rather than a single stateless function: which storyline set (and
 // therefore which folder names/knowledge/split labels) applies depends on
 // which persona AND language the user picked before the tutorial started —
@@ -145,11 +173,5 @@ export function createTutorialMockProvider(personaId = 'swe', locale = getLocale
   const persona = findPersona(personaId);
   const storylines = resolveStorylines(persona.storylines, locale);
   const mergeStoryline = storylines[persona.mergeStorylineIndex];
-
-  return function tutorialMockProvider(prompt) {
-    if (prompt.includes('"placements"')) return delayed(mockPlacements(storylines, prompt));
-    if (prompt.includes('"ranges"')) return delayed(mockSplit(mergeStoryline, prompt));
-    if (prompt.includes('"decisions"')) return delayed(mockAutotag(prompt, locale));
-    return delayed(mockKnowledge(storylines, prompt));
-  };
+  return createMockProvider(storylines, mergeStoryline, locale);
 }

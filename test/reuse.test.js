@@ -58,6 +58,26 @@ test('injectAgentsMd() creates a fresh AGENTS.md with a marker block when none e
   assert.match(content, /Knowledge for fresh target\./);
 });
 
+test('injectAgentsMd() writes an English marker comment by default, Korean when locale is ko', async () => {
+  const { loadConfig, saveConfig } = await import('../src/config.js');
+  writeKnowledge('locale-target', 'Locale-target knowledge.');
+  const targetDir = mkdtempSync(join(tmpdir(), 'mycelium-agents-'));
+  const enRes = injectAgentsMd(targetDir, 'locale-target');
+  const enContent = readFileSync(enRes.path, 'utf8');
+  assert.match(enContent, /Managed by Mycelium/);
+  assert.doesNotMatch(enContent, /[가-힣]/);
+
+  saveConfig({ ...loadConfig(), locale: 'ko' });
+  try {
+    const targetDir2 = mkdtempSync(join(tmpdir(), 'mycelium-agents-'));
+    const koRes = injectAgentsMd(targetDir2, 'locale-target');
+    const koContent = readFileSync(koRes.path, 'utf8');
+    assert.match(koContent, /Mycelium이 관리하는 영역/);
+  } finally {
+    saveConfig({ ...loadConfig(), locale: 'en' });
+  }
+});
+
 test('injectAgentsMd() appends the marker block after existing user content, never touching it', () => {
   writeKnowledge('append-target', 'Append-target knowledge.');
   const targetDir = mkdtempSync(join(tmpdir(), 'mycelium-agents-'));

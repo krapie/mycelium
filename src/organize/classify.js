@@ -5,6 +5,7 @@ import { loadRaw, saveRaw, allRaw } from '../scanner.js';
 import { listTags } from '../index-db.js';
 import { complete, parseJsonReply, mapConcurrent } from '../llm.js';
 import { autoTagSession } from '../learn.js';
+import { contentLocale } from '../config.js';
 import { isArchive, isSuperseded, listTreeDirs, isInSubtree } from './folders.js';
 import { move } from './lineage.js';
 
@@ -180,33 +181,13 @@ function folderProfiles(sessions) {
  * stamped/collected, since aborting work that's concurrently running would
  * throw away real progress for no benefit.
  */
-export async function suggestPlacements({ onProgress, batchSize = 25, limit, cooldownMs = 0, folder, concurrency = 3 } = {}) {
-  const allSessions = allRaw();
-  const profiles = folderProfiles(allSessions);
-  let candidates = classificationCandidates({ cooldownMs, folder, sessions: allSessions })
-    .filter((n) => n.extracted.summary)
-    .sort((a, b) => (a.startedAt || '').localeCompare(b.startedAt || ''));
-  if (limit) candidates = candidates.slice(0, limit);
-  if (!candidates.length) return { ok: true, placements: [] };
-
-  const folderBlock = profiles.size
-    ? [...profiles.entries()].map(([folder, text]) => `폴더: ${folder}\n${text}`).join('\n\n')
-    : '(아직 정리된 폴더 없음)';
-  const known = new Set(profiles.keys());
-  const existingDirs = new Set(listTreeDirs());
-  const placements = [];
-  const chunks = [];
-  for (let i = 0; i < candidates.length; i += batchSize) chunks.push(candidates.slice(i, i + batchSize));
-
-  let firstError = null;
-  let completedChunks = 0;
-  await mapConcurrent(chunks, concurrency, async (chunk) => {
-    // 현재 폴더(있다면)를 힌트로 같이 준다 — 이미 어딘가 들어가 있는
-    // 세션이라도 그 폴더의 하위 주제일 수 있으니 참고만 하라는 뜻.
-    const sessionBlock = chunk
-      .map((n) => `- id:${n.id} 현재폴더:${n.folder || '(없음)'} 요약:${n.extracted.summary}`)
-      .join('\n');
-    const prompt = `아래는 이미 사람이 정리해 둔 폴더들과 그 안 세션 요약이다.
+// Korean branch is the original prompt, unchanged — see contentLocale()
+// (config.js). `folderBlock`/`sessionBlock` are already fully built by the
+// caller in the target language (see foldersBlockText()/sessionsBlockText()
+// below), so this only needs to localize its own instructional text.
+function placementPrompt(folderBlock, sessionBlock, locale) {
+  if (locale === 'ko') {
+    return `아래는 이미 사람이 정리해 둔 폴더들과 그 안 세션 요약이다.
 
 ${folderBlock}
 
@@ -219,6 +200,57 @@ ${sessionBlock}
 
 출력 형식(JSON만, 다른 설명 없이):
 {"placements":[{"id":"...", "folder":"..."|null, "reason":"짧은 이유"}]}`;
+  }
+  return `Below are the folders a human has already organized, and the session summaries inside each.
+
+${folderBlock}
+
+---
+Below are sessions that need (re)classifying. For each one, judge which of the above folders is the closest match by topic/nature.
+- If an existing folder fits well, use that exact folder path.
+- If no existing folder fits but the session is a clearly distinct sub-topic of its current folder, you may propose a new folder path (e.g. if the current folder is "company/server" and this session is about "logging", propose "company/server/logging" as a new subfolder name).
+- If it's still ambiguous, set folder to null.
+${sessionBlock}
+
+Output format (JSON only, no other explanation):
+{"placements":[{"id":"...", "folder":"..."|null, "reason":"short reason"}]}`;
+}
+
+export async function suggestPlacements({ onProgress, batchSize = 25, limit, cooldownMs = 0, folder, concurrency = 3 } = {}) {
+  const locale = contentLocale();
+  const allSessions = allRaw();
+  const profiles = folderProfiles(allSessions);
+  let candidates = classificationCandidates({ cooldownMs, folder, sessions: allSessions })
+    .filter((n) => n.extracted.summary)
+    .sort((a, b) => (a.startedAt || '').localeCompare(b.startedAt || ''));
+  if (limit) candidates = candidates.slice(0, limit);
+  if (!candidates.length) return { ok: true, placements: [] };
+
+  const folderLabel = locale === 'ko' ? '폴더' : 'Folder';
+  const folderBlock = profiles.size
+    ? [...profiles.entries()].map(([folder, text]) => `${folderLabel}: ${folder}\n${text}`).join('\n\n')
+    : locale === 'ko'
+      ? '(아직 정리된 폴더 없음)'
+      : '(no folders organized yet)';
+  const known = new Set(profiles.keys());
+  const existingDirs = new Set(listTreeDirs());
+  const placements = [];
+  const chunks = [];
+  for (let i = 0; i < candidates.length; i += batchSize) chunks.push(candidates.slice(i, i + batchSize));
+
+  let firstError = null;
+  let completedChunks = 0;
+  await mapConcurrent(chunks, concurrency, async (chunk) => {
+    // Current folder (if any) is given as a hint — even a session already
+    // sitting somewhere might belong to a sub-topic of that same folder.
+    const sessionBlock = chunk
+      .map((n) =>
+        locale === 'ko'
+          ? `- id:${n.id} 현재폴더:${n.folder || '(없음)'} 요약:${n.extracted.summary}`
+          : `- id:${n.id} current folder:${n.folder || '(none)'} summary:${n.extracted.summary}`,
+      )
+      .join('\n');
+    const prompt = placementPrompt(folderBlock, sessionBlock, locale);
 
     let reply;
     try {

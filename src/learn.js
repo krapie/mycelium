@@ -1,21 +1,29 @@
 import { complete, parseJsonReply, mapConcurrent } from './llm.js';
 import { loadRaw, saveRaw, allRaw } from './scanner.js';
 import { listTags } from './index-db.js';
+import { contentLocale } from './config.js';
 
 // Cap how much of a long session we send to the tagger. First + last slices
 // capture the intent and the outcome without paying for the whole transcript.
-function sessionExcerpt(neutral, budget = 6000) {
+function sessionExcerpt(neutral, locale, budget = 6000) {
   const lines = neutral.turns.map((t) => `${t.role}: ${t.text}`);
   const joined = lines.join('\n');
   if (joined.length <= budget) return joined;
   const head = joined.slice(0, Math.floor(budget * 0.6));
   const tail = joined.slice(-Math.floor(budget * 0.4));
-  return `${head}\n…(중략)…\n${tail}`;
+  const marker = locale === 'ko' ? '…(중략)…' : '…(truncated)…';
+  return `${head}\n${marker}\n${tail}`;
 }
 
-function buildPrompt(neutral, existingTags) {
-  const vocab = existingTags.length ? existingTags.join(', ') : '(아직 없음)';
-  return `아래 세션 기록을 읽고, 이 세션의 **실질 내용(알맹이)**을 아래 JSON으로만 출력해라. 설명 금지.
+// Korean prompt below is the original, unchanged — see contentLocale()
+// (config.js) for why this branches instead of always using one language:
+// generated content (title/tags/summary/decisions/todos) should follow
+// config.json's locale the same way TUI chrome already does, not be
+// hardcoded regardless of it.
+function buildPrompt(neutral, existingTags, locale) {
+  if (locale === 'ko') {
+    const vocab = existingTags.length ? existingTags.join(', ') : '(아직 없음)';
+    return `아래 세션 기록을 읽고, 이 세션의 **실질 내용(알맹이)**을 아래 JSON으로만 출력해라. 설명 금지.
 
 핵심 규칙:
 - title: 이 세션이 무엇에 관한 것인지 한 줄로 나타내는 짧은 제목(명사구, 12자~30자). 예: "KT Cloud vs AWS 선택 이유", "JWT 인증 미들웨어 리팩토링".
@@ -31,10 +39,34 @@ function buildPrompt(neutral, existingTags) {
 
 세션 기록:
 """
-${sessionExcerpt(neutral)}
+${sessionExcerpt(neutral, locale)}
 """
 
 출력 형식:
+{"title": "", "tags": [], "summary": "", "decisions": [], "todos": []}`;
+  }
+
+  const vocab = existingTags.length ? existingTags.join(', ') : '(none yet)';
+  return `Read the session record below and output ONLY the following JSON describing the **actual substance** of this session. No explanation.
+
+Key rules:
+- title: a short title (noun phrase, 12-30 chars) in one line, naming what this session is actually about. e.g. "Why KT Cloud over AWS", "Refactor JWT auth middleware".
+- summary: capture the **actual substance of what was discussed** in 2-3 sentences. Must include what was asked or attempted AND the **key answer, conclusion, result, or reasoning**.
+    · Q&A/discussion/research sessions: the gist of the question + the key answer and its reasoning. e.g. "Discussed using a domestic cloud provider instead of AWS. Data sovereignty and regional compliance requirements were the main reasons."
+    · Coding/work sessions: what was built or fixed and what the result was.
+    · **Forbidden**: meta-descriptions like "no code changes", "just provided information", "user asked and assistant answered". Summarize the actual content (the answer/conclusion/knowledge) itself — what matters is the substance of the conversation, not whether code changed.
+- tags: 2-4 topic tags. Reuse one from "existing tags" below if it fits; only invent a new one if none do. Short noun phrases.
+- decisions: decisions/conclusions reached (empty array if none).
+- todos: remaining action items (empty array if none).
+
+Existing tags: ${vocab}
+
+Session record:
+"""
+${sessionExcerpt(neutral, locale)}
+"""
+
+Output format:
 {"title": "", "tags": [], "summary": "", "decisions": [], "todos": []}`;
 }
 
@@ -62,7 +94,7 @@ export async function autoTagSession(sessionId, { existingTags } = {}) {
   const vocab = existingTags || listTags().map((t) => t.name);
   let reply;
   try {
-    reply = await complete(buildPrompt(n, vocab));
+    reply = await complete(buildPrompt(n, vocab, contentLocale()));
   } catch (err) {
     // complete() rejects on spawn failure, non-zero exit, or timeout — this
     // was previously unguarded, so any of those became an unhandled promise
