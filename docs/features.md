@@ -368,7 +368,14 @@ argument-parsing/routing/output-formatting layer itself is not). [untested]
   overridable `app.quitGuard` (the tutorial takes it over during its own
   run). [untested]
 - **First-run onboarding prompt** — offers the interactive tutorial or a
-  static overview; `config.onboarded` set on first answer either way. [untested]
+  static overview; `config.onboarded` set on first answer either way.
+  `runTui()`'s call to `daemon.js`'s `startTuiRoutine()` (real background
+  `scanCycle()`, unawaited) is deliberately deferred until onboarding
+  actually concludes (tutorial completed/declined, or not a first launch at
+  all) — a real bug in v0.1.0 called it unconditionally before this check,
+  so it raced the tutorial's own mock-session seeding on a brand new
+  install and could show real `~/.claude`/`~/.codex`/`~/.kiro` session
+  titles mixed into what's supposed to be an isolated tutorial. [untested]
 - **Post-mount notification** — pending-suggestion toast takes priority over
   the pending-knowledge-review toast, which takes priority over the
   unfiled-backlog hint. Below `FIRST_SCAN_MODAL_THRESHOLD` (20) unfiled

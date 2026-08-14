@@ -157,7 +157,22 @@ export async function runTui({ forceTutorial = false } = {}) {
   // for as long as the TUI is open, on the same timers a standalone daemon
   // would use — see daemon.js's startTuiRoutine() for why this replaced an
   // auto-spawned separate process. Stops naturally when the TUI exits.
-  startTuiRoutine();
+  //
+  // Deliberately NOT called here, before the onboarded check below — a real
+  // bug found in production (v0.1.0): startTuiRoutine() kicks off scanCycle()
+  // without awaiting it, so it runs concurrently with the first-run
+  // onboarding flow below. On a brand new install, that flow spends real
+  // wall-clock time on language/tour/persona pickers before seedMockSessions()
+  // ever writes the first mock session — plenty of time for the real scan to
+  // import actual ~/.claude/~/.codex/~/.kiro history into ~/.mycelium first.
+  // sessionsView() shows ALL unfiled sessions, not just demo:true ones, so
+  // the tutorial ended up showing a mix of real personal session titles
+  // alongside the mock ones — exactly the "adapters read real data
+  // regardless of MYCELIUM_HOME" hazard demo/pitch-launch.js's own header
+  // comment warns about, just triggered by a real user's real first launch
+  // instead of a recording. Fixed by moving each call below to fire only
+  // once onboarding has genuinely concluded (tutorial completed or
+  // declined, or this isn't a first launch at all) — never racing it.
   const cfg = loadConfig();
 
   // First-ever launch: offer the interactive tutorial before dropping into
@@ -204,13 +219,21 @@ export async function runTui({ forceTutorial = false } = {}) {
                   api.resetToRoot();
                   app.render();
                   notifyPostMount(app);
+                  // Only now — the mock rows are gone (endTutorial()'s sweep)
+                  // and the human is looking at their real (still-empty, not
+                  // yet scanned) cockpit, not the tutorial — see this
+                  // function's own header comment for why this moved here.
+                  startTuiRoutine();
                 },
                 personaId,
               );
             });
           } else {
             // Declining the guided tour still gets the short static overview.
-            welcomeModal(app, () => notifyPostMount(app));
+            welcomeModal(app, () => {
+              notifyPostMount(app);
+              startTuiRoutine();
+            });
           }
         },
       );
@@ -218,6 +241,10 @@ export async function runTui({ forceTutorial = false } = {}) {
     return;
   }
 
+  // Already onboarded — no tutorial/mock-seeding race to avoid here, so this
+  // is the one path where starting real background upkeep right away (same
+  // as it always did) is safe.
+  startTuiRoutine();
   await app.show(sessionsView());
   app.render();
   notifyPostMount(app);
