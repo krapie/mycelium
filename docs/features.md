@@ -827,7 +827,17 @@ straight into real data feels linguistically seamless instead of switching
 back to whatever language was set before. Deliberately scoped to the full-
 handoff path only, not every demo run: previewing/presenting the demo in a
 different language shouldn't silently change real settings unless the
-presenter actually continues into real data right after. [tested]
+presenter actually continues into real data right after. Before starting the
+real TUI, `cli.js` also stamps `onboarded: true` onto the real config (via
+`saveConfig({ ...loadConfig(), onboarded: true })`) — a real bug had the
+handoff carry over locale but not this flag, so `runTui()`'s own
+onboarding check (see the App shell section above) saw a "first launch"
+immediately after the tutorial and re-showed the language/tour picker on
+top of the just-handed-off real session list, reading as if the demo had
+silently failed and dumped the presenter back at square one. Completing the
+tutorial's final step is the one path where treating it as equivalent to
+real onboarding is correct — it only fires on a full `completed: true` run,
+never an early `q`/Esc bail. [tested]
 (`buildMockSessions()` and `tutorial-mock-llm.js`'s prompt-dispatch/
 classification/folder-lookup logic are unit-tested as pure functions;
 `test/e2e/demo-e2e.test.js` drives the real interactive state machine
@@ -860,6 +870,33 @@ of scope for this refactor pass (the original plan scoped Phase 7 as
 "investigate feasibility, execute separately," and this note is that
 investigation). A follow-up plan should treat it as its own reviewed change,
 not a rider on an unrelated refactor.
+
+**`isModalOpen()`'s blind spot to permanent widgets (real bug, fixed).**
+The `app.screen.children.length > baseline` heuristic only detects widgets
+that get freshly parented to the screen — it's blind to a visibility toggle
+on something mounted once and reused, which is exactly what `app.js`'s
+`toast` widget is (created once in `createApp()`, `show()`/`hide()` never
+touch `screen.children`). `sessions.js`'s merge (`Shift+M`) and split
+(`Shift+S`) handlers each start a second, *synchronous* auto-summarize
+spinner (`autoTagSession()`) immediately after their own review modal — a
+real, counted widget — is destroyed. The narrator's `thenWait: 'close'` poll
+saw the review modal's child-count drop and advanced to the next step
+right away, while the auto-summarize spinner was still visibly on screen
+underneath the next step's caption — read as "two modals open at once."
+Fixed with a `busyWidgets` reference counter on `app` (`app.js`),
+incremented/decremented by both `startSpinner()` and `startProgressBar()`
+around their `stop()`, exposed as `app.isBusy()`; `isModalOpen()` now checks
+`app.screen.children.length > baseline || app.isBusy()`. Narrower than the
+`app.modalDepth` refactor discussed in the testability note above (which
+would cover every picker/prompt/viewer for testability) — this only needed
+to close the one real gap (spinners/progress bars, the app's only
+permanent, toggle-visibility widgets), not the full self-parenting-widget
+audit that refactor would require. [tested] (re-verified via a disposable,
+non-committed VHS tape driving the real `mycelium demo` end to end, frame-
+extracted at the split step's confirm→auto-summarize transition before and
+after the fix — see this session's history, not itself part of the
+automated suite; `test/e2e/demo-e2e.test.js`'s existing merge/split
+coverage continues to pass unchanged)
 
 **Superseded, for coverage purposes, by a different approach**:
 `test/e2e/demo-e2e.test.js` doesn't unit-test the STEPS reducer in isolation

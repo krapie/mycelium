@@ -25,6 +25,7 @@ import { assembleContext, injectAgentsMd, contextForSession } from './reuse.js';
 import { buildHandoff } from './handoff.js';
 import { resumeCommandLine } from './agents.js';
 import { copyToClipboard } from './tui/clipboard.js';
+import { loadConfig, saveConfig } from './config.js';
 
 function fail(msg) {
   console.error(msg);
@@ -455,6 +456,22 @@ async function main() {
               // the real tool keeps whatever language it already had, not
               // a hard failure blocking the handoff itself.
             }
+            // A real bug found in production: on a real ~/.mycelium that's
+            // ALSO never been onboarded yet (a brand new install, or one
+            // where the user tried `mycelium demo` before ever running plain
+            // `mycelium`), runTui() below would immediately show its OWN
+            // first-run onboarding prompt — language picker, "want a tour?",
+            // persona picker — right on top of the demo the human just
+            // finished. Someone who just sat through the interactive
+            // tutorial does not expect an equivalent second one a moment
+            // later; it read as the demo breaking/restarting rather than
+            // handing off. Mark the real store onboarded here, same as
+            // finishing (or declining) the real tutorial already does —
+            // this handoff only ever happens after a FULL completion
+            // (DEMO_HANDOFF_EXIT_CODE, not an early Esc bail), so treating
+            // it as equivalent real onboarding is exactly right, not a
+            // shortcut around it.
+            saveConfig({ ...loadConfig(), onboarded: true });
             const { runTui } = await import('./tui/index.js');
             await runTui();
           } else {
