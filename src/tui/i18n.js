@@ -81,7 +81,8 @@ const en = {
   'sessions.firstScanBody': (n, fg) =>
     `{bold}${n} sessions captured, nothing organized yet.{/}\n\n` +
     `Press {${fg}-fg}o{/} to sort them all by content — Mycelium reads and classifies each one, which takes real time for a backlog this size.\n\n` +
-    `Feel free to switch away and do something else in the meantime — it keeps running. Come back and review the suggestions whenever you're ready.`,
+    `Feel free to switch away and do something else in the meantime — it keeps running. Come back and review the suggestions whenever you're ready.\n\n` +
+    `Tip: don't need all of these? Press {${fg}-fg}Space{/} to select sessions, then {${fg}-fg}x{/} to delete them — fewer sessions means fewer LLM calls when you press o.`,
   'detail.noSummary': '(no summary yet — press a in the session to summarize/tag)',
   'detail.lastActive': 'last active',
   'detail.firstRequest': 'First request:',
@@ -282,6 +283,9 @@ const en = {
   'smart.newFolder': 'new folder',
   'smart.previewTitle': 'Suggested placements',
   'smart.pendingOnOpen': (n) => `${n} suggestion${n === 1 ? '' : 's'} waiting — press o to review`,
+  'smart.summarizeStoppedEarly': (done, total) =>
+    `Stopped after summarizing ${done}/${total} — looks like your Claude/Codex usage limit was hit. Your progress is saved; press o again later to continue.`,
+  'smart.placementsStoppedEarly': (err) => `Some placements failed (${err}) — showing what did come back. Press o again later for the rest.`,
 
   // calendar.js — Calendar tab (v key toggles Sessions ↔ Calendar)
   'calendar.header': 'Calendar',
@@ -349,7 +353,8 @@ const ko = {
   'sessions.firstScanBody': (n, fg) =>
     `{bold}${n}개 세션을 가져왔지만 아직 정리되지 않았습니다.{/}\n\n` +
     `{${fg}-fg}o{/}를 눌러 내용 기준으로 전부 정리해보세요 — Mycelium이 각 세션을 읽고 분류하는데, 세션이 많으면 실제로 시간이 걸립니다.\n\n` +
-    `그 동안 다른 작업을 하다 와도 괜찮습니다 — 계속 진행되고 있으니, 준비되면 돌아와서 제안 내용을 검토하세요.`,
+    `그 동안 다른 작업을 하다 와도 괜찮습니다 — 계속 진행되고 있으니, 준비되면 돌아와서 제안 내용을 검토하세요.\n\n` +
+    `팁: 필요 없는 세션이 있다면 {${fg}-fg}Space{/}로 선택한 뒤 {${fg}-fg}x{/}로 삭제하세요 — 세션이 적을수록 o를 눌렀을 때 LLM 호출도 줄어듭니다.`,
   'detail.noSummary': '(요약 없음 — 세션에서 a를 눌러 요약·태깅 생성)',
   'detail.lastActive': '최근 활동',
   'detail.firstRequest': '첫 요청:',
@@ -521,6 +526,9 @@ const ko = {
   'smart.newFolder': '신규 폴더',
   'smart.previewTitle': '제안된 폴더 배치',
   'smart.pendingOnOpen': (n) => `${n}개 정리 제안 대기 중 — o로 확인`,
+  'smart.summarizeStoppedEarly': (done, total) =>
+    `${done}/${total}개 요약 후 중단됨 — Claude/Codex 사용량 한도에 도달한 것 같습니다. 지금까지의 진행 상황은 저장되어 있으니, 나중에 다시 o를 눌러 이어서 진행하세요.`,
+  'smart.placementsStoppedEarly': (err) => `일부 배치 제안이 실패했습니다 (${err}) — 성공한 것만 표시합니다. 나머지는 나중에 다시 o를 눌러주세요.`,
 
   // calendar.js — 캘린더 탭 (v 키로 세션 ↔ 캘린더 전환)
   'calendar.header': '캘린더',

@@ -45,6 +45,16 @@ import { copyToClipboard } from '../clipboard.js';
 import { t } from '../i18n.js';
 import { createResumeHandoff } from '../resume-handoff.js';
 
+// A large first-time backlog (hundreds of unfiled sessions from a fresh
+// import) would otherwise mean that many real claude/codex subprocess
+// calls in one `o` press — easily enough to exhaust a tighter usage quota
+// mid-run (see "session 100% usage" reports). Same env-override convention
+// as daemon/cycles.js's TAG_BATCH_LIMIT/SMART_ORGANIZE_BATCH_LIMIT. Kept
+// separate from suggestPlacements()'s own limit:200 below — summarizing is
+// the more expensive per-item cost (a full session's turns vs. a compact
+// summary line), so it gets the tighter cap.
+const SUMMARIZE_BATCH_LIMIT = Number(process.env.MYCELIUM_SUMMARIZE_BATCH_LIMIT || 30);
+
 // Plain-text rendering of a session for the clipboard (title, summary, and the
 // full transcript — everything you'd want to paste elsewhere).
 function sessionToText(n) {
@@ -871,8 +881,13 @@ export function sessionsView(opts = {}) {
           const summarizeSpin = pending ? app.startProgressBar(t('sessions.summarizingLabel')) : null;
           const summarized = [];
           let summarizedDone = 0;
-          await summarizeCandidates({
+          const summarizeRes = await summarizeCandidates({
             folder: state.folder,
+            // Bounds this call's own subprocess volume — see
+            // SUMMARIZE_BATCH_LIMIT's own comment above. Pressing `o` again
+            // continues where this left off (already-summarized candidates
+            // are excluded up front, see classificationCandidates() above).
+            limit: SUMMARIZE_BATCH_LIMIT,
             onProgress: (s) => {
               if (s) summarized.push(s.id);
               summarizeSpin?.update(++summarizedDone, pending);
@@ -881,6 +896,14 @@ export function sessionsView(opts = {}) {
           summarizeSpin?.stop();
           // Only the just-summarized sessions actually changed.
           if (summarized.length) data.refreshMany(summarized);
+          // A real usage-limit exhaustion trips summarizeCandidates()'s own
+          // circuit breaker (see organize.js) before suggestPlacements() is
+          // even attempted — every already-summarized session's progress is
+          // safe (each one is written to disk as it completes), so this is
+          // "stop here, not everything is lost," not a hard failure.
+          if (summarizeRes.stoppedEarly) {
+            return app.notify(t('smart.summarizeStoppedEarly', summarizeRes.done, summarizeRes.total), 8);
+          }
           const placeSpin = app.startProgressBar(t('smart.running'));
           const res = await suggestPlacements({
             cooldownMs: 0,
@@ -894,6 +917,10 @@ export function sessionsView(opts = {}) {
           placeSpin.stop();
           if (!res.ok) return app.notify(res.error, 4);
           matches = res.placements.filter((p) => p.folder);
+          // A partial failure (some chunks succeeded, one hit real usage
+          // exhaustion) still has real placements worth reviewing — surface
+          // both: whatever's usable below, plus why the rest is missing.
+          if (res.error) app.notify(t('smart.placementsStoppedEarly', res.error), 6);
           if (!matches.length) return app.notify(t('smart.noMatches'), 3);
           queueSuggestions(matches);
         }

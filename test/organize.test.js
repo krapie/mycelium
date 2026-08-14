@@ -484,6 +484,72 @@ test('suggestPlacements() surfaces a chunk failure but still finishes/stamps chu
   assert.ok(loadRaw('sp-fail-b').lastClassifiedAt);
 });
 
+test('suggestPlacements() returns partial success: a chunk failure no longer discards placements another chunk already computed', async () => {
+  seed('sp-partial-fail', { folder: null, organizedBy: 'auto', extracted: { title: 'x', tags: [], summary: 'partial-fail summary', decisions: [], todos: [] } });
+  seed('sp-partial-ok', { folder: null, organizedBy: 'auto', extracted: { title: 'x', tags: [], summary: 'partial-ok summary', decisions: [], todos: [] } });
+  __setTestProvider(async (prompt) => {
+    if (prompt.includes('partial-fail summary')) throw new Error('quota exhausted');
+    return JSON.stringify({ placements: [{ id: 'sp-partial-ok', folder: 'sp-partial-target', reason: 'good fit' }] });
+  });
+
+  const res = await suggestPlacements({ folder: null, batchSize: 1, concurrency: 2 });
+
+  // Real placements survived the sibling chunk's failure instead of being
+  // thrown away wholesale.
+  assert.equal(res.ok, true);
+  assert.match(res.error, /quota exhausted/);
+  const ok = res.placements.find((p) => p.id === 'sp-partial-ok');
+  assert.equal(ok.folder, 'sp-partial-target');
+});
+
+test('summarizeCandidates() limit bounds how many candidates are processed in one call, oldest first', async () => {
+  seed('sc-limit-old', { folder: 'sc-limit-scope', organizedBy: 'auto', startedAt: '2020-01-01T00:00:00.000Z', turns: [{ role: 'user', text: 'oldest one' }] });
+  seed('sc-limit-new', { folder: 'sc-limit-scope', organizedBy: 'auto', startedAt: '2024-01-01T00:00:00.000Z', turns: [{ role: 'user', text: 'newest one' }] });
+  const seenIds = [];
+  __setTestProvider(async (prompt) => {
+    seenIds.push(prompt.includes('oldest one') ? 'sc-limit-old' : 'sc-limit-new');
+    return JSON.stringify({ title: 'Generated', tags: [], summary: 'generated', decisions: [], todos: [] });
+  });
+
+  const res = await summarizeCandidates({ folder: 'sc-limit-scope', limit: 1 });
+
+  assert.equal(res.total, 1);
+  assert.deepEqual(seenIds, ['sc-limit-old']);
+  assert.equal(loadRaw('sc-limit-new').extracted.summary, null); // untouched, left for a later call
+});
+
+test('summarizeCandidates() stops after consecutive failures instead of burning through the whole backlog', async () => {
+  for (let i = 0; i < 9; i++) {
+    seed(`sc-circuit-${i}`, { folder: 'sc-circuit-scope', organizedBy: 'auto', turns: [{ role: 'user', text: `call ${i}` }] });
+  }
+  let calls = 0;
+  __setTestProvider(async () => {
+    calls++;
+    throw new Error('usage limit');
+  });
+
+  const res = await summarizeCandidates({ folder: 'sc-circuit-scope', concurrency: 1, stopAfterConsecutiveFailures: 3 });
+
+  assert.equal(res.stoppedEarly, true);
+  assert.equal(calls, 3); // never attempted the remaining 6
+});
+
+test('suggestPlacements() stops after consecutive chunk failures instead of every remaining chunk', async () => {
+  for (let i = 0; i < 9; i++) {
+    seed(`sp-circuit-${i}`, { folder: null, organizedBy: 'auto', extracted: { title: 'x', tags: [], summary: `circuit summary ${i}`, decisions: [], todos: [] } });
+  }
+  let calls = 0;
+  __setTestProvider(async () => {
+    calls++;
+    throw new Error('usage limit');
+  });
+
+  const res = await suggestPlacements({ folder: null, batchSize: 1, concurrency: 1, stopAfterConsecutiveFailures: 3 });
+
+  assert.equal(res.stoppedEarly, true);
+  assert.equal(calls, 3);
+});
+
 test('queueSuggestions()/pendingSuggestions()/clearSuggestions() round-trip without any LLM involvement', () => {
   seed('qs-1', { folder: null, organizedBy: 'auto' });
 

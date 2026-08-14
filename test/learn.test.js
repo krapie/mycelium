@@ -240,3 +240,24 @@ test('tagAll() with no concurrency option stays sequential (default unchanged fo
 
   assert.equal(maxInFlight, 1);
 });
+
+test('tagAll() stops after consecutive failures instead of burning through the whole backlog', async () => {
+  // Deliberately dated before every other test in this file's shared store
+  // (see AGENTS.md's "shared temp store persists across tests in one
+  // file") — oldest-first ordering guarantees these are the first ones
+  // tagAll() attempts, so the circuit breaker trips on exactly these,
+  // independent of whatever other tests left lying around.
+  for (let i = 0; i < 9; i++) {
+    seed(`circuit-${i}`, { startedAt: `1990-01-0${i + 1}T00:00:00.000Z`, turns: [{ role: 'user', text: `circuit call ${i}` }] });
+  }
+  let calls = 0;
+  __setTestProvider(async () => {
+    calls++;
+    throw new Error('usage limit');
+  });
+
+  const res = await tagAll({ concurrency: 1, stopAfterConsecutiveFailures: 3 });
+
+  assert.equal(res.stoppedEarly, true);
+  assert.equal(calls, 3); // never attempted the remaining 6, let alone anything else in the store
+});
