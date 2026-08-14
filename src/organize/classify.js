@@ -73,9 +73,30 @@ export function classificationCandidates({ cooldownMs = 0, folder, sessions } = 
  * — each one spawns a real `claude`/`codex` subprocess, and piling up too
  * many at once is exactly what issue #3 was (looked like runaway console
  * windows on Windows).
+ *
+ * `limit`, sorted oldest-first same as suggestPlacements()/tagAll(), bounds
+ * how many candidates get summarized in one call — a large first-time
+ * backlog (dozens/hundreds of unfiled sessions) would otherwise mean that
+ * many real LLM calls in a single `o` press, easily enough to exhaust a
+ * tighter usage quota mid-run (see "session 100% usage" reports). Omit it
+ * (default, every caller before this) for the previous unbounded behavior.
+ *
+ * Also passes `stopAfterConsecutiveFailures` to mapConcurrent() (llm.js,
+ * default 3) — once real usage runs out, every subsequent call fails
+ * identically, so this stops burning through the rest of `targets` once
+ * that's clear rather than one-at-a-time failing through the whole
+ * backlog. Whatever already succeeded is untouched either way: each
+ * candidate's summary is written to its own raw/<id>.json inside its own
+ * try/catch below, so stopping partway through never loses prior
+ * progress — press `o` again later to pick up where it left off (the
+ * `!n.extracted.summary` filter above already skips everything already
+ * done).
  */
-export async function summarizeCandidates({ onProgress, concurrency = 3, folder } = {}) {
-  const targets = classificationCandidates({ folder }).filter((n) => !n.extracted.summary);
+export async function summarizeCandidates({ onProgress, concurrency = 3, folder, limit, stopAfterConsecutiveFailures = 3 } = {}) {
+  let targets = classificationCandidates({ folder })
+    .filter((n) => !n.extracted.summary)
+    .sort((a, b) => (a.startedAt || '').localeCompare(b.startedAt || ''));
+  if (limit) targets = targets.slice(0, limit);
   // listTags() is sqlite-backed (cheap) — avoids a second full raw/ scan
   // just to derive the same vocabulary classificationCandidates() already
   // paid for once above.
@@ -83,23 +104,30 @@ export async function summarizeCandidates({ onProgress, concurrency = 3, folder 
   let done = 0;
   let failed = 0;
 
-  await mapConcurrent(targets, concurrency, async (n) => {
-    try {
-      const res = await autoTagSession(n.id, { existingTags: [...vocab] });
-      if (res.ok) {
-        done++;
-        for (const t of res.session.extracted.tags) vocab.add(t);
-        if (onProgress) onProgress(res.session);
-      } else {
+  const { stoppedEarly } = await mapConcurrent(
+    targets,
+    concurrency,
+    async (n) => {
+      try {
+        const res = await autoTagSession(n.id, { existingTags: [...vocab] });
+        if (res.ok) {
+          done++;
+          for (const t of res.session.extracted.tags) vocab.add(t);
+          if (onProgress) onProgress(res.session);
+          return { ok: true };
+        }
         failed++;
         if (onProgress) onProgress(null, new Error(res.error));
+        return { ok: false };
+      } catch (err) {
+        failed++;
+        if (onProgress) onProgress(null, err);
+        return { ok: false };
       }
-    } catch (err) {
-      failed++;
-      if (onProgress) onProgress(null, err);
-    }
-  });
-  return { done, failed, total: targets.length };
+    },
+    { stopAfterConsecutiveFailures },
+  );
+  return { done, failed, total: targets.length, stoppedEarly };
 }
 
 /**
@@ -175,11 +203,18 @@ function folderProfiles(sessions) {
  * `claude`/`codex` subprocesses stays the same regardless of which call
  * site triggered it). Each chunk still batches up to `batchSize` sessions
  * into one prompt, so concurrency bounds chunks in flight, not raw session
- * count. On any chunk's LLM failure, the error is surfaced (same
- * `{ok:false}` shape as before) but — unlike the old strictly-sequential
- * version — other chunks that were already in flight still finish and get
- * stamped/collected, since aborting work that's concurrently running would
- * throw away real progress for no benefit.
+ * count.
+ *
+ * A chunk failing no longer discards every other chunk's already-computed
+ * placements (a real bug: quota exhaustion partway through used to mean
+ * `{ok:false}` with the successful chunks' work silently thrown away).
+ * `error` is now set alongside `ok:true, placements` when some chunks
+ * failed but others didn't — `ok:false` only when nothing usable came back
+ * at all. `stopAfterConsecutiveFailures` (mapConcurrent(), default 3) stops
+ * scheduling new chunks once that many fail in a row (real usage
+ * exhaustion makes every subsequent call fail identically) rather than
+ * burning through every remaining chunk one at a time; chunks already in
+ * flight still finish and get stamped/collected.
  */
 // Korean branch is the original prompt, unchanged — see contentLocale()
 // (config.js). `folderBlock`/`sessionBlock` are already fully built by the
@@ -216,7 +251,15 @@ Output format (JSON only, no other explanation):
 {"placements":[{"id":"...", "folder":"..."|null, "reason":"short reason"}]}`;
 }
 
-export async function suggestPlacements({ onProgress, batchSize = 25, limit, cooldownMs = 0, folder, concurrency = 3 } = {}) {
+export async function suggestPlacements({
+  onProgress,
+  batchSize = 25,
+  limit,
+  cooldownMs = 0,
+  folder,
+  concurrency = 3,
+  stopAfterConsecutiveFailures = 3,
+} = {}) {
   const locale = contentLocale();
   const allSessions = allRaw();
   const profiles = folderProfiles(allSessions);
@@ -240,44 +283,55 @@ export async function suggestPlacements({ onProgress, batchSize = 25, limit, coo
 
   let firstError = null;
   let completedChunks = 0;
-  await mapConcurrent(chunks, concurrency, async (chunk) => {
-    // Current folder (if any) is given as a hint — even a session already
-    // sitting somewhere might belong to a sub-topic of that same folder.
-    const sessionBlock = chunk
-      .map((n) =>
-        locale === 'ko'
-          ? `- id:${n.id} 현재폴더:${n.folder || '(없음)'} 요약:${n.extracted.summary}`
-          : `- id:${n.id} current folder:${n.folder || '(none)'} summary:${n.extracted.summary}`,
-      )
-      .join('\n');
-    const prompt = placementPrompt(folderBlock, sessionBlock, locale);
+  const { stoppedEarly } = await mapConcurrent(
+    chunks,
+    concurrency,
+    async (chunk) => {
+      // Current folder (if any) is given as a hint — even a session already
+      // sitting somewhere might belong to a sub-topic of that same folder.
+      const sessionBlock = chunk
+        .map((n) =>
+          locale === 'ko'
+            ? `- id:${n.id} 현재폴더:${n.folder || '(없음)'} 요약:${n.extracted.summary}`
+            : `- id:${n.id} current folder:${n.folder || '(none)'} summary:${n.extracted.summary}`,
+        )
+        .join('\n');
+      const prompt = placementPrompt(folderBlock, sessionBlock, locale);
 
-    let reply;
-    try {
-      reply = await complete(prompt);
-    } catch (err) {
-      if (!firstError) firstError = `LLM failed: ${err.message}`;
-      return;
-    }
-    const parsed = parseJsonReply(reply);
-    for (const p of parsed?.placements || []) {
-      if (!chunk.some((c) => c.id === p.id)) continue;
-      const folder = known.has(p.folder) || isSafeFolderPath(p.folder) ? p.folder : null;
-      placements.push({ id: p.id, folder, reason: p.reason || '', isNew: !!folder && !existingDirs.has(folder) });
-    }
-    // Stamp every candidate the LLM actually saw this round, matched or
-    // not — "already asked" is what the cooldown needs, independent of the
-    // outcome.
-    const now = new Date().toISOString();
-    for (const n of chunk) {
-      n.lastClassifiedAt = now;
-      saveRaw(n);
-    }
-    completedChunks++;
-    if (onProgress) onProgress(completedChunks, chunks.length);
-  });
-  if (firstError) return { ok: false, error: firstError };
-  return { ok: true, placements };
+      let reply;
+      try {
+        reply = await complete(prompt);
+      } catch (err) {
+        if (!firstError) firstError = `LLM failed: ${err.message}`;
+        return { ok: false };
+      }
+      const parsed = parseJsonReply(reply);
+      for (const p of parsed?.placements || []) {
+        if (!chunk.some((c) => c.id === p.id)) continue;
+        const folder = known.has(p.folder) || isSafeFolderPath(p.folder) ? p.folder : null;
+        placements.push({ id: p.id, folder, reason: p.reason || '', isNew: !!folder && !existingDirs.has(folder) });
+      }
+      // Stamp every candidate the LLM actually saw this round, matched or
+      // not — "already asked" is what the cooldown needs, independent of the
+      // outcome.
+      const now = new Date().toISOString();
+      for (const n of chunk) {
+        n.lastClassifiedAt = now;
+        saveRaw(n);
+      }
+      completedChunks++;
+      if (onProgress) onProgress(completedChunks, chunks.length);
+      return { ok: true };
+    },
+    { stopAfterConsecutiveFailures },
+  );
+  // Partial success: a chunk failing partway through (quota exhaustion is
+  // the real-world case — see summarizeCandidates()'s doc comment above)
+  // used to discard every OTHER chunk's already-computed placements along
+  // with it. Whatever did come back stays usable; only report ok:false
+  // when literally nothing useful resulted from this call.
+  if (firstError && !placements.length) return { ok: false, error: firstError, stoppedEarly };
+  return { ok: true, placements, error: firstError || undefined, stoppedEarly };
 }
 
 /** Queue computed placements onto the session records themselves, so they

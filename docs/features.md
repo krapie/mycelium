@@ -74,17 +74,40 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   `applyPlacements`. Candidacy = `organizedBy !== 'human'` only. Cooldown
   (`0` for explicit runs, 24h for the daemon) avoids re-asking the LLM about
   an unresolved session every cycle. `summarizeCandidates` batches by
-  `concurrency` (default 3, deliberately low — see issue #3 history).
+  `concurrency` (default 3, deliberately low — see issue #3 history) and
+  now also takes a `limit` (oldest-first, same as `suggestPlacements`) — a
+  large first-time backlog otherwise means that many real LLM calls in one
+  call, easily enough to exhaust a tighter usage quota mid-run (real report:
+  "session 100% usage" against ~70 unfiled sessions). The TUI's `o` handler
+  passes `SUMMARIZE_BATCH_LIMIT` (`sessions.js`, default 30,
+  `MYCELIUM_SUMMARIZE_BATCH_LIMIT`-overridable); pressing `o` again picks up
+  where it left off, since already-summarized candidates are excluded.
   `suggestPlacements` prefers a folder's `KNOWLEDGE.md` over raw summaries,
   chunks by `batchSize` (25), validates every returned folder path
   (`isSafeFolderPath`), flags `isNew` for folders that don't exist yet, and
   stamps `lastClassifiedAt` on every candidate seen **regardless of match
-  outcome** (this is what makes the cooldown work). `applyPlacements` reuses
-  `move()`. [partial] (`classificationCandidates`, `queueSuggestions`,
-  `pendingSuggestions`, `clearSuggestions`, `applyPlacements` — the
-  non-LLM plumbing around the workflow — are untested; `summarizeCandidates`
-  and `suggestPlacements` themselves call `complete()` and still need
-  Phase 5's mocked-LLM tests)
+  outcome** (this is what makes the cooldown work). A chunk failure used to
+  discard every other chunk's already-computed placements wholesale
+  (`{ok:false}` even when most chunks succeeded) — fixed to return
+  `{ok:true, placements, error}` (partial success) whenever at least one
+  placement came back, `{ok:false}` only when nothing useful did. Both
+  functions, plus `tagAll` (`learn.js`), now pass
+  `stopAfterConsecutiveFailures` (default 3) to `mapConcurrent()`
+  (`llm.js`) — a circuit breaker that stops scheduling new work once that
+  many calls fail in a row (real usage exhaustion makes every subsequent
+  call fail identically) instead of burning through the rest of a large
+  backlog one doomed subprocess at a time; each function reports
+  `stoppedEarly` so callers can distinguish "ran out of quota, stop here"
+  from "some unrelated one-off failures." Per-candidate/per-chunk progress
+  is written to disk as it completes either way, so stopping early never
+  loses prior work. `applyPlacements` reuses `move()`. [tested]
+  (`test/organize.test.js`/`test/learn.test.js` cover `summarizeCandidates`/
+  `suggestPlacements`/`tagAll` via `llm.js`'s `__setTestProvider()` seam,
+  including `limit`, the partial-success return shape, and the circuit
+  breaker; `test/llm.test.js` covers `mapConcurrent()`'s breaker directly.
+  `classificationCandidates`/`queueSuggestions`/`pendingSuggestions`/
+  `clearSuggestions`/`applyPlacements` — the non-LLM plumbing — are also
+  covered)
 
 ## Organize — Lineage (continuation / merge / split)
 
@@ -107,10 +130,14 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   `summarizedTurnCount` recorded every run (growth-detection baseline).
   Prompt excerpt is 60%-head/40%-tail of a 6000-char cap, not a plain
   truncate. [untested]
-- **Retroactive bulk (re-)tagging.** `tagAll({force, onProgress, limit})` —
-  skip condition is "has summary AND hasn't grown since"; a session that
+- **Retroactive bulk (re-)tagging.**
+  `tagAll({force, onProgress, limit, concurrency, stopAfterConsecutiveFailures})`
+  — skip condition is "has summary AND hasn't grown since"; a session that
   grew is retagged even without `force`. `limit` caps per-call volume
-  (issue #3 history — avoid outlasting the scan interval). [untested]
+  (issue #3 history — avoid outlasting the scan interval).
+  `stopAfterConsecutiveFailures` (default 3) — same circuit breaker as
+  `organize.js`'s `summarizeCandidates`/`suggestPlacements`, see that
+  entry above. [tested] (`test/learn.test.js`)
 
 ## Insight — Digests & folder knowledge (`src/insight.js`)
 
@@ -346,6 +373,22 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   after the JSON containing its own braces mis-slices and returns `null`
   instead of the real object — pinned as a regression test, not yet fixed.
   Pure function, zero mocking needed. [tested]
+- **Bounded concurrency + optional circuit breaker for LLM-bound batches.**
+  `mapConcurrent(items, concurrency, worker, {stopAfterConsecutiveFailures})`
+  — the one place every LLM-bound batch caller (`summarizeCandidates`,
+  `suggestPlacements`, `tagAll`, the TUI's multi-select auto-tag) gets its
+  "how many `claude`/`codex` subprocesses at once" behavior from (issue #3).
+  Returns `{results, stoppedEarly}` (changed from a bare `results` array —
+  no caller read the return value before this, so the shape change is
+  invisible to all of them). `stopAfterConsecutiveFailures`, when passed,
+  requires `worker` to return `{ok}` and stops scheduling new items once
+  that many fail in a row (a success resets the count); omitted (every
+  pre-existing caller), `worker`'s return value isn't inspected at all —
+  pure no-op, unchanged behavior. Deliberately not string-matching a
+  specific vendor error message (fragile — differs between `claude`/`codex`,
+  changes across CLI versions) — a run of consecutive failures, regardless
+  of cause, is itself the signal a real usage-limit exhaustion is
+  happening. [tested] (`test/llm.test.js`)
 
 ## CLI (`src/cli.js`) — see [`docs/cli.md`](./cli.md) for the full command reference
 
@@ -384,7 +427,12 @@ argument-parsing/routing/output-formatting layer itself is not). [untested]
   (`widgets/viewers.js`) instead — a real first scan can mean minutes of
   classification once `o` is pressed, so a spinner-only toast undersells it.
   Guidance: press `o`, it takes real time for a backlog this size, feel free
-  to switch away and come back to review. Gated on `config.json`'s
+  to switch away and come back to review — plus a tip pointing at the
+  existing `Space` (multi-select) + `x` (delete) keys as a way to shrink the
+  backlog before organizing, framed as fewer sessions meaning fewer LLM
+  calls (no new mechanism — both keys already exist and work at Root scope
+  across the whole unfiled list; this just surfaces them at the one moment
+  they're most actionable). Gated on `config.json`'s
   `firstScanModalShown` so it only ever shows once, ever, even across
   restarts (unlike the toast it replaces, which just re-fires the small-
   backlog nudge on every mount until folders exist). [partial]

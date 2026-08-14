@@ -147,8 +147,16 @@ export async function autoTagSession(sessionId, { existingTags } = {}) {
  * autoTagSession() before touching the shared Set, so a race only ever
  * means "this lane didn't see a tag another lane just added," a quality
  * nicety, not a correctness requirement.
+ *
+ * `stopAfterConsecutiveFailures` (mapConcurrent(), default 3) — same
+ * circuit breaker organize.js's summarizeCandidates()/suggestPlacements()
+ * use: once real LLM usage runs out, every subsequent call fails
+ * identically, so this stops scheduling new work once that's clear rather
+ * than one-at-a-time failing through the rest of `targets`. Each success
+ * is still written to its own raw/<id>.json before this can trip, so
+ * stopping early never loses prior progress.
  */
-export async function tagAll({ force = false, onProgress, limit, concurrency = 1 } = {}) {
+export async function tagAll({ force = false, onProgress, limit, concurrency = 1, stopAfterConsecutiveFailures = 3 } = {}) {
   const vocab = new Set(listTags().map((t) => t.name));
   let tagged = 0;
   let skipped = 0;
@@ -163,20 +171,27 @@ export async function tagAll({ force = false, onProgress, limit, concurrency = 1
   targets.sort((a, b) => (a.startedAt || '').localeCompare(b.startedAt || ''));
   if (limit) targets = targets.slice(0, limit);
 
-  await mapConcurrent(targets, concurrency, async (n) => {
-    try {
-      const res = await autoTagSession(n.id, { existingTags: [...vocab] });
-      if (res.ok) {
-        tagged++;
-        for (const t of res.session.extracted.tags) vocab.add(t);
-        if (onProgress) onProgress(res.session);
-      } else {
+  const { stoppedEarly } = await mapConcurrent(
+    targets,
+    concurrency,
+    async (n) => {
+      try {
+        const res = await autoTagSession(n.id, { existingTags: [...vocab] });
+        if (res.ok) {
+          tagged++;
+          for (const t of res.session.extracted.tags) vocab.add(t);
+          if (onProgress) onProgress(res.session);
+          return { ok: true };
+        }
         failed++;
+        return { ok: false };
+      } catch (err) {
+        failed++;
+        if (onProgress) onProgress(null, err);
+        return { ok: false };
       }
-    } catch (err) {
-      failed++;
-      if (onProgress) onProgress(null, err);
-    }
-  });
-  return { tagged, skipped, failed };
+    },
+    { stopAfterConsecutiveFailures },
+  );
+  return { tagged, skipped, failed, stoppedEarly };
 }

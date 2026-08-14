@@ -94,7 +94,7 @@ test('mapConcurrent() returns results in input order regardless of completion or
   // Item 0 finishes last (longest delay), item 2 finishes first — the
   // results array must still line up with the input array's order.
   const delays = [30, 10, 0];
-  const results = await mapConcurrent(delays, 3, async (ms, idx) => {
+  const { results } = await mapConcurrent(delays, 3, async (ms, idx) => {
     await new Promise((r) => setTimeout(r, ms));
     return idx;
   });
@@ -142,7 +142,7 @@ test('mapConcurrent() propagates a worker rejection', async () => {
 });
 
 test('mapConcurrent() handles an empty items array', async () => {
-  const results = await mapConcurrent([], 3, async () => {
+  const { results } = await mapConcurrent([], 3, async () => {
     throw new Error('should never be called');
   });
   assert.deepEqual(results, []);
@@ -158,4 +158,47 @@ test('mapConcurrent() caps concurrency at the item count when concurrency is lar
     inFlight--;
   });
   assert.equal(maxInFlight, 2);
+});
+
+test('mapConcurrent() without stopAfterConsecutiveFailures ignores worker return shape entirely (back-compat)', async () => {
+  // Every pre-existing caller's worker returns undefined (or an unrelated
+  // value) and relies on mapConcurrent() never inspecting it.
+  const { results, stoppedEarly } = await mapConcurrent([1, 2, 3], 2, async () => ({ ok: false }));
+  assert.equal(stoppedEarly, false);
+  assert.equal(results.length, 3);
+});
+
+test('mapConcurrent() stops scheduling new work after N consecutive failures', async () => {
+  const attempted = [];
+  const { stoppedEarly } = await mapConcurrent(
+    [1, 2, 3, 4, 5, 6, 7, 8, 9],
+    1, // concurrency=1 makes "consecutive" deterministic to assert on
+    async (n) => {
+      attempted.push(n);
+      return { ok: false };
+    },
+    { stopAfterConsecutiveFailures: 3 },
+  );
+  assert.equal(stoppedEarly, true);
+  // Stops the instant the 3rd consecutive failure lands — never attempts
+  // a 4th item, let alone all 9.
+  assert.deepEqual(attempted, [1, 2, 3]);
+});
+
+test('mapConcurrent() circuit breaker resets the consecutive-failure count on a success', async () => {
+  const attempted = [];
+  // Fail, fail, succeed, fail, fail, succeed — never 3 in a row, so this
+  // should run to completion rather than tripping the breaker.
+  const outcomes = [false, false, true, false, false, true];
+  const { stoppedEarly } = await mapConcurrent(
+    [1, 2, 3, 4, 5, 6],
+    1,
+    async (n, idx) => {
+      attempted.push(n);
+      return { ok: outcomes[idx] };
+    },
+    { stopAfterConsecutiveFailures: 3 },
+  );
+  assert.equal(stoppedEarly, false);
+  assert.deepEqual(attempted, [1, 2, 3, 4, 5, 6]);
 });

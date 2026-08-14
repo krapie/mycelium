@@ -111,18 +111,47 @@ export function extractText(stdout) {
  * enforced in exactly one place. A lane pool, not a chunk-and-Promise.all
  * loop: a new item starts the instant any lane frees up, instead of the
  * whole next chunk waiting on the slowest item in the current one.
+ *
+ * `stopAfterConsecutiveFailures`, when passed, turns on a circuit breaker:
+ * `worker` must then return `{ ok }` (not just any value) so this can tell
+ * a real failure from a real success. Once that many calls fail in a row
+ * (a success resets the counter — a mixed bag of unrelated one-off
+ * failures shouldn't trip this), no new items are started; in-flight lanes
+ * still finish, the rest of `items` is left unprocessed. This exists
+ * because a real usage-limit exhaustion (see "session 100% usage" reports
+ * against a large first-time backlog) makes every subsequent call fail
+ * identically — without it, a big backlog just burns through dozens more
+ * doomed subprocess spawns one at a time instead of stopping once the
+ * pattern is obvious. Deliberately NOT string-matching a specific vendor
+ * error message (fragile — differs between claude/codex, changes across
+ * CLI versions, and no single wording is guaranteed) — a run of
+ * consecutive failures, regardless of cause, is itself the signal.
+ * Omitted (the default, every pre-existing caller), this is a no-op:
+ * `worker`'s return value isn't inspected at all, so callers whose worker
+ * returns nothing (or anything else) keep working exactly as before.
  */
-export async function mapConcurrent(items, concurrency, worker) {
+export async function mapConcurrent(items, concurrency, worker, { stopAfterConsecutiveFailures } = {}) {
   const results = new Array(items.length);
   let i = 0;
+  let consecutiveFailures = 0;
+  let stoppedEarly = false;
   async function lane() {
     while (i < items.length) {
+      if (stoppedEarly) return;
       const idx = i++;
-      results[idx] = await worker(items[idx], idx);
+      const r = await worker(items[idx], idx);
+      results[idx] = r;
+      if (!stopAfterConsecutiveFailures) continue;
+      if (r && r.ok === false) {
+        consecutiveFailures++;
+        if (consecutiveFailures >= stopAfterConsecutiveFailures) stoppedEarly = true;
+      } else {
+        consecutiveFailures = 0;
+      }
     }
   }
   await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, lane));
-  return results;
+  return { results, stoppedEarly };
 }
 
 /** Parse the first JSON object found in an LLM reply (they often wrap it in prose/fences). */
