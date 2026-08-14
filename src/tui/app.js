@@ -104,6 +104,12 @@ export function createApp({ input, output } = {}) {
     hidden: true,
   });
 
+  // See startSpinner()'s own comment (below) for why this exists — counts
+  // active startSpinner()/startProgressBar() calls, since both reuse a
+  // permanent screen child (show()/hide() only toggle visibility) that
+  // tutorial.js's screen.children.length-based isModalOpen() can't see.
+  let busyWidgets = 0;
+
   // Separate from `toast`: a real filling bar for the two smart-organize
   // phases (summarize, classify) that already know a true total up front
   // (see sessions.js's runSmartOrganize()) — unlike the spinner, which
@@ -175,6 +181,22 @@ export function createApp({ input, output } = {}) {
     // completed-item count) change the label without restarting the spinner
     // itself — see sessions.js's summarize/smart-organize progress toasts.
     startSpinner(msg) {
+      // Counted, not just toggled — busyWidgets++/-- below is what
+      // isBusy() reports, since `toast` itself is a permanent screen child
+      // created once here in createApp() (show()/hide() just toggle
+      // visibility, never actually add/remove it from screen.children).
+      // tutorial.js's own isModalOpen() heuristic (screen.children.length
+      // > a baseline captured after this app already exists) is blind to
+      // that — a real bug found in production: sessions.js's merge/split
+      // handlers start a SECOND spinner (auto-summarizing the result) right
+      // after their own review modal (a real, counted widget) closes; the
+      // narrator's thenWait:'close' step saw the review modal's close and
+      // advanced immediately, landing on the next step's caption while this
+      // second spinner was still visibly running underneath it — two things
+      // on screen the narrator never accounted for both being true at once.
+      // isBusy() closes that blind spot without changing `toast`'s own
+      // architecture (it's reused for plain notify() toasts too, elsewhere).
+      busyWidgets++;
       const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
       let i = 0;
       let label = msg;
@@ -218,6 +240,7 @@ export function createApp({ input, output } = {}) {
           clearInterval(rearm);
           toast.hide();
           screen.render();
+          busyWidgets--;
         },
       };
     },
@@ -230,6 +253,9 @@ export function createApp({ input, output } = {}) {
     // the same way); progressBar is a child of progressBox, so hiding the
     // box on stop() takes the bar with it.
     startProgressBar(label) {
+      // Same permanent-widget blind spot as startSpinner() above (see its
+      // comment) — counted the same way.
+      busyWidgets++;
       progressBar.setProgress(0);
       progressBox.setContent(`{bold}${label}{/}`);
       progressBox.show();
@@ -244,8 +270,15 @@ export function createApp({ input, output } = {}) {
         stop() {
           progressBox.hide();
           screen.render();
+          busyWidgets--;
         },
       };
+    },
+    // True while any startSpinner()/startProgressBar() is active — see
+    // startSpinner()'s own comment for why tutorial.js's isModalOpen()
+    // needs this instead of relying on screen.children.length alone.
+    isBusy() {
+      return busyWidgets > 0;
     },
     async show(view) {
       if (app._view && app._view.unmount) app._view.unmount();

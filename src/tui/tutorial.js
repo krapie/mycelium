@@ -209,8 +209,19 @@ export function startTutorial(app, onDone, personaId = 'swe') {
   // modal (they're all `parent: app.screen`, same as this box, per this
   // codebase's convention). Generic across both o's multiSelectList and w's
   // confirmText — no need to know which one is open, just whether one is.
+  //
+  // app.isBusy() is ADDITIONALLY checked — a real bug found in production:
+  // `toast` (app.js's shared spinner/notify widget) is a permanent screen
+  // child created once, before this baseline is even captured, so
+  // show()/hide() never changes screen.children.length at all. Shift+M/
+  // Shift+S's handlers (sessions.js) start a SECOND spinner (auto-
+  // summarizing the merge/split result) right after their own review modal
+  // — a real, counted widget — closes; without this, isModalOpen() saw the
+  // review modal's close and reported "closed" immediately, advancing the
+  // narrator to the NEXT step's caption while that second spinner was still
+  // visibly running underneath it. See app.js's startSpinner() comment.
   const baseline = app.screen.children.length;
-  const isModalOpen = () => app.screen.children.length > baseline;
+  const isModalOpen = () => app.screen.children.length > baseline || app.isBusy();
 
   let i = 0;
   let done = false;
