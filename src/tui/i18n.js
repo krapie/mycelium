@@ -160,6 +160,15 @@ const en = {
   'welcome.modalLabel': ' Welcome to Mycelium (Enter/Esc to start) ',
   'welcome.body': null, // filled in below, function like help.text
 
+  // cli.js's `mycelium demo` handoff — printed with a plain console.log(),
+  // not inside a blessed screen (the child tutorial process has already
+  // torn its own screen down by this point, restoring the terminal to a
+  // normal printable state), right before the real TUI's own cold import/
+  // mount work happens. Without this, a slower machine could show a
+  // silent, blank-looking gap between the tutorial ending and the real
+  // session appearing — long enough to wonder if anything happened.
+  'demo.handoffTransition': 'Wrapping up — switching to your real data…',
+
   // First-run tutorial (tutorial.js) — mock sessions, real o/w LLM calls.
   // Body strings are (fg) => `...` functions (same style as help.text/
   // welcome.body) so the key they're waiting for can be highlighted inline.
@@ -168,6 +177,10 @@ const en = {
   'tutorial.promptNo': 'Skip, just show me around',
   'tutorial.personaPromptTitle': 'Whose work should the tour follow?',
   'tutorial.exitHint': 'q: exit tutorial',
+  // Shown instead of exitHint above, only on the tutorial's last step — q
+  // there completes the tour and hands off into real data, not a plain
+  // exit, so it gets its own accurate wording (tutorial.js's render()).
+  'tutorial.finishHint': 'q: finish & switch to your real data',
   // "Step N/Total" itself — see tutorial.js's render(), computed from
   // STEPS.length/index rather than baked into each stepNTitle below, so
   // every stepNTitle now holds only its subtitle (or '' for steps without
@@ -213,7 +226,7 @@ const en = {
     `Press {${fg}-fg}/{/} and search for a keyword you remember from these sessions, then press {${fg}-fg}v{/} to check the calendar and find the date they're on. Press {${fg}-fg}Enter{/} to continue.`,
   'tutorial.step16Title': ' — Complete!',
   'tutorial.step16Body': (fg) =>
-    `That's the full lifecycle. Day to day, it's a simple loop — the {bold}Context Flywheel{/}: {${fg}-fg}s{/} capture → {${fg}-fg}o{/} organize → {${fg}-fg}k{/} learn → {${fg}-fg}n{/} start the next session with everything it needs. Most of that already happens by itself in the background — Mycelium keeps capturing, organizing, and refreshing what it's learned on its own; pressing these keys is mostly just reviewing and confirming what's already waiting for you, not starting the work from scratch. Press {${fg}-fg}q{/} when you're done — the mock sessions get cleaned up and you're back to your own, existing data.`,
+    `That's the full lifecycle. Day to day, it's a simple loop — the {bold}Context Flywheel{/}: {${fg}-fg}s{/} capture → {${fg}-fg}o{/} organize → {${fg}-fg}k{/} learn → {${fg}-fg}n{/} start the next session with everything it needs. Most of that already happens by itself in the background — Mycelium keeps capturing, organizing, and refreshing what it's learned on its own; pressing these keys is mostly just reviewing and confirming what's already waiting for you, not starting the work from scratch. Press {${fg}-fg}q{/} when you're done. The mock sessions get cleaned up and you're switched over to your own, existing data.`,
   // Interim text shown while a real handler is in flight (o/w/k/Shift+S's
   // LLM calls are mocked during the tutorial — see tutorial-mock-llm.js —
   // so these resolve almost instantly, but the narrator still has to wait
@@ -418,11 +431,14 @@ const ko = {
   'welcome.modalLabel': ' Mycelium에 오신 것을 환영합니다 (Enter/Esc로 시작) ',
   'welcome.body': null,
 
+  'demo.handoffTransition': '마무리하는 중 — 실제 데이터로 전환합니다…',
+
   'tutorial.promptTitle': '처음 오셨네요! 짧은 인터랙티브 튜토리얼 보시겠어요?',
   'tutorial.promptYes': '튜토리얼 시작하기',
   'tutorial.promptNo': '건너뛰고 바로 시작하기',
   'tutorial.personaPromptTitle': '누구의 작업을 따라가 볼까요?',
   'tutorial.exitHint': 'q: 튜토리얼 종료',
+  'tutorial.finishHint': 'q: 마치고 실제 데이터로 전환',
   'tutorial.stepCounter': (n, total) => `${n}/${total}단계`,
   'tutorial.introTitle': '',
   'tutorial.introBody': (fg) =>
@@ -464,7 +480,7 @@ const ko = {
     `{${fg}-fg}/{/}를 눌러 방금 본 세션들에서 기억나는 키워드로 검색해보고, {${fg}-fg}v{/}를 눌러 캘린더에서 해당 세션이 있는 날짜를 확인해보세요. {${fg}-fg}Enter{/}로 계속하세요.`,
   'tutorial.step16Title': ' — 완료!',
   'tutorial.step16Body': (fg) =>
-    `전체 라이프사이클을 다 보셨습니다. 일상적으로는 단순한 반복입니다 — {bold}Context Flywheel{/}: {${fg}-fg}s{/} 캡처 → {${fg}-fg}o{/} 정리 → {${fg}-fg}k{/} 학습 → {${fg}-fg}n{/} 필요한 모든 게 준비된 채로 다음 세션 시작. 대부분은 이미 백그라운드에서 저절로 돌아갑니다 — Mycelium이 알아서 캡처하고 정리하고 배운 것을 갱신해둡니다. 이 키들을 누르는 건 대부분 처음부터 뭔가 시작시키는 게 아니라 이미 준비된 걸 검토/확인하는 것에 가깝습니다. 다 보셨으면 {${fg}-fg}q{/}를 누르세요 — 데모 세션이 정리되고 원래(기존) 데이터로 돌아갑니다.`,
+    `전체 라이프사이클을 다 보셨습니다. 일상적으로는 단순한 반복입니다 — {bold}Context Flywheel{/}: {${fg}-fg}s{/} 캡처 → {${fg}-fg}o{/} 정리 → {${fg}-fg}k{/} 학습 → {${fg}-fg}n{/} 필요한 모든 게 준비된 채로 다음 세션 시작. 대부분은 이미 백그라운드에서 저절로 돌아갑니다 — Mycelium이 알아서 캡처하고 정리하고 배운 것을 갱신해둡니다. 이 키들을 누르는 건 대부분 처음부터 뭔가 시작시키는 게 아니라 이미 준비된 걸 검토/확인하는 것에 가깝습니다. 다 보셨으면 {${fg}-fg}q{/}를 누르세요. 데모 세션이 정리되고 원래(기존) 데이터로 전환됩니다.`,
   'tutorial.waitingOrganize': '세션을 읽고 폴더를 제안하는 중…',
   'tutorial.waitingApply': '적용하는 중…',
   'tutorial.waitingKnowledge': '이 폴더의 세션들을 지식 초안으로 압축하는 중…',

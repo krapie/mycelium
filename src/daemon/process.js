@@ -29,15 +29,21 @@ function isAlive(pid) {
  * owns the terminal, so raw console writes would corrupt the screen.
  * Opt-out via MYCELIUM_NO_AUTOSTART (used by automated TUI smoke tests to
  * avoid triggering real LLM calls in the background).
+ *
+ * `onFirstScanDone`, forwarded straight to runDaemon() — lets a caller
+ * (tui/index.js) re-check what's now in the store once the first real scan
+ * actually lands, since this call itself is fire-and-forget (not awaited)
+ * and the TUI mounts/evaluates its own first paint well before that scan
+ * could plausibly finish on a real backlog.
  */
-export function startTuiRoutine() {
+export function startTuiRoutine(onFirstScanDone) {
   if (process.env.MYCELIUM_NO_AUTOSTART) return;
   ensureDirs();
   const fileLog = {
     log: (...args) => appendFileSync(DAEMON_LOG_PATH, `[${new Date().toISOString()}] ${args.join(' ')}\n`),
     error: (...args) => appendFileSync(DAEMON_LOG_PATH, `[${new Date().toISOString()}] ${args.join(' ')}\n`),
   };
-  runDaemon({ log: fileLog });
+  runDaemon({ log: fileLog, onFirstScanDone });
 }
 
 /**

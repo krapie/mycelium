@@ -440,6 +440,27 @@ argument-parsing/routing/output-formatting layer itself is not). [untested]
   content, Enter/Escape dismiss, `onDismiss` firing; `notifyPostMount()`'s
   own threshold/gating branch that decides when to show it is untested,
   verify manually)
+- **Post-mount notification re-evaluates itself once the first real scan
+  actually lands.** `startTuiRoutine()`'s own `scanCycle()` is fire-and-
+  forget (see above) — on a genuinely fresh store (a brand new install, or
+  right after a `mycelium demo` handoff), the already-onboarded path used
+  to mount `sessionsView()` and call `notifyPostMount()` before that first
+  scan had imported anything: the list read 0 sessions and the
+  `firstScanModal()` threshold check never cleared, until some unrelated
+  later navigation happened to re-query the by-then-populated index — a
+  real bug, confirmed via VHS against a genuinely empty `~/.mycelium`.
+  Fixed with `startTuiRoutine(onFirstScanDone)` (threaded through
+  `daemon/process.js` → `daemon/cycles.js`'s `runDaemon()`, fired once,
+  right after the first `scanCycle()`, not any later periodic one) —
+  `tui/index.js`'s already-onboarded path uses it to call
+  `api.reloadAll()` + re-run `notifyPostMount()` once real data actually
+  exists. Calling `notifyPostMount()` twice is safe (gated on
+  `firstScanModalShown`; a no-op on the common non-fresh case where the
+  index already had data before this launch). [tested] (`daemon-cycles.test.js`
+  covers `runDaemon()`'s `onFirstScanDone` firing exactly once; the
+  `tui/index.js` wiring itself verified manually via VHS — screenshot
+  confirmed the real session count and `firstScanModal()` both correct on
+  first paint, no navigation needed)
 - **Real progress bar for the two smart-organize phases.**
   `app.startProgressBar(label)` — sibling to `startSpinner()`, same
   `{update(current, total), stop()}` shape, backed by a real
@@ -875,7 +896,14 @@ straight into real data feels linguistically seamless instead of switching
 back to whatever language was set before. Deliberately scoped to the full-
 handoff path only, not every demo run: previewing/presenting the demo in a
 different language shouldn't silently change real settings unless the
-presenter actually continues into real data right after. Before starting the
+presenter actually continues into real data right after. `render()`'s
+persistent footer (`tutorial.exitHint`, "q: exit tutorial") is now
+step-aware: every step but the last keeps that wording, but the last step
+shows a distinct `tutorial.finishHint` ("q: finish & switch to your real
+data") instead — reusing "exit" language on the one step where `q` doesn't
+exit anything (it completes the tour and hands off) read as contradictory
+right next to that step's own body text explaining the real handoff
+behavior, part of what made the transition feel uncertain. Before starting the
 real TUI, `cli.js` also stamps `onboarded: true` onto the real config (via
 `saveConfig({ ...loadConfig(), onboarded: true })`) — a real bug had the
 handoff carry over locale but not this flag, so `runTui()`'s own
@@ -886,7 +914,34 @@ silently failed and dumped the presenter back at square one. Completing the
 tutorial's final step is the one path where treating it as equivalent to
 real onboarding is correct — it only fires on a full `completed: true` run,
 never an early `q`/Esc bail. [tested]
-(`buildMockSessions()` and `tutorial-mock-llm.js`'s prompt-dispatch/
+
+**Handoff transition speed + stray-keystroke safety.** From child-exit to a
+rendered real screen, `cli.js`'s handoff branch used to do three cold
+`await import()`s in the visible gap — `tui/tutorial.js`, `tui/i18n.js`,
+and `tui/index.js` (which transitively pulls in nearly the whole app:
+`app.js`/neo-blessed, `sessions.js` and everything it imports). Fixed with
+three changes, confirmed together via a disposable VHS debug tape (not
+committed) against a genuinely fresh store: (1) `import('./tui/index.js')`
+is kicked off right after spawning the child, not awaited until the
+handoff branch — the tutorial itself takes at least tens of seconds of
+real interaction, plenty of time for the cold import to fully resolve in
+the background, so `await`ing the same promise in the handoff branch is
+near-instant instead of paying that cost visibly; (2) a locale-aware
+`console.log(t('demo.handoffTransition'))` prints immediately at the top
+of the handoff branch, before any other async work — safe because the
+child's own `screen.destroy()` (`app.js`, called by its `quit()`) already
+restored the terminal to normal/cooked mode before this exit handler even
+runs; (3) `process.stdin` is actively resumed-then-drained (with a
+deliberate 120ms wait — a first attempt without any wait still let the
+stray keystroke through, confirmed by re-running the same tape) for the
+duration of the handoff, discarding whatever arrives, then returned to
+blessed's expected paused state right before `runTui()`. (3) exists
+because an impatient repeat `q` right after the first was confirmed (via
+the same tape) to genuinely leak into the newly-mounted real session — it
+closed `firstScanModal()` **and** armed `app.js`'s quit-confirm in the same
+event (both independent listeners on the same keypress), meaning one more
+stray `q` from there would have actually exited the just-launched real
+session. [tested] (`buildMockSessions()` and `tutorial-mock-llm.js`'s prompt-dispatch/
 classification/folder-lookup logic are unit-tested as pure functions;
 `test/e2e/demo-e2e.test.js` drives the real interactive state machine
 end-to-end — organize→learn→reuse→merge→split, the exit-key model, and the

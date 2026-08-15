@@ -10,8 +10,9 @@ const { emptyNeutral } = await import('../src/schema.js');
 const { saveRaw } = await import('../src/scanner.js');
 const { __setTestProvider, __clearTestProvider } = await import('../src/llm.js');
 const { DIGEST_DIR } = await import('../src/paths.js');
-const { digestCycle, knowledgeReviewCycle } = await import('../src/daemon/cycles.js');
+const { digestCycle, knowledgeReviewCycle, runDaemon } = await import('../src/daemon/cycles.js');
 const { pendingKnowledgeReviews } = await import('../src/insight.js');
+const adaptersIndex = await import('../src/adapters/index.js');
 
 function seed(id, overrides = {}) {
   const n = { ...emptyNeutral(id, 'claude'), ...overrides };
@@ -58,4 +59,35 @@ test('knowledgeReviewCycle() stages a proposal for yesterday\'s active folders, 
 
   const reviews = pendingKnowledgeReviews();
   assert.ok(reviews.some((r) => r.folder === 'krc-folder'));
+});
+
+test('runDaemon() fires onFirstScanDone once, right after the first scan — before it schedules any periodic interval', async (t) => {
+  // Mocked, not real: runDaemon() ends by registering several real
+  // setInterval()s (SCAN_INTERVAL_MS etc.) that would otherwise keep
+  // ticking for the rest of this test file's process — mock timers replace
+  // them with an inert fake clock this test never advances, so nothing
+  // real gets scheduled and the process exits normally once this test ends.
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  // No fake adapters needed — an empty ADAPTERS list makes scan() a fast,
+  // deterministic no-op (0 scanned/imported), same effect as
+  // scanner.test.js's withOnlyAdapters() but inline since this is the only
+  // adapter-splicing test in this file.
+  const real = adaptersIndex.ADAPTERS.splice(0, adaptersIndex.ADAPTERS.length);
+  // This file's shared temp store (see AGENTS.md) still has the earlier
+  // tests' seeded sessions in it — smartOrganizeCycle() (unlike digest/
+  // knowledge review, already gated to once/day and skipped by the time
+  // this test runs) hasn't fired yet in this process, so it sees those as
+  // real unclassified candidates and would otherwise spawn a REAL
+  // claude/codex subprocess here. Any parseable-but-empty reply is enough
+  // — this test only cares about onFirstScanDone's timing, not what
+  // smartOrganizeCycle does with it.
+  __setTestProvider(async () => '{}');
+  let fired = 0;
+  try {
+    await runDaemon({ log: fakeLog(), onFirstScanDone: () => fired++ });
+  } finally {
+    adaptersIndex.ADAPTERS.splice(0, adaptersIndex.ADAPTERS.length, ...real);
+  }
+
+  assert.equal(fired, 1, 'fires exactly once for the whole runDaemon() call, not per later cycle');
 });

@@ -255,7 +255,15 @@ export function startTutorial(app, onDone, personaId = 'swe') {
     // actually read them, to interpolate the active persona's session count
     // / merge-target folder instead of a hardcoded `backend/payments`.
     const body = waiting ? t(step.waitingKey) : t(step.bodyKey, C.fox, sessionCount, mergeFolder);
-    box.setContent(`${body}\n{${C.faint}-fg}${t('tutorial.exitHint')}{/}`);
+    // Every step but the last reuses the same "q: exit tutorial" hint — on
+    // the last step that's actually misleading: q there doesn't abandon
+    // anything, it completes the tour and hands off into real data (see
+    // finish() below). A generic "exit" hint sitting right under a step
+    // whose own body already explains the real handoff behavior read as
+    // contradictory — this is part of what made the transition feel
+    // uncertain (a "did that even do anything?" moment right before q).
+    const exitOrFinishHint = i === STEPS.length - 1 ? t('tutorial.finishHint') : t('tutorial.exitHint');
+    box.setContent(`${body}\n{${C.faint}-fg}${exitOrFinishHint}{/}`);
     app.render();
   };
 
