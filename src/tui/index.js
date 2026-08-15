@@ -244,8 +244,28 @@ export async function runTui({ forceTutorial = false } = {}) {
   // Already onboarded — no tutorial/mock-seeding race to avoid here, so this
   // is the one path where starting real background upkeep right away (same
   // as it always did) is safe.
-  startTuiRoutine();
-  await app.show(sessionsView());
+  //
+  // startTuiRoutine() is fire-and-forget (its own scanCycle() isn't
+  // awaited) — on a store with nothing scanned yet (a genuinely fresh
+  // ~/.mycelium, e.g. right after a mycelium demo handoff), the view below
+  // mounts and notifyPostMount() evaluates before that first scan has
+  // imported anything: the list reads 0 sessions and the first-scan modal's
+  // threshold check never clears, until some unrelated later navigation
+  // happens to re-query the by-then-populated index. The onFirstScanDone
+  // callback re-checks once real data actually exists, without blocking
+  // this function on a full scan (which would make the initial paint
+  // itself slower — the opposite of what a fast handoff needs). Calling
+  // notifyPostMount() twice is safe: it's gated on config.json's
+  // firstScanModalShown (won't double-show the modal), and on the common,
+  // non-fresh case (index already has data from a prior run) the immediate
+  // call below already has accurate numbers, so the callback just re-does
+  // the same no-op check a moment later.
+  let api;
+  startTuiRoutine(() => {
+    api?.reloadAll();
+    notifyPostMount(app);
+  });
+  await app.show(sessionsView({ onReady: (a) => (api = a) }));
   app.render();
   notifyPostMount(app);
 }

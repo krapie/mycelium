@@ -152,8 +152,17 @@ export async function knowledgeReviewCycle(log) {
  * — `log` defaults to the real console for the former; the TUI passes a file
  * logger instead, since blessed owns the terminal and raw stdout writes
  * would corrupt the screen.
+ *
+ * `onFirstScanDone`, if passed, fires once — right after the very first
+ * scanCycle() above, not any of the later periodic ones. startTuiRoutine()
+ * (process.js) calls this without awaiting it, so a genuinely fresh store
+ * (nothing scanned yet) mounts the sessions view and evaluates
+ * notifyPostMount() before this first scan has imported anything — the list
+ * reads 0 sessions and the first-scan modal's threshold check never clears.
+ * This hook lets the TUI re-check once real data actually exists, without
+ * blocking the initial paint on a full scan (see tui/index.js).
  */
-export async function runDaemon({ log = console } = {}) {
+export async function runDaemon({ log = console, onFirstScanDone } = {}) {
   log.log('Mycelium daemon starting (background upkeep: scan + digest + knowledge review + smart organize).');
   log.log(`  scan interval: ${SCAN_INTERVAL_MS}ms (tag batch limit ${TAG_BATCH_LIMIT})`);
   log.log(
@@ -161,6 +170,7 @@ export async function runDaemon({ log = console } = {}) {
   );
 
   await scanCycle(log);
+  if (onFirstScanDone) onFirstScanDone();
   await digestCycle(log);
   await knowledgeReviewCycle(log);
   await smartOrganizeCycle(log);

@@ -413,6 +413,19 @@ async function main() {
       const { existsSync, rmSync } = await import('node:fs');
       const demoHome = join(homedir(), '.mycelium-demo');
       if (existsSync(demoHome)) rmSync(demoHome, { recursive: true, force: true });
+      // Fired off now, awaited (if needed at all) only much later in the
+      // handoff branch below — the tutorial itself takes at least tens of
+      // seconds of real interaction, plenty of time for this to fully
+      // resolve in the background. tui/index.js transitively pulls in
+      // nearly the whole app (app.js/neo-blessed, sessions.js and
+      // everything IT imports) — all cold, since only the CHILD process
+      // below has loaded any of it so far. Without this, that whole load
+      // happened serially, visibly, in the gap between the child exiting
+      // and the real screen painting — see cli.js's own handoff comment
+      // and i18n.js's demo.handoffTransition for the rest of that fix. A
+      // presenter who never finishes the tutorial (no handoff) just never
+      // awaits this — the resolved module sits unused, harmless.
+      const tuiIndexPromise = import('./tui/index.js');
       const child = spawn(process.execPath, [process.argv[1], 'tui', '--tutorial'], {
         env: { ...process.env, MYCELIUM_HOME: demoHome },
         stdio: 'inherit',
@@ -421,6 +434,42 @@ async function main() {
         child.on('exit', async (code) => {
           const { DEMO_HANDOFF_EXIT_CODE } = await import('./tui/tutorial.js');
           if (code === DEMO_HANDOFF_EXIT_CODE) {
+            // Actively discard stdin for the duration of this handoff.
+            // Confirmed via a disposable VHS debug tape (not committed —
+            // see this session's history) that an impatient repeat `q`
+            // right after the first genuinely leaks through: the child's
+            // screen.destroy() (app.js, called by its own quit()) restores
+            // cooked mode before this exit handler runs, so a keystroke
+            // typed in the gap sits in the terminal's normal input queue
+            // until SOMETHING reads it — and once the real TUI's own
+            // raw-mode reader starts below, that stale keystroke arrives
+            // indistinguishable from a live press, landing on whatever's
+            // focused (observed: it closed firstScanModal() AND armed
+            // app.js's quit-confirm in the same event, both being
+            // independent listeners on the same keypress — one more stray
+            // `q` from there would have actually exited the just-launched
+            // real session). Resuming then immediately dropping the
+            // listener flips the stream back to blessed's expected paused
+            // starting state (Node auto-pauses a readable once its last
+            // 'data' listener is removed) — createApp() (inside runTui()
+            // below) sets up its own raw-mode reading same as always.
+            //
+            // The short wait below is deliberate, not decorative: a first
+            // attempt without it still let the stray keystroke through
+            // (confirmed by re-running the same VHS tape) — resume() asks
+            // Node to read the fd, but that read isn't synchronous with the
+            // call, and the async work following used to finish (now that
+            // it's pre-warmed) before the OS had actually delivered the
+            // buffered byte into this listener. 120ms is well inside what a
+            // human "impatient repeat press" already takes to physically
+            // happen, and imperceptible against the handoff's overall
+            // duration.
+            const discardStdin = () => {};
+            if (process.stdin.isTTY) {
+              process.stdin.resume();
+              process.stdin.on('data', discardStdin);
+              await new Promise((r) => setTimeout(r, 120));
+            }
             // The presenter went all the way through the tutorial (not an
             // early Esc bail) — hand off straight into a real TUI session.
             // This process's own env was never touched (only the CHILD's
@@ -456,6 +505,20 @@ async function main() {
               // the real tool keeps whatever language it already had, not
               // a hard failure blocking the handoff itself.
             }
+            // Printed immediately, in whatever locale was just set above,
+            // before any of the (usually fast now, thanks to the pre-warmed
+            // import above, but not guaranteed on a slower machine) real-TUI
+            // mount work below. screen.destroy() (app.js, called by the
+            // child's own quit()) already restored the terminal to normal/
+            // cooked mode before this process's exit handler even ran, so a
+            // plain console.log() here is safe — nothing blessed-related is
+            // mounted yet to corrupt. Without this, a silent gap here read
+            // as "did that even do anything?" — enough that a user might
+            // press q again, which (once the real screen DOES mount and
+            // starts reading input) risks landing on the just-launched real
+            // session's own quit-confirm instead of a no-op.
+            const { t } = await import('./tui/i18n.js');
+            console.log(t('demo.handoffTransition'));
             // A real bug found in production: on a real ~/.mycelium that's
             // ALSO never been onboarded yet (a brand new install, or one
             // where the user tried `mycelium demo` before ever running plain
@@ -472,7 +535,15 @@ async function main() {
             // it as equivalent real onboarding is exactly right, not a
             // shortcut around it.
             saveConfig({ ...loadConfig(), onboarded: true });
-            const { runTui } = await import('./tui/index.js');
+            // Awaits the SAME promise kicked off right after spawning the
+            // child above — already resolved (or resolving) by now, so this
+            // is near-instant instead of paying the full cold-import cost
+            // here in the visible gap.
+            const { runTui } = await tuiIndexPromise;
+            if (process.stdin.isTTY) {
+              process.stdin.removeListener('data', discardStdin);
+              process.stdin.pause();
+            }
             await runTui();
           } else {
             process.exitCode = code ?? 0;
