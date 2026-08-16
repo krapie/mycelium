@@ -548,6 +548,35 @@ argument-parsing/routing/output-formatting layer itself is not). [untested]
   the fix lives at the toast's own level instead. [tested]
   (`test/e2e/spinner-toast-e2e.test.js` — two overlapping spinners, the
   common single-spinner case, and spinner+progress-bar sharing the counter)
+  **Follow-up fix, same investigation — the actual dominant cause.** The
+  reference-counting fix above only covers TWO spinners genuinely
+  overlapping; a user report that it "made no improvement" led to testing
+  a real (non-mocked) SOLO merge — no second spinner in sight — via VHS,
+  which showed the "Summarizing…" toast invisible for the entire ~15-28s
+  duration of a real `claude` call, with nothing on screen until the final
+  result. Root cause, found by reading `neo-blessed`'s own
+  `Message.prototype.display()`: it schedules an internal `setTimeout`
+  that calls `self.hide()` unconditionally once its `seconds` argument
+  elapses, and **never clears that timeout on any later call** —
+  `show()`, `display()` again, or `hide()`. Every `.display()` call (from
+  `notify()` elsewhere in the app, or from `update()`/an earlier "rearm"
+  mechanism inside `startSpinner()` itself) leaves its own independent
+  hide-timer ticking down in the background; whichever one's deadline
+  hits first calls `hide()`, with no way to know a spinner has since
+  claimed the widget for a still-running operation. The `rearm` interval
+  this method previously used to (ineffectively) fight this — calling
+  `.display()` every 20s hoping to "push the deadline forward" — didn't
+  cancel anything, it just added ANOTHER independent stale timer to the
+  pile. Fixed by having `tick()` (already running every 120ms) call
+  `toast.show()` on every frame, not just once at spinner start — this
+  decisively overrides any stale `hide()` from any source within 120ms,
+  without needing to know where it came from, so `rearm` was removed
+  entirely (no longer needed, and was actively harmful) and `update()`
+  now uses the same safe `setContent()`-based path instead of `.display()`.
+  [tested] (existing `spinner-toast-e2e.test.js` cases pass unchanged;
+  manually re-verified via the same real, non-mocked merge — the toast
+  now stays visible continuously for the operation's whole real duration,
+  confirmed via VHS screenshots at 2-second intervals showing zero gaps)
 - **In-flight LLM subprocesses are killed on quit, not orphaned.**
   `llm.js`'s `complete()` had no `detached` flag and nothing tracked its
   spawned child beyond the local Promise closure — `app.js`'s `quit()`
