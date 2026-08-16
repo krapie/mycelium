@@ -443,24 +443,50 @@ argument-parsing/routing/output-formatting layer itself is not). [untested]
 - **Post-mount notification re-evaluates itself once the first real scan
   actually lands.** `startTuiRoutine()`'s own `scanCycle()` is fire-and-
   forget (see above) — on a genuinely fresh store (a brand new install, or
-  right after a `mycelium demo` handoff), the already-onboarded path used
-  to mount `sessionsView()` and call `notifyPostMount()` before that first
-  scan had imported anything: the list read 0 sessions and the
-  `firstScanModal()` threshold check never cleared, until some unrelated
-  later navigation happened to re-query the by-then-populated index — a
-  real bug, confirmed via VHS against a genuinely empty `~/.mycelium`.
-  Fixed with `startTuiRoutine(onFirstScanDone)` (threaded through
+  right after a `mycelium demo` handoff), a `startTuiRoutine()` call site
+  that mounted `sessionsView()` and called `notifyPostMount()` before that
+  first scan had imported anything used to read 0 sessions, with the
+  `firstScanModal()` threshold check never clearing that launch — a real
+  bug, confirmed via VHS against a genuinely empty `~/.mycelium`. Fixed
+  with `startTuiRoutine(onFirstScanDone)` (threaded through
   `daemon/process.js` → `daemon/cycles.js`'s `runDaemon()`, fired once,
-  right after the first `scanCycle()`, not any later periodic one) —
-  `tui/index.js`'s already-onboarded path uses it to call
-  `api.reloadAll()` + re-run `notifyPostMount()` once real data actually
-  exists. Calling `notifyPostMount()` twice is safe (gated on
+  right after the first `scanCycle()`, not any later periodic one).
+  `tui/index.js`'s shared `startUpkeepAndRecheck(getApi)` helper wraps this
+  — `getApi()?.reloadAll()` + a second `notifyPostMount()` call once real
+  data actually exists — and is used at **all three** of `runTui()`'s
+  `startTuiRoutine()` call sites (accepted-tour, declined-tour, and
+  already-onboarded). A first version of this fix only patched the
+  already-onboarded branch; the other two (a first-ever plain `mycelium`
+  launch, tour accepted or declined) silently missed the modal's only fair
+  chance to fire, so it didn't appear until whichever LATER launch happened
+  to have the scan already done before ITS OWN immediate
+  `notifyPostMount()` check — reading as "the modal came back after I
+  already exited and re-entered" rather than "it finally got shown."
+  Confirmed via VHS: two plain `mycelium` launches in a row, first showing
+  0 sessions with no modal, second correctly showing the real count +
+  modal — reproduced the exact reported symptom, then fixed and
+  re-verified clean. Calling `notifyPostMount()` twice is safe (gated on
   `firstScanModalShown`; a no-op on the common non-fresh case where the
-  index already had data before this launch). [tested] (`daemon-cycles.test.js`
-  covers `runDaemon()`'s `onFirstScanDone` firing exactly once; the
-  `tui/index.js` wiring itself verified manually via VHS — screenshot
-  confirmed the real session count and `firstScanModal()` both correct on
-  first paint, no navigation needed)
+  index already had data before this launch).
+  `startUpkeepAndRecheck()` is also called strictly **after**
+  `app.show()`/`app.render()` in the already-onboarded branch, not before
+  — `scan()` (`scanner.js`) is a plain synchronous function
+  (`readFileSync`/`readdirSync`, no async I/O), so calling it blocks the
+  entire event loop for however long a real scan takes (measured ~1.9-2.4s
+  for 65 real sessions via direct in-process timing instrumentation;
+  scales with backlog size) regardless of being "fire-and-forget" in Promise
+  terms — that's CPU time, not I/O wait. Calling it before the first paint
+  meant nothing reached the terminal until the scan finished; painting
+  first means the shell is on screen (however briefly showing 0 sessions)
+  during that unavoidable block instead of nothing appearing at all. The
+  synchronous blocking itself is a known, deeper limitation (would need
+  `scan()`'s file I/O converted to async, a separate, larger change) — not
+  fully eliminated, just no longer hidden behind a blank/frozen-looking
+  screen. [tested] (`daemon-cycles.test.js` covers `runDaemon()`'s
+  `onFirstScanDone` firing exactly once; the `tui/index.js` wiring itself
+  verified manually via VHS — screenshots confirmed the real session count
+  and `firstScanModal()` both correct on first paint at all three call
+  sites, no navigation or second launch needed)
 - **Real progress bar for the two smart-organize phases.**
   `app.startProgressBar(label)` — sibling to `startSpinner()`, same
   `{update(current, total), stop()}` shape, backed by a real
@@ -941,7 +967,21 @@ the same tape) to genuinely leak into the newly-mounted real session — it
 closed `firstScanModal()` **and** armed `app.js`'s quit-confirm in the same
 event (both independent listeners on the same keypress), meaning one more
 stray `q` from there would have actually exited the just-launched real
-session. [tested] (`buildMockSessions()` and `tutorial-mock-llm.js`'s prompt-dispatch/
+session. **Known remaining limitation**, found via a follow-up user report
+and confirmed with direct in-process `Date.now()` timing instrumentation
+(not VHS video timing — VHS's own recording pipeline showed a much longer
+apparent freeze than the app's real internal timestamps did, most likely
+capture/render latency in VHS itself under sustained system load rather
+than real app behavior; the in-process trace is the trustworthy source
+here): the shell now paints ~200ms after the child exits (this section's
+fixes above worked as intended), but a further freeze — roughly 2s for a
+65-session real backlog, scaling with backlog size — still follows,
+because `scan()` (see the Post-mount notification entry above) blocks the
+event loop synchronously. The transitional message and painted shell are
+both visible before this freeze starts, which is a real improvement over
+the prior fully-blank gap, but the freeze itself isn't eliminated — that
+needs `scan()`'s file I/O converted to async, a separate, larger,
+not-yet-scoped change. [tested] (`buildMockSessions()` and `tutorial-mock-llm.js`'s prompt-dispatch/
 classification/folder-lookup logic are unit-tested as pure functions;
 `test/e2e/demo-e2e.test.js` drives the real interactive state machine
 end-to-end — organize→learn→reuse→merge→split, the exit-key model, and the

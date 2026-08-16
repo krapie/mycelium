@@ -102,6 +102,28 @@ export async function runTui({ forceTutorial = false } = {}) {
   }
   const app = createApp();
 
+  // Shared by every startTuiRoutine() call site below (the accepted-tour,
+  // declined-tour, and already-onboarded branches) — startTuiRoutine()'s own
+  // scanCycle() is fire-and-forget, so whichever notifyPostMount() call ran
+  // right after mount can easily run before that first scan has imported
+  // anything: a genuinely fresh store reads 0 sessions and the first-scan-
+  // modal's threshold check never clears. A real bug (confirmed via VHS)
+  // came from this helper only being applied to ONE of the three call
+  // sites — the other two silently missed the modal's only fair chance to
+  // fire, so it didn't show up until whichever LATER launch happened to
+  // have the scan already done before its own immediate notifyPostMount()
+  // ran, reading as "the modal showed up again after I already exited and
+  // came back" rather than "it finally got shown." `getApi` is a closure
+  // (not a plain `api` value) since each call site's own `api` variable is
+  // still `undefined` at the moment this function is defined/passed in —
+  // only set once `sessionsView()`'s `onReady` fires, before
+  // startTuiRoutine()'s callback can ever run.
+  const startUpkeepAndRecheck = (getApi) =>
+    startTuiRoutine(() => {
+      getApi()?.reloadAll();
+      notifyPostMount(app);
+    });
+
   // `mycelium demo` (cli.js) — MYCELIUM_HOME already points at a throwaway
   // store by the time this process started, so there's no real data to
   // protect and no onboarded prompt to ask; just seed and go straight in.
@@ -223,16 +245,21 @@ export async function runTui({ forceTutorial = false } = {}) {
                   // and the human is looking at their real (still-empty, not
                   // yet scanned) cockpit, not the tutorial — see this
                   // function's own header comment for why this moved here.
-                  startTuiRoutine();
+                  // See startUpkeepAndRecheck()'s own comment (top of this
+                  // function) for why the re-check callback matters here too,
+                  // not just the already-onboarded branch below.
+                  startUpkeepAndRecheck(() => api);
                 },
                 personaId,
               );
             });
           } else {
             // Declining the guided tour still gets the short static overview.
+            // Same reasoning as the startTutorial() branch above — this is
+            // also a genuinely fresh store's first-ever notifyPostMount().
             welcomeModal(app, () => {
               notifyPostMount(app);
-              startTuiRoutine();
+              startUpkeepAndRecheck(() => api);
             });
           }
         },
@@ -243,30 +270,39 @@ export async function runTui({ forceTutorial = false } = {}) {
 
   // Already onboarded — no tutorial/mock-seeding race to avoid here, so this
   // is the one path where starting real background upkeep right away (same
-  // as it always did) is safe.
+  // as it always did) is safe. See startUpkeepAndRecheck()'s own comment
+  // (top of this function) for why the re-check callback matters — this is
+  // the branch a `mycelium demo` handoff always lands on (cli.js stamps
+  // onboarded:true before calling runTui()), so it's also the one every
+  // earlier VHS verification pass exercised. Calling notifyPostMount()
+  // twice (once here immediately, once again once the callback fires) is
+  // safe: gated on config.json's firstScanModalShown (won't double-show the
+  // modal), and on the common, non-fresh case (index already has data from
+  // a prior run) the immediate call below already has accurate numbers, so
+  // the callback just re-does the same no-op check a moment later.
   //
-  // startTuiRoutine() is fire-and-forget (its own scanCycle() isn't
-  // awaited) — on a store with nothing scanned yet (a genuinely fresh
-  // ~/.mycelium, e.g. right after a mycelium demo handoff), the view below
-  // mounts and notifyPostMount() evaluates before that first scan has
-  // imported anything: the list reads 0 sessions and the first-scan modal's
-  // threshold check never clears, until some unrelated later navigation
-  // happens to re-query the by-then-populated index. The onFirstScanDone
-  // callback re-checks once real data actually exists, without blocking
-  // this function on a full scan (which would make the initial paint
-  // itself slower — the opposite of what a fast handoff needs). Calling
-  // notifyPostMount() twice is safe: it's gated on config.json's
-  // firstScanModalShown (won't double-show the modal), and on the common,
-  // non-fresh case (index already has data from a prior run) the immediate
-  // call below already has accurate numbers, so the callback just re-does
-  // the same no-op check a moment later.
+  // Mount + render FIRST, THEN start upkeep — a real bug found via VHS
+  // frame timing: scan() (scanner.js) is a plain synchronous function
+  // (readFileSync/readdirSync throughout, no async I/O), so scanCycle()
+  // calling it (`const res = scan();`, no await) blocks the ENTIRE event
+  // loop for however long a real scan takes (measured ~1.9s for 65
+  // sessions via the daemon log; scales with real backlog size) —
+  // "fire-and-forget" only describes the Promise chain, not actual CPU
+  // time. Calling startUpkeepAndRecheck() before app.show()/app.render()
+  // used to mean that synchronous block ran BEFORE the first paint could
+  // even happen, since both statements share the same synchronous call
+  // stack up to the first real await — nothing reaches the terminal until
+  // scan() returns. The transitional message in cli.js's handoff branch
+  // (demo.handoffTransition) was staying on screen for that whole
+  // multi-second stretch with no visible progress, exactly the "still
+  // delays, feels frozen" symptom. Painting first means the shell (however
+  // briefly empty) is what's on screen during that unavoidable block,
+  // instead of nothing — startUpkeepAndRecheck()'s own callback still
+  // fixes up the numbers once the scan actually finishes.
   let api;
-  startTuiRoutine(() => {
-    api?.reloadAll();
-    notifyPostMount(app);
-  });
   await app.show(sessionsView({ onReady: (a) => (api = a) }));
   app.render();
+  startUpkeepAndRecheck(() => api);
   notifyPostMount(app);
 }
 
