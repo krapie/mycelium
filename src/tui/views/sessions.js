@@ -107,9 +107,10 @@ export function sessionsView(opts = {}) {
   // the New pseudo-folder (genuinely unfiled only), a path = that folder's
   // subtree.
   let state = { folder: undefined, query: '', tags: [], selected: new Set(), sortBy: 'recent' };
-  // Guards o/w/Shift+S — each is an async LLM-bound flow that shows a
-  // spinner, awaits a real complete() call (anywhere from under a second to
-  // 10+ seconds), then opens a review modal. None of them disable their own
+  // Guards o/w/Shift+S/Shift+M — each is an async LLM-bound flow that shows
+  // a spinner, awaits a real complete() call (anywhere from under a second
+  // to 10+ seconds), then opens a review modal (o/w/Shift+S) or applies
+  // directly (Shift+M has no review step). None of them disable their own
   // key while in flight, so an impatient repeat press (nothing visibly
   // happened yet) used to start a SECOND concurrent run — a second spinner,
   // a second LLM call, and eventually a second review modal stacking on top
@@ -118,8 +119,19 @@ export function sessionsView(opts = {}) {
   // `app.screen.children.length` against a pre-press baseline (the
   // tutorial's own isModalOpen()) never saw it drop back down — stuck
   // waiting for a "close" that could never fully arrive. One shared flag
-  // is enough since these three are mutually exclusive anyway (nothing
-  // sane comes from running two of them at once regardless of which two).
+  // is enough since these four are mutually exclusive anyway (nothing sane
+  // comes from running two of them at once regardless of which two).
+  // Deliberately narrow scope for all four: released as soon as the
+  // "immediate" part of the flow finishes (a review modal opening, or for
+  // Shift+M, the title prompt closing) — never held through a later async
+  // best-effort auto-summarize phase (merge/split both have one). An
+  // earlier attempt DID hold it through that phase specifically to stop two
+  // overlapping spinners from fighting over the shared toast widget
+  // (app.js) — that broke legitimate immediate follow-up actions instead
+  // (e.g. Shift+S right after a merge silently did nothing, confirmed by a
+  // real e2e regression). The toast-hiding bug is fixed at its actual
+  // source now — see app.js's startSpinner() stop(), reference-counted on
+  // busyWidgets instead of hiding unconditionally.
   let asyncReviewFlowRunning = false;
   const SORT_CYCLE = ['recent', 'title', 'agent'];
   let app;
@@ -624,7 +636,24 @@ export function sessionsView(opts = {}) {
           if (targetId && doUnmerge(targetId)) return;
         }
         if (ids.length < 2) return app.notify(t('merge.needsTwo'), 3);
+        // See asyncReviewFlowRunning's own comment (near `state`'s
+        // declaration) — only guards the title prompt itself (a second
+        // Shift+M while it's open), released the instant it closes, same
+        // scope as o/w/Shift+S's own guards. Deliberately NOT held through
+        // the async auto-summarize below — the UI (and the very next
+        // keypress, e.g. Shift+S right after a merge) is meant to be usable
+        // immediately once the merge itself has applied, summary filling in
+        // independently in the background; a prior attempt at holding the
+        // guard through that whole phase broke exactly this (confirmed by a
+        // real e2e regression — merge-then-immediate-split silently did
+        // nothing, split's own key press swallowed by the still-held
+        // guard). The toast-hiding bug this was meant to prevent is fixed
+        // at its actual source instead — see app.js's startSpinner()
+        // stop(), gated on busyWidgets instead of hiding unconditionally.
+        if (asyncReviewFlowRunning) return;
+        asyncReviewFlowRunning = true;
         textPrompt(app, t('merge.titlePrompt'), suggestMergeTitle(ids), async (title) => {
+          asyncReviewFlowRunning = false;
           if (title === null) return listBox.focus(); // Esc — cancelled
           const res = mergeSessions(ids, { title: title.trim() || undefined });
           if (!res.ok) return app.notify(res.error, 3);
@@ -750,7 +779,14 @@ export function sessionsView(opts = {}) {
           // one failing doesn't undo the split or block the others. Runs
           // AFTER the UI has already recovered — pieces show up immediately
           // (with their real boundary-label titles), summaries fill in a
-          // moment later.
+          // moment later. Deliberately NOT re-arming asyncReviewFlowRunning
+          // here (a prior attempt did, to guard against this overlapping a
+          // second trigger's own spinner on the same shared toast) — that
+          // blocked legitimate immediate follow-up actions (e.g. another
+          // Shift+S right after this one), confirmed by a real e2e
+          // regression. The toast-hiding bug is fixed at its actual source
+          // instead — see app.js's startSpinner() stop(), gated on
+          // busyWidgets instead of hiding unconditionally.
           const spin = app.startSpinner(t('split.summarizing'));
           try {
             await mapConcurrent(applied.pieces, 2, (p) => autoTagSession(p.id).catch(() => {}));

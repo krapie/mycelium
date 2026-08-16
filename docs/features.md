@@ -487,6 +487,26 @@ argument-parsing/routing/output-formatting layer itself is not). [untested]
   verified manually via VHS — screenshots confirmed the real session count
   and `firstScanModal()` both correct on first paint at all three call
   sites, no navigation or second launch needed)
+  **Follow-up fix, same investigation**: the above got the modal's own
+  numbers right but missed refreshing the sessions view's own header/
+  folders/list at the same moment — those stayed built from mount()'s
+  pre-scan (empty) snapshot until `onFirstScanDone` eventually fired,
+  which (a real bug) waited for `scanCycle()`'s FULL body including
+  `tagAll()` — up to `TAG_BATCH_LIMIT` (20) real LLM calls, tens of
+  seconds to minutes, not the ~2s `scan()`+`reindex()` alone takes.
+  Confirmed via a fresh VHS screenshot showing "65 sessions" in the modal
+  simultaneous with "0 sessions"/"No sessions" everywhere else on the same
+  frame. Fixed by moving the `onScanned` hook into `scanCycle()` itself
+  (`daemon/cycles.js`), firing right after `reindex()` and before
+  `tagAll()` starts — `runDaemon()` passes `onFirstScanDone` through to
+  only the first call, unchanged for every later periodic one. `tui/index.js`
+  also gained a belt-and-suspenders explicit `api.reloadAll()` alongside its
+  existing immediate `notifyPostMount()` call, for correctness even if this
+  synchronous-timing relationship changes later. [tested] (new
+  `daemon-cycles.test.js` case gates the test LLM provider on a
+  test-controlled promise to prove `onScanned` fires while `tagAll()`'s own
+  call is still pending; `tui/index.js` wiring re-verified via VHS —
+  header/folders/list now match the modal's numbers immediately)
 - **Real progress bar for the two smart-organize phases.**
   `app.startProgressBar(label)` — sibling to `startSpinner()`, same
   `{update(current, total), stop()}` shape, backed by a real
@@ -502,6 +522,56 @@ argument-parsing/routing/output-formatting layer itself is not). [untested]
   `.filled` percentage, label text, stop() hiding it; the `runSmartOrganize()`
   call sites are exercised indirectly by demo-e2e.test.js's `o` steps, which
   only assert the resulting review modal opens, not the bar's fill)
+- **Shared toast (`startSpinner()`/`startProgressBar()`) is reference-
+  counted, not last-write-wins.** Both share one `busyWidgets` counter
+  (see `isBusy()` above); a real bug found in production had each
+  `stop()` call `toast.hide()` (or `progressBox.hide()`) unconditionally,
+  regardless of whether the OTHER widget-type's own call was still active.
+  Two overlapping `startSpinner()` calls — e.g. an impatient re-trigger of
+  merge (`Shift+M`) before it had its own re-entry guard — meant whichever
+  finished first hid the toast for both, reading as "the modal closed
+  early" while the other's real work kept running, landing its result
+  later with nothing on screen to show for it. Fixed with a shared
+  `hideToastIfIdle()` helper both `stop()` methods call — only actually
+  hides `toast` once `busyWidgets` reaches 0, and specifically both
+  methods call it (not just `startSpinner()`'s own), since a progress bar
+  and a spinner sharing the counter means either one's `stop()` could be
+  the one that brings it to 0. (The background daemon's own periodic
+  scan/tag/organize cycles never touch this widget at all — those run
+  headless, no spinner of their own, so they can't collide with a user's
+  spinner here.) A first attempt at the merge/split side of this fix held
+  their `asyncReviewFlowRunning` guard through the async auto-summarize
+  phase too, to prevent the overlap from starting in the first place —
+  that broke legitimate immediate follow-up actions instead (confirmed by
+  a real e2e regression: split right after merge silently did nothing,
+  its own keypress swallowed by the still-held guard) and was reverted;
+  the fix lives at the toast's own level instead. [tested]
+  (`test/e2e/spinner-toast-e2e.test.js` — two overlapping spinners, the
+  common single-spinner case, and spinner+progress-bar sharing the counter)
+- **In-flight LLM subprocesses are killed on quit, not orphaned.**
+  `llm.js`'s `complete()` had no `detached` flag and nothing tracked its
+  spawned child beyond the local Promise closure — `app.js`'s `quit()`
+  (`screen.destroy(); process.exit(code);`, shared by both the `q` key and
+  `Ctrl+C`, tutorial handoff included) is unconditional and synchronous,
+  so any `claude`/`codex` subprocess still running at quit time — a user's
+  own merge/split/organize call, or the background daemon's periodic
+  cycles — kept running as an orphan after mycelium itself had exited:
+  real API quota consumed, an eventual write to `raw/<id>.json` with
+  nothing left alive to show for it. Reported as "sessions still running
+  even after exiting mycelium." Fixed with an `inFlight` `Set` (`llm.js`)
+  every `complete()` call adds itself to on spawn and removes itself from
+  on `close`/`error` (same lifecycle as the existing timeout-triggered
+  `child.kill('SIGTERM')`), plus `killInFlight()` — best-effort `SIGTERM`
+  to everything currently tracked, not awaited (the goal is "don't leave
+  it running," not "block quitting until confirmed dead"). `app.js`'s
+  `quit()` calls it before `process.exit()`. [tested] (`llm.test.js`,
+  using test-only `__trackChildForTest()`/`__inFlightCountForTest()` seams
+  — `complete()`'s real spawn path always targets the real `claude`/`codex`
+  binaries with fixed args, and `_testProvider` deliberately bypasses
+  `spawn()` entirely, so neither can exercise real child tracking; the
+  wiring inside `complete()` itself — `inFlight.add()`/removal — is left
+  to code review, same "real spawn path not tested, by design" precedent
+  this file's `complete()` entry already documents)
 
 ## TUI — Detail rendering (`src/tui/render.js`)
 
@@ -638,10 +708,11 @@ first, the complete key-by-key reference below it. Factored out of
 `l`/the first-run picker otherwise left it in whichever language was active
 at mount time). [untested]
 
-**`asyncReviewFlowRunning` guards `o`/`w`/Shift+S against a double-press
-while the LLM call is still in flight.** All three are async: show a
-spinner, `await` a real `complete()` call (anywhere from under a second to
-10+ seconds), then open a review modal. None disable their own key while
+**`asyncReviewFlowRunning` guards `o`/`w`/Shift+S/Shift+M against a
+double-press while the LLM call is still in flight.** All four are async:
+show a spinner, `await` a real `complete()` call (anywhere from under a
+second to 10+ seconds), then open a review modal (`o`/`w`/Shift+S) or
+apply directly (Shift+M has none). None disable their own key while
 waiting, so an impatient repeat press — nothing visibly happened yet —
 used to start a SECOND concurrent run: a second spinner, a second LLM
 call, and eventually a second review modal stacking on top of the first
@@ -651,13 +722,23 @@ the other still parented underneath, so anything watching
 own `isModalOpen()`) never saw it drop back to baseline — permanently
 stuck waiting for a "close" that could never fully arrive (surfaced as the
 narrator hanging on "Applying…" forever after Shift+S). One shared flag
-covers all three (mutually exclusive anyway), set on entry and released
-the instant each one's own review modal opens — not held through however
-long the human takes to review it, so reviewing one doesn't block starting
-a different one afterward. [tested] (`test/e2e/demo-e2e.test.js`'s "an
-impatient double Shift+S while the LLM call is in flight" case double-
-presses inside the mock delay window and asserts only one modal opens and
-closing it returns exactly to baseline)
+covers all four (mutually exclusive anyway), set on entry and released
+the instant each one's own "immediate" step finishes — a review modal
+opening for `o`/`w`/Shift+S, the title prompt closing for Shift+M — never
+held through the LATER async best-effort auto-summarize phase merge/split
+both have (Shift+M has no review modal to release at, so it's the only
+one of the four gated on prompt-close instead). An earlier attempt DID
+hold the guard through that later phase too, specifically to stop two
+overlapping spinners fighting over the shared toast widget — that broke
+legitimate immediate follow-up actions instead (confirmed by a real e2e
+regression: Shift+S right after a merge silently did nothing) and was
+reverted; the toast-hiding bug is fixed at its own source now (see the App
+shell section's "reference-counted" toast entry). [tested] (`test/e2e/
+demo-e2e.test.js`'s "an impatient double Shift+S while the LLM call is in
+flight" case double-presses inside the mock delay window and asserts only
+one modal opens and closing it returns exactly to baseline; the same
+file's merge-then-immediate-split case is the regression test for the
+guard-scope revert)
 
 ## TUI — Calendar tab (`src/tui/views/calendar.js`)
 

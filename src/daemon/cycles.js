@@ -38,7 +38,20 @@ const SUMMARIZE_CONCURRENCY = Number(process.env.MYCELIUM_SUMMARIZE_CONCURRENCY 
 let scanRunning = false;
 let organizeRunning = false;
 
-export async function scanCycle(log) {
+// `onScanned`, if passed, fires once — right after scan()+reindex(), before
+// the (much slower, LLM-bound) tagAll() call below. A real bug found via
+// VHS: a first version of this hook (see runDaemon()'s own comment) fired
+// only after tagAll() too, since it lived on the OUTSIDE of this whole
+// function's await — tagAll() can mean up to TAG_BATCH_LIMIT real
+// claude/codex subprocess calls, tens of seconds to minutes on a real
+// backlog, not the ~2s scan()+reindex() itself takes. A caller that wants
+// to refresh a just-mounted view (tui/index.js's startUpkeepAndRecheck())
+// needs to know as soon as the data is actually queryable, not after the
+// whole cycle — waiting for tagAll() meant the sessions view's own header/
+// folders/list stayed built from pre-scan (empty) state for however long
+// tagging took, even though notifyPostMount()'s own immediate call (which
+// re-queries data.sessions() fresh) already had the right numbers by then.
+export async function scanCycle(log, { onScanned } = {}) {
   if (scanRunning) return log.log('[scan] skip — previous cycle still running');
   scanRunning = true;
   try {
@@ -49,6 +62,9 @@ export async function scanCycle(log) {
       // Just reindex + tag.
       reindex();
       log.log(`[scan] +${res.imported} (reindexed)`);
+    }
+    if (onScanned) onScanned();
+    if (res.imported > 0) {
       // Tag freshly imported sessions (skips those already summarized).
       // Shares SUMMARIZE_CONCURRENCY with smartOrganizeCycle below — one
       // governing concurrency ceiling for every daemon-triggered batch of
@@ -154,13 +170,16 @@ export async function knowledgeReviewCycle(log) {
  * would corrupt the screen.
  *
  * `onFirstScanDone`, if passed, fires once — right after the very first
- * scanCycle() above, not any of the later periodic ones. startTuiRoutine()
- * (process.js) calls this without awaiting it, so a genuinely fresh store
- * (nothing scanned yet) mounts the sessions view and evaluates
- * notifyPostMount() before this first scan has imported anything — the list
- * reads 0 sessions and the first-scan modal's threshold check never clears.
- * This hook lets the TUI re-check once real data actually exists, without
- * blocking the initial paint on a full scan (see tui/index.js).
+ * scanCycle() above's own scan()+reindex() (see scanCycle()'s own comment
+ * for why it's threaded in there now, not called out here after the whole
+ * cycle including tagAll() finishes), not any of the later periodic ones.
+ * startTuiRoutine() (process.js) calls this without awaiting it, so a
+ * genuinely fresh store (nothing scanned yet) mounts the sessions view and
+ * evaluates notifyPostMount() before this first scan has imported anything
+ * — the list reads 0 sessions and the first-scan modal's threshold check
+ * never clears. This hook lets the TUI re-check once real data actually
+ * exists, without blocking the initial paint on a full scan (see
+ * tui/index.js).
  */
 export async function runDaemon({ log = console, onFirstScanDone } = {}) {
   log.log('Mycelium daemon starting (background upkeep: scan + digest + knowledge review + smart organize).');
@@ -169,8 +188,7 @@ export async function runDaemon({ log = console, onFirstScanDone } = {}) {
     `  smart organize interval: ${SMART_ORGANIZE_INTERVAL_MS}ms (batch limit ${SMART_ORGANIZE_BATCH_LIMIT}, cooldown ${SMART_ORGANIZE_COOLDOWN_MS}ms, concurrency ${SUMMARIZE_CONCURRENCY})`,
   );
 
-  await scanCycle(log);
-  if (onFirstScanDone) onFirstScanDone();
+  await scanCycle(log, { onScanned: onFirstScanDone });
   await digestCycle(log);
   await knowledgeReviewCycle(log);
   await smartOrganizeCycle(log);

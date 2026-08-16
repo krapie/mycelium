@@ -91,3 +91,44 @@ test('runDaemon() fires onFirstScanDone once, right after the first scan — bef
 
   assert.equal(fired, 1, 'fires exactly once for the whole runDaemon() call, not per later cycle');
 });
+
+test('runDaemon() fires onFirstScanDone right after scan()+reindex(), before the slower tagAll() pass resolves', async (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  // A real bug: an earlier version fired this hook only after the WHOLE
+  // scanCycle() (including tagAll()'s real, potentially slow LLM calls)
+  // resolved — a caller wanting to refresh a just-mounted view (see
+  // tui/index.js) needs to know as soon as data is queryable, not after
+  // however long tagging a real backlog takes. Proven here by gating the
+  // test LLM provider on a promise this test controls: if onFirstScanDone
+  // fired before tagAll()'s own call resolves, the fix is doing its job.
+  const fakeRef = { id: 'onscanned-1', mtimeMs: 1000 };
+  const fakeAdapter = {
+    name: 'fake-source',
+    listSessions: () => [fakeRef],
+    parse: (ref) => {
+      const n = emptyNeutral(ref.id, 'fake-source');
+      n.turns = [{ role: 'user', text: 'do the thing' }];
+      return n;
+    },
+  };
+  const real = adaptersIndex.ADAPTERS.splice(0, adaptersIndex.ADAPTERS.length, fakeAdapter);
+  let resolveLLM;
+  const llmGate = new Promise((r) => (resolveLLM = r));
+  __setTestProvider(() => llmGate); // tagAll()'s complete() call hangs here until resolved below
+  let firedWhileLLMPending = false;
+  try {
+    const daemonPromise = runDaemon({
+      log: fakeLog(),
+      onFirstScanDone: () => {
+        firedWhileLLMPending = true;
+      },
+    });
+    // The LLM call is still gated on llmGate at this point — if the hook
+    // already fired, it fired strictly before tagAll()'s own await settled.
+    assert.equal(firedWhileLLMPending, true, 'onScanned already fired while tagAll()\'s LLM call is still pending');
+    resolveLLM(JSON.stringify({ title: 'x', tags: [], summary: 'onscanned test summary', decisions: [], todos: [] }));
+    await daemonPromise;
+  } finally {
+    adaptersIndex.ADAPTERS.splice(0, adaptersIndex.ADAPTERS.length, ...real);
+  }
+});

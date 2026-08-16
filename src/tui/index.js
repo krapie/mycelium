@@ -303,6 +303,15 @@ export async function runTui({ forceTutorial = false } = {}) {
   await app.show(sessionsView({ onReady: (a) => (api = a) }));
   app.render();
   startUpkeepAndRecheck(() => api);
+  // Belt-and-suspenders alongside startUpkeepAndRecheck()'s own callback:
+  // scanCycle()'s onScanned hook now fires synchronously within THIS same
+  // call stack (right after scan()+reindex(), before its own first real
+  // await), so by the time control reaches this line the callback above
+  // has typically already run once — this second reloadAll() is a no-op
+  // in that case. Kept explicit anyway so this stays correct even if that
+  // synchronous coupling ever changes (e.g. scan() becoming real async
+  // I/O), rather than depending on exact timing between two files.
+  api?.reloadAll();
   notifyPostMount(app);
 }
 

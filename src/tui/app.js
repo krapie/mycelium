@@ -2,6 +2,7 @@ import pkg from 'neo-blessed';
 const blessed = pkg.default || pkg;
 import { C } from './theme.js';
 import { t, getLocale, setLocale } from './i18n.js';
+import { killInFlight } from '../llm.js';
 
 // blessed mis-compiles some xterm-256color capabilities (notably `Setulc`,
 // set-underline-color) into JS with a syntax error, then dumps the generated
@@ -109,6 +110,20 @@ export function createApp({ input, output } = {}) {
   // permanent screen child (show()/hide() only toggle visibility) that
   // tutorial.js's screen.children.length-based isModalOpen() can't see.
   let busyWidgets = 0;
+  // Shared by both stop() methods below — startProgressBar()'s own stop()
+  // decrementing busyWidgets to 0 needs to be able to hide `toast` too, not
+  // just its own progressBox: a spinner and a progress bar both increment
+  // the same counter, so whichever of the two stop()s happens to be the
+  // LAST one out is the one that actually needs to hide the toast, and
+  // that isn't always the spinner's own stop(). Only startSpinner() ever
+  // shows the toast, but either stop() can be what finally makes it safe
+  // to hide.
+  const hideToastIfIdle = () => {
+    if (busyWidgets <= 0) {
+      toast.hide();
+      screen.render();
+    }
+  };
 
   // Separate from `toast`: a real filling bar for the two smart-organize
   // phases (summarize, classify) that already know a true total up front
@@ -238,9 +253,32 @@ export function createApp({ input, output } = {}) {
         stop() {
           clearInterval(timer);
           clearInterval(rearm);
-          toast.hide();
-          screen.render();
           busyWidgets--;
+          // Only actually hide the shared toast once NOTHING else is still
+          // busy — a real bug found in production: `toast` is one widget
+          // shared by every startSpinner() call (merge/split's own summarize
+          // spinner, any other in-flight LLM-bound action), and this used to
+          // call toast.hide() unconditionally. Two overlapping spinners —
+          // e.g. an impatient re-trigger of the same action before its own
+          // first spinner had stopped (merge, before it had a guard against
+          // this — see sessions.js) — meant whichever one finished FIRST hid
+          // the toast for BOTH, reading as "the modal closed early" while
+          // the other operation kept genuinely running, landing its real
+          // result later with nothing on screen to show for it in between.
+          // (The daemon's own periodic scan/tag/organize cycles — see
+          // daemon/cycles.js — never touch this widget at all: those run
+          // headless, with no spinner of their own, so they can't collide
+          // with a user's spinner here regardless.) Leaves whatever label is
+          // currently showing alone if something else is still in flight;
+          // that other spinner's own tick() (still running on its own
+          // interval) corrects the label on its next frame if it changed.
+          // A startProgressBar() call sharing busyWidgets with this spinner
+          // (not exercised by any real UI flow today — see
+          // hideToastIfIdle()'s own comment) is exactly why this delegates
+          // to the shared helper instead of checking/hiding inline: whoever
+          // decrements busyWidgets to 0 needs to hide the toast, and that
+          // isn't always this method.
+          hideToastIfIdle();
         },
       };
     },
@@ -271,6 +309,12 @@ export function createApp({ input, output } = {}) {
           progressBox.hide();
           screen.render();
           busyWidgets--;
+          // See hideToastIfIdle()'s own comment — a spinner could have
+          // started (and left its own stop() unable to hide the toast yet)
+          // after this progress bar did; if THIS is the call that brings
+          // the shared count to 0, the toast needs hiding too, not just
+          // this method's own progressBox.
+          hideToastIfIdle();
         },
       };
     },
@@ -294,6 +338,12 @@ export function createApp({ input, output } = {}) {
     // (see tutorial.js's DEMO_HANDOFF_EXIT_CODE) — every other caller just
     // calls quit() with no args, which keeps the normal 0.
     quit(code = 0) {
+      // Best-effort, not awaited — see llm.js's killInFlight()/inFlight for
+      // why this exists (orphaned claude/codex subprocesses surviving past
+      // mycelium's own exit, real bug found in production). Every quit
+      // path funnels through here (the tutorial's own DEMO_HANDOFF_EXIT_CODE
+      // quit included), so this is the one place that needs it.
+      killInFlight();
       screen.destroy();
       process.exit(code);
     },
