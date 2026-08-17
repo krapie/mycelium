@@ -689,12 +689,11 @@ export function sessionsView(opts = {}) {
           spin.stop();
           data.refreshOne(res.merged.id);
           reloadList();
-          // Longer duration + the actual id: merge is fully reversible
-          // (`mycelium unmerge <id>` restores the originals, deletes this
-          // record) but that's only discoverable if this toast actually
-          // says so — a bare "Merged N sessions" gave no hint it could be
-          // undone at all, let alone how.
-          app.notify(t('merge.done', ids.length, res.merged.id.slice(0, 8)), 6);
+          // Includes the actual id so the toast itself says how to undo
+          // (`mycelium unmerge <id>`) — a bare "Merged N sessions" gave no
+          // hint it could be undone at all, let alone how. 4s (was 6s, felt
+          // too long lingering on screen) — still enough to read the id.
+          app.notify(t('merge.done', ids.length, res.merged.id.slice(0, 8)), 4);
           app.render();
         });
       });
@@ -795,12 +794,12 @@ export function sessionsView(opts = {}) {
           }
           data.refreshMany(applied.pieces.map((p) => p.id));
           reloadList();
-          // Longer duration + the original's id: split is fully reversible
-          // (`mycelium unsplit <id>` deletes the pieces, original untouched
-          // the whole time) but that's only discoverable if this toast
-          // actually says so — a bare "Split into N sessions" gave no hint
-          // it could be undone at all, let alone how.
-          app.notify(t('split.done', applied.pieces.length, r.id.slice(0, 8)), 6);
+          // Includes the original's id so the toast itself says how to
+          // undo (`mycelium unsplit <id>`, pieces deleted, original
+          // untouched) — a bare "Split into N sessions" gave no hint it
+          // could be undone at all, let alone how. 4s (was 6s, felt too
+          // long lingering on screen) — still enough to read the id.
+          app.notify(t('split.done', applied.pieces.length, r.id.slice(0, 8)), 4);
           app.render();
         }, { defaultAll: true });
       };
