@@ -2,6 +2,7 @@ import pkg from 'neo-blessed';
 const blessed = pkg.default || pkg;
 import { C } from './theme.js';
 import { t, getLocale, setLocale } from './i18n.js';
+import { killInFlight } from '../llm.js';
 
 // blessed mis-compiles some xterm-256color capabilities (notably `Setulc`,
 // set-underline-color) into JS with a syntax error, then dumps the generated
@@ -109,6 +110,20 @@ export function createApp({ input, output } = {}) {
   // permanent screen child (show()/hide() only toggle visibility) that
   // tutorial.js's screen.children.length-based isModalOpen() can't see.
   let busyWidgets = 0;
+  // Shared by both stop() methods below — startProgressBar()'s own stop()
+  // decrementing busyWidgets to 0 needs to be able to hide `toast` too, not
+  // just its own progressBox: a spinner and a progress bar both increment
+  // the same counter, so whichever of the two stop()s happens to be the
+  // LAST one out is the one that actually needs to hide the toast, and
+  // that isn't always the spinner's own stop(). Only startSpinner() ever
+  // shows the toast, but either stop() can be what finally makes it safe
+  // to hide.
+  const hideToastIfIdle = () => {
+    if (busyWidgets <= 0) {
+      toast.hide();
+      screen.render();
+    }
+  };
 
   // Separate from `toast`: a real filling bar for the two smart-organize
   // phases (summarize, classify) that already know a true total up front
@@ -169,17 +184,36 @@ export function createApp({ input, output } = {}) {
     // Animated wait indicator for LLM-bound calls — re-displays the toast
     // every 120ms with a cycling braille spinner frame (same family npm/
     // yarn/ora use; the screen is created with fullUnicode: true so this is
-    // safe to render). Re-displaying on a fixed timer, independent of any
-    // real progress, is deliberate: blessed.message's own auto-hide timer
-    // (the `seconds` argument to notify()/display()) doesn't extend itself,
-    // so a call that runs longer than the toast's fixed duration (60-90s,
-    // vs. llm.js's own 240s default timeout) used to make the toast vanish
-    // while the LLM call was still genuinely in flight — indistinguishable
-    // from a hang. Ticking re-arms that timer continuously, so the toast now
-    // only ever goes away via stop() (or dismissNotify()), never on its own.
-    // update(msg) lets a caller with real progress (a batch count, a
-    // completed-item count) change the label without restarting the spinner
-    // itself — see sessions.js's summarize/smart-organize progress toasts.
+    // safe to render). update(msg) lets a caller with real progress (a
+    // batch count, a completed-item count) change the label without
+    // restarting the spinner itself — see sessions.js's summarize/smart-
+    // organize progress toasts.
+    //
+    // A real, confirmed-in-production bug lived here: blessed.message's own
+    // `display(text, seconds, cb)` (used by notify() elsewhere, and by an
+    // earlier version of this method's own "rearm" logic) schedules an
+    // internal setTimeout that calls `self.hide()` unconditionally once
+    // `seconds` elapses — and neo-blessed's implementation (message.js)
+    // never clears that timeout on a LATER show()/display()/hide() call.
+    // Every `display()` call creates its own independent hide-timer that
+    // WILL fire at its own scheduled time no matter what happens afterward.
+    // A previous version of this method tried to "re-arm" against this by
+    // calling `toast.display(frame(), 60, cb)` every 20s — that doesn't
+    // cancel the earlier timer, it just piles up ANOTHER one; the ORIGINAL
+    // deadline (from THIS spinner's own first tick, or — worse — from any
+    // earlier, wholly unrelated notify() call still pending when THIS
+    // spinner starts) still fires and calls hide() out from under an
+    // actively-running spinner. Confirmed via VHS against a REAL (non-
+    // mocked) merge: the "Summarizing…" toast was invisible for the entire
+    // ~15s duration of a real claude call, with nothing on screen until the
+    // final result toast — exactly the "gone after a few seconds but
+    // actually still running" symptom reported. Fixed below by having
+    // tick() defensively call show() on every 120ms frame, not just once at
+    // start — decisively overriding any stale hide() from ANY source with
+    // at most a 120ms flicker, without needing to know where that hide()
+    // came from. update() now uses the same safe setContent()+render()
+    // path as tick() (previously used display(), which had the identical
+    // stale-timer problem) instead of blessed's auto-hide machinery.
     startSpinner(msg) {
       // Counted, not just toggled — busyWidgets++/-- below is what
       // isBusy() reports, since `toast` itself is a permanent screen child
@@ -214,33 +248,61 @@ export function createApp({ input, output } = {}) {
       // single-width braille glyph changes, so there's nothing stale left
       // over to expose.
       const tick = () => {
+        // show() every frame, not just once at start — see this method's
+        // own header comment for why: decisively overrides any stale
+        // hide() (blessed's own uncleared auto-hide timeout, from this
+        // spinner or an unrelated earlier notify()) within 120ms, without
+        // needing to know where that hide() call came from.
+        toast.show();
         toast.setContent(frame(), true);
         screen.render();
       };
-      toast.show();
       tick();
       const timer = setInterval(tick, 120);
-      // A real display() call, on a much slower cadence, to periodically
-      // re-arm blessed.message's own auto-hide timer (see the comment
-      // above this method for why that's needed) — its one clear-then-
-      // redraw is fine this rarely; it's only calling it every single
-      // animation tick that flickered.
-      const rearm = setInterval(() => toast.display(frame(), 60, () => {}), 20000);
       return {
-        // A real display() call here too: update() means the label itself
-        // changed (e.g. sessions.js's progress toasts, "3/6" → "4/6"), so
-        // the region genuinely needs clearing in case the new text is
-        // shorter than what it's replacing.
+        // Deliberately WITHOUT noClear, unlike tick() above — update() means
+        // the label itself changed (e.g. sessions.js's progress toasts,
+        // "3/6" → "4/6"), so the region genuinely needs clearing in case the
+        // new text is shorter than what it's replacing (setContent()'s own
+        // noClear param controls exactly this — element.js's clearPos()).
+        // Uses setContent() directly rather than display() (which the
+        // original version of this method used) for the same stale-timer
+        // reason tick() now calls show() defensively — see this method's
+        // header comment.
         update(newMsg) {
           label = newMsg;
-          toast.display(frame(), 60, () => {});
+          toast.show();
+          toast.setContent(frame());
+          screen.render();
         },
         stop() {
           clearInterval(timer);
-          clearInterval(rearm);
-          toast.hide();
-          screen.render();
           busyWidgets--;
+          // Only actually hide the shared toast once NOTHING else is still
+          // busy — a real bug found in production: `toast` is one widget
+          // shared by every startSpinner() call (merge/split's own summarize
+          // spinner, any other in-flight LLM-bound action), and this used to
+          // call toast.hide() unconditionally. Two overlapping spinners —
+          // e.g. an impatient re-trigger of the same action before its own
+          // first spinner had stopped (merge, before it had a guard against
+          // this — see sessions.js) — meant whichever one finished FIRST hid
+          // the toast for BOTH, reading as "the modal closed early" while
+          // the other operation kept genuinely running, landing its real
+          // result later with nothing on screen to show for it in between.
+          // (The daemon's own periodic scan/tag/organize cycles — see
+          // daemon/cycles.js — never touch this widget at all: those run
+          // headless, with no spinner of their own, so they can't collide
+          // with a user's spinner here regardless.) Leaves whatever label is
+          // currently showing alone if something else is still in flight;
+          // that other spinner's own tick() (still running on its own
+          // interval) corrects the label on its next frame if it changed.
+          // A startProgressBar() call sharing busyWidgets with this spinner
+          // (not exercised by any real UI flow today — see
+          // hideToastIfIdle()'s own comment) is exactly why this delegates
+          // to the shared helper instead of checking/hiding inline: whoever
+          // decrements busyWidgets to 0 needs to hide the toast, and that
+          // isn't always this method.
+          hideToastIfIdle();
         },
       };
     },
@@ -271,6 +333,12 @@ export function createApp({ input, output } = {}) {
           progressBox.hide();
           screen.render();
           busyWidgets--;
+          // See hideToastIfIdle()'s own comment — a spinner could have
+          // started (and left its own stop() unable to hide the toast yet)
+          // after this progress bar did; if THIS is the call that brings
+          // the shared count to 0, the toast needs hiding too, not just
+          // this method's own progressBox.
+          hideToastIfIdle();
         },
       };
     },
@@ -294,6 +362,12 @@ export function createApp({ input, output } = {}) {
     // (see tutorial.js's DEMO_HANDOFF_EXIT_CODE) — every other caller just
     // calls quit() with no args, which keeps the normal 0.
     quit(code = 0) {
+      // Best-effort, not awaited — see llm.js's killInFlight()/inFlight for
+      // why this exists (orphaned claude/codex subprocesses surviving past
+      // mycelium's own exit, real bug found in production). Every quit
+      // path funnels through here (the tutorial's own DEMO_HANDOFF_EXIT_CODE
+      // quit included), so this is the one place that needs it.
+      killInFlight();
       screen.destroy();
       process.exit(code);
     },

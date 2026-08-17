@@ -1,6 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { extractText, parseJsonReply, __setTestProvider, __clearTestProvider, complete, mapConcurrent } from '../src/llm.js';
+import {
+  extractText,
+  parseJsonReply,
+  __setTestProvider,
+  __clearTestProvider,
+  complete,
+  mapConcurrent,
+  killInFlight,
+  __trackChildForTest,
+  __inFlightCountForTest,
+  __clearInFlightForTest,
+} from '../src/llm.js';
 
 // Pure functions + the test-provider seam — no subprocess, no MYCELIUM_HOME
 // involvement, so plain static imports are fine here.
@@ -201,4 +212,38 @@ test('mapConcurrent() circuit breaker resets the consecutive-failure count on a 
   );
   assert.equal(stoppedEarly, false);
   assert.deepEqual(attempted, [1, 2, 3, 4, 5, 6]);
+});
+
+// killInFlight()/inFlight — the real spawn() path (inside complete())
+// always targets the real claude/codex binaries with fixed args (no
+// injection point for a test double), and _testProvider deliberately
+// bypasses spawn() entirely, so neither exercises real child tracking.
+// __trackChildForTest()/__inFlightCountForTest() (llm.js, same test-only-
+// export convention as __setTestProvider) let these tests register fake
+// children directly instead — real wiring inside complete() itself
+// (inFlight.add() on spawn, removal on close/error) is left to code
+// review, same as this file's own "the real claude/codex spawn path is
+// not tested, by design" precedent (see docs/features.md).
+
+test.afterEach(() => __clearInFlightForTest());
+
+test('killInFlight() sends SIGTERM to every currently-tracked child', () => {
+  const killed = [];
+  const fakeChild1 = { kill: (sig) => killed.push(['child1', sig]) };
+  const fakeChild2 = { kill: (sig) => killed.push(['child2', sig]) };
+  __trackChildForTest(fakeChild1);
+  __trackChildForTest(fakeChild2);
+  assert.equal(__inFlightCountForTest(), 2);
+
+  killInFlight();
+
+  assert.deepEqual(killed.sort(), [
+    ['child1', 'SIGTERM'],
+    ['child2', 'SIGTERM'],
+  ]);
+});
+
+test('killInFlight() with nothing tracked is a harmless no-op', () => {
+  assert.equal(__inFlightCountForTest(), 0);
+  assert.doesNotThrow(() => killInFlight());
 });

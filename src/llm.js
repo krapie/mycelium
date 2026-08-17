@@ -39,6 +39,45 @@ export function __clearTestProvider() {
   _testProvider = null;
 }
 
+// Every in-flight complete() child, tracked so killInFlight() (called by
+// app.js's quit()/Ctrl+C) can actually stop them — a real bug found in
+// production: spawn() below has no `detached` flag and nothing tracked
+// these beyond the local Promise closure, so quit()'s unconditional
+// process.exit() left any still-running claude/codex subprocess (a user's
+// own merge/split/organize call, or the background daemon's periodic scan/
+// tag/organize cycles — see daemon/cycles.js) orphaned: it kept running
+// after mycelium itself had exited, consuming real API quota and
+// eventually writing its result to raw/<id>.json with nothing left alive
+// to show for it, which read as "sessions still running even after
+// exiting mycelium."
+const inFlight = new Set();
+
+// Test-only seam, same naming/purpose convention as __setTestProvider()
+// above — complete()'s real spawn() path always targets the real claude/
+// codex binaries with fixed args (no injection point for a test double),
+// and _testProvider deliberately bypasses spawn() entirely (no subprocess
+// at all), so neither path can exercise killInFlight()'s real behavior
+// against a tracked child. This lets a test register a fake child (any
+// object with a `.kill()` method) directly, without a real subprocess.
+export function __trackChildForTest(child) {
+  inFlight.add(child);
+}
+export function __inFlightCountForTest() {
+  return inFlight.size;
+}
+export function __clearInFlightForTest() {
+  inFlight.clear();
+}
+
+/** Best-effort SIGTERM to every currently-tracked complete() child — see
+ * `inFlight`'s own comment above. Not awaited by the caller: the goal is
+ * "don't leave it running," not "block quitting until it's confirmed
+ * dead" — each child's own `close`/`error` handler removes it from
+ * `inFlight` once it actually exits, same as the normal completion path. */
+export function killInFlight() {
+  for (const child of inFlight) child.kill('SIGTERM');
+}
+
 export function complete(prompt, { timeoutMs = 240000 } = {}) {
   if (_testProvider) return Promise.resolve(_testProvider(prompt, { timeoutMs }));
   const fullPrompt = `${META_MARKER}\n${prompt}`;
@@ -58,6 +97,8 @@ export function complete(prompt, { timeoutMs = 240000 } = {}) {
     // background, that's what looked like "Claude DOS windows keep
     // appearing" in practice (issue #3). No-op on macOS/Linux.
     const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+    inFlight.add(child);
+    const untrack = () => inFlight.delete(child);
     let out = '';
     let err = '';
     const timer = setTimeout(() => {
@@ -69,10 +110,12 @@ export function complete(prompt, { timeoutMs = 240000 } = {}) {
     child.stderr.on('data', (d) => (err += d));
     child.on('error', (e) => {
       clearTimeout(timer);
+      untrack();
       reject(e);
     });
     child.on('close', (code) => {
       clearTimeout(timer);
+      untrack();
       if (code !== 0) return reject(new Error(err.trim() || `${cmd} exited ${code}`));
       resolve(extractText(out));
     });
