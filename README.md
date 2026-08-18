@@ -24,17 +24,13 @@ Engineer by picking a different persona when it asks.
 
 ## Requirements
 
+> **Uses your own LLM usage.** `organize`, `autotag`, `knowledge`, and split
+> suggestions call your own `claude`/`codex` CLI — including automatically in
+> the background while mycelium is open. Disable with
+> `MYCELIUM_NO_AUTOSTART=1`, or tune it in [`docs/cli.md`](./docs/cli.md).
+
 - Node.js ≥ 22.13, git
 - AI agents: `claude` / `codex` / `kiro-cli`
-
-> **Uses your own LLM usage.** Commands like `organize`, `autotag`,
-> `knowledge`, and split-boundary suggestions call your own `claude`/`codex`
-> CLI (no separate API key) to summarize and classify sessions — so they
-> consume some of your existing Claude/Codex usage, same as running those
-> prompts yourself. This also runs automatically in the background while
-> mycelium is open (capture/organize/knowledge upkeep); set
-> `MYCELIUM_NO_AUTOSTART=1` to disable it, or see
-> [`docs/cli.md`](./docs/cli.md) for the tunable batch-size/interval limits.
 
 ## Install
 
