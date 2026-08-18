@@ -5,13 +5,10 @@ name: Publish to npm
 # secret with publish rights for @kevinprk/mycelium — add it under
 # Settings → Secrets and variables → Actions before the first release.
 #
-# Also bumps the Homebrew formula in krapie/homebrew-tap (a separate repo)
-# via `brew bump-formula-pr`, which opens a PR there rather than pushing
-# directly. Requires a second repo secret, HOMEBREW_TAP_TOKEN — a
-# fine-grained GitHub PAT scoped to just krapie/homebrew-tap with
-# contents + pull-requests write. That job is best-effort
-# (continue-on-error) — a broken tap bump must never mark a release as
-# failed when npm publish itself already succeeded.
+# The Homebrew tap bump is a separate workflow (publish-homebrew.yml), not a
+# second job here — keeping them as two independent workflow runs means a
+# broken tap bump shows up as its own clearly-failed run instead of being
+# folded into (and hidden inside) this workflow's own overall status.
 on:
   release:
     types: [published]
@@ -47,27 +44,3 @@ jobs:
         run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-  update-homebrew-tap:
-    name: Update Homebrew tap
-    needs: publish
-    runs-on: macos-latest # Homebrew is preinstalled here; ubuntu-latest is not
-    continue-on-error: true # a formula-bump failure must never mark the release as failed — npm publish already succeeded
-    permissions:
-      contents: read
-    steps:
-      - name: Bump mycelium formula in krapie/homebrew-tap
-        env:
-          HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-        run: |
-          TAG="${{ github.event.release.tag_name }}"
-          VERSION="${TAG#v}" # release tags are "v0.1.4"; the npm tarball path has no leading v
-          # brew bump-formula-pr has no --tap flag (confirmed against its own
-          # --help, which only lists a bare [formula] positional arg) — the
-          # tap is selected by fully-qualifying the formula name instead,
-          # same as `brew install krapie/tap/mycelium`; auto-taps
-          # krapie/homebrew-tap on this runner if it isn't already tapped.
-          brew bump-formula-pr \
-            --url "https://registry.npmjs.org/@kevinprk/mycelium/-/mycelium-${VERSION}.tgz" \
-            --no-browse \
-            krapie/tap/mycelium
