@@ -4,6 +4,14 @@ name: Publish to npm
 # so release notes get written deliberately). Requires an NPM_TOKEN repo
 # secret with publish rights for @kevinprk/mycelium — add it under
 # Settings → Secrets and variables → Actions before the first release.
+#
+# Also bumps the Homebrew formula in krapie/homebrew-tap (a separate repo)
+# via `brew bump-formula-pr`, which opens a PR there rather than pushing
+# directly. Requires a second repo secret, HOMEBREW_TAP_TOKEN — a
+# fine-grained GitHub PAT scoped to just krapie/homebrew-tap with
+# contents + pull-requests write. That job is best-effort
+# (continue-on-error) — a broken tap bump must never mark a release as
+# failed when npm publish itself already succeeded.
 on:
   release:
     types: [published]
@@ -39,3 +47,22 @@ jobs:
         run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  update-homebrew-tap:
+    name: Update Homebrew tap
+    needs: publish
+    runs-on: macos-latest # Homebrew is preinstalled here; ubuntu-latest is not
+    continue-on-error: true # a formula-bump failure must never mark the release as failed — npm publish already succeeded
+    permissions:
+      contents: read
+    steps:
+      - name: Bump mycelium formula in krapie/homebrew-tap
+        env:
+          HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          VERSION="${TAG#v}" # release tags are "v0.1.4"; the npm tarball path has no leading v
+          brew bump-formula-pr \
+            --tap krapie/homebrew-tap \
+            --url "https://registry.npmjs.org/@kevinprk/mycelium/-/mycelium-${VERSION}.tgz" \
+            --no-browse
