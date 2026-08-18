@@ -414,11 +414,13 @@ formatting layer itself is not). [untested]
   launch branch and the switch's `default` fallthrough, unlike `--help`
   (documented above/in the Homebrew formula's own comments as falling into
   that `default` branch and exiting 1) — this is a real, intentionally-
-  handled flag. Same `VERSION` constant backs a footer line appended to
-  the TUI's `?` help modal (`helpModal()`, `src/tui/widgets/viewers.js`) —
-  not locale-branched in `i18n.js` since a product name + semver reads the
-  same in `en`/`ko`. [tested] (`test/cli-version.test.js` spawns the real
-  bin for all three flag forms; `test/version.test.js` covers `VERSION`
+  handled flag. Same `VERSION` constant is shown right-aligned in the main
+  TUI's statusbar (`app.js`'s `setStatus()`, same `{|}` right-align fill
+  token `setHeader()` already uses for its own right-side counts) —
+  visible on every screen, not just the `?` help modal — and not locale-
+  branched in `i18n.js` since a product name + semver reads the same in
+  `en`/`ko`. [tested] (`test/cli-version.test.js` spawns the real bin for
+  all three flag forms; `test/version.test.js` covers `VERSION`
   itself)
 
 ## TUI — App shell (`src/tui/app.js`, `index.js`)
