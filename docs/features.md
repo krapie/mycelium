@@ -437,6 +437,28 @@ formatting layer itself is not). [untested]
   so it raced the tutorial's own mock-session seeding on a brand new
   install and could show real `~/.claude`/`~/.codex`/`~/.kiro` session
   titles mixed into what's supposed to be an isolated tutorial. [untested]
+- **Onboarding-tutorial completion drops back to Sessions even if the human
+  ended on the Calendar tab.** The `!cfg.onboarded` branch's `startTutorial()`
+  callback resets the real cockpit via `sessionsView()`'s own
+  `api.resetToRoot()` rather than a second `app.show()`/mount (see that
+  method's own comment for why re-mounting is unsafe here). A real bug: if
+  `v` was pressed during the tutorial and never toggled back before the
+  final step's `q`, the old `resetToRoot()` only reset Sessions' own
+  state — Calendar's boxes (`sessions.js`'s `calTab`) stayed active and
+  visible, but `resetToRoot()`'s own `foldersBox.focus()` yanked blessed's
+  real keyboard focus onto the still-*hidden* Sessions panel underneath.
+  Every subsequent keypress (Enter, Escape, anything) was delivered to that
+  invisible widget — nothing on screen ever responded, which read as "stuck
+  on Calendar AND a modal that won't close" (the same root cause, not two
+  separate symptoms: Calendar's own boxes were never a modal, they just
+  looked like an unresponsive one once focus silently moved elsewhere).
+  Fixed by having `resetToRoot()` mirror `showSessionsTab()`'s own tab-exit
+  steps (deactivate `calTab`, show Sessions' three panels, `updateHeader()`)
+  before its existing reset, whenever `activeTab === 'calendar'`. [tested]
+  (`test/e2e/demo-e2e.test.js`'s "resetToRoot() while still on the Calendar
+  tab..." — asserts `app.body.children`'s real hidden state and
+  `screen.focused` land back on the now-visible Folders panel, not a
+  hidden one; confirmed to fail without the fix)
 - **Post-mount notification** — pending-suggestion toast takes priority over
   the pending-knowledge-review toast, which takes priority over the
   unfiled-backlog hint. Below `FIRST_SCAN_MODAL_THRESHOLD` (20) unfiled
