@@ -62,7 +62,12 @@ jobs:
         run: |
           TAG="${{ github.event.release.tag_name }}"
           VERSION="${TAG#v}" # release tags are "v0.1.4"; the npm tarball path has no leading v
+          # brew bump-formula-pr has no --tap flag (confirmed against its own
+          # --help, which only lists a bare [formula] positional arg) — the
+          # tap is selected by fully-qualifying the formula name instead,
+          # same as `brew install krapie/tap/mycelium`; auto-taps
+          # krapie/homebrew-tap on this runner if it isn't already tapped.
           brew bump-formula-pr \
-            --tap krapie/homebrew-tap \
             --url "https://registry.npmjs.org/@kevinprk/mycelium/-/mycelium-${VERSION}.tgz" \
-            --no-browse
+            --no-browse \
+            krapie/tap/mycelium
