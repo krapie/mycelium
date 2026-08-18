@@ -24,6 +24,11 @@ Engineer by picking a different persona when it asks.
 
 ## Requirements
 
+> **Mycelium uses your own LLM usage.** `organize`, `autotag`, `knowledge`,
+> and split suggestions call your own `claude`/`codex` CLI — including
+> automatically in the background while mycelium is open. Disable with
+> `MYCELIUM_NO_AUTOSTART=1`, or tune it in [`docs/cli.md`](./docs/cli.md).
+
 - Node.js ≥ 22.13, git
 - AI agents: `claude` / `codex` / `kiro-cli`
 
