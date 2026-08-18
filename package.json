@@ -1,6 +1,6 @@
 {
   "name": "@kevinprk/mycelium",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Context Lifecycle platform for AI collaboration — capture, organize, learn, reuse.",
   "type": "module",
   "bin": {
