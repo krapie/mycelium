@@ -400,10 +400,26 @@ since the no-command case is handled earlier and launches the TUI instead).
 `--yes` confirmation gate — a real safety inconsistency worth fixing.
 Roughly a third of commands' output strings are hardcoded Korean,
 independent of `mycelium lang` (which only affects the TUI) — worth a
-decision before assuming the CLI is localized. None of the 25+ subcommands
-are exercised through `cli.js`'s own dispatch layer today (the underlying
-module functions they call are tested where noted above, but the CLI
-argument-parsing/routing/output-formatting layer itself is not). [untested]
+decision before assuming the CLI is localized. Aside from `--version`
+(below), none of the 25+ subcommands are exercised through `cli.js`'s own
+dispatch layer today (the underlying module functions they call are
+tested where noted above, but the CLI argument-parsing/routing/output-
+formatting layer itself is not). [untested]
+
+- **`--version` / `-v` / `-V`** — prints `mycelium v<version>` and exits 0,
+  reading `src/version.js`'s `VERSION` (parsed once from `package.json` via
+  a `file:` URL relative to that module, so it resolves correctly through
+  symlinks regardless of install method — npm global, Homebrew, or a
+  `npm link` dev checkout). Checked ahead of both the `!cmd`/`tui` TUI-
+  launch branch and the switch's `default` fallthrough, unlike `--help`
+  (documented above/in the Homebrew formula's own comments as falling into
+  that `default` branch and exiting 1) — this is a real, intentionally-
+  handled flag. Same `VERSION` constant backs a footer line appended to
+  the TUI's `?` help modal (`helpModal()`, `src/tui/widgets/viewers.js`) —
+  not locale-branched in `i18n.js` since a product name + semver reads the
+  same in `en`/`ko`. [tested] (`test/cli-version.test.js` spawns the real
+  bin for all three flag forms; `test/version.test.js` covers `VERSION`
+  itself)
 
 ## TUI — App shell (`src/tui/app.js`, `index.js`)
 

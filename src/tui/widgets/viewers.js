@@ -7,6 +7,7 @@ import { DIGEST_DIR } from '../../paths.js';
 import { copyToClipboard } from '../clipboard.js';
 import { generateDigest } from '../../insight.js';
 import { t } from '../i18n.js';
+import { VERSION } from '../../version.js';
 
 /**
  * Scrollable read-only overlay for markdown/text (context, knowledge, digest).
@@ -242,7 +243,10 @@ export function helpModal(app) {
     width: '70%',
     height: '80%',
     label: t('help.modalLabel'),
-    content: t('help.text', C.fox, C.spore),
+    // Version isn't locale-dependent (product name + semver reads the same
+    // in en/ko) — appended here rather than duplicated into both of
+    // i18n.js's help.text blocks.
+    content: t('help.text', C.fox, C.spore) + `\n\n{${C.dim}-fg}Mycelium v${VERSION}{/}`,
     tags: true,
     scrollable: true,
     alwaysScroll: true,
