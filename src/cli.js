@@ -26,6 +26,7 @@ import { buildHandoff } from './handoff.js';
 import { resumeCommandLine } from './agents.js';
 import { copyToClipboard } from './tui/clipboard.js';
 import { loadConfig, saveConfig } from './config.js';
+import { VERSION } from './version.js';
 
 function fail(msg) {
   console.error(msg);
@@ -55,6 +56,10 @@ function parseFlags(args) {
 
 async function main() {
   const [, , cmd, ...args] = process.argv;
+  if (cmd === '--version' || cmd === '-v' || cmd === '-V') {
+    console.log(`mycelium v${VERSION}`);
+    process.exit(0);
+  }
   // No command (or `tui`) → launch the interactive cockpit. `--tutorial`
   // is internal — only `demo` (below) passes it, to skip straight into
   // the tutorial instead of the normal first-run yes/no prompt.
@@ -591,6 +596,7 @@ Run       (인자 없음) 또는 tui          인터랙티브 TUI (콕핏) — �
 Clean     cleanup [tidy]                메타세션 제거 + 빈 폴더 정리 + 인덱스 재생성
           cleanup folders|archive|index 부분 정리
           cleanup reset --yes           전체 데이터(~/.mycelium) 초기화
+Other     --version / -v / -V           설치된 버전 출력
 `);
       process.exit(cmd ? 1 : 0);
   }

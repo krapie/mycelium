@@ -32,7 +32,7 @@ Engineer by picking a different persona when it asks.
 ```sh
 brew install krapie/tap/mycelium    # via Homebrew
 # or
-npm install -g @kevinprk/mycelium   # then run `mycelium` from anywhere, like k9s
+npm install -g @kevinprk/mycelium   # then run `mycelium` from anywhere
 ```
 
 To hack on it, clone instead:

@@ -3,6 +3,7 @@ const blessed = pkg.default || pkg;
 import { C } from './theme.js';
 import { t, getLocale, setLocale } from './i18n.js';
 import { killInFlight } from '../llm.js';
+import { VERSION } from '../version.js';
 
 // blessed mis-compiles some xterm-256color capabilities (notably `Setulc`,
 // set-underline-color) into JS with a syntax error, then dumps the generated
@@ -166,7 +167,11 @@ export function createApp({ input, output } = {}) {
       screen.render();
     },
     setStatus(hints) {
-      statusbar.setContent(` ${hints}`);
+      // {|} is the same right-align fill token setHeader() uses above — puts
+      // the version in the bottom-right corner of every screen instead of
+      // only inside the ? help modal, without every setStatus() caller
+      // needing to pass it through themselves.
+      statusbar.setContent(` ${hints}{|}{${C.dim}-fg}v${VERSION}{/}`);
       screen.render();
     },
     notify(msg, seconds = 2) {

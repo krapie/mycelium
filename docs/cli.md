@@ -49,6 +49,8 @@ mycelium demo
 mycelium lang        # check current setting
 mycelium lang ko      # switch to Korean
 mycelium lang en      # switch to English
+
+mycelium --version   # (also -v / -V) print the installed version and exit
 ```
 
 **Opening `mycelium` (the TUI) normally already runs background upkeep
