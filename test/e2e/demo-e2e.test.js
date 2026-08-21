@@ -496,6 +496,36 @@ test('demo: finishing the tutorial on the actual last step reports completed:tru
   }
 });
 
+test('resetToRoot() while still on the Calendar tab returns to Sessions, not stuck on Calendar', async () => {
+  // A real bug: index.js's onDone callback for the first-run onboarding
+  // tutorial calls api.resetToRoot() (not a second app.show()/mount() — see
+  // that method's own comment for why) to drop back into the real cockpit.
+  // If the tutorial finished while the human was still on the Calendar tab
+  // (`v`, never toggled back before the last step's `q`), the old
+  // resetToRoot() only touched Sessions' own state: calTab stayed active
+  // and its boxes stayed visible, but foldersBox.focus() yanked blessed's
+  // real keyboard focus onto the still-hidden Sessions panel underneath —
+  // every keypress landed on an invisible widget, reading as "stuck on
+  // Calendar AND nothing responds to Enter/Escape" (the same root cause,
+  // not two separate bugs).
+  const { app, input, api } = await mountDemo();
+  try {
+    sendKey(input, 'v');
+    await new Promise((r) => setTimeout(r, 50));
+    const byLabel = (re) => app.body.children.find((c) => re.test(c._label?.content || ''));
+    assert.equal(byLabel(/Calendar/)?.hidden, false, 'sanity: Calendar grid is actually showing before the reset');
+
+    api.resetToRoot();
+
+    assert.equal(byLabel(/Folders/)?.hidden, false, 'Sessions\' Folders panel is visible again');
+    assert.equal(byLabel(/Sessions/)?.hidden, false, 'Sessions\' own Sessions panel is visible again');
+    assert.equal(byLabel(/Calendar/)?.hidden, true, 'Calendar grid is hidden');
+    assert.equal(app.screen.focused, byLabel(/Folders/), 'focus landed back on the now-visible Folders panel, not a hidden widget');
+  } finally {
+    cleanup(app);
+  }
+});
+
 test('demo: pressing a later step\'s key early (skipping step 1) still lets the narrator catch up to the real last step', async () => {
   // Regression test: onKeypress() used to only check the CURRENT step's own
   // waitFor. Since this listener never gates sessions.js's real handlers

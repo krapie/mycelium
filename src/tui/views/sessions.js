@@ -1419,7 +1419,26 @@ export function sessionsView(opts = {}) {
         // which left stale closures capturing already-detached boxes and
         // crashed later (Cannot read properties of null (reading 'height'))
         // the next time a real handler like drillIntoDetail fired.
+        //
+        // A real bug: if the tutorial finished while still on the Calendar
+        // tab (`v`, never toggled back before the last step's `q`), this
+        // reset only touched Sessions' own state — calTab stayed active and
+        // its boxes stayed visible, but `foldersBox.focus()` below yanked
+        // blessed's actual keyboard focus onto the still-HIDDEN Sessions
+        // panel underneath. The result wasn't just "stuck showing Calendar"
+        // — every keypress (Enter, Escape, anything) was being delivered to
+        // an invisible widget, so nothing on screen ever responded, reading
+        // as a frozen/unclosable modal. Mirror showSessionsTab()'s own
+        // tab-exit steps first so focus lands back on something visible.
         resetToRoot() {
+          if (activeTab === 'calendar') {
+            if (calTab) calTab.deactivate();
+            activeTab = 'sessions';
+            foldersBox.show();
+            listBox.show();
+            detailBox.show();
+            updateHeader();
+          }
           data.refresh();
           state.selected.clear();
           foldersBox.select(0);
