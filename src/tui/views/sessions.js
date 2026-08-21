@@ -179,7 +179,28 @@ export function sessionsView(opts = {}) {
       keys.push(f);
     }
     foldersBox._keys = keys;
+    // A real bug: neo-blessed's List.prototype.setItems() tries to keep the
+    // cursor on "the same item" across a full items replacement by matching
+    // the PREVIOUSLY selected row's rendered TEXT against the new array
+    // (`items.indexOf(oldRenderedText)`) — a content match, not an identity/
+    // index one. Two folders sharing a leaf name under different parents
+    // (e.g. cases/CW and projects/CW) render byte-identical rows whenever
+    // neither is the current one (same dim color, same leaf, same count) —
+    // so the instant the cursor moves onto one of them, setItems()'s own
+    // heuristic can match that old identical text against the OTHER
+    // same-named folder and silently relocate the cursor there instead.
+    // Confirmed via a real reproduction: navigating onto cases/CW jumped the
+    // real selection to projects/CW while state.folder (computed from the
+    // index just before this call) still correctly said "cases/CW" — a
+    // genuine desync where the highlighted "current folder" and the actual
+    // cursor disagreed, and the next move/rename/delete acted on the wrong
+    // one. Since reloadFolders() runs on every keystroke (previewFolder()'s
+    // live preview) and every folder op's own refresh, restoring our own
+    // already-correct index right after setItems() unconditionally
+    // overrides that fragile guess.
+    const wantIndex = foldersBox.selected;
     foldersBox.setItems(items);
+    foldersBox.select(Math.min(wantIndex, items.length - 1));
   }
 
   // Recent is whatever order data.sessions() already returns (most-recent

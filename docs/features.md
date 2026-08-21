@@ -660,6 +660,28 @@ deleted); `w` extract KNOWLEDGE.md (shared with Sessions panel — async LLM
 generate → dismiss toast → `confirmText` preview → conditional write, the
 canonical "preview-then-confirm" pattern reused by `i` too). [untested]
 
+- **Navigating onto a folder whose sibling shares its leaf name no longer
+  relocates the cursor to that sibling.** A real bug: two folders under
+  different parents with the same leaf (e.g. `cases/CW` and `projects/CW`)
+  render byte-identical rows in `reloadFolders()` whenever neither is the
+  "current" one (same dim color, same leaf text, same session count).
+  `previewFolder()`'s live-preview calls `reloadFolders()` → `setItems()` on
+  every up/down keystroke, and neo-blessed's own `List.prototype.setItems()`
+  tries to keep the cursor on "the same item" across that full replacement
+  by matching the *previously selected row's rendered text* against the new
+  items array (`items.indexOf(oldText)`) — a content match, not an index
+  one. The instant the cursor moved onto one of two identically-rendered
+  same-leaf folders, that heuristic could match the old text against the
+  *other* one and silently relocate the real selection there — `state.folder`
+  (computed from the index just before the call) still said the right
+  folder, but `foldersBox.selected`/`curFolder()` — what `e`/`m`/`x` actually
+  act on — pointed at the sibling. Fixed by capturing the intended index
+  before `setItems()` and re-asserting it right after, unconditionally
+  overriding blessed's own guess. [tested]
+  (`test/e2e/folders-panel-e2e.test.js` — confirmed to fail on `main` before
+  the fix, reproducing the exact cases/CW → projects/CW relocation, plus a
+  real rename proving only the intended folder is ever affected)
+
 ## TUI — Sessions panel (`src/tui/views/sessions.js`)
 
 Navigation (Enter/→ drill in, Esc/← back), multi-select (`Space`, `*`
