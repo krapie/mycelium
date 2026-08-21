@@ -71,8 +71,11 @@ first launch.
 
 > Skipped `npm link`? Use `node src/cli.js <command>` instead.
 
-Everything is per-machine: Mycelium only reads sessions on the machine it
-runs on and stores its own data in that machine's `~/.mycelium/`.
+Mycelium stores everything on your machine (`~/.mycelium/`) with no
+server or telemetry — safe to use inside restricted orgs that already
+permit `claude`/`codex`. Just note that its LLM calls
+(organize/autotag/knowledge) do carry session content to the provider,
+the same as any direct CLI use.
 
 ## Learn More
 
