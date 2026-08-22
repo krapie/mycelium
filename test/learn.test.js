@@ -136,6 +136,19 @@ test('tagAll() skips a session that already has a summary and has not grown', as
   assert.equal(loadRaw('tagall-skip').extracted.summary, 'already summarized');
 });
 
+test('tagAll() never summarizes an _archive session, even with force', async () => {
+  // Capture's auto-archived old backlog must stay out of the daemon's
+  // automatic summarize pass — see learn.js's tagAll() and scanner.js.
+  seed('tagall-archived', { folder: '_archive', turns: [{ role: 'user', text: 'old archived work' }] });
+  __setTestProvider(async () => mockReply({ summary: 'should never be written' }));
+
+  await tagAll({ force: true });
+
+  // force:true re-tags every non-archived session in the shared store, but
+  // the archived one is skipped, so its summary stays untouched (null).
+  assert.equal(loadRaw('tagall-archived').extracted.summary, null);
+});
+
 test('tagAll() re-tags a session that grew since its last summarization', async () => {
   seed('tagall-grew', {
     turns: [{ role: 'user', text: 'hi' }, { role: 'assistant', text: 'ok' }, { role: 'user', text: 'more' }],

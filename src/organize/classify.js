@@ -24,9 +24,11 @@ function isSafeFolderPath(folderPath) {
  * applyPlacements() once a person has reviewed/confirmed an LLM placement,
  * and by launching `n`/`h` into a folder — so it doubles as "already
  * deliberately placed, leave it alone". Everything else is fair game
- * regardless of its current `folder` — capture itself never assigns one, so
- * anything non-human is either genuinely unfiled or was placed by something
- * that didn't actually decide on its behalf.
+ * regardless of its current `folder` — the one exception being `_archive`
+ * (excluded below): capture only ever auto-assigns that one folder (an old
+ * session's recency-based archive, see scanner.js), and it's meant to stay
+ * out of the way. Anything else non-human is either genuinely unfiled or was
+ * placed by something that didn't actually decide on its behalf.
  *
  * `cooldownMs` skips sessions classified too recently — without it, a
  * session the LLM couldn't confidently place keeps getting re-sent to it
@@ -50,6 +52,13 @@ export function classificationCandidates({ cooldownMs = 0, folder, sessions } = 
   return (sessions || allRaw()).filter(
     (n) =>
       n.organizedBy !== 'human' &&
+      // _archive is hidden from (re)classification the same way it's hidden
+      // from every list/search (index-db.js) — unless the caller is
+      // explicitly scoping into it. Without this, capture's auto-archived old
+      // backlog (organizedBy:'auto', so otherwise fair game) would get pulled
+      // back into every whole-store/New `o` run and re-summarized by the
+      // daemon, defeating the point of archiving it.
+      (isArchive(folder) || !isArchive(n.folder)) &&
       (!n.lastClassifiedAt || now - Date.parse(n.lastClassifiedAt) >= cooldownMs) &&
       (folder === undefined || (folder === null ? !n.folder : isInSubtree(n.folder, folder))),
   );

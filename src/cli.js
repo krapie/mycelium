@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
-import { scan, allRaw, findSession } from './scanner.js';
+import { scan, allRaw, findSession, reevaluateArchive } from './scanner.js';
 import { firstUserText } from './schema.js';
 import { reindex, search, listTags } from './index-db.js';
 import {
@@ -92,6 +92,29 @@ async function main() {
     case 'reindex': {
       const n = reindex();
       console.log(`reindexed ${n} sessions`);
+      break;
+    }
+    case 'archive': {
+      const { flags, positional } = parseFlags(args);
+      const sub = positional[0] || 'reeval';
+      if (sub !== 'reeval') {
+        return fail(`알 수 없는 대상: ${sub}\n사용: mycelium archive reeval [--days N]`);
+      }
+      // --days, if given, persists as the new threshold before re-evaluating
+      // (so the config and the actual archive state stay consistent). Omit it
+      // to just re-apply whatever archiveOlderThanDays is already configured.
+      let days;
+      if (flags.days !== undefined && flags.days !== true) {
+        days = Number(flags.days);
+        if (!Number.isFinite(days)) return fail('--days 는 숫자여야 합니다');
+        saveConfig({ ...loadConfig(), archiveOlderThanDays: days });
+      }
+      const res = reevaluateArchive({ days });
+      reindex();
+      const used = days ?? (Number(loadConfig().archiveOlderThanDays) || 0);
+      console.log(
+        `재평가 완료 (임계값 ${used}일): New로 복구 ${res.unarchived}개, 새로 archive ${res.archived}개.`,
+      );
       break;
     }
     case 'search': {
@@ -572,7 +595,8 @@ async function main() {
     default:
       console.log(`Mycelium — AI 협업 컨텍스트 라이프사이클
 
-Capture   scan                          세션 저장소 스캔 → 중립 스키마 (자동 폴더 배정 없음 — 새 세션은 미분류로 시작)
+Capture   scan                          세션 저장소 스캔 → 중립 스키마 (오래된 세션은 첫 캡처 시 _archive로, 나머지는 미분류로 시작)
+          archive reeval [--days N]     현재/지정 임계값으로 auto-archive 재평가 (New↔_archive 복구/이동). --days는 기본값도 갱신
 Organize  organize [--apply] [--limit N] [--folder <경로>]   내용 기반 폴더 제안(요약 먼저 채움) — --folder로 특정 폴더(하위 포함)만 좁히기, --apply 전엔 미리보기만
           mkdir <folder>                폴더 생성
           mv <session> <folder>         세션 수동 이동

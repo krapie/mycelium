@@ -1,6 +1,7 @@
 import { complete, parseJsonReply, mapConcurrent } from './llm.js';
 import { loadRaw, saveRaw, allRaw } from './scanner.js';
 import { listTags } from './index-db.js';
+import { isArchive } from './organize/folders.js';
 import { contentLocale } from './config.js';
 
 // Cap how much of a long session we send to the tagger. First + last slices
@@ -163,6 +164,14 @@ export async function tagAll({ force = false, onProgress, limit, concurrency = 1
   let failed = 0;
 
   let targets = allRaw().filter((n) => {
+    // Skip _archive — capture's auto-archived old backlog (thousands of
+    // historical sessions on a first scan) shouldn't get swept into automatic
+    // summarization by the daemon's tagAll() cycle. Per-session summarize
+    // (detail `a` → autoTagSession() directly) still works if a user opens one.
+    if (isArchive(n.folder)) {
+      skipped++;
+      return false;
+    }
     const upToDate = n.extracted.summary && (!n.summarizedTurnCount || n.summarizedTurnCount === n.turns.length);
     if (force || !upToDate) return true;
     skipped++;

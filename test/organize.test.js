@@ -344,6 +344,16 @@ test('classificationCandidates() includes non-human sessions and excludes human-
   assert.equal(ids.includes('cc-human'), false);
 });
 
+test('classificationCandidates() excludes _archive (auto) sessions unless scoped into _archive', () => {
+  seed('cc-arch-auto', { folder: '_archive', organizedBy: 'auto' });
+  // Unscoped (whole store) and New (folder: null) must not surface it — this
+  // is what keeps capture's auto-archived old backlog out of `o`.
+  assert.equal(classificationCandidates().map((n) => n.id).includes('cc-arch-auto'), false);
+  assert.equal(classificationCandidates({ folder: null }).map((n) => n.id).includes('cc-arch-auto'), false);
+  // Explicitly scoping into _archive still reaches it (mirrors listSessions()).
+  assert.ok(classificationCandidates({ folder: '_archive' }).map((n) => n.id).includes('cc-arch-auto'));
+});
+
 test('classificationCandidates() cooldownMs excludes recently-classified sessions', () => {
   seed('cc-cooldown', { folder: 'cc-cooldown-scope', organizedBy: 'auto', lastClassifiedAt: new Date().toISOString() });
 

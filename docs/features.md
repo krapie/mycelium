@@ -26,6 +26,24 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   (`scan()`'s carry-forward + skip-unchanged + empty-session-drop behavior is
   tested against a fake adapter; the real per-adapter `parse()` paths are
   covered separately under Agents/Adapters)
+- **Auto-archive an old backlog on first capture.** `scan()` files a
+  *newly discovered* session whose last activity (`endedAt`||`startedAt`) is
+  older than `config.archiveOlderThanDays` (default 90, `<=0` disables)
+  straight into `_archive` instead of New/unfiled — so a heavy first scan of
+  thousands of historical sessions doesn't present as thousands of things to
+  triage. Lossless (still stored + searchable); gated on `!existing` (first
+  import only) + `folder==null` + non-human, so it never retroactively moves
+  sessions already sitting in New. `_archive` is already hidden from
+  New/Root/calendar and skipped by `o`/`a` (`classificationCandidates()`
+  excludes it unless scoped into it; `tagAll()` skips it). [tested]
+- **Re-apply the archive threshold to the existing backlog.**
+  `reevaluateArchive({ days })` (CLI: `mycelium archive reeval [--days N]`).
+  scan()'s archiving is first-import-only, so changing `archiveOlderThanDays`
+  has no retroactive effect on its own — this reconciliation pass does.
+  Bidirectional, auto-owned + New/`_archive` sessions only: a session now
+  inside the window returns to New, one now past it gets archived; human
+  placements and real-folder sessions are never touched. `--days` also
+  persists as the new default threshold. [tested]
 - **Never re-capture Mycelium's own LLM calls.** `purgeMeta()` /
   `isMyceliumMeta()` — matches `META_MARKER` (current) or 7 legacy Korean
   prompt fragments (retroactive only). [tested] (marker path tested; legacy

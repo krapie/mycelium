@@ -10,6 +10,16 @@ const DEFAULTS = {
   locale: 'en',
   autoApproveSmartOrganize: false,
   onboarded: false,
+  // First-time capture of a session whose last activity is older than this
+  // (days) files it straight into _archive instead of the New/unfiled
+  // backlog — so a heavy first scan of thousands of historical sessions
+  // doesn't present as thousands of things to triage. Capture stays lossless
+  // (they're still stored + searchable); this only changes where a *newly
+  // discovered* old session lands. <= 0 disables (capture everything as New).
+  // See scanner.js's scan() (assigns on capture) and reevaluateArchive()
+  // (re-applies this threshold to the existing auto-archived backlog when the
+  // value changes — `mycelium archive reeval`).
+  archiveOlderThanDays: 90,
   // Set once index.js's notifyPostMount() has shown the large-backlog
   // first-scan modal (see widgets/viewers.js's firstScanModal()) — that
   // modal is a one-time nudge, not a recurring one, unlike the lightweight

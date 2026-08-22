@@ -14,6 +14,7 @@ test('loadConfig() returns pure defaults when no config.json exists yet', () => 
     locale: 'en',
     autoApproveSmartOrganize: false,
     onboarded: false,
+    archiveOlderThanDays: 90,
     firstScanModalShown: false,
   });
 });
@@ -37,6 +38,7 @@ test('loadConfig() falls back to pure defaults when config.json is corrupt', () 
     locale: 'en',
     autoApproveSmartOrganize: false,
     onboarded: false,
+    archiveOlderThanDays: 90,
     firstScanModalShown: false,
   });
 });
