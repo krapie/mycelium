@@ -472,7 +472,7 @@ const ko = {
   'tutorial.step12Body': (fg) => `제목을 입력하거나(비워두면 기본값) {${fg}-fg}Enter{/}를 누르세요.`,
   'tutorial.step13Title': ' — 분할',
   'tutorial.step13Body': (fg, count, folder) =>
-    `반대 방향도 완전히 되돌릴 수 있습니다. 병합된 세션은 그대로 \`${folder}\`에 남아 있습니다 — 선택된 상태에서 {${fg}-fg}Shift+S{/}로 주제 경계 제안을 받아보세요.`,
+    `반대 방향도 완전히 되돌릴 수 있습니다. 병합된 세션은 그대로 \`${folder}\`에 남아 있습니다 — 선택된 상태에서 {${fg}-fg}Shift+S{/}로 세션을 나눌 지점 제안을 받아보세요.`,
   'tutorial.step14Title': '',
   'tutorial.step14Body': (fg) => `{${fg}-fg}*{/}로 제안된 구간을 모두 선택한 뒤 {${fg}-fg}Enter{/}로 적용하세요.`,
   'tutorial.step15Title': '',
@@ -488,7 +488,7 @@ const ko = {
   'tutorial.waitingContext': '상속받을 컨텍스트를 조합하는 중…',
   'tutorial.waitingKnowledgeReview': '오늘 활동이 있었던 폴더를 확인해 지식을 갱신하는 중…',
   'tutorial.waitingMerge': 'Shift+M을 기다리는 중 — 먼저 Space로 세션 두 개를 선택했는지 확인하세요.',
-  'tutorial.waitingSplit': '병합된 세션의 주제 경계를 분석하는 중…',
+  'tutorial.waitingSplit': '병합된 세션을 나눌 지점을 찾는 중…',
 
   'picker.newLabel': '{gray-fg}New (미분류){/}',
   'picker.folderLabel': ' 폴더 선택 (Enter, Esc 취소) ',
@@ -529,7 +529,7 @@ const ko = {
   'merge.done': (n, id) => `${n}개 세션 병합됨 — \`mycelium unmerge ${id}\`로 되돌리기`,
   'merge.reverted': (n) => `병합 취소됨 — 원본 세션 ${n}개 복원`,
 
-  'split.suggesting': '주제 경계 분석 중…',
+  'split.suggesting': '세션을 나눌 지점을 찾는 중…',
   'split.reviewTitle': '분할 제안',
   'split.turnRangeLabel': (from, to, label) => `턴 ${from}-${to}  "${label}"`,
   'split.summarizing': '분할된 세션들 요약 중…',
@@ -679,7 +679,7 @@ ko['help.text'] = (fg, spore) => `{bold}Context Flywheel{/}
   {${fg}-fg}Space{/}   다중 선택
   {${fg}-fg}*{/}       현재 목록 전체 선택 (다시 누르면 전체 해제)
   {${fg}-fg}Shift+M{/} 선택한 세션 2개 이상 병합 (git처럼 — 원본은 안 지워지고 숨겨질 뿐, mycelium unmerge로 되돌리기)
-  {${fg}-fg}Shift+S{/} 분할 (LLM이 주제 경계 제안, 검토 후 적용 — 조각은 원본과 같은 폴더에 생성, 원본은 그대로 목록에 남음; mycelium unsplit로 되돌리기)
+  {${fg}-fg}Shift+S{/} 분할 (LLM이 세션을 나눌 지점 제안, 검토 후 적용 — 조각은 원본과 같은 폴더에 생성, 원본은 그대로 목록에 남음; mycelium unsplit로 되돌리기)
   {${fg}-fg}Shift+O{/} 정렬 순서 전환 — 최신순(기본) → 제목순(A-Z) → 에이전트순
 
 {bold}상세 패널{/}
