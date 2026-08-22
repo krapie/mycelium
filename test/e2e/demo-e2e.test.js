@@ -377,6 +377,68 @@ test('demo: an impatient double Shift+S while the LLM call is in flight does not
   }
 });
 
+test('demo: the narrator box stays visible (in front) once a real modal opens on top of it', async () => {
+  // Regression test: the narrator's box (tutorial.js) is created once, at
+  // tutorial start, and is bottom-anchored/full-width. Every real widget a
+  // later step opens (multiSelectList, confirmText, textView's context
+  // viewer, merge/split's review modals) gets parented to app.screen AFTER
+  // it, so it draws ON TOP wherever the two overlap — textView() alone is
+  // 80% height/centered, tall enough to reach into that same bottom strip.
+  // Whichever step's own "what to press next" guidance was showing there
+  // became unreadable, hidden under the newer widget. Fixed via
+  // render()'s own box.setFront() call on every step settle.
+  const { app, input } = await mountDemo();
+  try {
+    const settle = () => new Promise((r) => setTimeout(r, 320));
+    let doneArg;
+    startTutorial(app, (completed) => (doneArg = completed));
+
+    sendKey(input, 'enter');
+    await settle();
+    let baseline = app.screen.children.length;
+    sendKey(input, 'o');
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 3000 });
+    await settle();
+    sendKey(input, 'enter');
+    await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 2000 });
+    await settle();
+    sendKey(input, 'left');
+    await settle();
+    await sendKeys(input, ['down', 'down', 'down', 'down'], 30);
+    sendKey(input, 'enter');
+    await settle();
+    baseline = app.screen.children.length;
+    sendKey(input, 'w');
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 3000 });
+    await settle();
+    sendKey(input, 'enter');
+    await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 2000 });
+    await settle();
+
+    // Step 7: press c to open the real context viewer (textView(), 80%
+    // height/centered — tall enough to overlap the bottom-anchored
+    // narrator box).
+    baseline = app.screen.children.length;
+    sendKey(input, 'c');
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 1000 });
+    await settle(); // narrator's own poll catches up, settles onto step 8, calls render()
+
+    const narratorBox = app.screen.children.find((c) => c._label && /Step \d+\/\d+/.test(c._label.content || ''));
+    assert.ok(narratorBox, 'narrator box is still on screen');
+    assert.equal(
+      app.screen.children.indexOf(narratorBox),
+      app.screen.children.length - 1,
+      'narrator box is last in app.screen.children (front-most, drawn on top of the context viewer)',
+    );
+
+    sendKey(input, 'escape'); // close the context viewer, tutorial continues
+    await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 1000 });
+    void doneArg;
+  } finally {
+    cleanup(app);
+  }
+});
+
 test('demo: q exits the tutorial immediately from any step, no confirm dialog', async () => {
   const { app, input } = await mountDemo();
   try {
