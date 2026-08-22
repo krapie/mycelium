@@ -207,11 +207,23 @@ export function sessionsView(opts = {}) {
   // first, or FTS relevance while searching) — left untouched. Title/agent
   // are re-sorted client-side; ties within the same agent fall back to
   // recency so agent grouping doesn't otherwise scramble chronology.
+  // title-desc/date-asc (Shift+T's picker, below) are the reverse direction
+  // of title/recent respectively — recent itself has no comparator to flip
+  // (it's the DB's own DESC order passed through untouched), so date-asc is
+  // a real ascending sort, not just a reversed pass-through.
   function sortRows(list) {
     if (state.sortBy === 'title') {
       return [...list].sort((a, b) =>
         (a.title || a.summary || a.preview || '').localeCompare(b.title || b.summary || b.preview || ''),
       );
+    }
+    if (state.sortBy === 'title-desc') {
+      return [...list].sort((a, b) =>
+        (b.title || b.summary || b.preview || '').localeCompare(a.title || a.summary || a.preview || ''),
+      );
+    }
+    if (state.sortBy === 'date-asc') {
+      return [...list].sort((a, b) => (a.startedAt || '').localeCompare(b.startedAt || ''));
     }
     if (state.sortBy === 'agent') {
       return [...list].sort((a, b) => {
@@ -604,6 +616,33 @@ export function sessionsView(opts = {}) {
         state.sortBy = SORT_CYCLE[(i + 1) % SORT_CYCLE.length];
         reloadList();
         app.render();
+      });
+
+      // Shift+T: pick a sort order directly instead of cycling blind
+      // (issue #51) — recent/oldest-first/title A-Z/title Z-A, the two
+      // directions Shift+O's cycle above can't reach on its own. Left as a
+      // fully separate entry point rather than folded into SORT_CYCLE: both
+      // just write the same state.sortBy strings, so they can't disagree
+      // with each other, and Shift+O keeps working unchanged (still the
+      // only way to sort by agent).
+      listBox.key('S-t', () => {
+        menu(
+          app,
+          t('sessions.sortPickerTitle'),
+          [
+            { label: t('sessions.sortOption_recent'), value: 'recent' },
+            { label: t('sessions.sortOption_dateAsc'), value: 'date-asc' },
+            { label: t('sessions.sortOption_title'), value: 'title' },
+            { label: t('sessions.sortOption_titleDesc'), value: 'title-desc' },
+          ],
+          (val) => {
+            listBox.focus();
+            if (val === undefined) return; // Escape — no change
+            state.sortBy = val;
+            reloadList();
+            app.render();
+          },
+        );
       });
 
       // *: select every session currently listed (this folder/search scope,
