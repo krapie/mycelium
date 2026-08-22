@@ -591,7 +591,7 @@ Day to day, it's a simple loop: {${fg}-fg}s{/} capture → {${fg}-fg}o{/} organi
   {${fg}-fg}Esc / ←{/}     Back to folders
   {${fg}-fg}a{/}       Generate summary + tags (LLM, batches over multi-select)
   {${fg}-fg}e{/}       Rename title (modal — summary/tags stay AI-generated)
-  {${fg}-fg}y{/}       Copy to clipboard
+  {${fg}-fg}y{/}       Copy the whole session to the clipboard. For a snippet, hold Shift (Option on iTerm2) while dragging to bypass mouse tracking, then Cmd+C / Ctrl+Shift+C
   {${fg}-fg}r{/}       Resume (reopen in the original agent, right here — merged/split sessions fall back to handoff instead, which replaces them with the real session it produces)
   {${fg}-fg}h{/}       Handoff (start a new session on a different agent)
   {${fg}-fg}n{/}       Launch a new agent session with this folder's context — after picking an agent/directory, asks "open here" or "copy command" (paste into a separate terminal tab to run several sessions in parallel)
@@ -667,7 +667,7 @@ ko['help.text'] = (fg, spore) => `{bold}Context Flywheel{/}
   {${fg}-fg}Esc / ←{/}     폴더 패널로
   {${fg}-fg}a{/}       요약·태그 생성 (LLM, 다중 선택 시 일괄)
   {${fg}-fg}e{/}       제목 수정 (모달 — 요약·태그는 AI 생성 그대로)
-  {${fg}-fg}y{/}       클립보드로 복사
+  {${fg}-fg}y{/}       세션 전체를 클립보드로 복사. 일부만 복사하려면 Shift(iTerm2는 Option)를 누른 채 드래그해서 마우스 추적을 우회한 뒤 Cmd+C / Ctrl+Shift+C
   {${fg}-fg}r{/}       이어열기 (원래 에이전트로, 바로 여기서 — 병합/분할 세션은 핸드오프로 대체되고, 그렇게 생긴 실제 세션이 원래 자리를 대신함)
   {${fg}-fg}h{/}       핸드오프 (다른 에이전트로 새 세션 시작)
   {${fg}-fg}n{/}       이 폴더 컨텍스트로 새 에이전트 세션 — 에이전트/디렉터리 선택 후 "여기서 열기" 또는 "명령어 복사" 선택 (복사하면 다른 터미널 탭에 붙여넣어 여러 세션을 동시에 실행 가능)
