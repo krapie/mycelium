@@ -1,0 +1,9 @@
+reviews:
+  auto_review:
+    # CodeRabbit reported "Auto reviews are disabled on base/target branches
+    # other than the default branch" on a PR targeting `main`, even though
+    # `main` is genuinely this repo's default branch (confirmed via GitHub's
+    # API) — CodeRabbit's own cached notion of the default branch was out of
+    # sync. This explicitly whitelists `main` regardless of that cache.
+    base_branches:
+      - "main"
