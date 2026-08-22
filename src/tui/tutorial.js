@@ -264,6 +264,22 @@ export function startTutorial(app, onDone, personaId = 'swe') {
     // uncertain (a "did that even do anything?" moment right before q).
     const exitOrFinishHint = i === STEPS.length - 1 ? t('tutorial.finishHint') : t('tutorial.exitHint');
     box.setContent(`${body}\n{${C.faint}-fg}${exitOrFinishHint}{/}`);
+    // A real bug: this box is created once, at tutorial start, so every
+    // real widget opened afterward (the context viewer on step 7→8 is the
+    // one actually reported, but this applies to any of them — `o`'s
+    // multiSelectList, `w`'s confirmText, merge/split's own review modals)
+    // gets parented to app.screen LATER and therefore draws ON TOP of it in
+    // the region where their boxes overlap — this box is bottom-anchored,
+    // full-width, and textView() (widgets/viewers.js) alone is 80% height
+    // centered, tall enough to reach into that same bottom strip. Whichever
+    // step's own guidance was showing there (what to press, how to close
+    // it) became unreadable, hidden under the later widget. setFront()
+    // moves this box to the end of app.screen's children on every step
+    // render — purely a z-order change, not a focus change (blessed tracks
+    // those independently — see screen.js's own keypress dispatch), so it
+    // doesn't interfere with the real widget still correctly receiving and
+    // acting on Escape/Enter/whatever closes it.
+    box.setFront();
     app.render();
   };
 

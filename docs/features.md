@@ -1253,6 +1253,24 @@ seconds, dominated by deliberate settle delays past the narrator's own
 needed, found by a real flaky-looking failure during development that
 turned out to be exactly this timing gap).
 
+**Narrator box could be hidden behind a real modal opened on top of it (real
+bug, fixed).** The narrator's own box (`startTutorial()`'s `box`) is created
+once, at tutorial start, bottom-anchored and full-width. Every real widget a
+later step opens (`o`'s multiSelectList, `w`'s confirmText, `c`'s context
+viewer via `textView()` — 80% height, centered — merge/split's own review
+modals) gets parented to `app.screen` afterward, so blessed draws it ON TOP
+wherever the two overlap — `textView()` alone is tall enough to reach into
+the narrator's own bottom strip. Reported directly: opening the context
+viewer on step 7→8 visually covered the narrator's "what to press next"
+guidance, making it look stuck/unreadable. Fixed with `box.setFront()`
+(moves the box to the end of `app.screen`'s children — the render order,
+not the currently-focused element, which blessed tracks independently, see
+`screen.js`'s keypress dispatch) called on every `render()`, i.e. every step
+settle — so the narrator always redraws on top of whatever opened since, no
+matter which step or which real widget. [tested] (`test/e2e/demo-e2e.test.js`
+— confirmed to fail on `main` before the fix by asserting the narrator box's
+position in `app.screen.children` right after the context viewer opens)
+
 ---
 
 ## Cross-cutting duplication (architecture revamp candidates)
