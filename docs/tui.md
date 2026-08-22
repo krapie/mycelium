@@ -75,7 +75,7 @@ Once a session is moved to `_archive`, re-scanning won't bring it back out —
 | `n` | Launch a new agent session with this folder's context. After picking an agent and directory, asks **"open here"** (hands over this same terminal — `foreground()`, `stdio: 'inherit'` — and blocks the whole TUI until that session exits, only one at a time) or **"copy command"** (copies the equivalent `cd <dir> && <bin> ...` shell command to the clipboard instead, to paste into a separate terminal tab and run several sessions in parallel — there's no portable way for Mycelium itself to open a new tab across terminal emulators, so this is the escape hatch). Same choice `Enter` already offers when resuming an existing session |
 | `m` / `t` | Move folder / edit tags |
 | `x` | Delete the session (from Mycelium's own store only — the original log stays put, and it's recorded so a future scan won't re-capture it) |
-| `y` | Copy the session (title + summary + transcript) to the clipboard |
+| `y` | Copy the session (title + summary + transcript) to the clipboard. For an arbitrary snippet instead of the whole session, `Shift`+drag to select (`Option`+drag on iTerm2), then `Cmd+C` / `Ctrl+Shift+C` — mouse-tracking normally swallows drags, so `Shift` bypasses it |
 | `Shift+M` | **Merge** — select 2+ with `Space` first. Originals are never modified; a single new session is created stitching the conversations together (like a git merge). Originals are hidden from the list (content preserved) and can be undone any time with `mycelium unmerge <id>` |
 | `Shift+S` | **Split** — the current session (from either the list or detail) gets LLM-suggested topic boundaries to review, then only the ranges you keep become new sessions. New pieces land in the same folder as the original; **the original is never deleted or hidden** (its content wasn't moved, just partially copied). `mycelium unsplit <id>` deletes the pieces and reverts |
 | `Shift+O` | **Cycle sort order** — recent (default) → title A-Z → agent, cycling back to recent. Display-only within the current folder/search scope, not persisted. The header shows the current sort when it's not the default |
@@ -94,13 +94,6 @@ show `[Merged]` (merge result) / `[Split]` (split result) tags; a split
 original (or, for merges, the hidden originals) shows a `[Linked]` tag.
 The detail screen shows which session something came from or went to as
 clickable-style links.
-
-**Copying text out of the TUI**
-
-- Substring / snippet: `Shift`+drag to select (`Option`+drag on iTerm2),
-  then `Cmd+C` / `Ctrl+Shift+C`. Mouse-tracking normally swallows drags,
-  so `Shift` is what bypasses it.
-- Whole session (title + summary + transcript): press `y` on the row.
 
 ## Knowledge review
 
