@@ -703,7 +703,8 @@ canonical "preview-then-confirm" pattern reused by `i` too). [untested]
 ## TUI — Sessions panel (`src/tui/views/sessions.js`)
 
 Navigation (Enter/→ drill in, Esc/← back), multi-select (`Space`, `*`
-select-scoped-all), `Shift+O` cycle sort, `Shift+M` merge (2+ selected,
+select-scoped-all), `Shift+O` cycle sort, `Shift+T` pick sort directly (see
+below), `Shift+M` merge (2+ selected,
 git-like), `Shift+S` LLM split-review (multi-select, default unchecked —
 opposite default from `o`'s multi-select), `/` search, `v` toggle Calendar
 tab (co-hosted screen, `activeTab`-guarded key scoping — the largest
@@ -720,6 +721,23 @@ rename title, `y` copy to clipboard, `d` digest reader (nested mini-screen,
 plain narrative summary — no knowledge coupling, see `k` below), `k`
 knowledge review (see below), `c` view context, `i` inject AGENTS.md
 (preview-then-confirm, sibling to `w`). [untested]
+
+- **`Shift+T`: pick a sort order directly, instead of `Shift+O`'s blind
+  cycle (issue [#51](https://github.com/krapie/mycelium/issues/51)).**
+  Opens `menu()` (`widgets/pickers.js`) with all 4 orderable combinations —
+  newest/oldest first, title A→Z/Z→A — writing the same `state.sortBy`
+  strings `Shift+O`'s `SORT_CYCLE` already uses, so the two entry points
+  can never disagree with each other; `Shift+O` is untouched and remains
+  the only way to reach `agent` sort. `sortRows()` gained the two
+  comparators that didn't exist yet: `title-desc` (flipped `title`
+  compare) and `date-asc` (a real ascending sort — `recent` itself has
+  none of its own, it's the DB's `ORDER BY started_at DESC` passed through
+  client-side unsorted). The header's existing `sortSuffix` line already
+  keys off `state.sortBy` generically, so no code change was needed there
+  — just the two new `sessions.sortLabel_*` i18n entries. [tested]
+  (`test/e2e/sessions-sort-e2e.test.js` — all 4 options via real
+  keypresses, Escape leaves the order untouched, `Shift+O`'s own cycle
+  confirmed unaffected)
 
 **`k`: knowledge review, deliberately unrelated to Digest (`d`) — mirrors
 `o` (smart organize) exactly, not the digest reader.** `runKnowledgeReview()`:
