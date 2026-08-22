@@ -95,6 +95,13 @@ original (or, for merges, the hidden originals) shows a `[Linked]` tag.
 The detail screen shows which session something came from or went to as
 clickable-style links.
 
+**Copying text out of the TUI**
+
+- Substring / snippet: `Shift`+drag to select (`Option`+drag on iTerm2),
+  then `Cmd+C` / `Ctrl+Shift+C`. Mouse-tracking normally swallows drags,
+  so `Shift` is what bypasses it.
+- Whole session (title + summary + transcript): press `y` on the row.
+
 ## Knowledge review
 
 Keeping every active folder's KNOWLEDGE.md fresh by hand (`w`, folder by
