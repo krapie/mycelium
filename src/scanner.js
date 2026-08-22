@@ -82,7 +82,10 @@ export function purgeMeta() {
 export function scan({ onImport } = {}) {
   ensureDirs();
   purgeMeta();
-  const excluded = new Set(loadConfig().excludedSessionIds || []);
+  const cfg = loadConfig();
+  const excluded = new Set(cfg.excludedSessionIds || []);
+  const archiveDays = Number(cfg.archiveOlderThanDays) || 0;
+  const archiveCutoff = Date.now() - archiveDays * 86400000;
   let scanned = 0;
   let imported = 0;
   let skipped = 0;
@@ -169,6 +172,21 @@ export function scan({ onImport } = {}) {
         neutral.titleLocked = existing.titleLocked ?? neutral.titleLocked;
         neutral.summarizedTurnCount = existing.summarizedTurnCount ?? neutral.summarizedTurnCount;
       }
+      // First-time capture of an already-old session: file it straight into
+      // _archive rather than New/unfiled. _archive is already hidden from
+      // New/Root/calendar (index-db.js/data.js) and skipped by o/a
+      // (classify.js/learn.js), so this keeps a large historical backlog out
+      // of the triage flow while still capturing it losslessly. Deliberately
+      // gated on `!existing` (first import only) and folder==null (never
+      // organized): an already-stored session keeps whatever folder the
+      // carry-forward block above restored, so this never retroactively
+      // archives sessions already sitting in New — only newly discovered ones.
+      // Recency = last activity (endedAt||startedAt), same basis the calendar
+      // uses (index-db.js's sessionCountsByDay()).
+      if (!existing && archiveDays > 0 && neutral.folder == null && neutral.organizedBy !== 'human') {
+        const last = Date.parse(neutral.endedAt || neutral.startedAt || '');
+        if (Number.isFinite(last) && last < archiveCutoff) neutral.folder = '_archive';
+      }
       neutral._mtimeMs = ref.mtimeMs;
 
       writeFileSync(rawPath(neutral.id), JSON.stringify(neutral, null, 2));
@@ -178,6 +196,44 @@ export function scan({ onImport } = {}) {
   }
 
   return { scanned, imported, skipped, failed };
+}
+
+/**
+ * Re-apply the recency archive threshold to the *existing* auto-archived
+ * backlog. scan()'s own archiving is first-import-only (it never revisits a
+ * stored session), so changing `archiveOlderThanDays` after a big first scan
+ * has no retroactive effect on its own — this is the reconciliation pass that
+ * does. Only touches auto-owned sessions currently in `_archive` or unfiled
+ * (New); a human placement (`organizedBy: 'human'`) or a real-folder
+ * placement is never disturbed. `days` defaults to the current config value.
+ * Bidirectional: an auto-archived session now inside the window comes back to
+ * New (folder null); an unfiled auto session now past the window gets
+ * archived. Caller is responsible for reindex() afterwards (matches scan()).
+ */
+export function reevaluateArchive({ days } = {}) {
+  ensureDirs();
+  const archiveDays = days ?? (Number(loadConfig().archiveOlderThanDays) || 0);
+  const cutoff = Date.now() - archiveDays * 86400000;
+  const inArchive = (f) => f === '_archive' || (!!f && f.startsWith('_archive/'));
+  let archived = 0;
+  let unarchived = 0;
+  for (const n of allRaw()) {
+    if (n.organizedBy === 'human') continue;
+    const wasArchived = inArchive(n.folder);
+    if (!wasArchived && n.folder != null) continue; // in a real (auto) folder — leave it
+    const last = Date.parse(n.endedAt || n.startedAt || '');
+    const shouldArchive = archiveDays > 0 && Number.isFinite(last) && last < cutoff;
+    if (wasArchived && !shouldArchive) {
+      n.folder = null;
+      saveRaw(n);
+      unarchived++;
+    } else if (!wasArchived && shouldArchive) {
+      n.folder = '_archive';
+      saveRaw(n);
+      archived++;
+    }
+  }
+  return { archived, unarchived };
 }
 
 export function allRaw() {

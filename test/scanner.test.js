@@ -5,7 +5,7 @@ import { useTempHome } from './helpers.js';
 useTempHome();
 
 const { emptyNeutral } = await import('../src/schema.js');
-const { loadRaw, saveRaw, deleteRaw, allRaw, findSession, purgeMeta, scan } = await import('../src/scanner.js');
+const { loadRaw, saveRaw, deleteRaw, allRaw, findSession, purgeMeta, scan, reevaluateArchive } = await import('../src/scanner.js');
 const { META_MARKER } = await import('../src/llm.js');
 const adaptersIndex = await import('../src/adapters/index.js');
 
@@ -179,4 +179,116 @@ test('scan() drops sessions with zero turns as skipped, not imported', () => {
     assert.equal(res.skipped, 1);
     assert.equal(loadRaw('empty-session'), null);
   });
+});
+
+const daysAgoIso = (n) => new Date(Date.now() - n * 86400000).toISOString();
+
+test('scan() files an old session straight into _archive on first capture (recency-based)', () => {
+  const fakeRef = { id: 'old-session', mtimeMs: 10 };
+  const fakeAdapter = {
+    name: 'fake-old',
+    listSessions: () => [fakeRef],
+    parse: (ref) => {
+      const n = emptyNeutral(ref.id, 'fake-old');
+      n.turns = [{ role: 'user', text: 'ancient work' }];
+      n.endedAt = daysAgoIso(120); // well past the 30-day default
+      return n;
+    },
+  };
+  withOnlyAdapters([fakeAdapter], () => {
+    const res = scan();
+    assert.equal(res.imported, 1);
+    const n = loadRaw('old-session');
+    assert.equal(n.folder, '_archive');
+    assert.equal(n.organizedBy, 'auto'); // not lied to as human
+  });
+});
+
+test('scan() leaves a recent session unfiled (New), not archived', () => {
+  const fakeRef = { id: 'recent-session', mtimeMs: 11 };
+  const fakeAdapter = {
+    name: 'fake-recent',
+    listSessions: () => [fakeRef],
+    parse: (ref) => {
+      const n = emptyNeutral(ref.id, 'fake-recent');
+      n.turns = [{ role: 'user', text: 'fresh work' }];
+      n.endedAt = daysAgoIso(2);
+      return n;
+    },
+  };
+  withOnlyAdapters([fakeAdapter], () => {
+    scan();
+    assert.equal(loadRaw('recent-session').folder, null);
+  });
+});
+
+test('scan() never retroactively archives an already-stored unfiled session (first-import only)', () => {
+  // Pre-seed a session as if captured earlier while it was recent, now grown
+  // old — a plain re-scan (bumped mtime) must NOT sweep it into _archive.
+  const existing = emptyNeutral('grown-old', 'fake-grow');
+  existing.turns = [{ role: 'user', text: 'started recent' }];
+  existing.endedAt = daysAgoIso(200);
+  existing.folder = null;
+  existing._mtimeMs = 100;
+  saveRaw(existing);
+
+  const fakeRef = { id: 'grown-old', mtimeMs: 999 }; // changed -> forces re-parse
+  const fakeAdapter = {
+    name: 'fake-grow',
+    listSessions: () => [fakeRef],
+    parse: (ref) => {
+      const n = emptyNeutral(ref.id, 'fake-grow');
+      n.turns = [{ role: 'user', text: 'started recent' }];
+      n.endedAt = daysAgoIso(200);
+      return n;
+    },
+  };
+  withOnlyAdapters([fakeAdapter], () => {
+    scan();
+    assert.equal(loadRaw('grown-old').folder, null); // still New, untouched
+  });
+});
+
+test('reevaluateArchive() brings an auto-archived session back to New when it is inside a widened window', () => {
+  const n = emptyNeutral('reeval-back', 'claude');
+  n.folder = '_archive';
+  n.organizedBy = 'auto';
+  n.endedAt = daysAgoIso(60); // archived under 30d, but inside a 90d window
+  saveRaw(n);
+
+  const res = reevaluateArchive({ days: 90 });
+
+  assert.equal(loadRaw('reeval-back').folder, null);
+  assert.ok(res.unarchived >= 1);
+});
+
+test('reevaluateArchive() never disturbs a human placement or a real-folder session', () => {
+  const human = emptyNeutral('reeval-human', 'claude');
+  human.folder = '_archive';
+  human.organizedBy = 'human'; // deliberately archived by a person
+  human.endedAt = daysAgoIso(5);
+  saveRaw(human);
+
+  const filed = emptyNeutral('reeval-filed', 'claude');
+  filed.folder = 'work/proj';
+  filed.organizedBy = 'auto';
+  filed.endedAt = daysAgoIso(400); // old, but sits in a real folder
+  saveRaw(filed);
+
+  reevaluateArchive({ days: 90 });
+
+  assert.equal(loadRaw('reeval-human').folder, '_archive'); // human archive kept
+  assert.equal(loadRaw('reeval-filed').folder, 'work/proj'); // real folder kept
+});
+
+test('reevaluateArchive({days:0}) un-archives everything auto (threshold disabled)', () => {
+  const n = emptyNeutral('reeval-disable', 'claude');
+  n.folder = '_archive';
+  n.organizedBy = 'auto';
+  n.endedAt = daysAgoIso(1000);
+  saveRaw(n);
+
+  reevaluateArchive({ days: 0 });
+
+  assert.equal(loadRaw('reeval-disable').folder, null);
 });
