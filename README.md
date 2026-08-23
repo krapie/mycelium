@@ -12,7 +12,7 @@ You create a lot of AI sessions while working, and most of them get lost the mom
 - **Capture** — Claude Code, Codex, and Kiro sessions land in one place, automatically.
 - **Organize** — grouped by the project, case, or service they belong to.
 - **Learn** — what repeats across a folder's sessions becomes durable knowledge.
-- **Reuse** — your next session automatically inherits that knowledge, insights, and context.
+- **Reuse** — your next session inherits that knowledge, insights, and context automatically when started from Mycelium.
 
 Local-first, model-agnostic, human-controlled.
 
