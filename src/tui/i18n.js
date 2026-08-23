@@ -72,6 +72,14 @@ const en = {
   'sessions.copyFailed': 'No clipboard tool found (pbcopy etc.)',
   'sessions.sortLabel_title': 'sort: title A-Z',
   'sessions.sortLabel_agent': 'sort: agent',
+  'sessions.sortLabel_title-desc': 'sort: title Z-A',
+  'sessions.sortLabel_date-asc': 'sort: oldest first',
+  'sessions.sortLabel_date-desc': 'sort: newest first',
+  'sessions.sortPickerTitle': 'Sort by',
+  'sessions.sortOption_recent': 'Newest first',
+  'sessions.sortOption_dateAsc': 'Oldest first',
+  'sessions.sortOption_title': 'Title A → Z',
+  'sessions.sortOption_titleDesc': 'Title Z → A',
   'sessions.unfiledHint': (n) => `${n} session(s) captured, no folders yet — press o to sort them by content`,
   // Large-backlog counterpart to unfiledHint above — index.js promotes to
   // this modal instead of the toast once the unfiled count clears
@@ -368,6 +376,14 @@ const ko = {
   'sessions.copyFailed': '복사 도구(pbcopy 등)를 찾지 못함',
   'sessions.sortLabel_title': '정렬: 제목순',
   'sessions.sortLabel_agent': '정렬: 에이전트순',
+  'sessions.sortLabel_title-desc': '정렬: 제목 역순',
+  'sessions.sortLabel_date-asc': '정렬: 오래된순',
+  'sessions.sortLabel_date-desc': '정렬: 최신순',
+  'sessions.sortPickerTitle': '정렬 기준',
+  'sessions.sortOption_recent': '최신순',
+  'sessions.sortOption_dateAsc': '오래된순',
+  'sessions.sortOption_title': '제목 A → Z',
+  'sessions.sortOption_titleDesc': '제목 Z → A',
   'sessions.unfiledHint': (n) => `${n}개 세션을 가져왔지만 아직 폴더가 없습니다 — o를 눌러 내용 기준으로 정리해보세요`,
   'sessions.firstScanModalLabel': ' 첫 스캔 완료 — 아직 정리되지 않음 (Enter/Esc로 닫기) ',
   'sessions.firstScanBody': (n, fg) =>
@@ -619,6 +635,7 @@ Day to day, it's a simple loop: {${fg}-fg}s{/} capture → {${fg}-fg}o{/} organi
   {${fg}-fg}Shift+M{/} Merge 2+ selected sessions into one (git-like — originals kept, just hidden; mycelium unmerge undoes it)
   {${fg}-fg}Shift+S{/} Split (LLM-suggested topic boundaries, review before applying — pieces land in the same folder, original stays visible; mycelium unsplit undoes it)
   {${fg}-fg}Shift+O{/} Cycle sort order — recent (default) → title A-Z → agent
+  {${fg}-fg}Shift+T{/} Pick a sort order directly — newest/oldest first, title A-Z/Z-A
 
 {bold}Detail panel{/}
 
@@ -695,6 +712,7 @@ ko['help.text'] = (fg, spore) => `{bold}Context Flywheel{/}
   {${fg}-fg}Shift+M{/} 선택한 세션 2개 이상 병합 (git처럼 — 원본은 안 지워지고 숨겨질 뿐, mycelium unmerge로 되돌리기)
   {${fg}-fg}Shift+S{/} 분할 (LLM이 세션을 나눌 지점 제안, 검토 후 적용 — 조각은 원본과 같은 폴더에 생성, 원본은 그대로 목록에 남음; mycelium unsplit로 되돌리기)
   {${fg}-fg}Shift+O{/} 정렬 순서 전환 — 최신순(기본) → 제목순(A-Z) → 에이전트순
+  {${fg}-fg}Shift+T{/} 정렬 방식 직접 선택 — 최신순/오래된순, 제목 A-Z/Z-A
 
 {bold}상세 패널{/}
 

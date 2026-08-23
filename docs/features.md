@@ -703,7 +703,8 @@ canonical "preview-then-confirm" pattern reused by `i` too). [untested]
 ## TUI — Sessions panel (`src/tui/views/sessions.js`)
 
 Navigation (Enter/→ drill in, Esc/← back), multi-select (`Space`, `*`
-select-scoped-all), `Shift+O` cycle sort, `Shift+M` merge (2+ selected,
+select-scoped-all), `Shift+O` cycle sort, `Shift+T` pick sort directly (see
+below), `Shift+M` merge (2+ selected,
 git-like), `Shift+S` LLM split-review (multi-select, default unchecked —
 opposite default from `o`'s multi-select), `/` search, `v` toggle Calendar
 tab (co-hosted screen, `activeTab`-guarded key scoping — the largest
@@ -720,6 +721,36 @@ rename title, `y` copy to clipboard, `d` digest reader (nested mini-screen,
 plain narrative summary — no knowledge coupling, see `k` below), `k`
 knowledge review (see below), `c` view context, `i` inject AGENTS.md
 (preview-then-confirm, sibling to `w`). [untested]
+
+- **`Shift+T`: pick a sort order directly, instead of `Shift+O`'s blind
+  cycle (issue [#51](https://github.com/krapie/mycelium/issues/51)).**
+  Opens `menu()` (`widgets/pickers.js`) with all 4 orderable combinations —
+  newest/oldest first, title A→Z/Z→A — writing values in the same
+  `state.sortBy` field `Shift+O`'s `SORT_CYCLE` already uses. The picker
+  shares `title` and adds `title-desc`, `date-asc`, and `date-desc`;
+  `Shift+O` remains unchanged and is still the only way to reach `agent`
+  sort. `sortRows()` gained three comparators that didn't exist yet: `title-desc`
+  (flipped `title` compare), `date-asc` (a real ascending sort), and
+  `date-desc` (a real descending sort). The picker's "Newest first" option
+  deliberately uses `date-desc`, **not** `Shift+O`'s `recent` — `recent` is
+  a bare pass-through of whatever `data.sessions()` already returned, which
+  is FTS relevance order while a search/query is active (`data.js`), not
+  date order; reusing it would have made "Newest first" silently mean
+  "whatever order was already on screen" mid-search instead of what it
+  says. The header's existing `sortSuffix` line already keys off
+  `state.sortBy` generically, so no code change was needed there — just
+  the three new `sessions.sortLabel_*` i18n entries (`title-desc`,
+  `date-asc`, `date-desc`) plus a `Shift+T` line in both locales'
+  `help.text` (`?` modal — easy to miss otherwise, since `Shift+O`'s own
+  line doesn't imply a second sort entry point exists). [tested]
+  (`test/e2e/sessions-sort-e2e.test.js` — all 4 options via real
+  keypresses against a fixture where title/date-asc/date-desc/agent orders
+  are all distinct permutations (an earlier fixture had titles that
+  happened to alias with date order, which could have hidden a swapped
+  picker-option mapping behind a still-passing assertion); a dedicated
+  case confirms "Newest first" still means literal date order with a
+  search active, unlike `recent`; Escape leaves the order untouched,
+  `Shift+O`'s own cycle confirmed unaffected)
 
 **`k`: knowledge review, deliberately unrelated to Digest (`d`) — mirrors
 `o` (smart organize) exactly, not the digest reader.** `runKnowledgeReview()`:
