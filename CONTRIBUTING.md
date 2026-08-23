@@ -16,7 +16,7 @@ Mycelium is MIT licensed and accepts contributions via GitHub pull requests. Thi
 
 ### Requirements
 
-- [Node.js](https://nodejs.org) >= 22.13.0
+- [Node.js](https://nodejs.org) >= 22.16.0
 - npm
 
 ### Getting started
