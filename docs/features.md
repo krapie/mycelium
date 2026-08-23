@@ -418,11 +418,23 @@ since the no-command case is handled earlier and launches the TUI instead).
 `--yes` confirmation gate — a real safety inconsistency worth fixing.
 Roughly a third of commands' output strings are hardcoded Korean,
 independent of `mycelium lang` (which only affects the TUI) — worth a
-decision before assuming the CLI is localized. Aside from `--version`
-(below), none of the 25+ subcommands are exercised through `cli.js`'s own
-dispatch layer today (the underlying module functions they call are
-tested where noted above, but the CLI argument-parsing/routing/output-
-formatting layer itself is not). [untested]
+decision before assuming the CLI is localized. Most of the 25+ subcommands'
+argument-parsing/routing/output-formatting layer is now exercised directly
+(`test/cli.test.js`, spawning the real binary — `node src/cli.js <args>` —
+against an isolated `MYCELIUM_HOME` per test) — the underlying module
+functions they call were already tested where noted above; this closes the
+gap in the dispatch layer itself. One real, unavoidable gap remains: LLM-
+dependent branches (`autotag`'s actual tagging call, `organize`'s actual
+classification when nothing's pre-queued, `digest`, `knowledge`'s actual
+extraction) aren't covered this way — `__setTestProvider()` (`llm.js`) is an
+in-process-only seam that doesn't survive a spawned subprocess boundary, so
+only their argument-validation/empty-store early-exit paths are covered
+here (verified to return before ever reaching `complete()`); the LLM-
+invoking branches themselves are covered at the module level instead
+(`learn.test.js`/`organize.test.js`/`insight.test.js`, via the mock
+provider). `resume --exec`, `daemon`/`daemon --detach`, and `demo` are also
+excluded — they spawn/exec a real process or launch an interactive TUI.
+[partial] (`test/cli.test.js`)
 
 - **`--version` / `-v` / `-V`** — prints `mycelium v<version>` and exits 0,
   reading `src/version.js`'s `VERSION` (parsed once from `package.json` via
