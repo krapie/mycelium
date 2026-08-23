@@ -1249,7 +1249,7 @@ export function sessionsView(opts = {}) {
       listBox.key('n', () => {
         // launchAgent() (launch.js) already reindexes exactly what scan()
         // captured internally — no need to also reindex the whole store here.
-        launchAgent(app, { folder: state.folder }, () => {
+        launchAgent(app, { folder: state.folder, title: t('launch.selectAgentNew') }, () => {
           reloadFolders();
           reloadList();
           listBox.focus();

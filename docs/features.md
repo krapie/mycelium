@@ -829,6 +829,18 @@ copy path to a separate `Shift+N` key, decided *before* the agent/directory
 picker instead of after; folded into `n` itself as one shared choice.
 [untested]
 
+The directory picker (`resolveDir()`) **creates the chosen directory (mkdir
+-p, after a confirm menu) instead of aborting** when it doesn't exist —
+handing a session off into a fresh workspace is a first-class flow, since the
+whole point of `h`/`n` is to seed the next agent's dir with the folder's
+KNOWLEDGE via `injectAgentsMd()`, and that dir often doesn't exist yet.
+Handoff (`resume-handoff.js`'s `doHandoff()`) also **prefills the picker with
+the handed-off session's own `projectDir`/`cwd`** (`launchAgent({defaultDir})`)
+rather than the mycelium process cwd, and offers that path even if it no
+longer exists (`resolveDir()` will offer to recreate it). Shared by both the
+"open here" and "copy command" branches, since both route through
+`resolveDir()`/`injectAgentsMd()`. [untested]
+
 **Status bar shows the short Context Flywheel loop, not the full
 stage-by-stage breakdown.** `updateStatusBar()` renders `i18n.js`'s
 `lifecycle.bar` — `Capture·s → Organize·o → Learn·k → Reuse·n` — plus the
