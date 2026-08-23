@@ -1245,7 +1245,11 @@ export function sessionsView(opts = {}) {
         items.push({ label: `${t('actions.newAgent')}${hint('n')}`, value: doNewAgent });
         menu(app, t('actions.title'), items, (fn) => {
           if (typeof fn === 'function') fn();
-        }, { width: '50%' });
+          // fn===undefined = palette dismissed without a choice (Esc, or a
+          // screen-key like `o` stole focus and opened its own modal on
+          // top). Nothing to do — the real action, if any, ran through
+          // its own key handler already.
+        }, { width: '50%', dismissOnBlur: true });
       }
       screenKey(app, ['.'], openActionMenu);
 
