@@ -59,6 +59,16 @@ const STEPS = [
   // the side effect) fixes both at once. Always index 0, so forward-only
   // skip-ahead scanning from any later step can never re-match it either.
   { titleKey: 'tutorial.introTitle', bodyKey: 'tutorial.introBody', waitFor: 'enter' },
+  // Introduce `.` up front so every later step's single-key instruction reads
+  // as "one of the palette entries you already saw", not "another key to
+  // memorize". After intro's Enter we're standing in the Sessions panel, so
+  // both SESSION and FOLDER groups are visible here — the full breadth of
+  // what the palette offers. Split into two steps (open / close) because
+  // isModalOpen()'s DOM-child-count heuristic only tracks a widget's
+  // open/close transition, not "opened AND user acknowledged AND closed
+  // themselves" — same shape as steps 2/3 and 5/6.
+  { titleKey: 'tutorial.stepPaletteTitle', bodyKey: 'tutorial.stepPaletteBody', waitFor: '.', thenWait: 'open', waitingKey: 'tutorial.waitingPalette' },
+  { titleKey: 'tutorial.stepPaletteAckTitle', bodyKey: 'tutorial.stepPaletteAckBody', waitFor: 'escape', thenWait: 'close' },
   { titleKey: 'tutorial.step2Title', bodyKey: 'tutorial.step2Body', waitFor: 'o', thenWait: 'open', waitingKey: 'tutorial.waitingOrganize' },
   { titleKey: 'tutorial.step3Title', bodyKey: 'tutorial.step3Body', waitFor: 'enter', thenWait: 'close', waitingKey: 'tutorial.waitingApply' },
   // waitFor is 'left' here, not 'down' — applying placements (previous
@@ -333,11 +343,16 @@ export function startTutorial(app, onDone, personaId = 'swe') {
     tick();
   };
 
-  // Whether `key` is the exact keypress `step` is narrating/waiting for —
-  // same `shift`-flag reasoning as the inline comment below: Shift+M/Shift+S
-  // arrive as key.name 'm'/'s' + key.shift:true, not blessed's 'S-m' combo
-  // form, so a plain m/s must not satisfy a step whose waitFor needs Shift.
-  const matchesWaitFor = (step, k) => !!step.waitFor && k.name === step.waitFor && (!step.shift || k.shift);
+  // Whether the keypress `step` is narrating/waiting for — same `shift`-flag
+  // reasoning as the inline comment below: Shift+M/Shift+S arrive as
+  // key.name 'm'/'s' + key.shift:true, not blessed's 'S-m' combo form, so a
+  // plain m/s must not satisfy a step whose waitFor needs Shift.
+  //
+  // Punctuation keys (e.g. '.') don't get a k.name from readline's parser —
+  // they arrive only as the raw `ch` argument — so fall back to that when
+  // name is missing, keeping the letter/arrow-key path unchanged.
+  const matchesWaitFor = (step, ch, k) =>
+    !!step.waitFor && (k.name === step.waitFor || (!k.name && ch === step.waitFor)) && (!step.shift || k.shift);
 
   // Keys that mean something different almost everywhere in the app —
   // confirming ANY dialog, plain panel navigation — never count toward the
@@ -408,9 +423,9 @@ export function startTutorial(app, onDone, personaId = 'swe') {
     // — no match at all, or an ambiguous key that only matches a step
     // other than the current one — falls through untouched.
     let j = i;
-    if (!matchesWaitFor(STEPS[j], key)) {
+    if (!matchesWaitFor(STEPS[j], ch, key)) {
       if (AMBIGUOUS_KEYS.has(key.name)) return;
-      while (j < STEPS.length && !matchesWaitFor(STEPS[j], key)) j++;
+      while (j < STEPS.length && !matchesWaitFor(STEPS[j], ch, key)) j++;
       if (j >= STEPS.length) return;
     }
     i = j;

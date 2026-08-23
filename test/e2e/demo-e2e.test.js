@@ -55,9 +55,9 @@ function findByKeyword(sessions, re) {
 // where the thing actually under test IS which step the narrator thinks
 // it's on, not just whether some real handler ran.
 function narratorStepIndex(app) {
-  const box = app.screen.children.find((c) => c._label && /Step \d+\/16/.test(c._label.content || ''));
+  const box = app.screen.children.find((c) => c._label && /Step \d+\/\d+/.test(c._label.content || ''));
   if (!box) return null;
-  const m = /Step (\d+)\/16/.exec(box._label.content);
+  const m = /Step (\d+)\/\d+/.exec(box._label.content);
   return m ? Number(m[1]) : null;
 }
 
@@ -395,7 +395,15 @@ test('demo: the narrator box stays visible (in front) once a real modal opens on
 
     sendKey(input, 'enter');
     await settle();
+    // Palette intro (new steps 2/3): `.` opens the action menu, Escape closes.
     let baseline = app.screen.children.length;
+    sendKey(input, '.');
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 2000 });
+    await settle();
+    sendKey(input, 'escape');
+    await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 2000 });
+    await settle();
+    baseline = app.screen.children.length;
     sendKey(input, 'o');
     await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 3000 });
     await settle();
@@ -494,7 +502,15 @@ test('demo: finishing the tutorial on the actual last step reports completed:tru
     // through the tutorial's own final step.
     sendKey(input, 'enter'); // the opening step's own real advance — also the real drillIntoSessions() (see tutorial.js)
     await settle();
+    // Palette intro (new steps 2/3): `.` opens the action menu, Escape closes.
     let baseline = app.screen.children.length;
+    sendKey(input, '.');
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 2000 });
+    await settle();
+    sendKey(input, 'escape');
+    await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 2000 });
+    await settle();
+    baseline = app.screen.children.length;
     sendKey(input, 'o');
     await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 3000 });
     await settle();
@@ -706,22 +722,32 @@ test('demo: a stray Enter on step 1 does not falsely cascade the narrator forwar
     // tutorial.js), so one press both advances the narrator for real and
     // performs the "step into Sessions" action it describes (a plain
     // no-thenWait step, so this settles synchronously) — landing on the
-    // Organize lesson.
+    // palette-intro lesson (waitFor: `.`).
     sendKey(input, 'enter');
     await new Promise((r) => setTimeout(r, 50));
-    assert.equal(narratorStepIndex(app), 2, 'the opening step\'s own Enter is a real advance, onto the Organize lesson');
+    assert.equal(narratorStepIndex(app), 2, 'the opening step\'s own Enter is a real advance, onto the palette-intro lesson');
 
     sendKey(input, 'enter');
     await new Promise((r) => setTimeout(r, 400));
-    assert.equal(narratorStepIndex(app), 2, 'a stray Enter on the Organize lesson (waitFor: o) must not advance it');
+    assert.equal(narratorStepIndex(app), 2, "a stray Enter on the palette-intro lesson (waitFor: '.') must not advance it");
+
+    // The stray Enter above was also sessions.js's real listBox.key('enter')
+    // — drillIntoDetail — so focus is on the Detail panel now, and `.` is
+    // deliberately scoped out of Detail (see openActionMenu()'s state.level
+    // early-return). Return to the Sessions panel before pressing `.`, same
+    // as a real user would.
+    sendKey(input, 'left');
+    await new Promise((r) => setTimeout(r, 50));
 
     // The step's own real key still resolves it normally once the real
-    // suggestPlacements() call's review modal actually opens.
+    // action menu actually opens. Wait past the narrator's own 250ms
+    // pollUntil tick before checking, same as the settle() padding the full
+    // walkthrough test uses.
     const baseline = app.screen.children.length;
-    sendKey(input, 'o');
+    sendKey(input, '.');
     await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 3000 });
-    await new Promise((r) => setTimeout(r, 320));
-    assert.equal(narratorStepIndex(app), 3, 'o resolves the Organize step once the real modal opens');
+    await new Promise((r) => setTimeout(r, 400));
+    await waitFor(() => narratorStepIndex(app) === 3, { timeoutMs: 2000 });
     assert.equal(doneArg, undefined, 'tutorial is still running');
   } finally {
     cleanup(app);
