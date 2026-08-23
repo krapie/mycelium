@@ -44,9 +44,14 @@ export function createResumeHandoff(app, { getCurrentRow, afterResume, afterHand
     const hb = buildHandoff(r.id);
     if (!hb.ok) return app.notify(hb.error, 3);
     const isDerived = r.mergedFrom?.length || r.splitFrom;
+    // Default the new session's working dir to the handed-off session's own
+    // dir (row rows don't carry cwd/projectDir — load the raw record). Falls
+    // back to undefined (resolveDir then uses process.cwd()) if unknown.
+    const n = data.detail(r.id);
+    const defaultDir = n?.projectDir || n?.cwd || undefined;
     // launchAgent() (launch.js) already reindexes exactly what changed, and
     // already linkContinuation()s the new session to r.id.
-    launchAgent(app, { folder: r.folder, seed: hb.prompt, parentId: r.id, title: fallback ? t('launch.selectAgentFallback') : undefined }, (mine) => {
+    launchAgent(app, { folder: r.folder, seed: hb.prompt, parentId: r.id, defaultDir, title: fallback ? t('launch.selectAgentFallback') : t('launch.selectAgentHandoff') }, (mine) => {
       // A merge/split product only ever existed to seed this handoff — once
       // a real, directly-resumable session exists, fold the product's
       // content into it and drop the product entirely, so there's one
