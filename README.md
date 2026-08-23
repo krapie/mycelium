@@ -4,7 +4,7 @@
 [![CI](https://github.com/krapie/mycelium/actions/workflows/ci.yml/badge.svg)](https://github.com/krapie/mycelium/actions/workflows/ci.yml)
 [![coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/krapie/511d91209145406ab7f7ed1e9fbcd49c/raw/mycelium-coverage.json)](https://github.com/krapie/mycelium/actions/workflows/coverage.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
-[![node](https://img.shields.io/badge/node-%3E%3D22.13-brightgreen)](https://nodejs.org)
+[![node](https://img.shields.io/badge/node-%3E%3D22.16-brightgreen)](https://nodejs.org)
 
 **Organize your AI sessions, and carry what they know into the next one.**
 
@@ -33,7 +33,7 @@ Engineer by picking a different persona when it asks.
 > automatically in the background while mycelium is open. Disable with
 > `MYCELIUM_NO_AUTOSTART=1`, or tune it in [`docs/cli.md`](./docs/cli.md).
 
-- Node.js ≥ 22.13, git
+- Node.js ≥ 22.16, git
 - AI agents: `claude` / `codex` / `kiro-cli`
 
 ## Install

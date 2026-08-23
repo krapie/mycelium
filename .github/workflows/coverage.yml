@@ -30,12 +30,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          # Intentionally NOT node-version-file: .nvmrc (22.13) — node:sqlite
-          # only gained FTS5 support in 22.16.0 (nodejs/node#57621), so the
-          # literal floor version this repo claims to support can't actually
-          # run test/organize.test.js's index-db-backed tests. Matching
-          # ci.yml's floating "22.x" here until that's resolved elsewhere.
-          node-version: "22.x"
+          node-version-file: ".nvmrc"
           cache: "npm"
 
       - name: Install dependencies
