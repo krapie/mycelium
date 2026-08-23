@@ -240,16 +240,31 @@ export function sessionsView(opts = {}) {
   }
 
   function reloadList() {
+    // A real bug (same class as reloadFolders()'s own fix — see that
+    // function's comment): neo-blessed's List.prototype.setItems() tries to
+    // keep the cursor on "the same item" by matching the PREVIOUSLY selected
+    // row's rendered TEXT against the new items array — a content match, not
+    // an identity one. Two sessions can render byte-identical rows (same
+    // title, same badges, same agent, no snippet difference) — reloadList()
+    // runs after essentially every mutation (rename, tag, move, delete,
+    // merge, split, auto-tag), any of which can also resort the list (e.g.
+    // a title edit while sorted by title), so restoring by the OLD numeric
+    // index alone (reloadFolders()'s fix) isn't enough here — the same
+    // index can legitimately now belong to a different session even without
+    // any duplicate-text collision. Tracking the actual session id instead
+    // sidesteps both problems: it's correct across a resort, and immune to
+    // setItems()'s own fragile text-matching heuristic. currentRow()/`e`/
+    // `m`/`t`/`x`/etc. all read listBox.selected afterward, so getting this
+    // wrong meant a subsequent action could silently act on the wrong
+    // session.
+    const wantId = rows[listBox.selected]?.id;
+    const prevIndex = listBox.selected;
     rows = sortRows(data.sessions({ folder: state.folder, query: state.query, tags: state.tags }));
     const items = rows.map((r) => {
       // Agent name formatted as a hashtag, same visual language as tags —
       // and now trails the title instead of leading it, so the title (the
       // thing you're actually scanning for) reads first on the line.
       const src = `{${sourceColor(r.source)}-fg}#${sourceLabel(r.source)}{/}`;
-      // Same "source #idPrefix" shape as the continuation links in detail
-      // ("Continues:"/"Continued by:"), so you can match a row here to that
-      // label there.
-      const idPrefix = `{${C.dim}-fg}#${r.id.slice(0, 8)}{/}`;
       // No reserved gutter — the checkmark only takes space on rows you've
       // actually selected, so the title starts flush-left the rest of the
       // time instead of every row paying for a feature most rows don't use.
@@ -288,9 +303,13 @@ export function sessionsView(opts = {}) {
       // {|} is blessed's right-align pivot (same trick app.js uses for the
       // header) — pins the metadata cluster to the column's right edge
       // instead of trailing directly off the title text.
-      return `${mark}${text}{|}${lineage}${link}${src} ${idPrefix} ${isNew}`;
+      return `${mark}${text}{|}${lineage}${link}${src} ${isNew}`;
     });
     listBox.setItems(items.length ? items : [`{gray-fg}${t('sessions.empty')}{/}`]);
+    if (items.length) {
+      const idx = wantId ? rows.findIndex((r) => r.id === wantId) : -1;
+      listBox.select(idx >= 0 ? idx : Math.min(prevIndex, items.length - 1));
+    }
     updateHeader();
   }
 

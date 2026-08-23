@@ -669,6 +669,18 @@ formatting layer itself is not). [untested]
   One implementation, used by both the Sessions panel and the Calendar tab's
   detail panel. `splitSentences(text)` — sentence-boundary split for the
   summary bullets, no blessed dependency. [tested]
+- **Full session id, shown here now instead of the list (issue
+  [#57](https://github.com/krapie/mycelium/issues/57)).** The Sessions list
+  row used to carry a truncated `#<8-char>` badge (`sessions.js`'s
+  `reloadList()`) — rarely what you're scanning a list for, and it crowded
+  the row's right-hand metadata cluster. Removed from the list entirely;
+  `formatSessionDetail()` now prints the session's own id **in full** (not
+  truncated, unlike the list badge that used to stand in for it, and unlike
+  the continuation-link labels elsewhere in this same output, which still
+  truncate) right under the source/date/folder line — the id wasn't shown
+  *anywhere* in the TUI before this, needed for `mycelium resume <id>`/
+  `mycelium context <id>` or filing a bug report. [tested]
+  (`test/render.test.js` asserts the full id string, not a sliced prefix)
 
 ## TUI — Folders panel (`src/tui/views/sessions.js`)
 
@@ -751,6 +763,28 @@ knowledge review (see below), `c` view context, `i` inject AGENTS.md
   case confirms "Newest first" still means literal date order with a
   search active, unlike `recent`; Escape leaves the order untouched,
   `Shift+O`'s own cycle confirmed unaffected)
+- **`reloadList()` preserves session identity across a rebuild, not just
+  numeric position (real bug, found by CodeRabbit review on PR #58, same
+  class as `reloadFolders()`'s own fix above).** Two sessions can render
+  byte-identical Sessions-panel rows (same title, same badges, no
+  distinguishing snippet) — `setItems()` (neo-blessed) restores the cursor
+  by matching the *previously selected row's rendered text* against the
+  new items, a content match, not an identity one, so it could silently
+  select the wrong one of two identical-looking rows. Worse than
+  `reloadFolders()`'s version of this bug: `reloadList()` runs after
+  nearly every mutation (rename, tag, move, delete, merge, split,
+  auto-tag), several of which can also resort the list (e.g. a title edit
+  while sorted by title), so restoring by the old numeric index alone
+  isn't sufficient here — the same index can legitimately now belong to a
+  different session even with no duplicate-text collision at all. Fixed
+  by tracking the actually-selected session's `id` across the rebuild
+  (`rows.findIndex((r) => r.id === wantId)`) instead of trusting either
+  blessed's own heuristic or a bare index — `currentRow()` (and therefore
+  `e`/`m`/`t`/`x`/etc.) reads `listBox.selected` afterward, so getting
+  this wrong meant a subsequent action could silently act on the wrong
+  session. [tested] (`test/e2e/sessions-list-duplicate-rows-e2e.test.js` —
+  confirmed to fail on the pre-fix code, reproducing the exact
+  wrong-session selection)
 
 **`k`: knowledge review, deliberately unrelated to Digest (`d`) — mirrors
 `o` (smart organize) exactly, not the digest reader.** `runKnowledgeReview()`:
