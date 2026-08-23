@@ -52,10 +52,8 @@ spaces.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the maintainer, [@krapie](https://github.com/krapie), via a
-[private GitHub message](https://github.com/krapie) or by opening a
-[Security Advisory](https://github.com/krapie/mycelium/security/advisories/new)
-if the report itself is sensitive. All complaints will be reviewed and
+reported to the maintainer, [@krapie](https://github.com/krapie), at
+krapi0314@gmail.com. All complaints will be reviewed and
 investigated promptly and fairly.
 
 All maintainers are obligated to respect the privacy and security of the
