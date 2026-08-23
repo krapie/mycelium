@@ -1208,7 +1208,14 @@ export function sessionsView(opts = {}) {
         const sessionItems = [];
         if (r) {
           sessionItems.push({ label: `${t('actions.handoff')}${hint('h')}`, value: () => doHandoff() });
-          sessionItems.push({ label: `${t('actions.lineage')}${hint('Enter')}`, value: drillIntoDetail });
+          // "View details / Enter" only makes sense from the sessions list —
+          // in detail (already there) or folders (two panels away) the Enter
+          // hint would be a lie: detail's Enter opens onDetailEnter, folders'
+          // Enter drills into sessions, not detail. Both stay reachable via
+          // the palette's other entries.
+          if (state.level === 'sessions') {
+            sessionItems.push({ label: `${t('actions.lineage')}${hint('Enter')}`, value: drillIntoDetail });
+          }
           sessionItems.push({ label: `${t('actions.split')}${hint('Shift+S')}`, value: doSplit });
         }
         if (multi) sessionItems.push({ label: `${t('actions.merge')}${hint('Shift+M')}`, value: doMerge });
