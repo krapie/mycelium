@@ -914,11 +914,15 @@ test('action menu: FOLDER group lists Scan first, then Organize/Knowledge/New ta
     const folderIdx = menuBox.items.findIndex((it) => /FOLDER/.test(it.content));
     assert.ok(folderIdx >= 0, 'FOLDER group header present');
     const folderLabels = menuBox.items.slice(folderIdx + 1).map((it) => it.content);
+    assert.equal(folderLabels.length, 4, 'exactly 4 items in the FOLDER group, not one extra/missing');
     assert.match(folderLabels[0], /Scan for new sessions.*\(s\)/, 'Scan is first in the FOLDER group');
     assert.match(folderLabels[1], /Organize session.*\(o\)/);
     assert.match(folderLabels[2], /Generate folder insights.*\(w\)/);
     assert.match(folderLabels[3], /New task with folder context.*\(n\)/);
+
+    const baseline = app.screen.children.length - 1; // -1: the menu itself, about to close
     sendKey(input, 'escape');
+    await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 2000 });
   } finally {
     cleanup(app);
   }
