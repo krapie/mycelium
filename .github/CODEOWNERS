@@ -1,0 +1,4 @@
+# Auto-requests a review from krapie on every PR. GitHub skips the request
+# automatically when krapie is the PR's own author (no self-review-request),
+# so this only actually fires for PRs opened by other contributors.
+* @krapie
