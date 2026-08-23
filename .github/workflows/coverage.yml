@@ -1,0 +1,41 @@
+name: Coverage badge
+
+# Only on push to main — not on PRs, since fork PRs can't see GIST_SECRET
+# anyway, and the badge shouldn't move until a change is actually merged.
+on:
+  push:
+    branches: [main]
+
+jobs:
+  update-badge:
+    name: update coverage badge
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run coverage
+        run: npm run test:coverage
+
+      - name: Summarize coverage
+        id: badge
+        run: node scripts/coverage-badge.js >> "$GITHUB_OUTPUT"
+
+      - name: Update coverage Gist
+        uses: schneegans/dynamic-badges-action@v1.9.0
+        with:
+          auth: ${{ secrets.GIST_SECRET }}
+          gistID: 511d91209145406ab7f7ed1e9fbcd49c
+          filename: mycelium-coverage.json
+          label: coverage
+          message: ${{ steps.badge.outputs.message }}
+          color: ${{ steps.badge.outputs.color }}
