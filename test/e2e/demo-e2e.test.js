@@ -897,3 +897,29 @@ test('action menu: `.` opens the palette and Esc closes it cleanly (no input wed
     cleanup(app);
   }
 });
+
+test('action menu: FOLDER group lists Scan first, then Organize/Knowledge/New task, in that order', async () => {
+  // Scan (`s`) was deliberately left out of the palette when it first
+  // shipped (PR #63) — added back in, first in the FOLDER group, so
+  // "capture then organize" reads as the natural order top to bottom.
+  // doScan is now a named function (was an inline screenKey closure) for
+  // the same reason doOrganize/doMerge/doNewAgent already are — the menu
+  // entry and the `s` key must never be able to drift apart.
+  const { app, input } = await mountDemo();
+  try {
+    sendKey(input, '.');
+    await new Promise((r) => setTimeout(r, 80));
+    const menuBox = app.screen.children.find((c) => c.type === 'list' && /want to do/.test(c._label?.content || ''));
+    assert.ok(menuBox, 'action menu opened');
+    const folderIdx = menuBox.items.findIndex((it) => /FOLDER/.test(it.content));
+    assert.ok(folderIdx >= 0, 'FOLDER group header present');
+    const folderLabels = menuBox.items.slice(folderIdx + 1).map((it) => it.content);
+    assert.match(folderLabels[0], /Scan for new sessions.*\(s\)/, 'Scan is first in the FOLDER group');
+    assert.match(folderLabels[1], /Organize session.*\(o\)/);
+    assert.match(folderLabels[2], /Generate folder insights.*\(w\)/);
+    assert.match(folderLabels[3], /New task with folder context.*\(n\)/);
+    sendKey(input, 'escape');
+  } finally {
+    cleanup(app);
+  }
+});
