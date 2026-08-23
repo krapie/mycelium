@@ -931,7 +931,10 @@ export function sessionsView(opts = {}) {
       // s: scan only (capture new/changed sessions from every tab/terminal +
       // reindex), without leaving the TUI. Mirrors `mycelium scan`. Captured
       // sessions land unfiled — use `o` (or `mycelium organize`) to place them.
-      screenKey(app, ['s'], () => {
+      // Named (not inline) so the `.` action palette's FOLDER group can reuse
+      // the exact same handler, same reasoning as doOrganize/doMerge/
+      // doNewAgent below.
+      const doScan = () => {
         app.notify(t('scan.inProgress'), 30);
         setImmediate(() => {
           let s;
@@ -947,7 +950,8 @@ export function sessionsView(opts = {}) {
           app.notify(t('scan.done', s.imported, s.scanned, s.skipped, s.failed), 4);
           app.render();
         });
-      });
+      };
+      screenKey(app, ['s'], doScan);
 
       // o: smart organize — LLM content-based folder suggestions, comparing
       // candidates against the sessions already filed in each folder (see
@@ -1204,7 +1208,7 @@ export function sessionsView(opts = {}) {
         // - Detail: the user is already inside a session — every remaining
         //   action lives elsewhere; suppress the palette entirely.
         // - Folders: they're navigating the tree, so only folder-scoped
-        //   actions (organize/insights/new-task-with-context) apply.
+        //   actions (scan/organize/insights/new-task-with-context) apply.
         // - Sessions: both groups — session actions on the current row, plus
         //   the folder actions you can still reach from here.
         if (state.level === 'detail') return;
@@ -1235,6 +1239,7 @@ export function sessionsView(opts = {}) {
         // single session (that's why `o` lives here, not up top). Available
         // from both the sessions list and the folders panel.
         items.push({ header: true, label: t('actions.groupFolder') });
+        items.push({ label: `${t('actions.scan')}${hint('s')}`, value: doScan });
         items.push({ label: `${t('actions.organize')}${hint('o')}`, value: doOrganize });
         items.push({ label: `${t('actions.knowledge')}${hint('w')}`, value: doKnowledge });
         items.push({ label: `${t('actions.newAgent')}${hint('n')}`, value: doNewAgent });
