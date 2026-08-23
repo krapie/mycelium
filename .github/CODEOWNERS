@@ -1,0 +1,5 @@
+# Auto-requests a review from krapie on PRs opened ready-for-review (GitHub
+# doesn't auto-request reviewers on drafts until they're marked ready).
+# GitHub also skips the request when krapie is the PR's own author, so this
+# only actually fires for non-draft PRs opened by other contributors.
+* @krapie
