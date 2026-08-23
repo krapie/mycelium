@@ -55,6 +55,18 @@ test('formatSessionDetail() renders title, source, folder, tags, and summary bul
   assert.match(lines, /- Write more tests/);
 });
 
+test('formatSessionDetail() shows the session\'s own id in full, not truncated', () => {
+  // Issue #57: the Sessions list row used to show a truncated #<8-char>
+  // badge instead — removed from the list, moved here, in full (not
+  // sliced to 8 chars like the list badge or continuation-link labels
+  // below were) since that's the whole point: CLI commands like
+  // `mycelium resume <id>` need the real thing, not a prefix.
+  const fullId = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+  const n = session({ id: fullId });
+  const lines = formatSessionDetail(n).join('\n');
+  assert.match(lines, new RegExp(fullId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+});
+
 test('formatSessionDetail() shows "(no summary yet)" + first user turn when summary is missing', () => {
   const n = session({
     turns: [

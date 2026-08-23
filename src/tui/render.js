@@ -38,6 +38,12 @@ export function formatSessionDetail(n) {
   lines.push(
     `{${sourceColor(n.source)}-fg}${sourceLabel(n.source)}{/}  {${C.dim}-fg}${when} · ${n.folder || t('sessions.newBadge')}{/}`,
   );
+  // Full, untruncated id — the Sessions list row used to show a truncated
+  // #<8-char> badge instead (removed — rarely what you're scanning a list
+  // for, and crowded the row's metadata cluster); this is the one place the
+  // real id is shown at all now, needed for things like `mycelium resume
+  // <id>`/`mycelium context <id>` or filing a bug report.
+  lines.push(`{${C.faint}-fg}${t('detail.id')} #${n.id}{/}`);
   if (n.extracted.tags?.length) {
     lines.push(n.extracted.tags.map((tg) => `{${C.tag}-fg}#${tg}{/}`).join(' '));
   }
