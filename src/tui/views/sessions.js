@@ -717,7 +717,7 @@ export function sessionsView(opts = {}) {
         app.render();
         return true;
       };
-      listBox.key('S-m', () => {
+      function doMerge() {
         const ids = [...state.selected];
         if (ids.length <= 1) {
           const targetId = ids[0] ?? currentRow()?.id;
@@ -784,7 +784,8 @@ export function sessionsView(opts = {}) {
           app.notify(t('merge.done', ids.length, res.merged.id.slice(0, 8)), 4);
           app.render();
         });
-      });
+      }
+      listBox.key('S-m', doMerge);
 
       // Shift+S: LLM-suggested split — propose topic boundaries, human
       // reviews via the same multiSelectList pattern smart-organize (`o`)
@@ -958,7 +959,10 @@ export function sessionsView(opts = {}) {
       // you're actually standing at Root. Always a preview-then-confirm flow
       // (like w/i), and never run automatically by the daemon — unlike `s`'s
       // plain scan, this makes real LLM calls and moves things.
-      screenKey(app, ['o'], async () => {
+      screenKey(app, ['o'], doOrganize);
+      // Named (not an inline screenKey closure) so the `.` action menu can
+      // invoke the exact same guarded flow — see openActionMenu().
+      async function doOrganize() {
         // See asyncReviewFlowRunning's own comment above — an impatient
         // repeat press while the LLM call is still in flight used to start
         // a second concurrent run.
@@ -969,7 +973,7 @@ export function sessionsView(opts = {}) {
         } finally {
           asyncReviewFlowRunning = false;
         }
-      });
+      }
       async function runSmartOrganize() {
         // Reuse whatever the daemon already queued (see organize.js's
         // smartOrganizeCycle) instead of recomputing — makes `o` instant when
@@ -1085,7 +1089,9 @@ export function sessionsView(opts = {}) {
       // fallback for whenever a human didn't get to it — both call the same
       // insight.js proposeKnowledgeRefreshes(), so either path produces an
       // identical result.
-      screenKey(app, ['k'], async () => {
+      screenKey(app, ['k'], doRefreshKnowledge);
+      // Named for the `.` action menu, same reasoning as doOrganize above.
+      async function doRefreshKnowledge() {
         if (asyncReviewFlowRunning) return;
         asyncReviewFlowRunning = true;
         try {
@@ -1093,7 +1099,7 @@ export function sessionsView(opts = {}) {
         } finally {
           asyncReviewFlowRunning = false;
         }
-      });
+      }
       async function runKnowledgeReview() {
         let pending = pendingKnowledgeReviews();
         if (!pending.length) {
@@ -1185,6 +1191,45 @@ export function sessionsView(opts = {}) {
       // ?: full keymap reference — status bar only shows a short breadcrumb now.
       screenKey(app, ['?'], () => helpModal(app));
 
+      // .: "What do you want to do?" action palette — a discoverable menu of
+      // the session/folder actions, each showing its own single-key shortcut
+      // so the menu doubles as a way to learn the keys. Context-aware: only
+      // offers what's valid for the current selection (Merge needs 2+ picked;
+      // Split/lineage need a current row). Every entry's `value` is the exact
+      // same handler its key triggers — no behavior duplicated, so the two
+      // paths can't drift. Esc closes with no action (menu() → cb(undefined)).
+      function openActionMenu() {
+        const r = currentRow();
+        const multi = state.selected.size > 1;
+        const hint = (k) => `  {${C.text}-fg}(${k}){/}`;
+        const items = [];
+        // SESSION group — acts on the selected session(s). Only shown when
+        // there's something selected to act on.
+        const sessionItems = [];
+        if (r) {
+          sessionItems.push({ label: `${t('actions.handoff')}${hint('h')}`, value: () => doHandoff() });
+          sessionItems.push({ label: `${t('actions.lineage')}${hint('Enter')}`, value: drillIntoDetail });
+          sessionItems.push({ label: `${t('actions.split')}${hint('Shift+S')}`, value: doSplit });
+        }
+        if (multi) sessionItems.push({ label: `${t('actions.merge')}${hint('Shift+M')}`, value: doMerge });
+        if (sessionItems.length) {
+          items.push({ header: true, label: t('actions.groupSession') });
+          items.push(...sessionItems);
+          items.push({ header: true, label: '' }); // blank spacer between groups
+        }
+        // FOLDER group — scoped to the folder/view you're browsing, not the
+        // single session (that's why `o` lives here, not up top). Always
+        // available.
+        items.push({ header: true, label: t('actions.groupFolder') });
+        items.push({ label: `${t('actions.organize')}${hint('o')}`, value: doOrganize });
+        items.push({ label: `${t('actions.knowledge')}${hint('w')}`, value: doKnowledge });
+        items.push({ label: `${t('actions.newAgent')}${hint('n')}`, value: doNewAgent });
+        menu(app, t('actions.title'), items, (fn) => {
+          if (typeof fn === 'function') fn();
+        }, { width: '50%' });
+      }
+      screenKey(app, ['.'], openActionMenu);
+
       // g: re-show the first-run getting-started guide on demand — index.js
       // only shows it automatically once (config.json's `onboarded` flag),
       // this is how to pull it back up any time after that.
@@ -1265,7 +1310,10 @@ export function sessionsView(opts = {}) {
       // "Copy command" doesn't actually capture anything here (no real
       // launch, no scan()), so reloadFolders()/reloadList() below are a
       // harmless no-op refresh in that case, not a bug.
-      listBox.key('n', () => {
+      // Named (not an inline closure) so the `.` action menu can invoke the
+      // exact same "new task with this folder's context" launch — see
+      // openActionMenu().
+      function doNewAgent() {
         // launchAgent() (launch.js) already reindexes exactly what scan()
         // captured internally — no need to also reindex the whole store here.
         launchAgent(app, { folder: state.folder, title: t('launch.selectAgentNew') }, () => {
@@ -1274,7 +1322,8 @@ export function sessionsView(opts = {}) {
           listBox.focus();
           app.render();
         });
-      });
+      }
+      listBox.key('n', doNewAgent);
 
       // Resume/handoff/copy-command trio — shared with the Calendar tab's
       // day-list/detail (see resume-handoff.js). Only the "what's currently

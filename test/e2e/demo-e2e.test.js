@@ -872,3 +872,28 @@ test('k: a folder spanning 2+ real directories asks which ones to inject into, i
     cleanup(app);
   }
 });
+
+test('action menu: `.` opens the palette and Esc closes it cleanly (no input wedge)', async () => {
+  const { app, input } = await mountDemo();
+  try {
+    // `.` is a screenKey (fires regardless of focused panel). Opening a modal
+    // adds a child to the screen; Esc must remove it and hand focus back —
+    // the main risk of adding any new modal is wedging input if it doesn't
+    // close cleanly. Assert real child-count transitions, not rendered text
+    // (same approach the organize/knowledge steps above use).
+    const baseline = app.screen.children.length;
+    sendKey(input, '.');
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 2000 });
+    sendKey(input, 'escape');
+    await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 2000 });
+
+    // Input still works afterwards: `.` opens the menu again (proves the
+    // first open/close didn't leave a dangling focus/listener).
+    sendKey(input, '.');
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 2000 });
+    sendKey(input, 'escape');
+    await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 2000 });
+  } finally {
+    cleanup(app);
+  }
+});
