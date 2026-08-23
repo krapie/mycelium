@@ -5,28 +5,28 @@
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D22.13-brightgreen)](https://nodejs.org)
 
-**Turn scattered AI coding sessions into living project knowledge.**
+**Organize your AI sessions, and make each one smarter than the last.**
 
-AI coding sessions hold more than a conversation — decisions, discoveries, failed approaches, conventions, and context that normally disappears the moment the session ends, or gets stranded in whichever agent produced it. Mycelium captures that context, organizes it around the project it belongs to, distills what matters into durable knowledge, and hands it back — to your next session, or to a different agent CLI entirely — through **Capture → Organize → Learn → Reuse**.
+Sessions pile up fast — one per case, one per feature, one per bug — and whatever's reusable in them (a root cause, a convention, a customer-facing tone) disappears with each one. Mycelium organizes sessions around the work they belong to, and **Learn** distills what repeats into `AGENTS.md`, so the next similar session already knows it.
 
-- **Capture** — bring sessions from Claude Code, Codex, and Kiro into one place, automatically.
-- **Organize** — structure scattered sessions around the project/work they actually belong to.
-- **Learn** — distill decisions, discoveries, conventions, and useful context into durable per-project knowledge.
-- **Reuse** — inject that knowledge into your next session, or hand it to a different agent when you switch.
+- **Capture** — Claude Code, Codex, and Kiro sessions land in one place, automatically.
+- **Organize** — grouped by the project, case, or service they actually belong to.
+- **Learn** — what repeats across a folder's sessions becomes durable knowledge.
+- **Reuse** — injected into your next session, or handed to a different agent.
 
-Local-first, model-agnostic, human-controlled — your project knowledge isn't tied to one session, one folder, or one AI provider.
+**Example**: a support engineer files one session per case under `cases/onprem-connectivity`. After a few cases, Learn extracts *"MTU mismatch is the default suspect for large-payload on-prem↔VPC failures"* — the next case in that folder starts already knowing it.
 
-*Sessions end. Project knowledge shouldn't.*
+Local-first, model-agnostic, human-controlled. *Sessions end. Project knowledge shouldn't.*
 
 POC stage — all four stages verified against real local sessions (Claude Code + Codex + Kiro).
 
 ## Demo
 
-![mycelium demo — Organize, Learn, Reuse](https://github.com/krapie/mycelium/releases/download/demo-assets/swe-highlight.gif)
+![mycelium demo — a Cloud Support Engineer's cases, organized and learned from](https://github.com/krapie/mycelium/releases/download/demo-assets/cse-highlight.gif)
 
 `mycelium demo` walks through the same loop interactively — try it with
 `npm install -g @kevinprk/mycelium && mycelium demo`, or see it as a
-Cloud Support Engineer / Solutions Architect instead of a Software
+Software Engineer / Solutions Architect instead of a Cloud Support
 Engineer by picking a different persona when it asks.
 
 ## Requirements
