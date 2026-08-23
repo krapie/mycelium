@@ -92,6 +92,11 @@ export function textPrompt(app, label, initial, cb) {
 
 /** A small menu picker returning the chosen value. */
 export function menu(app, label, choices, cb, { width = '40%' } = {}) {
+  // A choice with `header: true` is a non-selectable section label (e.g. the
+  // action palette's SESSION/FOLDER groups) — shown dimmed, indented siblings,
+  // and skipped on select so Enter/click on it does nothing. Only affects
+  // menus that actually pass headers; a plain choice list renders unchanged.
+  const hasHeaders = choices.some((c) => c.header);
   const box = blessed.list({
     parent: app.screen,
     top: 'center',
@@ -104,10 +109,15 @@ export function menu(app, label, choices, cb, { width = '40%' } = {}) {
     tags: true,
     keys: true,
     mouse: true,
-    items: choices.map((c) => c.label),
+    items: choices.map((c) =>
+      c.header ? `{${C.text}-fg}{bold}${c.label}{/bold}{/}` : hasHeaders ? `  {${C.claude}-fg}${c.label}{/}` : c.label,
+    ),
     border: { type: 'line' },
     style: { border: { fg: C.fox }, selected: { bg: C.surface, fg: C.text }, fg: C.dim },
   });
+  // Don't land the initial highlight on a leading header row.
+  const firstSelectable = choices.findIndex((c) => !c.header);
+  if (firstSelectable > 0) box.select(firstSelectable);
   box.focus();
   app.render();
   box.key(['escape'], () => {
@@ -116,6 +126,7 @@ export function menu(app, label, choices, cb, { width = '40%' } = {}) {
     cb(undefined);
   });
   box.on('select', (_, idx) => {
+    if (choices[idx]?.header) return; // header row — not a choice
     box.destroy();
     app.render();
     cb(choices[idx].value);

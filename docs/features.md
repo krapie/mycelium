@@ -875,6 +875,28 @@ longer exists (`resolveDir()` will offer to recreate it). Shared by both the
 "open here" and "copy command" branches, since both route through
 `resolveDir()`/`injectAgentsMd()`. [untested]
 
+**`.`: a "what do you want to do?" action palette.** `openActionMenu()`
+(`sessions.js`) opens a menu of the common session actions, each label
+showing its own single-key shortcut so the menu doubles as a way to learn
+the keys without memorizing them up front. **Grouped by scope under
+non-selectable `SESSION`/`FOLDER` headers** (a small `menu()` widget
+extension: a choice with `header: true` renders dimmed/indented and is skipped
+on select) so it's clear which actions act on the selected session (handoff,
+details, split, merge) vs. the folder/view you're browsing (organize,
+insights, new task) — `o` in particular is folder-scoped, not per-session,
+which the grouping now makes obvious. Context-aware: the SESSION group only
+appears when something's selected (Merge needs 2+; handoff/details/split need
+a current row). Deliberately excludes actions that are neither: Digest (`d`,
+global + date-based) and Refresh-knowledge (`k`, a review inbox for the
+daemon's prepared updates, scoped to *today's* active folders) stay on their
+own keys. Every entry's value is the *exact same handler* its key triggers
+(`doOrganize`/`doMerge`/`doSplit`/`doHandoff`/`doNewAgent`/`doKnowledge`/
+`drillIntoDetail`) — three of those (`doOrganize`/`doMerge`/`doNewAgent`) were
+extracted from inline key closures into named functions so the key and the
+menu can't drift. [tested] (smoke e2e: opens on
+`.`, closes cleanly on Esc, input not wedged — `test/e2e/demo-e2e.test.js`;
+the individual actions are covered by their own key-path tests)
+
 **Status bar shows the short Context Flywheel loop, not the full
 stage-by-stage breakdown.** `updateStatusBar()` renders `i18n.js`'s
 `lifecycle.bar` — `Capture·s → Organize·o → Learn·k → Reuse·n` — plus the
