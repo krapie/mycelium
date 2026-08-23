@@ -1199,34 +1199,41 @@ export function sessionsView(opts = {}) {
       // same handler its key triggers — no behavior duplicated, so the two
       // paths can't drift. Esc closes with no action (menu() → cb(undefined)).
       function openActionMenu() {
-        const r = currentRow();
-        const multi = state.selected.size > 1;
+        // Palette content is scoped to the panel the user is standing in, so
+        // it only ever offers actions that make sense from where they are.
+        // - Detail: the user is already inside a session — every remaining
+        //   action lives elsewhere; suppress the palette entirely.
+        // - Folders: they're navigating the tree, so only folder-scoped
+        //   actions (organize/insights/new-task-with-context) apply.
+        // - Sessions: both groups — session actions on the current row, plus
+        //   the folder actions you can still reach from here.
+        if (state.level === 'detail') return;
+
         const hint = (k) => `  {${C.text}-fg}(${k}){/}`;
         const items = [];
-        // SESSION group — acts on the selected session(s). Only shown when
-        // there's something selected to act on.
-        const sessionItems = [];
-        if (r) {
-          sessionItems.push({ label: `${t('actions.handoff')}${hint('h')}`, value: () => doHandoff() });
-          // "View details / Enter" only makes sense from the sessions list —
-          // in detail (already there) or folders (two panels away) the Enter
-          // hint would be a lie: detail's Enter opens onDetailEnter, folders'
-          // Enter drills into sessions, not detail. Both stay reachable via
-          // the palette's other entries.
-          if (state.level === 'sessions') {
+
+        // SESSION group — only shown when the sessions list is active AND has
+        // a current row to act on. Merge additionally needs 2+ picked.
+        if (state.level === 'sessions') {
+          const r = currentRow();
+          const multi = state.selected.size > 1;
+          const sessionItems = [];
+          if (r) {
+            sessionItems.push({ label: `${t('actions.handoff')}${hint('h')}`, value: () => doHandoff() });
             sessionItems.push({ label: `${t('actions.lineage')}${hint('Enter')}`, value: drillIntoDetail });
+            sessionItems.push({ label: `${t('actions.split')}${hint('Shift+S')}`, value: doSplit });
           }
-          sessionItems.push({ label: `${t('actions.split')}${hint('Shift+S')}`, value: doSplit });
+          if (multi) sessionItems.push({ label: `${t('actions.merge')}${hint('Shift+M')}`, value: doMerge });
+          if (sessionItems.length) {
+            items.push({ header: true, label: t('actions.groupSession') });
+            items.push(...sessionItems);
+            items.push({ header: true, label: '' }); // blank spacer between groups
+          }
         }
-        if (multi) sessionItems.push({ label: `${t('actions.merge')}${hint('Shift+M')}`, value: doMerge });
-        if (sessionItems.length) {
-          items.push({ header: true, label: t('actions.groupSession') });
-          items.push(...sessionItems);
-          items.push({ header: true, label: '' }); // blank spacer between groups
-        }
+
         // FOLDER group — scoped to the folder/view you're browsing, not the
-        // single session (that's why `o` lives here, not up top). Always
-        // available.
+        // single session (that's why `o` lives here, not up top). Available
+        // from both the sessions list and the folders panel.
         items.push({ header: true, label: t('actions.groupFolder') });
         items.push({ label: `${t('actions.organize')}${hint('o')}`, value: doOrganize });
         items.push({ label: `${t('actions.knowledge')}${hint('w')}`, value: doKnowledge });
