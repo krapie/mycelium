@@ -1,6 +1,6 @@
 # Contributing
 
-Mycelium is MIT licensed and accepts contributions via GitHub pull requests. This document covers the contribution workflow, development setup, and a few conventions to help get your change merged smoothly.
+Mycelium is MIT licensed and accepts contributions via GitHub pull requests. This document covers the contribution workflow, development setup, and a few conventions to help get your change merged smoothly. By participating, you're expected to follow the [Code of Conduct](./CODE_OF_CONDUCT.md).
 
 ## Contribution Flow
 

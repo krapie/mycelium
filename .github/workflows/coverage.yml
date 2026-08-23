@@ -1,0 +1,57 @@
+name: Coverage badge
+
+# Only on push to main — not on PRs, since fork PRs can't see GIST_SECRET
+# anyway, and the badge shouldn't move until a change is actually merged.
+on:
+  push:
+    branches: [main]
+
+# So an older run can't overwrite the Gist after a newer run already
+# finished, if two pushes to main land close together.
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  update-badge:
+    name: update coverage badge
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+        with:
+          # This job runs npm ci + repo/dependency scripts after checkout —
+          # don't leave GITHUB_TOKEN sitting in local git config for them.
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run coverage
+        run: npm run test:coverage
+
+      - name: Summarize coverage
+        id: badge
+        run: node scripts/coverage-badge.js >> "$GITHUB_OUTPUT"
+
+      - name: Update coverage Gist
+        # Pinned to the v1.9.0 tag's commit (not the mutable tag) since this
+        # step receives GIST_SECRET — verified via
+        # `git ls-remote --tags .../dynamic-badges-action.git v1.9.0`.
+        uses: schneegans/dynamic-badges-action@28b0fa8bdeb46170ac397105ece0c1fe58f68910 # v1.9.0
+        with:
+          auth: ${{ secrets.GIST_SECRET }}
+          gistID: 511d91209145406ab7f7ed1e9fbcd49c
+          filename: mycelium-coverage.json
+          label: coverage
+          message: ${{ steps.badge.outputs.message }}
+          color: ${{ steps.badge.outputs.color }}
