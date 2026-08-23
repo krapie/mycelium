@@ -72,6 +72,14 @@ const en = {
   'sessions.copyFailed': 'No clipboard tool found (pbcopy etc.)',
   'sessions.sortLabel_title': 'sort: title A-Z',
   'sessions.sortLabel_agent': 'sort: agent',
+  'sessions.sortLabel_title-desc': 'sort: title Z-A',
+  'sessions.sortLabel_date-asc': 'sort: oldest first',
+  'sessions.sortLabel_date-desc': 'sort: newest first',
+  'sessions.sortPickerTitle': 'Sort by',
+  'sessions.sortOption_recent': 'Newest first',
+  'sessions.sortOption_dateAsc': 'Oldest first',
+  'sessions.sortOption_title': 'Title A → Z',
+  'sessions.sortOption_titleDesc': 'Title Z → A',
   'sessions.unfiledHint': (n) => `${n} session(s) captured, no folders yet — press o to sort them by content`,
   // Large-backlog counterpart to unfiledHint above — index.js promotes to
   // this modal instead of the toast once the unfiled count clears
@@ -257,9 +265,17 @@ const en = {
   // launch.js
   'launch.noAgents': 'No agent CLI installed (claude/codex/kiro-cli)',
   'launch.selectAgent': 'Choose agent',
+  'launch.selectAgentHandoff': 'Continue this task on another agent — choose agent',
+  'launch.selectAgentNew': "New task with this folder's context — choose agent",
   'launch.chooseAction': 'Start session',
   'launch.selectAgentFallback': "Can't resume (merged/split session) — choose agent; this will be replaced by the new session",
   'launch.dirNotFound': "Directory doesn't exist",
+  'launch.dirMissingPrompt': (dir) => `Directory doesn't exist:\n${dir}\nCreate it?`,
+  'launch.dirCreate': 'Create it',
+  'launch.dirCreateCancel': 'Cancel',
+  'launch.dirCreated': (dir) => `Created ${dir}`,
+  'launch.dirCreateFailed': (msg) => `Couldn't create directory: ${msg}`,
+  'launch.dirNotADirectory': (dir) => `Not a directory (a file exists at that path):\n${dir}`,
   'launch.dirPrompt': (folder) => `Working directory${folder ? ` (${folder})` : ''}`,
   'launch.typeManually': '+ Type one in…',
   'launch.selectDir': (folder) => `Choose working directory (${folder})`,
@@ -361,6 +377,14 @@ const ko = {
   'sessions.copyFailed': '복사 도구(pbcopy 등)를 찾지 못함',
   'sessions.sortLabel_title': '정렬: 제목순',
   'sessions.sortLabel_agent': '정렬: 에이전트순',
+  'sessions.sortLabel_title-desc': '정렬: 제목 역순',
+  'sessions.sortLabel_date-asc': '정렬: 오래된순',
+  'sessions.sortLabel_date-desc': '정렬: 최신순',
+  'sessions.sortPickerTitle': '정렬 기준',
+  'sessions.sortOption_recent': '최신순',
+  'sessions.sortOption_dateAsc': '오래된순',
+  'sessions.sortOption_title': '제목 A → Z',
+  'sessions.sortOption_titleDesc': '제목 Z → A',
   'sessions.unfiledHint': (n) => `${n}개 세션을 가져왔지만 아직 폴더가 없습니다 — o를 눌러 내용 기준으로 정리해보세요`,
   'sessions.firstScanModalLabel': ' 첫 스캔 완료 — 아직 정리되지 않음 (Enter/Esc로 닫기) ',
   'sessions.firstScanBody': (n, fg) =>
@@ -503,9 +527,17 @@ const ko = {
 
   'launch.noAgents': '설치된 에이전트(claude/codex/kiro-cli)가 없습니다',
   'launch.selectAgent': '에이전트 선택',
+  'launch.selectAgentHandoff': '하던 작업을 다른 에이전트로 이어서 — 에이전트 선택',
+  'launch.selectAgentNew': '이 폴더 컨텍스트로 새 작업 — 에이전트 선택',
   'launch.chooseAction': '세션 시작',
   'launch.selectAgentFallback': '이어열기 불가(병합/분할된 세션) — 에이전트 선택, 이 세션은 새 세션으로 대체됩니다',
   'launch.dirNotFound': '디렉토리가 존재하지 않습니다',
+  'launch.dirMissingPrompt': (dir) => `이 경로가 없습니다:\n${dir}\n새로 만들까요?`,
+  'launch.dirCreate': '만들기',
+  'launch.dirCreateCancel': '취소',
+  'launch.dirCreated': (dir) => `생성함: ${dir}`,
+  'launch.dirCreateFailed': (msg) => `디렉토리 생성 실패: ${msg}`,
+  'launch.dirNotADirectory': (dir) => `디렉토리가 아닙니다 (이 경로에 파일이 있어요):\n${dir}`,
   'launch.dirPrompt': (folder) => `작업 디렉토리${folder ? ` (${folder})` : ''}`,
   'launch.typeManually': '+ 직접 입력…',
   'launch.selectDir': (folder) => `작업 디렉토리 선택 (${folder})`,
@@ -593,8 +625,8 @@ Day to day, it's a simple loop: {${fg}-fg}s{/} capture → {${fg}-fg}o{/} organi
   {${fg}-fg}e{/}       Rename title (modal — summary/tags stay AI-generated)
   {${fg}-fg}y{/}       Copy the whole session to the clipboard. For a snippet, hold Shift (Option on iTerm2) while dragging to bypass mouse tracking, then Cmd+C / Ctrl+Shift+C
   {${fg}-fg}r{/}       Resume (reopen in the original agent, right here — merged/split sessions fall back to handoff instead, which replaces them with the real session it produces)
-  {${fg}-fg}h{/}       Handoff (start a new session on a different agent)
-  {${fg}-fg}n{/}       Launch a new agent session with this folder's context — after picking an agent/directory, asks "open here" or "copy command" (paste into a separate terminal tab to run several sessions in parallel)
+  {${fg}-fg}h{/}       Continue this task on another agent (handoff) — seeds the new session with where this one left off, plus the folder's context, and links it as a continuation
+  {${fg}-fg}n{/}       Start a NEW task with this folder's context (new agent) — no prior conversation carried over, just the folder's accumulated knowledge. After picking an agent/directory, asks "open here" or "copy command" (paste into a separate terminal tab to run several sessions in parallel)
   {${fg}-fg}m{/} / {${fg}-fg}t{/}   Move to folder / edit tags
   {${fg}-fg}x{/}       Delete session (Mycelium record only, original log kept)
   {${fg}-fg}w{/}       Extract folder knowledge — preview then confirm
@@ -605,6 +637,7 @@ Day to day, it's a simple loop: {${fg}-fg}s{/} capture → {${fg}-fg}o{/} organi
   {${fg}-fg}Shift+M{/} Merge 2+ selected sessions into one (git-like — originals kept, just hidden; mycelium unmerge undoes it)
   {${fg}-fg}Shift+S{/} Split (LLM-suggested topic boundaries, review before applying — pieces land in the same folder, original stays visible; mycelium unsplit undoes it)
   {${fg}-fg}Shift+O{/} Cycle sort order — recent (default) → title A-Z → agent
+  {${fg}-fg}Shift+T{/} Pick a sort order directly — newest/oldest first, title A-Z/Z-A
 
 {bold}Detail panel{/}
 
@@ -669,8 +702,8 @@ ko['help.text'] = (fg, spore) => `{bold}Context Flywheel{/}
   {${fg}-fg}e{/}       제목 수정 (모달 — 요약·태그는 AI 생성 그대로)
   {${fg}-fg}y{/}       세션 전체를 클립보드로 복사. 일부만 복사하려면 Shift(iTerm2는 Option)를 누른 채 드래그해서 마우스 추적을 우회한 뒤 Cmd+C / Ctrl+Shift+C
   {${fg}-fg}r{/}       이어열기 (원래 에이전트로, 바로 여기서 — 병합/분할 세션은 핸드오프로 대체되고, 그렇게 생긴 실제 세션이 원래 자리를 대신함)
-  {${fg}-fg}h{/}       핸드오프 (다른 에이전트로 새 세션 시작)
-  {${fg}-fg}n{/}       이 폴더 컨텍스트로 새 에이전트 세션 — 에이전트/디렉터리 선택 후 "여기서 열기" 또는 "명령어 복사" 선택 (복사하면 다른 터미널 탭에 붙여넣어 여러 세션을 동시에 실행 가능)
+  {${fg}-fg}h{/}       하던 작업을 다른 에이전트로 이어서 (핸드오프) — 이 세션의 진행상황 + 폴더 컨텍스트를 새 세션에 넣어주고, 후속 세션으로 연결
+  {${fg}-fg}n{/}       이 폴더 컨텍스트로 새 작업 시작 (새 에이전트) — 이전 대화는 안 넘어가고 폴더에 쌓인 지식만. 에이전트/디렉터리 선택 후 "여기서 열기" 또는 "명령어 복사" 선택 (복사하면 다른 터미널 탭에 붙여넣어 여러 세션을 동시에 실행 가능)
   {${fg}-fg}m{/} / {${fg}-fg}t{/}   폴더 이동 / 태그 편집
   {${fg}-fg}x{/}       세션 삭제 (Mycelium 저장소에서만, 원본 로그 유지)
   {${fg}-fg}w{/}       폴더 지식 추출 — 미리보기 후 확인
@@ -681,6 +714,7 @@ ko['help.text'] = (fg, spore) => `{bold}Context Flywheel{/}
   {${fg}-fg}Shift+M{/} 선택한 세션 2개 이상 병합 (git처럼 — 원본은 안 지워지고 숨겨질 뿐, mycelium unmerge로 되돌리기)
   {${fg}-fg}Shift+S{/} 분할 (LLM이 세션을 나눌 지점 제안, 검토 후 적용 — 조각은 원본과 같은 폴더에 생성, 원본은 그대로 목록에 남음; mycelium unsplit로 되돌리기)
   {${fg}-fg}Shift+O{/} 정렬 순서 전환 — 최신순(기본) → 제목순(A-Z) → 에이전트순
+  {${fg}-fg}Shift+T{/} 정렬 방식 직접 선택 — 최신순/오래된순, 제목 A-Z/Z-A
 
 {bold}상세 패널{/}
 

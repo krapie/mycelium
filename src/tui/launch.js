@@ -1,4 +1,5 @@
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync, statSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { scan, allRaw, loadRaw } from '../scanner.js';
 import { reindexMany } from '../index-db.js';
 import { move, linkContinuation } from '../organize.js';
@@ -38,7 +39,7 @@ import { AGENTS, which, binFor, resumeArgsFor, workDirFor, newCommandLine } from
  * tab/window — the only way to get real parallelism, since only the human
  * (not this process) can open one.
  */
-export function launchAgent(app, { folder, seed, parentId, title } = {}, done) {
+export function launchAgent(app, { folder, seed, parentId, title, defaultDir } = {}, done) {
   const available = Object.entries(AGENTS).filter(([, a]) => which(a.bin));
   if (!available.length) {
     app.notify(t('launch.noAgents'), 3);
@@ -51,7 +52,7 @@ export function launchAgent(app, { folder, seed, parentId, title } = {}, done) {
     available.map(([k, a]) => ({ label: a.label, value: k })),
     (agentKey) => {
       if (!agentKey) return done && done();
-      resolveDir(app, folder, (dir) => {
+      resolveDir(app, folder, defaultDir, (dir) => {
         if (!dir) return done && done();
         menu(
           app,
@@ -97,25 +98,66 @@ function copyNewCommand(app, { agentKey, dir, folder, seed }, done) {
   done && done([]);
 }
 
-function resolveDir(app, folder, cb) {
+function resolveDir(app, folder, defaultDir, cb) {
+  // A chosen/typed directory that doesn't exist is created (mkdir -p) after
+  // confirmation, rather than aborting — handing a session off to a fresh
+  // workspace is a first-class flow (the whole point of h/n is to seed the
+  // NEXT agent's dir with this folder's KNOWLEDGE via injectAgentsMd, and
+  // that dir often doesn't exist yet). Shared by both the "open here" and
+  // "copy command" branches since both route through here.
   const finish = (dir) => {
     if (!dir) return cb(null);
-    dir = dir.trim();
-    if (!existsSync(dir)) {
-      app.notify(t('launch.dirNotFound'), 3);
-      return cb(null);
+    // Canonicalize: strip trailing slashes, resolve to absolute path — so the
+    // string cb() hands back matches what the spawned child later reports as
+    // process.cwd() (foreground.js), which run() then compares to session-
+    // captured cwds when filing the new session. A trailing slash on typed
+    // input used to leave that comparison empty, so the new session wasn't
+    // linked back to its origin.
+    dir = resolve(dir.trim());
+    if (existsSync(dir)) {
+      // A file at that path is not usable — spawn would crash with ENOTDIR
+      // deep inside foreground(). Reject upfront, same shape as mkdir failure.
+      if (!statSync(dir).isDirectory()) {
+        app.notify(t('launch.dirNotADirectory', dir), 4);
+        return cb(null);
+      }
+      return cb(dir);
     }
-    cb(dir);
+    menu(
+      app,
+      t('launch.dirMissingPrompt', dir),
+      [
+        { label: t('launch.dirCreate'), value: 'create' },
+        { label: t('launch.dirCreateCancel'), value: 'cancel' },
+      ],
+      (choice) => {
+        if (choice !== 'create') return cb(null);
+        try {
+          mkdirSync(dir, { recursive: true });
+          app.notify(t('launch.dirCreated', dir), 3);
+          cb(dir);
+        } catch (err) {
+          app.notify(t('launch.dirCreateFailed', err.message), 4);
+          cb(null);
+        }
+      },
+    );
   };
-  const typePrompt = () => textPrompt(app, t('launch.dirPrompt', folder), process.cwd(), finish);
+  // Prefill the type prompt with the caller's suggested directory (handoff
+  // passes the source session's own working dir) instead of the mycelium
+  // process cwd, which is almost never where the next agent should run.
+  const typePrompt = () => textPrompt(app, t('launch.dirPrompt', folder), defaultDir || process.cwd(), finish);
 
   // Offer the directories this folder's sessions already used — derived live
   // from actual session data (dirsForFolder()), not a remembered rule — no
-  // need to retype long paths.
+  // need to retype long paths. The caller's defaultDir is offered too (even
+  // if it no longer exists — finish() will offer to recreate it), so handing
+  // off a session whose original dir is gone still surfaces that path.
   const dirs = dirsForFolder(folder);
-  if (dirs.length === 0) return typePrompt();
+  const suggestions = defaultDir && !dirs.includes(defaultDir) ? [defaultDir, ...dirs] : dirs;
+  if (suggestions.length === 0) return typePrompt();
 
-  const choices = [...dirs.map((d) => ({ label: d, value: d })), { label: t('launch.typeManually'), value: '__type__' }];
+  const choices = [...suggestions.map((d) => ({ label: d, value: d })), { label: t('launch.typeManually'), value: '__type__' }];
   menu(app, t('launch.selectDir', folder), choices, (val) => {
     if (val === undefined) return cb(null);
     if (val === '__type__') return typePrompt();
