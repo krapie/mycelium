@@ -5,13 +5,20 @@
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D22.13-brightgreen)](https://nodejs.org)
 
-A Context Lifecycle platform that manages context produced by AI
-collaboration through **Capture → Organize → Learn → Reuse**. It solves
-context loss across model boundaries (Claude Code, Codex, ...), time, and
-space.
+**Turn scattered AI coding sessions into living project knowledge.**
 
-POC stage — all four lifecycle stages are verified against real local
-sessions (Claude Code + Codex + Kiro).
+AI coding sessions hold more than a conversation — decisions, discoveries, failed approaches, conventions, and context that normally disappears the moment the session ends, or gets stranded in whichever agent produced it. Mycelium captures that context, organizes it around the project it belongs to, distills what matters into durable knowledge, and hands it back — to your next session, or to a different agent CLI entirely — through **Capture → Organize → Learn → Reuse**.
+
+- **Capture** — bring sessions from Claude Code, Codex, and Kiro into one place, automatically.
+- **Organize** — structure scattered sessions around the project/work they actually belong to.
+- **Learn** — distill decisions, discoveries, conventions, and useful context into durable per-project knowledge.
+- **Reuse** — inject that knowledge into your next session, or hand it to a different agent when you switch.
+
+Local-first, model-agnostic, human-controlled — your project knowledge isn't tied to one session, one folder, or one AI provider.
+
+*Sessions end. Project knowledge shouldn't.*
+
+POC stage — all four stages verified against real local sessions (Claude Code + Codex + Kiro).
 
 ## Demo
 
