@@ -669,6 +669,18 @@ formatting layer itself is not). [untested]
   One implementation, used by both the Sessions panel and the Calendar tab's
   detail panel. `splitSentences(text)` — sentence-boundary split for the
   summary bullets, no blessed dependency. [tested]
+- **Full session id, shown here now instead of the list (issue
+  [#57](https://github.com/krapie/mycelium/issues/57)).** The Sessions list
+  row used to carry a truncated `#<8-char>` badge (`sessions.js`'s
+  `reloadList()`) — rarely what you're scanning a list for, and it crowded
+  the row's right-hand metadata cluster. Removed from the list entirely;
+  `formatSessionDetail()` now prints the session's own id **in full** (not
+  truncated, unlike the list badge that used to stand in for it, and unlike
+  the continuation-link labels elsewhere in this same output, which still
+  truncate) right under the source/date/folder line — the id wasn't shown
+  *anywhere* in the TUI before this, needed for `mycelium resume <id>`/
+  `mycelium context <id>` or filing a bug report. [tested]
+  (`test/render.test.js` asserts the full id string, not a sliced prefix)
 
 ## TUI — Folders panel (`src/tui/views/sessions.js`)
 

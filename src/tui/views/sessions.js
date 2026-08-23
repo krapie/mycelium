@@ -246,10 +246,6 @@ export function sessionsView(opts = {}) {
       // and now trails the title instead of leading it, so the title (the
       // thing you're actually scanning for) reads first on the line.
       const src = `{${sourceColor(r.source)}-fg}#${sourceLabel(r.source)}{/}`;
-      // Same "source #idPrefix" shape as the continuation links in detail
-      // ("Continues:"/"Continued by:"), so you can match a row here to that
-      // label there.
-      const idPrefix = `{${C.dim}-fg}#${r.id.slice(0, 8)}{/}`;
       // No reserved gutter — the checkmark only takes space on rows you've
       // actually selected, so the title starts flush-left the rest of the
       // time instead of every row paying for a feature most rows don't use.
@@ -288,7 +284,7 @@ export function sessionsView(opts = {}) {
       // {|} is blessed's right-align pivot (same trick app.js uses for the
       // header) — pins the metadata cluster to the column's right edge
       // instead of trailing directly off the title text.
-      return `${mark}${text}{|}${lineage}${link}${src} ${idPrefix} ${isNew}`;
+      return `${mark}${text}{|}${lineage}${link}${src} ${isNew}`;
     });
     listBox.setItems(items.length ? items : [`{gray-fg}${t('sessions.empty')}{/}`]);
     updateHeader();
