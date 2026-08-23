@@ -725,11 +725,11 @@ knowledge review (see below), `c` view context, `i` inject AGENTS.md
 - **`Shift+T`: pick a sort order directly, instead of `Shift+O`'s blind
   cycle (issue [#51](https://github.com/krapie/mycelium/issues/51)).**
   Opens `menu()` (`widgets/pickers.js`) with all 4 orderable combinations —
-  newest/oldest first, title A→Z/Z→A — writing the same `state.sortBy`
-  strings `Shift+O`'s `SORT_CYCLE` already uses (plus one new one, see
-  below), so the two entry points can never disagree with each other;
-  `Shift+O` is untouched and remains the only way to reach `agent` sort.
-  `sortRows()` gained three comparators that didn't exist yet: `title-desc`
+  newest/oldest first, title A→Z/Z→A — writing values in the same
+  `state.sortBy` field `Shift+O`'s `SORT_CYCLE` already uses. The picker
+  shares `title` and adds `title-desc`, `date-asc`, and `date-desc`;
+  `Shift+O` remains unchanged and is still the only way to reach `agent`
+  sort. `sortRows()` gained three comparators that didn't exist yet: `title-desc`
   (flipped `title` compare), `date-asc` (a real ascending sort), and
   `date-desc` (a real descending sort). The picker's "Newest first" option
   deliberately uses `date-desc`, **not** `Shift+O`'s `recent` — `recent` is
