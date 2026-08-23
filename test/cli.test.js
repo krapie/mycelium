@@ -32,6 +32,15 @@ const { reindex } = await import('../src/index-db.js');
 const { queueSuggestions, clearSuggestions } = await import('../src/organize.js');
 const { loadConfig } = await import('../src/config.js');
 const { VERSION } = await import('../src/version.js');
+const { __clearTestProvider } = await import('../src/llm.js');
+
+// This file never calls __setTestProvider() — every subcommand tested here
+// is spawned as a real subprocess (see the header comment above), and that
+// seam is in-process only, so there's nothing for it to actually clean up
+// today. Still following AGENTS.md's "always __clearTestProvider() in
+// afterEach" convention defensively, in case a future edit to this file
+// ever does call it in-process.
+test.afterEach(() => __clearTestProvider());
 
 const CLI_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'cli.js');
 
@@ -322,11 +331,16 @@ test('lang with no argument prints the current locale', () => {
 });
 
 test('lang <en|ko> sets and persists the locale', () => {
-  const { stdout, status } = runCli(['lang', 'ko']);
-  assert.equal(status, 0);
-  assert.match(stdout, /language set to ko/);
-  assert.equal(loadConfig().locale, 'ko');
-  runCli(['lang', 'en']); // reset for any later test relying on the default
+  try {
+    const { stdout, status } = runCli(['lang', 'ko']);
+    assert.equal(status, 0);
+    assert.match(stdout, /language set to ko/);
+    assert.equal(loadConfig().locale, 'ko');
+  } finally {
+    // Reset for any later test relying on the default — in a finally so a
+    // failed assertion above can't leave 'ko' leaking into them too.
+    runCli(['lang', 'en']);
+  }
 });
 
 test('lang with an invalid locale fails with usage', () => {

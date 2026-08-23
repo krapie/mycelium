@@ -432,8 +432,10 @@ only their argument-validation/empty-store early-exit paths are covered
 here (verified to return before ever reaching `complete()`); the LLM-
 invoking branches themselves are covered at the module level instead
 (`learn.test.js`/`organize.test.js`/`insight.test.js`, via the mock
-provider). `resume --exec`, `daemon`/`daemon --detach`, and `demo` are also
-excluded — they spawn/exec a real process or launch an interactive TUI.
+provider). `resume --exec`, a bare `daemon` invocation (foreground, blocks),
+`daemon --detach`, and `demo` are also excluded — they spawn/exec a real
+process, block in a foreground loop, or launch an interactive TUI
+(`daemon --stop` is tested, since it does neither).
 [partial] (`test/cli.test.js`)
 
 - **`--version` / `-v` / `-V`** — prints `mycelium v<version>` and exits 0,
