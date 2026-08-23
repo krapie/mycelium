@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync, statSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { scan, allRaw, loadRaw } from '../scanner.js';
 import { reindexMany } from '../index-db.js';
 import { move, linkContinuation } from '../organize.js';
@@ -106,8 +107,22 @@ function resolveDir(app, folder, defaultDir, cb) {
   // "copy command" branches since both route through here.
   const finish = (dir) => {
     if (!dir) return cb(null);
-    dir = dir.trim();
-    if (existsSync(dir)) return cb(dir);
+    // Canonicalize: strip trailing slashes, resolve to absolute path — so the
+    // string cb() hands back matches what the spawned child later reports as
+    // process.cwd() (foreground.js), which run() then compares to session-
+    // captured cwds when filing the new session. A trailing slash on typed
+    // input used to leave that comparison empty, so the new session wasn't
+    // linked back to its origin.
+    dir = resolve(dir.trim());
+    if (existsSync(dir)) {
+      // A file at that path is not usable — spawn would crash with ENOTDIR
+      // deep inside foreground(). Reject upfront, same shape as mkdir failure.
+      if (!statSync(dir).isDirectory()) {
+        app.notify(t('launch.dirNotADirectory', dir), 4);
+        return cb(null);
+      }
+      return cb(dir);
+    }
     menu(
       app,
       t('launch.dirMissingPrompt', dir),
