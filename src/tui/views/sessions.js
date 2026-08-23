@@ -204,13 +204,15 @@ export function sessionsView(opts = {}) {
   }
 
   // Recent is whatever order data.sessions() already returns (most-recent
-  // first, or FTS relevance while searching) — left untouched. Title/agent
-  // are re-sorted client-side; ties within the same agent fall back to
-  // recency so agent grouping doesn't otherwise scramble chronology.
-  // title-desc/date-asc (Shift+T's picker, below) are the reverse direction
-  // of title/recent respectively — recent itself has no comparator to flip
-  // (it's the DB's own DESC order passed through untouched), so date-asc is
-  // a real ascending sort, not just a reversed pass-through.
+  // first when browsing, but FTS relevance order while a search/query is
+  // active — see data.js's sessions()) — left untouched, since that's the
+  // established Shift+O behavior. date-desc is a DIFFERENT, always-literal
+  // "newest first" for Shift+T's picker (below): a real comparator, not a
+  // pass-through, so picking it explicitly still means date order even
+  // mid-search, instead of silently reusing whatever relevance order was
+  // already on screen. title-desc/date-asc are the reverse direction of
+  // title/date-desc; recent itself has no comparator to flip (that's
+  // exactly why it can't safely stand in for "newest first" here).
   function sortRows(list) {
     if (state.sortBy === 'title') {
       return [...list].sort((a, b) =>
@@ -221,6 +223,9 @@ export function sessionsView(opts = {}) {
       return [...list].sort((a, b) =>
         (b.title || b.summary || b.preview || '').localeCompare(a.title || a.summary || a.preview || ''),
       );
+    }
+    if (state.sortBy === 'date-desc') {
+      return [...list].sort((a, b) => (b.startedAt || '').localeCompare(a.startedAt || ''));
     }
     if (state.sortBy === 'date-asc') {
       return [...list].sort((a, b) => (a.startedAt || '').localeCompare(b.startedAt || ''));
@@ -619,18 +624,22 @@ export function sessionsView(opts = {}) {
       });
 
       // Shift+T: pick a sort order directly instead of cycling blind
-      // (issue #51) — recent/oldest-first/title A-Z/title Z-A, the two
+      // (issue #51) — newest/oldest-first/title A-Z/title Z-A, the two
       // directions Shift+O's cycle above can't reach on its own. Left as a
       // fully separate entry point rather than folded into SORT_CYCLE: both
       // just write the same state.sortBy strings, so they can't disagree
       // with each other, and Shift+O keeps working unchanged (still the
-      // only way to sort by agent).
+      // only way to sort by agent). "Newest first" here is 'date-desc', NOT
+      // 'recent' — Shift+O's 'recent' is a pass-through that can be FTS
+      // relevance order mid-search (see sortRows()'s own comment), so
+      // picking "newest first" explicitly needs its own real comparator to
+      // actually mean date order every time, search or not.
       listBox.key('S-t', () => {
         menu(
           app,
           t('sessions.sortPickerTitle'),
           [
-            { label: t('sessions.sortOption_recent'), value: 'recent' },
+            { label: t('sessions.sortOption_recent'), value: 'date-desc' },
             { label: t('sessions.sortOption_dateAsc'), value: 'date-asc' },
             { label: t('sessions.sortOption_title'), value: 'title' },
             { label: t('sessions.sortOption_titleDesc'), value: 'title-desc' },

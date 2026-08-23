@@ -21,18 +21,33 @@ function cleanup(app) {
   app.screen.destroy();
 }
 
-// 3 sessions, deliberately out of both date order and alphabetical order,
-// so each of the 4 sort modes produces a distinct, checkable arrangement.
+// 3 sessions, deliberately chosen so date order, title order, and agent
+// order are all DIFFERENT permutations of each other — with only 3 items,
+// an earlier version of this fixture had titles/dates that coincidentally
+// aliased (date-desc equalled title A-Z, date-asc equalled title Z-A),
+// which could hide a swapped picker-option mapping (e.g. "Oldest first"
+// silently wired to title-desc) behind a still-passing assertion. Verified
+// by hand that each of the 5 orderings below (title A-Z/Z-A, date asc/desc,
+// agent) is a distinct permutation of {Apple, Banana, Cherry}:
+//   title A-Z:  Apple, Banana, Cherry
+//   title Z-A:  Cherry, Banana, Apple
+//   date-asc (oldest first): Apple, Cherry, Banana
+//   date-desc (newest first): Banana, Cherry, Apple
+//   agent (claude < codex < kiro): Banana, Apple, Cherry
 const SPECS = [
-  { id: 'b-session', title: 'Banana work', startedAt: '2026-01-02T00:00:00.000Z' },
-  { id: 'a-session', title: 'Apple work', startedAt: '2026-01-03T00:00:00.000Z' },
-  { id: 'c-session', title: 'Cherry work', startedAt: '2026-01-01T00:00:00.000Z' },
+  { id: 'a-session', title: 'Apple work', startedAt: '2026-01-01T00:00:00.000Z', source: 'codex' }, // oldest
+  { id: 'c-session', title: 'Cherry work', startedAt: '2026-01-02T00:00:00.000Z', source: 'kiro' }, // middle
+  { id: 'b-session', title: 'Banana work', startedAt: '2026-01-03T00:00:00.000Z', source: 'claude' }, // newest
 ];
 
 async function mountWithSortableSessions() {
   for (const s of SPECS) {
-    const n = emptyNeutral(s.id, 'claude');
-    n.turns = [{ role: 'user', text: 'x' }];
+    const n = emptyNeutral(s.id, s.source);
+    // "work" (not just each title's fruit name) so the search-active test
+    // below can query for it — searchableText() (schema.js) indexes turn
+    // text/summary, not the title field, so a query needs to be here to
+    // actually match via FTS.
+    n.turns = [{ role: 'user', text: `some work happened, id ${s.id}` }];
     n.startedAt = s.startedAt;
     n.extracted.title = s.title;
     saveRaw(n);
@@ -68,10 +83,10 @@ async function pickSort(input, app, optionIndex) {
 test('Shift+T opens a picker with all 4 sort options, each reorders the list correctly', async () => {
   const { app, input, listBox } = await mountWithSortableSessions();
   try {
-    assert.deepEqual(titleOrder(listBox), ['Apple', 'Banana', 'Cherry'], 'initial order is recent (DB-ordered, most recent first)');
+    assert.deepEqual(titleOrder(listBox), ['Banana', 'Cherry', 'Apple'], 'initial order is recent (DB-ordered, most recent first)');
 
     await pickSort(input, app, 1); // Oldest first
-    assert.deepEqual(titleOrder(listBox), ['Cherry', 'Banana', 'Apple'], 'date-asc: oldest startedAt first');
+    assert.deepEqual(titleOrder(listBox), ['Apple', 'Cherry', 'Banana'], 'date-asc: oldest startedAt first');
 
     await pickSort(input, app, 2); // Title A-Z
     assert.deepEqual(titleOrder(listBox), ['Apple', 'Banana', 'Cherry'], 'title: alphabetical');
@@ -80,7 +95,7 @@ test('Shift+T opens a picker with all 4 sort options, each reorders the list cor
     assert.deepEqual(titleOrder(listBox), ['Cherry', 'Banana', 'Apple'], 'title-desc: reverse alphabetical');
 
     await pickSort(input, app, 0); // Newest first
-    assert.deepEqual(titleOrder(listBox), ['Apple', 'Banana', 'Cherry'], 'recent: back to most-recent-first');
+    assert.deepEqual(titleOrder(listBox), ['Banana', 'Cherry', 'Apple'], 'date-desc: back to newest-first (a real comparator, not reused "recent")');
   } finally {
     cleanup(app);
   }
@@ -106,12 +121,50 @@ test('Shift+T picker: Escape leaves the current sort order untouched', async () 
 });
 
 test('Shift+O\'s existing blind cycle still works unchanged alongside the new Shift+T picker', async () => {
-  const { app, input, listBox } = await mountWithSortableSessions();
+  const { app, input, api, listBox } = await mountWithSortableSessions();
   try {
-    // recent -> title (A-Z) -> agent -> recent, same as before this feature.
-    sendKey(input, 'O'); // Shift+O
+    // recent -> title (A-Z) -> agent -> recent, same 3-step cycle as before
+    // this feature — checked at every step (both api.state.sortBy and the
+    // real resulting order), not just the first transition, so a change
+    // that broke the cycle's later steps couldn't slip through unnoticed.
+    assert.equal(api.state.sortBy, 'recent', 'starts on recent');
+
+    sendKey(input, 'O'); // Shift+O: recent -> title
     await new Promise((r) => setTimeout(r, 80));
-    assert.deepEqual(titleOrder(listBox), ['Apple', 'Banana', 'Cherry'], 'Shift+O: recent -> title A-Z, unchanged');
+    assert.equal(api.state.sortBy, 'title');
+    assert.deepEqual(titleOrder(listBox), ['Apple', 'Banana', 'Cherry'], 'title A-Z');
+
+    sendKey(input, 'O'); // title -> agent
+    await new Promise((r) => setTimeout(r, 80));
+    assert.equal(api.state.sortBy, 'agent');
+    assert.deepEqual(titleOrder(listBox), ['Banana', 'Apple', 'Cherry'], 'agent: claude < codex < kiro');
+
+    sendKey(input, 'O'); // agent -> back to recent
+    await new Promise((r) => setTimeout(r, 80));
+    assert.equal(api.state.sortBy, 'recent');
+    assert.deepEqual(titleOrder(listBox), ['Banana', 'Cherry', 'Apple'], 'back to recent (DB-ordered, most recent first)');
+  } finally {
+    cleanup(app);
+  }
+});
+
+test('Shift+T "Newest first" means real date order even with a search active, unlike Shift+O\'s "recent"', async () => {
+  // Regression test: data.sessions() returns FTS relevance order (not
+  // date order) while a search/query is active (data.js). sortRows()'s
+  // 'recent' branch is a bare pass-through of whatever that was — correct
+  // for Shift+O, whose cycle has always meant "recent" that way — but the
+  // picker's "Newest first" option must mean literal date-desc order every
+  // time, search or not, which is exactly why it's wired to a real
+  // 'date-desc' comparator instead of reusing 'recent'.
+  const { app, input, api, listBox } = await mountWithSortableSessions();
+  try {
+    api.state.query = 'work'; // matches all 3 fixture titles — a real FTS query, not date-ordered
+    api.reloadAll();
+    await new Promise((r) => setTimeout(r, 30));
+
+    await pickSort(input, app, 0); // Newest first
+    assert.equal(api.state.sortBy, 'date-desc');
+    assert.deepEqual(titleOrder(listBox), ['Banana', 'Cherry', 'Apple'], 'still true newest-first date order, not FTS relevance order');
   } finally {
     cleanup(app);
   }

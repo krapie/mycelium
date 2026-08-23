@@ -726,18 +726,31 @@ knowledge review (see below), `c` view context, `i` inject AGENTS.md
   cycle (issue [#51](https://github.com/krapie/mycelium/issues/51)).**
   Opens `menu()` (`widgets/pickers.js`) with all 4 orderable combinations —
   newest/oldest first, title A→Z/Z→A — writing the same `state.sortBy`
-  strings `Shift+O`'s `SORT_CYCLE` already uses, so the two entry points
-  can never disagree with each other; `Shift+O` is untouched and remains
-  the only way to reach `agent` sort. `sortRows()` gained the two
-  comparators that didn't exist yet: `title-desc` (flipped `title`
-  compare) and `date-asc` (a real ascending sort — `recent` itself has
-  none of its own, it's the DB's `ORDER BY started_at DESC` passed through
-  client-side unsorted). The header's existing `sortSuffix` line already
-  keys off `state.sortBy` generically, so no code change was needed there
-  — just the two new `sessions.sortLabel_*` i18n entries. [tested]
+  strings `Shift+O`'s `SORT_CYCLE` already uses (plus one new one, see
+  below), so the two entry points can never disagree with each other;
+  `Shift+O` is untouched and remains the only way to reach `agent` sort.
+  `sortRows()` gained three comparators that didn't exist yet: `title-desc`
+  (flipped `title` compare), `date-asc` (a real ascending sort), and
+  `date-desc` (a real descending sort). The picker's "Newest first" option
+  deliberately uses `date-desc`, **not** `Shift+O`'s `recent` — `recent` is
+  a bare pass-through of whatever `data.sessions()` already returned, which
+  is FTS relevance order while a search/query is active (`data.js`), not
+  date order; reusing it would have made "Newest first" silently mean
+  "whatever order was already on screen" mid-search instead of what it
+  says. The header's existing `sortSuffix` line already keys off
+  `state.sortBy` generically, so no code change was needed there — just
+  the three new `sessions.sortLabel_*` i18n entries (`title-desc`,
+  `date-asc`, `date-desc`) plus a `Shift+T` line in both locales'
+  `help.text` (`?` modal — easy to miss otherwise, since `Shift+O`'s own
+  line doesn't imply a second sort entry point exists). [tested]
   (`test/e2e/sessions-sort-e2e.test.js` — all 4 options via real
-  keypresses, Escape leaves the order untouched, `Shift+O`'s own cycle
-  confirmed unaffected)
+  keypresses against a fixture where title/date-asc/date-desc/agent orders
+  are all distinct permutations (an earlier fixture had titles that
+  happened to alias with date order, which could have hidden a swapped
+  picker-option mapping behind a still-passing assertion); a dedicated
+  case confirms "Newest first" still means literal date order with a
+  search active, unlike `recent`; Escape leaves the order untouched,
+  `Shift+O`'s own cycle confirmed unaffected)
 
 **`k`: knowledge review, deliberately unrelated to Digest (`d`) — mirrors
 `o` (smart organize) exactly, not the digest reader.** `runKnowledgeReview()`:
