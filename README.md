@@ -5,21 +5,24 @@
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D22.13-brightgreen)](https://nodejs.org)
 
-A Context Lifecycle platform that manages context produced by AI
-collaboration through **Capture → Organize → Learn → Reuse**. It solves
-context loss across model boundaries (Claude Code, Codex, ...), time, and
-space.
+**Organize your AI sessions, and carry what they know into the next one.**
 
-POC stage — all four lifecycle stages are verified against real local
-sessions (Claude Code + Codex + Kiro).
+You create a lot of AI sessions while working, and most of them get lost the moment they end. Mycelium organizes the ones worth remembering and extracts their knowledge, insights, and context, so the next one already knows what mattered.
+
+- **Capture** — Claude Code, Codex, and Kiro sessions land in one place, automatically.
+- **Organize** — grouped by the project, case, or service they belong to.
+- **Learn** — what repeats across a folder's sessions becomes durable knowledge.
+- **Reuse** — your next session inherits that knowledge, insights, and context automatically when started from Mycelium.
+
+Local-first, model-agnostic, human-controlled.
 
 ## Demo
 
-![mycelium demo — Organize, Learn, Reuse](https://github.com/krapie/mycelium/releases/download/demo-assets/swe-highlight.gif)
+![mycelium demo — a Cloud Support Engineer's cases, organized and learned from](https://github.com/krapie/mycelium/releases/download/demo-assets/cse-highlight.gif)
 
 `mycelium demo` walks through the same loop interactively — try it with
 `npm install -g @kevinprk/mycelium && mycelium demo`, or see it as a
-Cloud Support Engineer / Solutions Architect instead of a Software
+Software Engineer / Solutions Architect instead of a Cloud Support
 Engineer by picking a different persona when it asks.
 
 ## Requirements
@@ -55,7 +58,7 @@ mycelium demo   # try it risk-free first — separate store, your real data unto
 
 Sessions from Claude Code, Codex, and Kiro are captured automatically in the
 background — no manual scan needed. Day to day it's a simple loop, the
-**Context Flywheel**: `s` capture → `o` organize → `k` learn → `n` start the
+**Context Flywheel**: `s` capture → `o` organize → `w` learn → `n` start the
 next session with everything it needs. Most of that already runs by itself
 in the background; pressing these keys is mostly reviewing and confirming
 what's already waiting for you.
