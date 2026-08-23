@@ -5,20 +5,16 @@
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D22.13-brightgreen)](https://nodejs.org)
 
-**Organize your AI sessions, and make each one smarter than the last.**
+**Organize your AI sessions, and carry what they know into the next one.**
 
-Sessions pile up fast — one per case, one per feature, one per bug — and whatever's reusable in them (a root cause, a convention, a customer-facing tone) disappears with each one. Mycelium organizes sessions around the work they belong to, and **Learn** distills what repeats into `AGENTS.md`, so the next similar session already knows it.
+You create a lot of AI sessions while working, and most of them get lost the moment they end. Mycelium organizes the ones worth remembering and extracts their knowledge, insights, and context, so the next one already knows what mattered.
 
 - **Capture** — Claude Code, Codex, and Kiro sessions land in one place, automatically.
-- **Organize** — grouped by the project, case, or service they actually belong to.
+- **Organize** — grouped by the project, case, or service they belong to.
 - **Learn** — what repeats across a folder's sessions becomes durable knowledge.
-- **Reuse** — injected into your next session, or handed to a different agent.
+- **Reuse** — your next session automatically inherits that knowledge, insights, and context.
 
-**Example**: a support engineer files one session per case under `cases/onprem-connectivity`. After a few cases, Learn extracts *"MTU mismatch is the default suspect for large-payload on-prem↔VPC failures"* — the next case in that folder starts already knowing it.
-
-Local-first, model-agnostic, human-controlled. *Sessions end. Project knowledge shouldn't.*
-
-POC stage — all four stages verified against real local sessions (Claude Code + Codex + Kiro).
+Local-first, model-agnostic, human-controlled.
 
 ## Demo
 
@@ -62,7 +58,7 @@ mycelium demo   # try it risk-free first — separate store, your real data unto
 
 Sessions from Claude Code, Codex, and Kiro are captured automatically in the
 background — no manual scan needed. Day to day it's a simple loop, the
-**Context Flywheel**: `s` capture → `o` organize → `k` learn → `n` start the
+**Context Flywheel**: `s` capture → `o` organize → `w` learn → `n` start the
 next session with everything it needs. Most of that already runs by itself
 in the background; pressing these keys is mostly reviewing and confirming
 what's already waiting for you.
