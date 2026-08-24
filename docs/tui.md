@@ -2,49 +2,15 @@
 
 # TUI (the cockpit)
 
-Running `mycelium` with no arguments opens the terminal UI: **Folders |
-Sessions | Detail**, three columns, drilled into k9s style. Start at
-folders, `Enter` into sessions, `Enter` into detail, `Esc` to go back. The
-focused column widens.
+Running `mycelium` with no arguments opens the terminal UI: **Folders | Sessions | Detail**, three columns, drilled into k9s style. Start at folders, `Enter` into sessions, `Enter` into detail, `Esc` to go back. The focused column widens.
 
-The status bar always shows the short **Context Flywheel** loop,
-`Capture·s → Organize·o → Learn·w → Reuse·n`, the same four canonical
-stages as the rest of this doc, each paired with its one flywheel key. It
-is not the full stage by stage breakdown; there is no room for that on a
-one line status bar seen on every screen. Press **`?`** anywhere for the
-full shortcut reference, which leads with the same loop before the
-complete key by key breakdown of every stage.
+The status bar always shows the short **Context Flywheel** loop, `Capture·s → Organize·o → Learn·w → Reuse·n`, the same four canonical stages as the rest of this doc, each paired with its one flywheel key. It is not the full stage by stage breakdown; there is no room for that on a one line status bar seen on every screen. Press **`?`** anywhere for the full shortcut reference, which leads with the same loop before the complete key by key breakdown of every stage.
 
-**Display language defaults to English.** You pick a language the first
-time you launch Mycelium, and again every time you run `mycelium demo`
-right before the persona picker: English or 한국어. From an already
-running session, press **`l`** anywhere to switch (confirm, then Mycelium
-restarts to apply it, the same effect as running `mycelium lang <en|ko>`
-and relaunching). The demo's mock session content (titles, summaries,
-transcripts, extracted knowledge) is fully bilingual too, not just the
-menus and narrator text. Picking 한국어 for `mycelium demo` seeds genuinely
-Korean session content, not an English demo wrapped in a Korean
-interface. Finishing the whole demo hands off into your real
-`~/.mycelium` data in that same language, so it feels seamless rather
-than switching back (`Esc` to bail early exits without touching your real
-language setting).
+**Display language defaults to English.** You pick a language the first time you launch Mycelium, and again every time you run `mycelium demo` right before the persona picker: English or 한국어. From an already running session, press **`l`** anywhere to switch (confirm, then Mycelium restarts to apply it, the same effect as running `mycelium lang <en|ko>` and relaunching). The demo's mock session content (titles, summaries, transcripts, extracted knowledge) is fully bilingual too, not just the menus and narrator text. Picking 한국어 for `mycelium demo` seeds genuinely Korean session content, not an English demo wrapped in a Korean interface. Finishing the whole demo hands off into your real `~/.mycelium` data in that same language, so it feels seamless rather than switching back (`Esc` to bail early exits without touching your real language setting).
 
 ## Folders panel
 
-The top **`Root`** entry is the tree's fixed top level (cannot be
-renamed, moved, or deleted) and **shows every session in the store**,
-including ones already filed into folders. It is a literal grand total,
-not only whatever has not been filed yet. Right below it, in the same
-list as real folders, sits a special **`New`** entry that shows **only
-sessions not yet assigned to any folder** (same restrictions as `Root`:
-no rename, move, delete, or knowledge extract, since it is a view over
-unfiled sessions, not a real folder). User created folders appear below
-`New`, at the same indent level. A **`[New]`** badge appears next to the
-title or summary anywhere an unfiled session shows up, including under
-`Root`, and disappears once you move the session with `m`. Searching with
-`/` scopes to everything under `Root`, to only unfiled sessions under
-`New`, or to that folder plus subfolders inside a real folder, the same
-rule as any other real folder.
+The top **`Root`** entry is the tree's fixed top level (cannot be renamed, moved, or deleted) and **shows every non-archived session in the store**, including ones already filed into folders. It is a literal grand total, not only whatever has not been filed yet; the one exception is `_archive`, hidden from `Root` the same way it's hidden everywhere else (see below). Right below it, in the same list as real folders, sits a special **`New`** entry that shows **only sessions not yet assigned to any folder** (same restrictions as `Root`: no rename, move, delete, or knowledge extract, since it is a view over unfiled sessions, not a real folder). User created folders appear below `New`, at the same indent level. A **`[New]`** badge appears next to the title or summary anywhere an unfiled session shows up, including under `Root`, and disappears once you move the session with `m`. Searching with `/` scopes to everything under `Root`, to only unfiled sessions under `New`, or to that folder plus subfolders inside a real folder, the same rule as any other real folder.
 
 | Key | Action |
 |---|---|
@@ -53,17 +19,12 @@ rule as any other real folder.
 | `w` | Extract folder knowledge (KNOWLEDGE.md) |
 | `Enter` | View this folder's sessions |
 
-**The `_archive` folder is hidden from the TUI by default.** It never
-appears in the folder list, the `Root` view, or search results. Move any
-session there with `m`, for example a session from a dead worktree you no
-longer use, to tuck it away out of sight. Nothing is deleted; to look at
-it later:
+**The `_archive` folder is hidden from the TUI by default.** It never appears in the folder list, the `Root` view, or search results. Move any session there with `m`, for example a session from a dead worktree you no longer use, to tuck it away out of sight. Nothing is deleted; to look at it later:
 ```sh
 mycelium list --folder _archive
 mycelium search "query" --folder _archive
 ```
-Once a session is moved to `_archive`, re-scanning will not bring it back
-out. `scan()` always preserves an already assigned folder.
+Once a session is moved to `_archive`, re-scanning will not bring it back out. `scan()` always preserves an already assigned folder.
 
 ## Sessions panel
 
@@ -91,48 +52,14 @@ out. `scan()` always preserves an already assigned folder.
 | `g` | **Re-show the getting started guide**, the short walkthrough (4 stage lifecycle plus key shortcuts) that auto shows once on first launch, any time |
 | `q` | Quit |
 
-Sessions connected by handoff show `[Resumed]`/`[Handoff]` tags in the
-list and "Continues:"/"Continued by:" links in detail. Merged or split
-sessions show `[Merged]` (merge result) and `[Split]` (split result)
-tags; a split original, or a merge's hidden originals, shows a `[Linked]`
-tag. The detail screen shows which session something came from or went
-to as clickable style links.
+Sessions connected by handoff show `[Resumed]`/`[Handoff]` tags in the list and "Continues:"/"Continued by:" links in detail. Merged or split sessions show `[Merged]` (merge result) and `[Split]` (split result) tags; a split original, or a merge's hidden originals, shows a `[Linked]` tag. The detail screen shows which session something came from or went to as clickable style links.
 
 ## Knowledge review
 
-Keeping every active folder's KNOWLEDGE.md fresh by hand (`w`, folder by
-folder) is easy to fall behind on. `k` does it for every folder at once,
-unrelated to Digest (`d`, a separate narrative summary feature that just
-happens to share the day based idea). Pressing `k` mirrors `o` (smart
-organize) exactly: if the daemon already computed a proposal overnight,
-it opens instantly; if not, Mycelium computes one on the spot for
-whatever is active today, then opens the same review.
+Keeping every active folder's KNOWLEDGE.md fresh by hand (`w`, folder by folder) is easy to fall behind on. `k` does it for every folder at once, unrelated to Digest (`d`, a separate narrative summary feature that just happens to share the day based idea). Pressing `k` mirrors `o` (smart organize) exactly: if the daemon already computed a proposal overnight, it opens instantly; if not, Mycelium computes one on the spot for whatever is active today, then opens the same review.
 
-**`k` is the expected, primary way to do this**, normally at the end of
-your day. If you do not get to it, the daemon quietly catches up on
-yesterday's activity the next time it runs, so nothing is lost either
-way. The result is the same whether a human or Mycelium triggered it,
-since both paths call the exact same underlying function.
+**`k` is the expected, primary way to do this**, normally at the end of your day. If you do not get to it, the daemon quietly catches up on yesterday's activity the next time it runs, so nothing is lost either way. The result is the same whether a human or Mycelium triggered it, since both paths call the exact same underlying function.
 
-The review itself is the same checkbox list `o` uses: every folder starts
-checked, `Space` to uncheck one you do not want, `Enter` applies the
-checked ones. The list only shows a short one line snippet per folder;
-press `p` on the highlighted row to open the **full** proposed
-KNOWLEDGE.md text before deciding, then `p`/`Esc`/`q` again to return to
-the checklist. **Approving a folder writes its KNOWLEDGE.md**, that is
-the content decision. Whatever is left unchecked, or the whole batch on
-`Esc`, is simply dismissed. It will not keep asking again, and a manual
-`w` can always regenerate it later.
+The review itself is the same checkbox list `o` uses: every folder starts checked, `Space` to uncheck one you do not want, `Enter` applies the checked ones. The list only shows a short one line snippet per folder; press `p` on the highlighted row to open the **full** proposed KNOWLEDGE.md text before deciding, then `p`/`Esc`/`q` again to return to the checklist. **Approving a folder writes its KNOWLEDGE.md**, that is the content decision. Whatever is left unchecked, or the whole batch on `Esc`, is simply dismissed. It will not keep asking again, and a manual `w` can always regenerate it later.
 
-**Which directories actually get the injection is a separate question.**
-A folder groups sessions by *topic*, and a topic is not always one
-project. A quick question asked from an unrelated repo's terminal still
-gets content classified into the real project's folder alongside genuine
-project sessions, so the folder can end up spanning directories that
-have nothing to do with each other. If an approved folder's sessions
-only ever ran in one directory, `k` injects straight through, no extra
-prompt, the same trust level `n`/`h`'s own silent auto inject on launch
-already operates at. If they ran in **more than one**, a second checklist
-opens (all pre checked) so you can uncheck whichever directory does not
-actually belong before anything gets written. If a proposal is still
-unreviewed the next time you open Mycelium, a toast points you at `k`.
+**Which directories actually get the injection is a separate question.** A folder groups sessions by *topic*, and a topic is not always one project. A quick question asked from an unrelated repo's terminal still gets content classified into the real project's folder alongside genuine project sessions, so the folder can end up spanning directories that have nothing to do with each other. If an approved folder's sessions only ever ran in one directory, `k` injects straight through, no extra prompt, the same trust level `n`/`h`'s own silent auto inject on launch already operates at. If they ran in **more than one**, a second checklist opens (all pre checked) so you can uncheck whichever directory does not actually belong before anything gets written. If a proposal is still unreviewed the next time you open Mycelium, a toast points you at `k`.

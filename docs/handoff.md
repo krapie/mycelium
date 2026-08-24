@@ -2,21 +2,14 @@
 
 # Handoff Lifecycle (continuing across models)
 
-Claude Code, Codex, Kiro, and OpenCode each store sessions in a different
-format, so a handoff (`h`) across vendors always creates a **new
-session**. That is intentional, not a bug. To continue the exact same session on the same
-agent, use `r` (resume) instead: `r` continues the original session
-itself, only possible on the same agent, while `h` always opens a new
-session on a different agent, or even the same one if you are handing
-back.
+Claude Code, Codex, Kiro, and OpenCode each store sessions in a different format, so a handoff (`h`) across vendors always creates a **new session**. That is intentional, not a bug. To continue the exact same session on the same agent, use `r` (resume) instead: `r` continues the original session itself, only possible on the same agent, while `h` always opens a new session on a different agent, or even the same one if you are handing back.
 
-```
+```text
 Claude session A ──h(handoff)──▶ Codex session B ──h(handoff)──▶ Claude session C
    (done, preserved)                (done, preserved)                (in progress)
 ```
 
-Sessions keep branching across multiple round trips, but converge back
-together two ways:
+Sessions keep branching across multiple round trips, but converge back together two ways:
 
 1. **Chain links.** Each hop is bidirectionally linked via
    `continuationOf`/`continuedTo`, shown as `↩`/`→` markers in the list
@@ -27,14 +20,16 @@ together two ways:
    Pressing `w` compiles the summaries and decisions of every session in
    that folder, regardless of agent, into one document, which gets auto
    injected into `AGENTS.md` the next time an agent launches in that
-   folder (`n`/`h`/`r`).
+   folder (`n`/`h`). Resuming with `r` continues the same session and
+   log, so there's no new agent process to inject into.
 
 ## Recommended order before a return handoff (B→C)
 
 1. `a`. If the session you are handing off (B) has no summary yet,
-   generate one first. The handoff prompt carries `extracted.summary`,
-   `decisions`, and `todos` directly, so without it you get a thin
-   handoff based only on the raw first and last message.
+   generate one first. The handoff prompt always carries the original
+   request, working directory, last message, and any inherited folder
+   knowledge; `summary`, `decisions`, and `todos` are included only when
+   present, so without `a` first, the next agent starts without them.
 2. `w`. Refresh the folder's knowledge. The `AGENTS.md` injected when the
    next agent starts reflects `KNOWLEDGE.md` as of this moment.
 3. `h`. Hand off from B, pick whichever agent you want, for example

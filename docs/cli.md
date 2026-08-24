@@ -53,13 +53,7 @@ mycelium lang en      # switch to English
 mycelium --version   # (also -v / -V) print the installed version and exit
 ```
 
-**Opening `mycelium` (the TUI) already runs background upkeep
-(scan/organize/digest/knowledge review) inside the TUI process itself.**
-No need to run `mycelium daemon` or any script separately. **Closing the
-TUI stops upkeep too.** No process is left behind, so the next launch
-always starts fresh with whatever code is currently installed. Turn this
-auto upkeep off with the `MYCELIUM_NO_AUTOSTART=1` environment variable if
-you don't want it.
+**Opening `mycelium` (the TUI) already runs background upkeep (scan/organize/digest/knowledge review) inside the TUI process itself.** No need to run `mycelium daemon` or any script separately. **Closing the TUI stops upkeep too.** No process is left behind, so the next launch always starts fresh with whatever code is currently installed. Turn this auto upkeep off with the `MYCELIUM_NO_AUTOSTART=1` environment variable if you don't want it.
 
 ## Cleanup (experimental stage)
 
@@ -72,8 +66,11 @@ mycelium cleanup index      # rebuild just the sqlite index (if search looks off
 mycelium cleanup reset --yes # full reset: delete ~/.mycelium entirely → re-scan
 ```
 
-- **`tidy` (default), `folders`, and `index` are safe.** They never delete
-  original sessions (`raw/`).
+- **`tidy` (default), `folders`, and `index` are safe.** The original
+  agent logs (`~/.claude`, `~/.codex`, `~/.kiro`, OpenCode's
+  `opencode.db`) are always untouched. `tidy` does remove Mycelium's own
+  synthetic meta-call records from `raw/` (sessions Mycelium's own LLM
+  calls accidentally left behind), never a real captured session.
 - **`archive`** deletes sessions filed under `_archive` from the store.
   The original `~/.claude`/`~/.codex`/`~/.kiro` logs and OpenCode's own
   `opencode.db` are untouched, so a re-scan brings them back, but this
@@ -88,26 +85,14 @@ For a clean start: `mycelium cleanup reset --yes && mycelium scan`.
 
 ## Background-only, no TUI (optional)
 
-If you want scanning, organizing, and digests to keep running without the
-TUI open (headless use, always on a server), start a detached daemon
-process explicitly:
+If you want scanning, organizing, and digests to keep running without the TUI open (headless use, always on a server), start a detached daemon process explicitly:
 ```sh
 mycelium daemon --detach    # no-op if already running (idempotent); logs to ~/.mycelium/daemon.log
 mycelium daemon --stop      # stops it if running, no-op otherwise
 ```
-Works the same way whether you installed with `npm install -g` or via
-`git clone` (use `node src/cli.js daemon --detach` in the latter case if
-you skipped `npm link`). There's no auto-start on reboot; wire
-`mycelium daemon --detach` into launchd, systemd, or cron yourself if you
-want that. **A daemon started this way keeps running whatever code was
-current when it started.** After updating mycelium, run
-`mycelium daemon --stop` then `--detach` again to pick up the new code.
+Works the same way whether you installed with `npm install -g` or via `git clone` (use `node src/cli.js daemon --detach` in the latter case if you skipped `npm link`). There's no auto-start on reboot; wire `mycelium daemon --detach` into launchd, systemd, or cron yourself if you want that. **A daemon started this way keeps running whatever code was current when it started.** After updating mycelium, run `mycelium daemon --stop` then `--detach` again to pick up the new code.
 
-Background upkeep's intervals and limits are all environment variable
-tunable. The defaults are conservative on purpose, so a large backlog
-doesn't pile up LLM processes all at once. That pile-up is exactly what
-caused Claude's console window to keep popping up on Windows,
-[#3](https://github.com/krapie/mycelium/issues/3):
+Background upkeep's intervals and limits are all environment variable tunable. The defaults are conservative on purpose, so a large backlog doesn't pile up LLM processes all at once. That pile-up is exactly what caused Claude's console window to keep popping up on Windows, [#3](https://github.com/krapie/mycelium/issues/3):
 
 | Env var | Default | Meaning |
 |---|---|---|
