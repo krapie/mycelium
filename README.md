@@ -1,6 +1,7 @@
 # Mycelium
 
 [![npm version](https://img.shields.io/npm/v/@kevinprk/mycelium)](https://www.npmjs.com/package/@kevinprk/mycelium)
+[![npm downloads](https://img.shields.io/npm/dt/@kevinprk/mycelium)](https://www.npmjs.com/package/@kevinprk/mycelium)
 [![CI](https://github.com/krapie/mycelium/actions/workflows/ci.yml/badge.svg)](https://github.com/krapie/mycelium/actions/workflows/ci.yml)
 [![coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/krapie/511d91209145406ab7f7ed1e9fbcd49c/raw/mycelium-coverage.json)](https://github.com/krapie/mycelium/actions/workflows/coverage.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
@@ -39,9 +40,9 @@ Engineer by picking a different persona when it asks.
 ## Install
 
 ```sh
-brew install krapie/tap/mycelium    # via Homebrew
+npm install -g @kevinprk/mycelium   # via npm
 # or
-npm install -g @kevinprk/mycelium   # then run `mycelium` from anywhere
+brew install krapie/tap/mycelium    # via Homebrew
 ```
 
 To hack on it, clone instead:
