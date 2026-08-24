@@ -1,8 +1,13 @@
-# Full 16-step tutorial walkthrough for the Solutions Architect persona —
+# Full 19-step tutorial walkthrough for the Solutions Architect persona —
 # for the YouTube MP4. See demo/README.md for how to regenerate, and
 # sa-highlight.tape's header comment for where the down-navigation depth
 # came from (no existing e2e coverage for this persona — confirmed with a
 # throwaway interactive dry-run, not guessed).
+#
+# Markers are anchored on each step's own stable subtitle (or, for the
+# handful of titleless "confirm/apply" steps, the real modal content that
+# opened right before them) rather than absolute step numbers — see
+# swe-full.tape's header comment for why.
 #
 # Safety: see swe-full.tape's header comment — same direct
 # `tui --tutorial` invocation, same disposable /tmp MYCELIUM_HOME.
@@ -37,24 +42,38 @@ Down
 Sleep 300ms
 Enter
 
-# Step 1/16 — intro + panel-nav merged
-Wait+Screen@6s /Step 1\/16/
+# Step 1/19 — intro + panel-nav merged
+Wait+Screen@6s /Step 1\/19/
 Sleep 2s
 Enter
 
-# Step 2/16 — Organize
-Wait+Screen@6s /Step 2\/16/
+# Step 2/19 — action palette intro
+Wait+Screen@6s /Step \d+\/\d+ — Menu/
+Sleep 1s
+Type "."
+Wait+Screen@6s /What do you want to do\?/
+Sleep 2s
+Escape
+
+# Step 4/19 — Capture
+Wait+Screen@6s /Step \d+\/\d+ — Capture/
+Sleep 1s
+Type "s"
+
+# Step 5/19 — Organize
+Wait+Screen@6s /Step \d+\/\d+ — Organize/
 Sleep 1s
 Type "o"
 
-# Step 3/16 — real suggestPlacements() review modal opened
-Wait+Screen@10s /Step 3\/16/
+# Real suggestPlacements() review modal opened.
+Wait+Screen@10s /Suggested placements/
 Sleep 2s
 Enter
 
-# Step 4/16 — back to Folders, walk down into the organized folder
-# (Root → New → customers → nimbustech — 4 downs).
-Wait+Screen@6s /Step 4\/16/
+# Step 7/19 — back to Folders, walk down into the organized folder
+# (Root → New → customers → nimbustech — 4 downs). No stable
+# subtitle/modal to anchor this arrival on — numbered exception.
+Wait+Screen@6s /Step 7\/19/
 Sleep 1s
 Left
 Sleep 500ms
@@ -68,66 +87,67 @@ Down
 Sleep 500ms
 Enter
 
-# Step 5/16 — Learn
-Wait+Screen@6s /Step 5\/16/
+# Step 8/19 — Learn
+Wait+Screen@6s /Step \d+\/\d+ — Learn/
 Sleep 1s
 Type "w"
 
-# Step 6/16 — real knowledge draft ready to save
-Wait+Screen@10s /Step 6\/16/
+# Real knowledge draft ready to save.
+Wait+Screen@10s /KNOWLEDGE\.md preview/
 Sleep 2s
 Enter
 
-# Step 7/16 — Reuse
-Wait+Screen@6s /Step 7\/16/
+# Step 10/19 — Reuse
+Wait+Screen@6s /Step \d+\/\d+ — Reuse/
 Sleep 1s
 Type "c"
 
-# Step 8/16 — real inherited-context viewer open
-Wait+Screen@10s /Step 8\/16/
+# Real inherited-context viewer open.
+Wait+Screen@10s /Context ·/
 Sleep 2s
 Escape
 
-# Step 9/16 — Knowledge review
-Wait+Screen@6s /Step 9\/16/
+# Step 12/19 — Knowledge review
+Wait+Screen@6s /Step \d+\/\d+ — Knowledge Review/
 Sleep 1s
 Type "k"
 
-# Step 10/16 — real knowledge review modal open
-Wait+Screen@10s /Step 10\/16/
+# Real knowledge review modal open.
+Wait+Screen@10s /Review knowledge updates/
 Sleep 2s
 Enter
 
-# Step 11/16 — Merge (select the top 2 rows, Shift+M)
-Wait+Screen@6s /Step 11\/16/
+# Step 14/19 — Merge (select the top 2 rows, Shift+M)
+Wait+Screen@6s /Step \d+\/\d+ — Merge/
 Sleep 1s
 Space
 Down
 Space
 Type "M"
 
-# Step 12/16 — real merge title prompt open
-Wait+Screen@10s /Step 12\/16/
+# Real merge title prompt open.
+Wait+Screen@10s /Title for the merged session/
 Sleep 2s
 Enter
 
-# Step 13/16 — Split
-Wait+Screen@6s /Step 13\/16/
+# Step 16/19 — Split
+Wait+Screen@6s /Step \d+\/\d+ — Split/
 Sleep 1s
 Type "S"
 
-# Step 14/16 — real split-boundary review modal open
-Wait+Screen@10s /Step 14\/16/
+# Real split-boundary review modal open.
+Wait+Screen@10s /Proposed split/
 Sleep 2s
 Enter
 
-# Step 15/16 — freeform explore
-Wait+Screen@6s /Step 15\/16/
+# Step 18/19 — freeform explore. No stable subtitle/modal to anchor this
+# arrival on — numbered exception.
+Wait+Screen@6s /Step 18\/19/
 Sleep 2s
 Enter
 
-# Step 16/16 — final recap. Hold long enough to read it, then exit.
-Wait+Screen@6s /Step 16\/16/
+# Step 19/19 — final recap. Hold long enough to read it, then exit.
+Wait+Screen@6s /Step \d+\/\d+ — Complete!/
 Sleep 6s
 Type "q"
 Sleep 1s
