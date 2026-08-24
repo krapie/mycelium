@@ -32,17 +32,17 @@ mycelium daemon                 # run in the foreground
 mycelium daemon --detach        # run detached in the background (idempotent)
 mycelium daemon --stop          # stop it
 
-# interactive tutorial with fake sessions — the full lifecycle (organize, learn,
-# reuse, merge/split), LLM calls mocked so it's fast and deterministic;
-# separate ~/.mycelium-demo store, your real data is never touched. Asks for
+# interactive tutorial with fake sessions, the full lifecycle (organize, learn,
+# reuse, merge/split), LLM calls mocked so it's fast and deterministic.
+# Separate ~/.mycelium-demo store, your real data is never touched. Asks for
 # a language and a persona (matching mock content) before seeding.
 # Finishing the whole tutorial hands off straight into a real TUI session
-# (your actual ~/.mycelium) IN THE SAME LANGUAGE you picked for the demo —
+# (your actual ~/.mycelium) IN THE SAME LANGUAGE you picked for the demo,
 # only on a full finish, never on an early Esc bail, so previewing the demo
 # in a different language never silently changes your real setting.
 mycelium demo
 
-# TUI display language (default en) — takes effect on the next TUI launch.
+# TUI display language (default en), takes effect on the next TUI launch.
 # Also settable from inside a running TUI session with the `l` key (confirm,
 # then Mycelium restarts to apply it), or via the language picker shown on
 # first launch / before every `mycelium demo` persona pick.
@@ -53,12 +53,13 @@ mycelium lang en      # switch to English
 mycelium --version   # (also -v / -V) print the installed version and exit
 ```
 
-**Opening `mycelium` (the TUI) normally already runs background upkeep
-(scan/organize/digest/knowledge review) inside the TUI process itself** — no need to run
-`mycelium daemon` or any script separately. **Closing the TUI stops upkeep
-too** — no process is left behind, so the next launch always starts fresh
-with whatever code is currently installed. Turn this auto-upkeep off with
-the `MYCELIUM_NO_AUTOSTART=1` environment variable if you don't want it.
+**Opening `mycelium` (the TUI) already runs background upkeep
+(scan/organize/digest/knowledge review) inside the TUI process itself.**
+No need to run `mycelium daemon` or any script separately. **Closing the
+TUI stops upkeep too.** No process is left behind, so the next launch
+always starts fresh with whatever code is currently installed. Turn this
+auto upkeep off with the `MYCELIUM_NO_AUTOSTART=1` environment variable if
+you don't want it.
 
 ## Cleanup (experimental stage)
 
@@ -71,40 +72,42 @@ mycelium cleanup index      # rebuild just the sqlite index (if search looks off
 mycelium cleanup reset --yes # full reset: delete ~/.mycelium entirely → re-scan
 ```
 
-- **`tidy` (default), `folders`, and `index` are safe** — they never delete
+- **`tidy` (default), `folders`, and `index` are safe.** They never delete
   original sessions (`raw/`).
-- **`archive`** deletes sessions filed under `_archive` from the store. The
-  original `~/.claude`/`~/.codex`/`~/.kiro`/OpenCode's own `opencode.db` logs are untouched, so a
-  re-`scan` brings them back — but this time unfiled (they don't
-  auto-return to `_archive`; that's manual-placement only).
-- **`reset --yes` cannot be undone** — it deletes all of `~/.mycelium`
-  (normalized sessions, folders, knowledge, index). It still doesn't touch
-  the original agent session logs, so `mycelium scan` rebuilds it from
-  scratch.
+- **`archive`** deletes sessions filed under `_archive` from the store.
+  The original `~/.claude`/`~/.codex`/`~/.kiro` logs and OpenCode's own
+  `opencode.db` are untouched, so a re-scan brings them back, but this
+  time unfiled. They don't automatically return to `_archive`; that's
+  manual placement only.
+- **`reset --yes` cannot be undone.** It deletes all of `~/.mycelium`
+  (normalized sessions, folders, knowledge, index). It still doesn't
+  touch the original agent session logs, so `mycelium scan` rebuilds it
+  from scratch.
 
 For a clean start: `mycelium cleanup reset --yes && mycelium scan`.
 
 ## Background-only, no TUI (optional)
 
-If you want scanning/organizing/digests to keep running without keeping the
-TUI open (headless use, always-on on a server), start a detached daemon
+If you want scanning, organizing, and digests to keep running without the
+TUI open (headless use, always on a server), start a detached daemon
 process explicitly:
 ```sh
 mycelium daemon --detach    # no-op if already running (idempotent); logs to ~/.mycelium/daemon.log
 mycelium daemon --stop      # stops it if running, no-op otherwise
 ```
 Works the same way whether you installed with `npm install -g` or via
-`git clone` (use `node src/cli.js daemon --detach` in the latter case if you
-skipped `npm link`). There's no auto-start on reboot — wire
-`mycelium daemon --detach` into launchd/systemd/cron yourself if you want
-that. **A daemon started this way keeps running whatever code was current
-when it started — after updating mycelium, `mycelium daemon --stop` then
-`--detach` again to pick up the new code.**
+`git clone` (use `node src/cli.js daemon --detach` in the latter case if
+you skipped `npm link`). There's no auto-start on reboot; wire
+`mycelium daemon --detach` into launchd, systemd, or cron yourself if you
+want that. **A daemon started this way keeps running whatever code was
+current when it started.** After updating mycelium, run
+`mycelium daemon --stop` then `--detach` again to pick up the new code.
 
-Background upkeep's intervals and limits are all environment-variable
-tunable (the defaults are conservative on purpose, so a large backlog
-doesn't pile up LLM processes all at once — that pile-up is exactly what
-caused Claude's console window to keep popping up on Windows, [#3](https://github.com/krapie/mycelium/issues/3)):
+Background upkeep's intervals and limits are all environment variable
+tunable. The defaults are conservative on purpose, so a large backlog
+doesn't pile up LLM processes all at once. That pile-up is exactly what
+caused Claude's console window to keep popping up on Windows,
+[#3](https://github.com/krapie/mycelium/issues/3):
 
 | Env var | Default | Meaning |
 |---|---|---|
@@ -114,4 +117,4 @@ caused Claude's console window to keep popping up on Windows, [#3](https://githu
 | `MYCELIUM_SMART_ORGANIZE_LIMIT` | 100 | Max sessions classified per smart-organize cycle |
 | `MYCELIUM_SMART_ORGANIZE_COOLDOWN_MS` | 24 h | Wait time before retrying an unmatched session |
 | `MYCELIUM_SUMMARIZE_CONCURRENCY` | 3 | Concurrent `claude`/`codex` processes the auto smart-organize cycle spawns |
-| `MYCELIUM_DIGEST_KNOWLEDGE_LIMIT` | 10 | Max folders proposed for a knowledge refresh per call, whether triggered by the daemon's independent overnight cycle or the TUI's `k` command computing fresh — unrelated to Digest (`d`) despite the env var's name |
+| `MYCELIUM_DIGEST_KNOWLEDGE_LIMIT` | 10 | Max folders proposed for a knowledge refresh per call, whether triggered by the daemon's independent overnight cycle or the TUI's `k` command computing fresh. Unrelated to Digest (`d`) despite the env var's name |

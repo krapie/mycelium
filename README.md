@@ -86,6 +86,7 @@ the same as any direct CLI use.
 
 Full guide in [`docs/`](./docs):
 
+- [**How It Works**](./docs/how-it-works.md): the loop, and why it holds together, in two diagrams
 - [**TUI**](./docs/tui.md) — the 3-column interface + every keyboard shortcut
 - [**Learn/Reuse loop**](./docs/learn-reuse.md) — how sessions pass knowledge forward
 - [**Handoff**](./docs/handoff.md) — continuing work across agent CLIs
