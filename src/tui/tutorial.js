@@ -353,28 +353,39 @@ export function startTutorial(app, onDone, personaId = 'swe', { reloadSessions, 
   // AMBIGUOUS_KEYS' keypress case) because every action name is already
   // unambiguous: it names the real handler that just ran, not a generic key
   // that could mean something else on a different step.
+  let scanInjected = false;
   app.tutorialSignal = (action) => {
-    if (done || waiting) return;
-    let j = i;
-    while (j < STEPS.length && STEPS[j].signalFor !== action) j++;
-    if (j >= STEPS.length) return;
-    // Scan is the one action that also makes something real happen in the
-    // store, not just in the narration: this is the actual moment the mock
-    // sessions get written — timed to this signal, not to startTutorial()'s
-    // own setup, so a still-empty Sessions view genuinely fills in right as
-    // this step's key is pressed. Skipped when sessionsPreSeeded is true
-    // (see this function's own doc comment): injectDemoSessions() is NOT
-    // idempotent on its own (fresh randomUUID() per call), so a caller that
-    // already ran seedMockSessions() before starting the tutorial would
-    // otherwise end up with two full sets once this signal fires.
-    // reloadSessions is what makes a genuine injection visible immediately
-    // rather than on the next unrelated re-render; harmless to call even
-    // when injection was skipped.
-    if (action === 'scan') {
-      if (!sessionsPreSeeded) injectDemoSessions(personaId);
+    if (done) return;
+    // Scan injection is intentionally handled BEFORE the `waiting` gate
+    // below, and unconditionally on `action === 'scan'` rather than only
+    // once a matching step is found — a real bug found via review: doScan()
+    // reports completion from a setImmediate() callback (see its own call
+    // site in sessions.js), so this signal can arrive an event-loop tick
+    // after the keypress that triggered it. If the human's very next
+    // keypress in that tiny window happened to start ANOTHER step's own
+    // wait (e.g. immediately pressing `o` right after `s`), `waiting` would
+    // already be true by the time this callback runs, and the OLD version's
+    // single combined `if (done || waiting) return;` at the top dropped the
+    // signal entirely — injectDemoSessions() never ran, and the Sessions
+    // view stayed silently empty for the rest of the demo, with the
+    // narrator having already moved on and nothing left to signal it. The
+    // narration jump below can still be legitimately skipped in that same
+    // race (matches the existing "human jumped ahead" tolerance elsewhere
+    // in this file) — only the actual store write is load-bearing enough to
+    // never skip. scanInjected (not sessionsPreSeeded alone) guards against
+    // double-injection now that this no longer waits on a step match: a
+    // second 's' press later in the tutorial would otherwise re-enter here.
+    if (action === 'scan' && !sessionsPreSeeded && !scanInjected) {
+      scanInjected = true;
+      injectDemoSessions(personaId);
+      // reloadSessions is what makes a genuine injection visible immediately
+      // rather than on the next unrelated re-render.
       reloadSessions?.();
     }
-    advanceFrom(j);
+    if (waiting) return;
+    let j = i;
+    while (j < STEPS.length && STEPS[j].signalFor !== action) j++;
+    if (j < STEPS.length) advanceFrom(j);
   };
 
   const render = () => {

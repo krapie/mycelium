@@ -53,9 +53,19 @@ const { __clearTestProvider } = await import('../../src/llm.js');
 // process. Harmless in practice (every test in this file only ever calls
 // llm.js's complete() through one of these mock providers, never a real
 // subprocess), but cheap to clean up properly regardless.
+//
+// MYCELIUM_DEMO_MODE too, same reasoning: startTutorial() sets it for its
+// own lifetime and restores it in finish() (see tutorial.js), but finish()
+// only runs if a test drives the tutorial to completion — a test that
+// mounts one and stops partway (many in this file do, deliberately, to
+// assert mid-tutorial state) leaves it set to '1' for whatever runs next.
+// Unconditionally deleted here rather than saved/restored per-test, same
+// as setLocale('en') above: no test in this file legitimately depends on
+// it surviving into a later, unrelated test.
 test.afterEach(() => {
   setLocale('en');
   __clearTestProvider();
+  delete process.env.MYCELIUM_DEMO_MODE;
 });
 
 function findByKeyword(sessions, re) {
@@ -1213,6 +1223,77 @@ test('demo: the Sessions view is genuinely empty until the Scan step, matching t
       api.listBox.items.length > listItemsBefore,
       'the mounted view actually re-rendered the newly-injected sessions (reloadSessions), not just the raw store',
     );
+  } finally {
+    cleanup(app);
+  }
+});
+
+test('demo: a scan signal arriving while the narrator is waiting on a different step still injects the mock sessions', async () => {
+  // Regression test for a real race found via review: doScan() reports
+  // completion from a setImmediate() callback (see its call site in
+  // sessions.js), so app.tutorialSignal('scan') can arrive an event-loop
+  // tick after the keypress that triggered it. If the human's very next
+  // keypress in that tiny window happens to start ANOTHER step's own wait
+  // (e.g. pressing `o` immediately after `s`), `waiting` is already true by
+  // the time the scan signal's callback runs — the old code's single
+  // `if (done || waiting) return;` at the top of app.tutorialSignal dropped
+  // the signal entirely, so injectDemoSessions() never ran and the Sessions
+  // view stayed silently empty for the rest of the demo (with the narrator
+  // having already moved on, nothing left to prompt a retry).
+  //
+  // Forced deterministically, not by racing a real timer: calling
+  // app.tutorialSignal('organize') directly (no real `o` keypress, no real
+  // doOrganize()/classification call at all) still runs the exact same
+  // advanceFrom() → pollUntil('open') path a real one would, setting
+  // `waiting = true` and scheduling a 250ms poll tick — since no real modal
+  // is ever going to open behind it, that poll never resolves on its own,
+  // giving a genuinely sustained (not microsecond) `waiting === true`
+  // window with zero side effects (no async classification chain left
+  // dangling past cleanup()). app.tutorialSignal('scan') immediately after
+  // lands inside that window every time, no timing sensitivity at all. `q`
+  // at the end both proves the tutorial can still be exited cleanly out of
+  // a stuck wait (matches onKeypress's own documented q-from-anywhere
+  // behavior) and stops that poll's setTimeout chain via `done`, so nothing
+  // is left running past this test.
+  //
+  // Counting from a BASELINE, not an absolute 0: this file shares one store
+  // across every test (useTempHome(), no per-test reset — see the "action
+  // menu" tests' own comment further up), and earlier tests that mount a
+  // tutorial without driving it to completion leave their own demo:true
+  // sessions behind. This test's own claim is narrower and still fully
+  // verified by a diff: THIS run contributes zero new demo sessions until
+  // the signal fires, then exactly 6.
+  prepareTutorialProvider('swe');
+  const { input, output } = createTestApp();
+  const app = createApp({ input, output });
+  let api;
+  await app.show(sessionsView({ onReady: (a) => (api = a) }));
+  try {
+    const settle = () => new Promise((r) => setTimeout(r, 320));
+    const demoCountBefore = allRaw().filter((s) => s.demo).length;
+    let doneArg;
+    startTutorial(app, (completed) => (doneArg = completed), 'swe', { reloadSessions: () => api.reloadAll() });
+
+    sendKey(input, 'enter'); // intro
+    await settle();
+
+    app.tutorialSignal('organize'); // forces waiting=true via the real advanceFrom()/pollUntil('open') path, no real modal behind it
+    assert.equal(
+      allRaw().filter((s) => s.demo).length,
+      demoCountBefore,
+      'sanity: nothing injected yet',
+    );
+
+    app.tutorialSignal('scan'); // simulates doScan()'s deferred signal arriving mid-wait
+
+    assert.equal(
+      allRaw().filter((s) => s.demo).length,
+      demoCountBefore + 6,
+      'injection still happens even though the narrator was waiting on a different step',
+    );
+
+    sendKey(input, 'q'); // q works from anywhere, including stuck mid-wait — also stops the dangling poll
+    await waitFor(() => doneArg !== undefined, { timeoutMs: 1000 });
   } finally {
     cleanup(app);
   }
