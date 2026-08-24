@@ -39,5 +39,5 @@ To move sessions between machines, copy `raw/` and `tree/`, then run
 ## Status
 
 POC. All four lifecycle stages verified against real local sessions (Claude
-Code + Codex + Kiro). The TUI is built on neo-blessed and is being verified
+Code + Codex + Kiro + OpenCode). The TUI is built on neo-blessed and is being verified
 in real terminal use.

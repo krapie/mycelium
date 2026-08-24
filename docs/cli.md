@@ -74,7 +74,7 @@ mycelium cleanup reset --yes # full reset: delete ~/.mycelium entirely → re-sc
 - **`tidy` (default), `folders`, and `index` are safe** — they never delete
   original sessions (`raw/`).
 - **`archive`** deletes sessions filed under `_archive` from the store. The
-  original `~/.claude`/`~/.codex`/`~/.kiro` logs are untouched, so a
+  original `~/.claude`/`~/.codex`/`~/.kiro`/OpenCode's own `opencode.db` logs are untouched, so a
   re-`scan` brings them back — but this time unfiled (they don't
   auto-return to `_archive`; that's manual-placement only).
 - **`reset --yes` cannot be undone** — it deletes all of `~/.mycelium`

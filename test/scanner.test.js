@@ -9,9 +9,10 @@ const { loadRaw, saveRaw, deleteRaw, allRaw, findSession, purgeMeta, scan, reeva
 const { META_MARKER } = await import('../src/llm.js');
 const adaptersIndex = await import('../src/adapters/index.js');
 
-// scan() iterates the real ADAPTERS array, and the real claude/codex/kiro
-// adapters read from the actual ~/.claude, ~/.codex, ~/.kiro on this machine
-// regardless of MYCELIUM_HOME (only the neutral session it WRITES lands under
+// scan() iterates the real ADAPTERS array, and the real claude/codex/kiro/
+// opencode adapters read from the actual ~/.claude, ~/.codex, ~/.kiro, and
+// opencode's own opencode.db on this machine regardless of MYCELIUM_HOME
+// (only the neutral session it WRITES lands under
 // the isolated temp home). To test scan() deterministically — without also
 // re-importing this machine's real sessions and blowing up the expected
 // counts below — temporarily swap the array's contents down to just the fake
@@ -163,6 +164,35 @@ test('scan() skips unchanged sessions on a second pass (same mtimeMs)', () => {
     const res2 = scan();
     assert.equal(res2.imported, 0);
     assert.equal(res2.skipped, 1);
+  });
+});
+
+test('scan() skips every adapter (real or fake) when MYCELIUM_DEMO_MODE=1, so mycelium demo never pulls real session content into its throwaway store', () => {
+  const fakeRef = { id: 'demo-mode-should-skip-this', mtimeMs: 1000 };
+  const fakeAdapter = {
+    name: 'fake-source-demo-mode',
+    listSessions: () => [fakeRef],
+    parse: (ref) => {
+      const n = emptyNeutral(ref.id, 'fake-source-demo-mode');
+      n.turns = [{ role: 'user', text: 'this should never actually get imported' }];
+      return n;
+    },
+  };
+  withOnlyAdapters([fakeAdapter], () => {
+    process.env.MYCELIUM_DEMO_MODE = '1';
+    try {
+      const res = scan();
+      assert.equal(res.scanned, 0, 'adapter never even asked for its sessions');
+      assert.equal(res.imported, 0);
+      assert.equal(loadRaw('demo-mode-should-skip-this'), null);
+    } finally {
+      delete process.env.MYCELIUM_DEMO_MODE;
+    }
+
+    // Sanity check the flag is actually what's gating this, not something
+    // else — same adapter, same session, imports normally once it's unset.
+    const res2 = scan();
+    assert.equal(res2.imported, 1);
   });
 });
 

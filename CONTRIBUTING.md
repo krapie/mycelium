@@ -49,14 +49,14 @@ No Prettier — the codebase already has a consistent hand-written style; `npm r
 
 ### Adding a New AI Agent CLI
 
-Mycelium captures sessions from AI coding-agent CLIs (Claude Code, Codex, Kiro today) through a small adapter interface. Adding support for a new one touches exactly two files:
+Mycelium captures sessions from AI coding-agent CLIs (Claude Code, Codex, Kiro, OpenCode today) through a small adapter interface. The adapter itself — the part that makes scanning/resuming/launching/the picker work — is exactly two required files:
 
 1. Write `src/adapters/<name>.js` implementing the contract documented in `src/adapters/base.js`: `name`, `label`, `bin`, `newArgs(seed)`, `resumeArgs(sessionId)`, `listSessions()`, `parse(ref)`. Look at `src/adapters/codex.js` for the simplest existing example.
 2. Register it in `src/adapters/index.js`'s `ADAPTERS` array.
 
 That's it — scanning, resuming, launching, and the TUI's agent picker all derive from that one registry. The one thing NOT covered by the adapter is a display color for the TUI (`src/tui/theme.js`'s `sourceColor()`) — pick one that's visually distinct from the existing agents' colors and add it there; this is deliberately kept out of the adapter contract so `src/adapters/` never needs to import from `src/tui/`.
 
-Add a couple of tests to `test/adapters.test.js` following the existing `claude`/`codex`/`kiro` examples — a fixture transcript plus a `parse()` assertion is usually enough.
+Add a couple of tests to `test/adapters.test.js` following the existing `claude`/`codex`/`kiro`/`opencode` examples — a fixture transcript plus a `parse()` assertion is usually enough.
 
 ## Contributor License Agreement (CLA)
 

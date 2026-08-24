@@ -11,7 +11,7 @@
 
 You create a lot of AI sessions while working, and most of them get lost the moment they end. Mycelium organizes the ones worth remembering and extracts their knowledge, insights, and context, so the next one already knows what mattered.
 
-- **Capture** — Claude Code, Codex, and Kiro sessions land in one place, automatically.
+- **Capture** — Claude Code, Codex, Kiro, and OpenCode sessions land in one place, automatically.
 - **Organize** — grouped by the project, case, or service they belong to.
 - **Learn** — what repeats across a folder's sessions becomes durable knowledge.
 - **Reuse** — your next session inherits that knowledge, insights, and context automatically when started from Mycelium.
@@ -35,7 +35,7 @@ Engineer by picking a different persona when it asks.
 > `MYCELIUM_NO_AUTOSTART=1`, or tune it in [`docs/cli.md`](./docs/cli.md).
 
 - Node.js ≥ 22.16, git
-- AI agents: `claude` / `codex` / `kiro-cli`
+- AI agents: `claude` / `codex` / `kiro-cli` / `opencode`
 
 ## Install
 
@@ -58,7 +58,7 @@ mycelium        # launch the TUI — first run offers a guided tour
 mycelium demo   # try it risk-free first — separate store, your real data untouched
 ```
 
-Sessions from Claude Code, Codex, and Kiro are captured automatically in the
+Sessions from Claude Code, Codex, Kiro, and OpenCode are captured automatically in the
 background — no manual scan needed. Day to day it's a simple loop, the
 **Context Flywheel**: `s` capture → `o` organize → `w` learn → `n` start the
 next session with everything it needs. Most of that already runs by itself

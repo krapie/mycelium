@@ -91,7 +91,22 @@ export function scan({ onImport } = {}) {
   let skipped = 0;
   let failed = 0;
 
-  for (const adapter of ADAPTERS) {
+  // ADAPTERS read from each agent's REAL global store (~/.claude, ~/.codex,
+  // ~/.kiro, plus OpenCode's own opencode.db — see adapters/index.js),
+  // completely unaffected by MYCELIUM_HOME.
+  // Wrong for BOTH tutorial-launch paths, not just `mycelium demo`'s
+  // isolated walkthrough: first-run onboarding runs against the real
+  // ~/.mycelium, and without a guard pressing scan there (directly or via
+  // the `.` menu — see tutorial.js) would import the user's actual real
+  // content into the very same batch injectDemoSessions() is about to add,
+  // both landing in one indistinguishable reveal. cli.js's `demo` command
+  // sets MYCELIUM_DEMO_MODE on its child process alongside MYCELIUM_HOME;
+  // tutorial.js's startTutorial() sets it too, for either flow, for the
+  // tutorial's whole lifetime (see that function's own comment) — skip the
+  // real adapters entirely when it's set, rather than trying to scope by
+  // MYCELIUM_HOME's path.
+  const skipRealAdapters = process.env.MYCELIUM_DEMO_MODE === '1';
+  for (const adapter of skipRealAdapters ? [] : ADAPTERS) {
     let refs;
     try {
       refs = adapter.listSessions();

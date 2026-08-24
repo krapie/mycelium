@@ -2,7 +2,7 @@
 
 # Handoff Lifecycle (continuing across models)
 
-Claude Code, Codex, and Kiro each store sessions in a different format, so a
+Claude Code, Codex, Kiro, and OpenCode each store sessions in a different format, so a
 handoff (`h`) across vendors always creates a **new session** — that's
 intentional, not a bug. To continue the exact same session on the same
 agent, use `r` (resume) instead: `r` continues the original session itself
