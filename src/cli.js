@@ -455,7 +455,9 @@ async function main() {
       // awaits this — the resolved module sits unused, harmless.
       const tuiIndexPromise = import('./tui/index.js');
       const child = spawn(process.execPath, [process.argv[1], 'tui', '--tutorial'], {
-        env: { ...process.env, MYCELIUM_HOME: demoHome },
+        // MYCELIUM_DEMO_MODE: scanner.js's own guard against pulling real
+        // session content into this throwaway store — see its comment.
+        env: { ...process.env, MYCELIUM_HOME: demoHome, MYCELIUM_DEMO_MODE: '1' },
         stdio: 'inherit',
       });
       return new Promise((resolve) => {

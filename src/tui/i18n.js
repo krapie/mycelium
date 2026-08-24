@@ -200,15 +200,24 @@ const en = {
   'tutorial.introTitle': '',
   'tutorial.introBody': (fg) =>
     `{bold}Welcome to Mycelium{/} — a Context Lifecycle platform for AI collaboration: {${fg}-fg}Capture → Organize → Learn → Reuse{/}. Every session from Claude Code, Codex, or Kiro gets captured automatically; this tour shows you the loop that keeps them useful instead of lost. Three panels — Folders → Sessions → Detail — walked with {${fg}-fg}→{/}/{${fg}-fg}←{/}. Press {${fg}-fg}Enter{/} now to step into your first folder and begin.`,
+  'tutorial.stepPaletteTitle': ' — Menu',
+  'tutorial.stepPaletteBody': (fg) =>
+    `No need to memorize shortcuts: press {${fg}-fg}.{/} from the Folders or Sessions panel and you'll get a menu of what you can actually do from there. Each item shows its key, grouped as SESSION (acts on the session) and FOLDER (acts on the folder).`,
+  'tutorial.stepPaletteAckTitle': '',
+  'tutorial.stepPaletteAckBody': (fg) =>
+    `That's it — press {${fg}-fg}Esc{/} to close. From here on, whenever a step says "press {${fg}-fg}o{/}" (or any other key), you can either press it directly or open the menu with {${fg}-fg}.{/} and pick it. Both do exactly the same thing.`,
+  'tutorial.stepScanTitle': ' — Capture',
+  'tutorial.stepScanBody': (fg) =>
+    `Every session below was already captured automatically — that's Capture, step one of the loop. Press {${fg}-fg}s{/} (or {${fg}-fg}.{/} → Scan) to trigger it yourself; it's the exact same action that runs quietly in the background for Claude Code, Codex, and Kiro.`,
   'tutorial.step2Title': ' — Organize',
-  'tutorial.step2Body': (fg, count) => `${count} fresh, unfiled sessions are sitting below. Press {${fg}-fg}o{/} to have Mycelium read them and suggest folders.`,
+  'tutorial.step2Body': (fg, count) => `${count} fresh, unfiled sessions are sitting below. Press {${fg}-fg}o{/} (or {${fg}-fg}.{/} → Organize) to have Mycelium read them and suggest folders.`,
   'tutorial.step3Title': '',
   'tutorial.step3Body': (fg) => `Review the suggested folders, then press {${fg}-fg}Enter{/} to apply them.`,
   'tutorial.step4Title': '',
   'tutorial.step4Body': (fg, count, folder) =>
     `Folders were created automatically and your sessions are sorted — several landed together in \`${folder}\`. Press {${fg}-fg}←{/} to get back to the Folders panel, then {${fg}-fg}↓{/} to find it and {${fg}-fg}Enter{/}/→ to open it.`,
   'tutorial.step5Title': ' — Learn',
-  'tutorial.step5Body': (fg, count, folder) => `With \`${folder}\` open, press {${fg}-fg}w{/} — Mycelium distills everything in it into one KNOWLEDGE.md.`,
+  'tutorial.step5Body': (fg, count, folder) => `With \`${folder}\` open, press {${fg}-fg}w{/} (or {${fg}-fg}.{/} → Generate folder insights) — Mycelium distills everything in it into one KNOWLEDGE.md.`,
   'tutorial.step6Title': '',
   'tutorial.step6Body': (fg) => `Review the knowledge draft, then press {${fg}-fg}Enter{/} to save it. Next: see exactly what a new session here would inherit from it.`,
   'tutorial.step7Title': ' — Reuse',
@@ -224,12 +233,12 @@ const en = {
     `Everything's pre-checked. Press {${fg}-fg}Enter{/} to approve — this writes KNOWLEDGE.md AND injects straight into AGENTS.md wherever each folder's sessions have run, all in one step.`,
   'tutorial.step11Title': ' — Merge',
   'tutorial.step11Body': (fg) =>
-    `These sessions are actually one story. Select them with {${fg}-fg}Space{/}, then press {${fg}-fg}Shift+M{/} to merge them into one continuous record.`,
+    `These sessions are actually one story. Select them with {${fg}-fg}Space{/}, then press {${fg}-fg}Shift+M{/} (or {${fg}-fg}.{/} → Merge sessions) to merge them into one continuous record.`,
   'tutorial.step12Title': '',
   'tutorial.step12Body': (fg) => `Type a title (or leave it blank for a default), then press {${fg}-fg}Enter{/}.`,
   'tutorial.step13Title': ' — Split',
   'tutorial.step13Body': (fg, count, folder) =>
-    `Fully reversible, the other direction too. The merged session stayed right here in \`${folder}\` — with it selected, press {${fg}-fg}Shift+S{/} for topic-boundary suggestions.`,
+    `Fully reversible, the other direction too. The merged session stayed right here in \`${folder}\` — with it selected, press {${fg}-fg}Shift+S{/} (or {${fg}-fg}.{/} → Split session) for topic-boundary suggestions.`,
   'tutorial.step14Title': '',
   'tutorial.step14Body': (fg) => `Press {${fg}-fg}*{/} to select all the proposed ranges, then {${fg}-fg}Enter{/} to apply.`,
   'tutorial.step15Title': '',
@@ -243,6 +252,7 @@ const en = {
   // so these resolve almost instantly, but the narrator still has to wait
   // for the actual modal to open/close (see tutorial.js's isModalOpen
   // polling) rather than trusting the raw keypress alone).
+  'tutorial.waitingPalette': 'Waiting for the action menu to open…',
   'tutorial.waitingOrganize': 'Reading sessions and drafting folder suggestions…',
   'tutorial.waitingApply': 'Applying…',
   'tutorial.waitingKnowledge': "Distilling this folder's sessions into a knowledge draft…",
@@ -485,15 +495,24 @@ const ko = {
   'tutorial.introTitle': '',
   'tutorial.introBody': (fg) =>
     `{bold}Mycelium에 오신 걸 환영합니다{/} — AI 협업을 위한 Context Lifecycle 플랫폼입니다: {${fg}-fg}Capture → Organize → Learn → Reuse{/}. Claude Code, Codex, Kiro의 모든 세션이 자동으로 캡처됩니다 — 이 투어는 그 세션들을 잃어버리지 않고 계속 쓸모 있게 만드는 흐름을 보여줍니다. 세 개의 패널 — 폴더 → 세션 → 상세 — 은 {${fg}-fg}→{/}/{${fg}-fg}←{/}로 이동합니다. 지금 {${fg}-fg}Enter{/}를 눌러 첫 폴더로 들어가 시작하세요.`,
+  'tutorial.stepPaletteTitle': ' — 메뉴',
+  'tutorial.stepPaletteBody': (fg) =>
+    `단축키를 외울 필요 없이, 폴더와 세션에서 {${fg}-fg}.{/}를 누르면 각각 지금 실행해볼 수 있는 것들의 메뉴가 나옵니다. 각 항목에 단축키가 함께 표시되고, SESSION(세션 대상)과 FOLDER(폴더 대상)로 묶여 있습니다.`,
+  'tutorial.stepPaletteAckTitle': '',
+  'tutorial.stepPaletteAckBody': (fg) =>
+    `이게 전부입니다 — {${fg}-fg}Esc{/}로 닫으세요. 이후 스텝에서 "'{${fg}-fg}o{/}'를 누르세요" 같은 안내가 나오면, 그 키를 직접 눌러도 되고 {${fg}-fg}.{/}로 메뉴를 열어서 해당 항목을 골라도 됩니다. 결과는 완전히 동일합니다.`,
+  'tutorial.stepScanTitle': ' — 캡처',
+  'tutorial.stepScanBody': (fg) =>
+    `아래 세션들은 이미 자동으로 캡처된 것입니다 — 루프의 첫 단계인 Capture입니다. {${fg}-fg}s{/}를 눌러 (또는 {${fg}-fg}.{/} → Scan) 직접 실행해보세요 — Claude Code, Codex, Kiro를 대상으로 백그라운드에서 조용히 도는 것과 동일한 동작입니다.`,
   'tutorial.step2Title': ' — 조직화',
-  'tutorial.step2Body': (fg, count) => `아직 정리 안 된 세션 ${count}개가 아래에 있습니다. {${fg}-fg}o{/}를 눌러 Mycelium이 내용을 읽고 폴더를 제안하게 해보세요.`,
+  'tutorial.step2Body': (fg, count) => `아직 정리 안 된 세션 ${count}개가 아래에 있습니다. {${fg}-fg}o{/}를 눌러 (또는 {${fg}-fg}.{/} → 세션 정리) Mycelium이 내용을 읽고 폴더를 제안하게 해보세요.`,
   'tutorial.step3Title': '',
   'tutorial.step3Body': (fg) => `제안된 폴더를 확인하고 {${fg}-fg}Enter{/}로 적용해보세요.`,
   'tutorial.step4Title': '',
   'tutorial.step4Body': (fg, count, folder) =>
     `폴더가 자동으로 생성되고 세션들이 정리됐습니다 — 관련 세션 여럿이 \`${folder}\`로 함께 모였습니다. {${fg}-fg}←{/}로 Folders 패널로 돌아간 뒤 {${fg}-fg}↓{/}로 찾고 {${fg}-fg}Enter{/}/→로 열어보세요.`,
   'tutorial.step5Title': ' — 학습',
-  'tutorial.step5Body': (fg, count, folder) => `\`${folder}\`를 연 상태에서 {${fg}-fg}w{/}를 눌러보세요 — 그 폴더의 모든 세션을 하나의 KNOWLEDGE.md로 압축합니다.`,
+  'tutorial.step5Body': (fg, count, folder) => `\`${folder}\`를 연 상태에서 {${fg}-fg}w{/}를 눌러보세요 (또는 {${fg}-fg}.{/} → 폴더 안의 인사이트 생성) — 그 폴더의 모든 세션을 하나의 KNOWLEDGE.md로 압축합니다.`,
   'tutorial.step6Title': '',
   'tutorial.step6Body': (fg) => `지식 초안을 확인하고 {${fg}-fg}Enter{/}로 저장하세요. 다음: 새 세션이 여기서 무엇을 물려받는지 직접 확인해봅니다.`,
   'tutorial.step7Title': ' — 재사용',
@@ -509,12 +528,12 @@ const ko = {
     `전부 기본으로 체크되어 있습니다. {${fg}-fg}Enter{/}를 눌러 승인하세요 — 이 한 번으로 각 폴더의 KNOWLEDGE.md를 갱신하고, 그 폴더의 세션들이 실행됐던 모든 곳의 AGENTS.md에도 바로 주입됩니다.`,
   'tutorial.step11Title': ' — 병합',
   'tutorial.step11Body': (fg) =>
-    `이 세션들은 사실 하나의 이야기입니다. {${fg}-fg}Space{/}로 선택한 뒤 {${fg}-fg}Shift+M{/}으로 하나의 연속된 기록으로 병합해보세요.`,
+    `이 세션들은 사실 하나의 이야기입니다. {${fg}-fg}Space{/}로 선택한 뒤 {${fg}-fg}Shift+M{/}으로 (또는 {${fg}-fg}.{/} → 세션 병합) 하나의 연속된 기록으로 병합해보세요.`,
   'tutorial.step12Title': '',
   'tutorial.step12Body': (fg) => `제목을 입력하거나(비워두면 기본값) {${fg}-fg}Enter{/}를 누르세요.`,
   'tutorial.step13Title': ' — 분할',
   'tutorial.step13Body': (fg, count, folder) =>
-    `반대 방향도 완전히 되돌릴 수 있습니다. 병합된 세션은 그대로 \`${folder}\`에 남아 있습니다 — 선택된 상태에서 {${fg}-fg}Shift+S{/}로 세션을 나눌 지점 제안을 받아보세요.`,
+    `반대 방향도 완전히 되돌릴 수 있습니다. 병합된 세션은 그대로 \`${folder}\`에 남아 있습니다 — 선택된 상태에서 {${fg}-fg}Shift+S{/}로 (또는 {${fg}-fg}.{/} → 세션 분할) 세션을 나눌 지점 제안을 받아보세요.`,
   'tutorial.step14Title': '',
   'tutorial.step14Body': (fg) => `{${fg}-fg}*{/}로 제안된 구간을 모두 선택한 뒤 {${fg}-fg}Enter{/}로 적용하세요.`,
   'tutorial.step15Title': '',
@@ -523,6 +542,7 @@ const ko = {
   'tutorial.step16Title': ' — 완료!',
   'tutorial.step16Body': (fg) =>
     `전체 라이프사이클을 다 보셨습니다. 일상적으로는 단순한 반복입니다 — {bold}Context Flywheel{/}: {${fg}-fg}s{/} 캡처 → {${fg}-fg}o{/} 정리 → {${fg}-fg}w{/} 학습 → {${fg}-fg}n{/} 필요한 모든 게 준비된 채로 다음 세션 시작. 대부분은 이미 백그라운드에서 저절로 돌아갑니다 — Mycelium이 알아서 캡처하고 정리하고 배운 것을 갱신해둡니다. 이 키들을 누르는 건 대부분 처음부터 뭔가 시작시키는 게 아니라 이미 준비된 걸 검토/확인하는 것에 가깝습니다. 다 보셨으면 {${fg}-fg}q{/}를 누르세요. 데모 세션이 정리되고 원래(기존) 데이터로 전환됩니다.`,
+  'tutorial.waitingPalette': '액션 메뉴가 열리기를 기다리는 중…',
   'tutorial.waitingOrganize': '세션을 읽고 폴더를 제안하는 중…',
   'tutorial.waitingApply': '적용하는 중…',
   'tutorial.waitingKnowledge': '이 폴더의 세션들을 지식 초안으로 압축하는 중…',

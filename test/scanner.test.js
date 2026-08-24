@@ -166,6 +166,35 @@ test('scan() skips unchanged sessions on a second pass (same mtimeMs)', () => {
   });
 });
 
+test('scan() skips every adapter (real or fake) when MYCELIUM_DEMO_MODE=1, so mycelium demo never pulls real session content into its throwaway store', () => {
+  const fakeRef = { id: 'demo-mode-should-skip-this', mtimeMs: 1000 };
+  const fakeAdapter = {
+    name: 'fake-source-demo-mode',
+    listSessions: () => [fakeRef],
+    parse: (ref) => {
+      const n = emptyNeutral(ref.id, 'fake-source-demo-mode');
+      n.turns = [{ role: 'user', text: 'this should never actually get imported' }];
+      return n;
+    },
+  };
+  withOnlyAdapters([fakeAdapter], () => {
+    process.env.MYCELIUM_DEMO_MODE = '1';
+    try {
+      const res = scan();
+      assert.equal(res.scanned, 0, 'adapter never even asked for its sessions');
+      assert.equal(res.imported, 0);
+      assert.equal(loadRaw('demo-mode-should-skip-this'), null);
+    } finally {
+      delete process.env.MYCELIUM_DEMO_MODE;
+    }
+
+    // Sanity check the flag is actually what's gating this, not something
+    // else — same adapter, same session, imports normally once it's unset.
+    const res2 = scan();
+    assert.equal(res2.imported, 1);
+  });
+});
+
 test('scan() drops sessions with zero turns as skipped, not imported', () => {
   const fakeRef = { id: 'empty-session', mtimeMs: 1 };
   const fakeAdapter = {

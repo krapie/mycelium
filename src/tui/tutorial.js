@@ -16,15 +16,24 @@ import { writePendingKnowledgeText } from '../insight.js';
  * sessions dropped into the real store just long enough to walk through
  * 3-column panel navigation (← →) then Organize (`o`) → Learn (`w`) →
  * Reuse (`c`) → Knowledge review (`k`) → session lineage (Shift+M merge,
- * Shift+S split), using the TUI's own real key handlers (sessions.js is
- * never touched or hooked into: this module just ALSO listens for the same
- * keypresses, purely to advance its own narration, alongside whatever
- * sessions.js's real handlers do with them). `o`/`w`/`k`/Shift+S all call
- * llm.js's complete() under the hood — seedMockSessions() swaps that over
- * to tutorialMockProvider() (fast, deterministic, English — see
- * tutorial-mock-llm.js for why, including why it's deliberately not
- * instant) for as long as the mock sessions are in the store, so the
- * tutorial stays fast without depending on a real claude/codex subprocess.
+ * Shift+S split), using the TUI's own real key handlers. sessions.js is not
+ * hooked into for narration in general — this module mostly just ALSO
+ * listens for the same keypresses, alongside whatever sessions.js's real
+ * handlers do with them — but the 5 action handlers reachable from the `.`
+ * action palette (doScan/doOrganize/doKnowledge/doMerge/doSplit) each call
+ * one tutorial-only hook, `app.tutorialSignal?.(name)`, past their own
+ * guard checks (see each call site's own comment). That's the one thing raw
+ * keypress-watching structurally can't do: selecting a palette item
+ * confirms via Enter, same as confirming any other dialog, so there's no
+ * key identity left by the time the real handler runs that would tell this
+ * module which action just happened — only the handler itself still knows
+ * that. See app.tutorialSignal's own comment below for how it's consumed.
+ * `o`/`w`/`k`/Shift+S all call llm.js's complete() under the hood —
+ * seedMockSessions() swaps that over to tutorialMockProvider() (fast,
+ * deterministic, English — see tutorial-mock-llm.js for why, including why
+ * it's deliberately not instant) for as long as the mock sessions are in
+ * the store, so the tutorial stays fast without depending on a real
+ * claude/codex subprocess.
  */
 
 // `thenWait: 'open'|'close'` marks steps whose key triggers a REAL o/w LLM
@@ -59,7 +68,26 @@ const STEPS = [
   // the side effect) fixes both at once. Always index 0, so forward-only
   // skip-ahead scanning from any later step can never re-match it either.
   { titleKey: 'tutorial.introTitle', bodyKey: 'tutorial.introBody', waitFor: 'enter' },
-  { titleKey: 'tutorial.step2Title', bodyKey: 'tutorial.step2Body', waitFor: 'o', thenWait: 'open', waitingKey: 'tutorial.waitingOrganize' },
+  // Introduce `.` up front so every later step's single-key instruction reads
+  // as "one of the palette entries you already saw", not "another key to
+  // memorize". After intro's Enter we're standing in the Sessions panel, so
+  // both SESSION and FOLDER groups are visible here — the full breadth of
+  // what the palette offers. Split into two steps (open / close) because
+  // isModalOpen()'s DOM-child-count heuristic only tracks a widget's
+  // open/close transition, not "opened AND user acknowledged AND closed
+  // themselves" — same shape as steps 2/3 and 5/6.
+  { titleKey: 'tutorial.stepPaletteTitle', bodyKey: 'tutorial.stepPaletteBody', waitFor: '.', thenWait: 'open', waitingKey: 'tutorial.waitingPalette' },
+  { titleKey: 'tutorial.stepPaletteAckTitle', bodyKey: 'tutorial.stepPaletteAckBody', waitFor: 'escape', thenWait: 'close' },
+  // Capture, taught right where the palette showed it first (FOLDER group's
+  // own top entry) — signalFor only, no waitFor/thenWait at all: doScan()
+  // has no review modal for isModalOpen() to poll (unlike organize/
+  // knowledge/merge/split below), so there's nothing to wait for once the
+  // signal fires — see doScan()'s own call site (sessions.js) for why that
+  // signal is placed at genuine completion (scan.done) rather than
+  // function-entry the way the other four are. Advances the instant it
+  // fires, same as any other step with no thenWait (e.g. step4 below).
+  { titleKey: 'tutorial.stepScanTitle', bodyKey: 'tutorial.stepScanBody', signalFor: 'scan' },
+  { titleKey: 'tutorial.step2Title', bodyKey: 'tutorial.step2Body', waitFor: 'o', signalFor: 'organize', thenWait: 'open', waitingKey: 'tutorial.waitingOrganize' },
   { titleKey: 'tutorial.step3Title', bodyKey: 'tutorial.step3Body', waitFor: 'enter', thenWait: 'close', waitingKey: 'tutorial.waitingApply' },
   // waitFor is 'left' here, not 'down' — applying placements (previous
   // step) leaves focus on the Sessions list (nothing in that flow moves it
@@ -73,7 +101,7 @@ const STEPS = [
   // by walking the tutorial live in tmux with the panel-nav step already in
   // place, not obvious from reading the STEPS data in isolation.
   { titleKey: 'tutorial.step4Title', bodyKey: 'tutorial.step4Body', waitFor: 'left' },
-  { titleKey: 'tutorial.step5Title', bodyKey: 'tutorial.step5Body', waitFor: 'w', thenWait: 'open', waitingKey: 'tutorial.waitingKnowledge' },
+  { titleKey: 'tutorial.step5Title', bodyKey: 'tutorial.step5Body', waitFor: 'w', signalFor: 'knowledge', thenWait: 'open', waitingKey: 'tutorial.waitingKnowledge' },
   { titleKey: 'tutorial.step6Title', bodyKey: 'tutorial.step6Body', waitFor: 'enter', thenWait: 'close', waitingKey: 'tutorial.waitingSave' },
   // Reuse: `c` (view context) rather than `i` (inject AGENTS.md) — both are
   // real, LLM-free, instant reads (reuse.js), but `c` opens exactly one
@@ -114,9 +142,9 @@ const STEPS = [
   // ≥2 sessions are already Space-selected — that's on the human to have
   // done per this step's own text; nothing here can verify it, same
   // accepted-risk shape as every other step's instructions.
-  { titleKey: 'tutorial.step11Title', bodyKey: 'tutorial.step11Body', waitFor: 'm', shift: true, thenWait: 'open', waitingKey: 'tutorial.waitingMerge' },
+  { titleKey: 'tutorial.step11Title', bodyKey: 'tutorial.step11Body', waitFor: 'm', shift: true, signalFor: 'merge', thenWait: 'open', waitingKey: 'tutorial.waitingMerge' },
   { titleKey: 'tutorial.step12Title', bodyKey: 'tutorial.step12Body', pollOnEntry: 'close' },
-  { titleKey: 'tutorial.step13Title', bodyKey: 'tutorial.step13Body', waitFor: 's', shift: true, thenWait: 'open', waitingKey: 'tutorial.waitingSplit' },
+  { titleKey: 'tutorial.step13Title', bodyKey: 'tutorial.step13Body', waitFor: 's', shift: true, signalFor: 'split', thenWait: 'open', waitingKey: 'tutorial.waitingSplit' },
   { titleKey: 'tutorial.step14Title', bodyKey: 'tutorial.step14Body', waitFor: 'enter', thenWait: 'close', waitingKey: 'tutorial.waitingApply' },
   // This step's whole point is "go try the real thing" (v for the calendar,
   // / for search) — both of those use Escape themselves for normal back-
@@ -237,6 +265,25 @@ export function startTutorial(app, onDone, personaId = 'swe') {
   // — see app.js — Ctrl+C stays a hard exit throughout the tutorial too.
   app.quitGuard = () => true;
 
+  // Tutorial-only signal from sessions.js's action handlers — see this
+  // module's own doc comment above. `action` is one of 'scan'/'organize'/
+  // 'knowledge'/'merge'/'split'; each real handler fires it past its own
+  // guard checks, so a no-op press (e.g. Shift+M with <2 selected) never
+  // reaches here at all. Cleared in finish(), same as quitGuard.
+  //
+  // Scans forward from the CURRENT step for the first one this action
+  // satisfies, same "human jumped ahead" tolerance matchesWaitFor's own
+  // skip-ahead gives keypresses — safe to always allow here (unlike
+  // AMBIGUOUS_KEYS' keypress case) because every action name is already
+  // unambiguous: it names the real handler that just ran, not a generic key
+  // that could mean something else on a different step.
+  app.tutorialSignal = (action) => {
+    if (done || waiting) return;
+    let j = i;
+    while (j < STEPS.length && STEPS[j].signalFor !== action) j++;
+    if (j < STEPS.length) advanceFrom(j);
+  };
+
   const render = () => {
     const step = STEPS[i];
     // "Step N/Total" is computed here, from this array's own length/index,
@@ -286,6 +333,7 @@ export function startTutorial(app, onDone, personaId = 'swe') {
   const finish = (completed) => {
     if (done) return;
     done = true;
+    app.tutorialSignal = null;
     app.screen.removeListener('keypress', onKeypress);
     // Deferred, not immediate: program.js emits 'keypress' (which is what
     // drives this whole listener) and the global quit binding's 'key q'
@@ -321,9 +369,13 @@ export function startTutorial(app, onDone, personaId = 'swe') {
     if (STEPS[i].pollOnEntry) pollUntil(STEPS[i].pollOnEntry === 'open');
   };
 
-  // Polls (rather than hooking sessions.js's real handlers) until the real
-  // o/w action's review modal has opened or closed, then settles on the
-  // next step. `want` is what isModalOpen() should read once ready.
+  // Polls until the real o/w/merge/split action's review modal has opened
+  // or closed, then settles on the next step. `want` is what isModalOpen()
+  // should read once ready. Still used even now that app.tutorialSignal
+  // exists (see advanceFrom below) — the signal only tells us the real
+  // handler STARTED (or, for scan, that it's fully done); an LLM-backed
+  // action can still take anywhere from under a second to 10+ seconds
+  // between that and its review modal actually appearing.
   const pollUntil = (want) => {
     const tick = () => {
       if (done) return;
@@ -333,11 +385,32 @@ export function startTutorial(app, onDone, personaId = 'swe') {
     tick();
   };
 
-  // Whether `key` is the exact keypress `step` is narrating/waiting for —
-  // same `shift`-flag reasoning as the inline comment below: Shift+M/Shift+S
-  // arrive as key.name 'm'/'s' + key.shift:true, not blessed's 'S-m' combo
-  // form, so a plain m/s must not satisfy a step whose waitFor needs Shift.
-  const matchesWaitFor = (step, k) => !!step.waitFor && k.name === step.waitFor && (!step.shift || k.shift);
+  // Shared tail for "step j's trigger just fired" — used by both a matched
+  // keypress (onKeypress below) and a matched app.tutorialSignal, so a step
+  // reachable from the `.` action menu settles the exact same way regardless
+  // of which path actually fired it.
+  const advanceFrom = (j) => {
+    i = j;
+    const step = STEPS[i];
+    if (step.thenWait) {
+      waiting = true;
+      render();
+      pollUntil(step.thenWait === 'open');
+    } else {
+      settleAt(i + 1);
+    }
+  };
+
+  // Whether the keypress `step` is narrating/waiting for — same `shift`-flag
+  // reasoning as the inline comment below: Shift+M/Shift+S arrive as
+  // key.name 'm'/'s' + key.shift:true, not blessed's 'S-m' combo form, so a
+  // plain m/s must not satisfy a step whose waitFor needs Shift.
+  //
+  // Punctuation keys (e.g. '.') don't get a k.name from readline's parser —
+  // they arrive only as the raw `ch` argument — so fall back to that when
+  // name is missing, keeping the letter/arrow-key path unchanged.
+  const matchesWaitFor = (step, ch, k) =>
+    !!step.waitFor && (k.name === step.waitFor || (!k.name && ch === step.waitFor)) && (!step.shift || k.shift);
 
   // Keys that mean something different almost everywhere in the app —
   // confirming ANY dialog, plain panel navigation — never count toward the
@@ -408,20 +481,12 @@ export function startTutorial(app, onDone, personaId = 'swe') {
     // — no match at all, or an ambiguous key that only matches a step
     // other than the current one — falls through untouched.
     let j = i;
-    if (!matchesWaitFor(STEPS[j], key)) {
+    if (!matchesWaitFor(STEPS[j], ch, key)) {
       if (AMBIGUOUS_KEYS.has(key.name)) return;
-      while (j < STEPS.length && !matchesWaitFor(STEPS[j], key)) j++;
+      while (j < STEPS.length && !matchesWaitFor(STEPS[j], ch, key)) j++;
       if (j >= STEPS.length) return;
     }
-    i = j;
-    const step = STEPS[i];
-    if (step.thenWait) {
-      waiting = true;
-      render();
-      pollUntil(step.thenWait === 'open');
-    } else {
-      settleAt(i + 1);
-    }
+    advanceFrom(j);
   }
 
   app.screen.on('keypress', onKeypress);

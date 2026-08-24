@@ -740,6 +740,12 @@ export function sessionsView(opts = {}) {
         // stop(), gated on busyWidgets instead of hiding unconditionally.
         if (asyncReviewFlowRunning) return;
         asyncReviewFlowRunning = true;
+        // Tutorial-only hook (see tutorial.js's app.tutorialSignal) — lets
+        // the narrator advance whether Shift+M was pressed directly or
+        // selected from the `.` action menu, since both call this exact
+        // function. Placed here, past the <2-selected no-op above, so a
+        // no-op press never fires a false "merge happened" signal.
+        app.tutorialSignal?.('merge');
         textPrompt(app, t('merge.titlePrompt'), suggestMergeTitle(ids), async (title) => {
           asyncReviewFlowRunning = false;
           if (title === null) return listBox.focus(); // Esc — cancelled
@@ -823,6 +829,10 @@ export function sessionsView(opts = {}) {
         // down — stuck waiting for a "close" that could never fully arrive.
         if (asyncReviewFlowRunning) return;
         asyncReviewFlowRunning = true;
+        // Tutorial-only hook, same reasoning as doMerge's — past the
+        // no-current-row/unsplit-revert branches above, so it only fires on
+        // a genuine forward split attempt.
+        app.tutorialSignal?.('split');
         const spin = app.startSpinner(t('split.suggesting'));
         const res = await suggestSplitBoundaries(r.id);
         spin.stop();
@@ -949,6 +959,11 @@ export function sessionsView(opts = {}) {
           reloadList();
           app.notify(t('scan.done', s.imported, s.scanned, s.skipped, s.failed), 4);
           app.render();
+          // Tutorial-only hook (see tutorial.js's app.tutorialSignal) — fired
+          // at genuine completion, not function-entry: scan has no review
+          // modal for isModalOpen() to poll (unlike o/w/merge/split), so this
+          // timing IS the narrator's only real completion signal.
+          app.tutorialSignal?.('scan');
         });
       };
       screenKey(app, ['s'], doScan);
@@ -972,6 +987,12 @@ export function sessionsView(opts = {}) {
         // a second concurrent run.
         if (asyncReviewFlowRunning) return;
         asyncReviewFlowRunning = true;
+        // Tutorial-only hook, same reasoning as doMerge's — past the
+        // in-flight guard above, so a swallowed impatient repeat press never
+        // double-fires it (harmless either way, tutorial.js's own signal
+        // handler no-ops while already waiting, but there's no reason to
+        // rely on that here too).
+        app.tutorialSignal?.('organize');
         try {
           await runSmartOrganize();
         } finally {
@@ -1245,7 +1266,11 @@ export function sessionsView(opts = {}) {
         items.push({ label: `${t('actions.newAgent')}${hint('n')}`, value: doNewAgent });
         menu(app, t('actions.title'), items, (fn) => {
           if (typeof fn === 'function') fn();
-        }, { width: '50%' });
+          // fn===undefined = palette dismissed without a choice (Esc, or a
+          // screen-key like `o` stole focus and opened its own modal on
+          // top). Nothing to do — the real action, if any, ran through
+          // its own key handler already.
+        }, { width: '50%', dismissOnBlur: true });
       }
       screenKey(app, ['.'], openActionMenu);
 
@@ -1465,6 +1490,9 @@ export function sessionsView(opts = {}) {
         // still in flight used to start a second concurrent run.
         if (asyncReviewFlowRunning) return;
         asyncReviewFlowRunning = true;
+        // Tutorial-only hook, same reasoning as doMerge's — past the
+        // no-folder-selected guard above.
+        app.tutorialSignal?.('knowledge');
         const refocus = () => (state.level === 'folders' ? foldersBox : listBox).focus();
         try {
           // startSpinner() (app.js) both animates the wait and keeps the
