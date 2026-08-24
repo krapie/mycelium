@@ -136,6 +136,15 @@ const STEPS = [
   // data.
   { titleKey: 'tutorial.step7Title', bodyKey: 'tutorial.step7Body', waitFor: 'c', thenWait: 'open', waitingKey: 'tutorial.waitingContext' },
   { titleKey: 'tutorial.step8Title', bodyKey: 'tutorial.step8Body', pollOnEntry: 'close' },
+  // Reuse: open the palette again on purpose so the human SEES where the
+  // `n` (new task) and `h` (handoff) actions live, without launching a
+  // real agent inside the tutorial (n/h call foreground() which spawns
+  // claude/codex/kiro — not something to do mid-tour). Same open/close
+  // pair shape as steps 2/3 (the earlier palette-intro) — see that step's
+  // own comment for why the acknowledgement is a separate close step
+  // rather than folded in.
+  { titleKey: 'tutorial.stepReuseTitle', bodyKey: 'tutorial.stepReuseBody', waitFor: '.', thenWait: 'open', waitingKey: 'tutorial.waitingReuse' },
+  { titleKey: 'tutorial.stepReuseAckTitle', bodyKey: 'tutorial.stepReuseAckBody', waitFor: 'escape', thenWait: 'close', waitingKey: 'tutorial.waitingReuseClose' },
   // Knowledge review (`k`) — deliberately its own unrelated feature from
   // Digest (`d`), not a step in the w/c sequence above; positioned right
   // after it anyway since it's the natural "faster way to do this across
@@ -534,7 +543,13 @@ export function startTutorial(app, onDone, personaId = 'swe', { reloadSessions, 
   // match always corresponds to that specific real handler actually having
   // run, and their thenWait is always 'open' — which only resolves once a
   // modal genuinely appears, never trivially.
-  const AMBIGUOUS_KEYS = new Set(['enter', 'left', 'right']);
+  // '.' is also the palette's open key, used twice by design — once early
+  // to introduce the palette, and once again mid-Reuse to show where n/h
+  // live (both waitFor: '.'). Without this, a `.` press on any earlier
+  // step (e.g. Organize) would forward-match the later Reuse-palette step
+  // and cascade the narrator straight there, skipping the real Organize
+  // action entirely.
+  const AMBIGUOUS_KEYS = new Set(['enter', 'left', 'right', '.']);
 
   function onKeypress(ch, key) {
     if (done || !key) return;
@@ -588,7 +603,9 @@ export function startTutorial(app, onDone, personaId = 'swe', { reloadSessions, 
     // other than the current one — falls through untouched.
     let j = i;
     if (!matchesWaitFor(STEPS[j], ch, key)) {
-      if (AMBIGUOUS_KEYS.has(key.name)) return;
+      // Punctuation keys arrive with key.name undefined (see matchesWaitFor's
+      // own ch-fallback), so check both when deciding what's ambiguous.
+      if (AMBIGUOUS_KEYS.has(key.name) || (!key.name && AMBIGUOUS_KEYS.has(ch))) return;
       while (j < STEPS.length && !matchesWaitFor(STEPS[j], ch, key)) j++;
       if (j >= STEPS.length) return;
     }

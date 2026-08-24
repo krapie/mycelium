@@ -225,6 +225,12 @@ const en = {
   'tutorial.step8Title': '',
   'tutorial.step8Body': (fg) =>
     `This is exactly what gets injected into AGENTS.md automatically whenever you start a session here with {${fg}-fg}n{/} or {${fg}-fg}h{/} — or press {${fg}-fg}i{/} to inject it into a project manually, right now. Press {${fg}-fg}c{/} or {${fg}-fg}Esc{/} to close.`,
+  'tutorial.stepReuseTitle': ' — Start next session',
+  'tutorial.stepReuseBody': (fg) =>
+    `That context feeds the next agent session. Press {${fg}-fg}.{/} — the FOLDER group's "New task with folder context" ({${fg}-fg}n{/}) and the SESSION group's "Continue this task on another agent" ({${fg}-fg}h{/}) are what actually launch those sessions. Just look for now — pressing them for real would spawn claude/codex/kiro. Esc when you've seen them.`,
+  'tutorial.stepReuseAckTitle': '',
+  'tutorial.stepReuseAckBody': (fg) =>
+    `Good. From your own store, {${fg}-fg}n{/} and {${fg}-fg}h{/} are how you actually go from what Mycelium knows to your next real session.`,
   'tutorial.step9Title': ' — Knowledge Review',
   'tutorial.step9Body': (fg) =>
     `That was one folder, by hand. Every folder's knowledge can also be refreshed in one place — press {${fg}-fg}k{/} to check for (or compute) today's knowledge updates, unrelated to Digest.`,
@@ -254,6 +260,8 @@ const en = {
   // polling) rather than trusting the raw keypress alone).
   'tutorial.waitingPalette': 'Waiting for the action menu to open…',
   'tutorial.waitingPaletteClose': 'Closing the action menu…',
+  'tutorial.waitingReuse': 'Waiting for the action menu to open…',
+  'tutorial.waitingReuseClose': 'Closing the action menu…',
   'tutorial.waitingOrganize': 'Reading sessions and drafting folder suggestions…',
   'tutorial.waitingApply': 'Applying…',
   'tutorial.waitingKnowledge': "Distilling this folder's sessions into a knowledge draft…",
@@ -521,6 +529,12 @@ const ko = {
   'tutorial.step8Title': '',
   'tutorial.step8Body': (fg) =>
     `{${fg}-fg}n{/} 또는 {${fg}-fg}h{/}로 이 폴더에서 세션을 시작할 때마다 이 내용이 AGENTS.md에 자동으로 주입됩니다 — 또는 {${fg}-fg}i{/}로 지금 바로 프로젝트에 직접 주입할 수도 있습니다. {${fg}-fg}c{/} 또는 {${fg}-fg}Esc{/}로 닫으세요.`,
+  'tutorial.stepReuseTitle': ' — 다음 세션 시작',
+  'tutorial.stepReuseBody': (fg) =>
+    `방금 본 컨텍스트가 다음 에이전트 세션에서 그대로 쓰입니다. {${fg}-fg}.{/}를 눌러보세요 — FOLDER 그룹의 "폴더 컨텍스트로 새 작업 시작"({${fg}-fg}n{/})과 SESSION 그룹의 "다른 에이전트로 작업을 이어서"({${fg}-fg}h{/})가 실제로 그 세션들을 실행하는 곳입니다. 지금은 눈으로만 확인하세요 — 실제로 누르면 claude/codex/kiro가 실행됩니다. 확인했으면 Esc로 닫으세요.`,
+  'tutorial.stepReuseAckTitle': '',
+  'tutorial.stepReuseAckBody': (fg) =>
+    `좋습니다. 실제 스토어에서는 {${fg}-fg}n{/}과 {${fg}-fg}h{/}가 Mycelium이 아는 것에서 다음 실제 세션으로 넘어가는 통로입니다.`,
   'tutorial.step9Title': ' — 지식 검토',
   'tutorial.step9Body': (fg) =>
     `방금은 폴더 하나를 손으로 했죠. 모든 폴더의 지식을 한 곳에서 한 번에 갱신할 수도 있습니다 — {${fg}-fg}k{/}를 눌러 오늘의 지식 업데이트를 확인(또는 계산)해보세요. Digest와는 무관한 별개 기능입니다.`,
@@ -545,6 +559,8 @@ const ko = {
     `전체 라이프사이클을 다 보셨습니다. 일상적으로는 단순한 반복입니다, 바로 {bold}Context Flywheel{/}: {${fg}-fg}s{/} 캡처 → {${fg}-fg}o{/} 정리 → {${fg}-fg}w{/} 학습 → {${fg}-fg}n{/} 필요한 모든 게 준비된 채로 다음 세션 시작. 대부분은 이미 백그라운드에서 저절로 돌아갑니다. Mycelium이 알아서 캡처하고 정리하고 배운 것을 갱신해둡니다. 이 키들을 누르는 건 대부분 처음부터 뭔가 시작시키는 게 아니라 이미 준비된 걸 검토/확인하는 것에 가깝습니다. 키가 기억나지 않으면 {${fg}-fg}.{/}로 메뉴를 열어보세요. 다 보셨으면 {${fg}-fg}q{/}를 누르세요. 데모 세션이 정리되고 원래(기존) 데이터로 전환됩니다.`,
   'tutorial.waitingPalette': '액션 메뉴가 열리기를 기다리는 중…',
   'tutorial.waitingPaletteClose': '액션 메뉴를 닫는 중…',
+  'tutorial.waitingReuse': '액션 메뉴가 열리기를 기다리는 중…',
+  'tutorial.waitingReuseClose': '액션 메뉴를 닫는 중…',
   'tutorial.waitingOrganize': '세션을 읽고 폴더를 제안하는 중…',
   'tutorial.waitingApply': '적용하는 중…',
   'tutorial.waitingKnowledge': '이 폴더의 세션들을 지식 초안으로 압축하는 중…',
