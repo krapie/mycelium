@@ -2,7 +2,7 @@ import { createApp } from './app.js';
 import { sessionsView } from './views/sessions.js';
 import { welcomeModal, firstScanModal } from './widgets/viewers.js';
 import { menu } from './widgets/pickers.js';
-import { seedMockSessions, startTutorial, DEMO_HANDOFF_EXIT_CODE } from './tutorial.js';
+import { prepareTutorialProvider, startTutorial, DEMO_HANDOFF_EXIT_CODE } from './tutorial.js';
 import { PERSONAS } from './personas.js';
 import { C } from './theme.js';
 import { t, getLocale, setLocale } from './i18n.js';
@@ -33,9 +33,9 @@ function pickLanguage(app, cb) {
   );
 }
 
-// Shown before seeding mock sessions, both for `mycelium demo` and for a
+// Shown before the tutorial starts, both for `mycelium demo` and for a
 // first-run user who opted into the tour — which persona's storylines
-// (personas.js) seedMockSessions()/startTutorial() should use. `cb` receives
+// (personas.js) prepareTutorialProvider()/startTutorial() should use. `cb` receives
 // undefined if the picker is dismissed with Escape; callers default that to
 // 'swe' rather than leaving the demo in a half-started state. personas.js's
 // label/description are `{en, ko}` — resolved here against whatever
@@ -130,29 +130,28 @@ export async function runTui({ forceTutorial = false } = {}) {
   // No background daemon either — a one-shot demo shouldn't be scanning
   // for real agent sessions in the background.
   if (forceTutorial) {
-    // Mount the (empty, pre-seed) sessions view FIRST, then show the
-    // persona picker on top of it — so the picker has the real TUI chrome
-    // (header/panels/statusbar) behind it instead of a bare screen. Seeding
-    // happens after the pick, so `api.reloadAll()` is what makes the
-    // already-mounted view pick up the newly-written mock sessions (seeding
-    // writes straight to the raw store/index, bypassing this view's own
-    // in-memory state).
+    // Mount the (empty) sessions view FIRST, then show the persona picker on
+    // top of it — so the picker has the real TUI chrome (header/panels/
+    // statusbar) behind it instead of a bare screen. Genuinely empty is the
+    // point now: prepareTutorialProvider() below only wires up the LLM mock
+    // + knowledge pre-stage, not any visible session rows — those land later,
+    // the moment the tutorial's own Scan step is triggered (see tutorial.js's
+    // doc comment), so the Sessions view stays empty straight through this
+    // whole picker sequence.
     let api;
     await app.show(sessionsView({ onReady: (a) => (api = a) }));
     app.render();
     pickLanguage(app, (locale = 'en') => {
       setLocale(locale);
-      // Refresh right away, not only once seedMockSessions() below also
-      // calls reloadAll() — panel border labels (`sessions.foldersPanelLabel`
+      // Refresh right away — panel border labels (`sessions.foldersPanelLabel`
       // etc.) are blessed widget construction options, only re-applied when
       // something calls reloadAll()'s updatePanelLabels(); without this call
-      // here too, any picker still shown on screen before persona/seeding
+      // here too, any picker still shown on screen before persona pick
       // (there is none in this branch, but see the onboarding branch below
       // for where it matters) would sit next to stale-language chrome.
       api.reloadAll();
       pickPersona(app, async (personaId = 'swe') => {
-        seedMockSessions(personaId);
-        api.reloadAll();
+        prepareTutorialProvider(personaId);
         // Once the demo sessions are cleaned up, this isolated ~/.mycelium-demo
         // store is empty — resetToRoot() used to just drop back into that empty
         // view, which reads as "the demo is broken" (0 sessions, no obvious way
@@ -169,6 +168,7 @@ export async function runTui({ forceTutorial = false } = {}) {
             app.quit(completed ? DEMO_HANDOFF_EXIT_CODE : 0);
           },
           personaId,
+          { reloadSessions: () => api.reloadAll() },
         );
       });
     });
@@ -184,9 +184,11 @@ export async function runTui({ forceTutorial = false } = {}) {
   // bug found in production (v0.1.0): startTuiRoutine() kicks off scanCycle()
   // without awaiting it, so it runs concurrently with the first-run
   // onboarding flow below. On a brand new install, that flow spends real
-  // wall-clock time on language/tour/persona pickers before seedMockSessions()
-  // ever writes the first mock session — plenty of time for the real scan to
-  // import actual ~/.claude/~/.codex/~/.kiro history into ~/.mycelium first.
+  // wall-clock time on language/tour/persona pickers, then the tutorial's own
+  // early steps, before injectDemoSessions() ever writes the first mock
+  // session (now deferred all the way to the Scan step — see tutorial.js) —
+  // plenty of time for the real scan to import actual ~/.claude/~/.codex/
+  // ~/.kiro history into ~/.mycelium first.
   // sessionsView() shows ALL unfiled sessions, not just demo:true ones, so
   // the tutorial ended up showing a mix of real personal session titles
   // alongside the mock ones — exactly the "adapters read real data
@@ -205,10 +207,12 @@ export async function runTui({ forceTutorial = false } = {}) {
   // second app.show()) to drop the by-then-deleted mock rows — see that
   // method's comment for why re-mounting a second time isn't safe here.
   if (!cfg.onboarded) {
-    // Mount the (real, pre-seed) sessions view FIRST, same reasoning as the
+    // Mount the (empty) sessions view FIRST, same reasoning as the
     // forceTutorial branch above — every picker shown from here on (language,
     // tour prompt, persona) gets real TUI chrome behind it instead of a bare
-    // screen.
+    // screen. Stays empty even if the human picks the tour: see the
+    // forceTutorial branch's comment for why session rows are now deferred
+    // to the tutorial's own Scan step rather than seeded here.
     let api;
     await app.show(sessionsView({ onReady: (a) => (api = a) }));
     app.render();
@@ -233,8 +237,7 @@ export async function runTui({ forceTutorial = false } = {}) {
           saveConfig({ ...loadConfig(), onboarded: true });
           if (choice === 'yes') {
             pickPersona(app, (personaId = 'swe') => {
-              seedMockSessions(personaId);
-              api.reloadAll();
+              prepareTutorialProvider(personaId);
               startTutorial(
                 app,
                 () => {
@@ -251,6 +254,7 @@ export async function runTui({ forceTutorial = false } = {}) {
                   startUpkeepAndRecheck(() => api);
                 },
                 personaId,
+                { reloadSessions: () => api.reloadAll() },
               );
             });
           } else {

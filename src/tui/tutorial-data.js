@@ -21,8 +21,8 @@ function daysAgo(n, hour = 10) {
 
 // personas.js's title/summary/turns are `{en, ko}` (turns: `{role, en, ko}`)
 // — resolved here against whichever locale is active at seed time (index.js
-// picks language before calling seedMockSessions(), so getLocale() already
-// reflects it by the time this runs). `locale` defaults to getLocale()
+// picks language before the tutorial ever calls injectDemoSessions(), so
+// getLocale() already reflects it by the time this runs). `locale` defaults to getLocale()
 // rather than always reading it live, so a caller can pin a specific
 // language explicitly (see the tests) without needing to call setLocale()
 // first and risk leaking that change to whatever runs after it.

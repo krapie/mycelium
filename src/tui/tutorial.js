@@ -14,26 +14,39 @@ import { writePendingKnowledgeText } from '../insight.js';
 /**
  * First-run interactive tutorial (and `mycelium demo`'s engine) — mock
  * sessions dropped into the real store just long enough to walk through
- * 3-column panel navigation (← →) then Organize (`o`) → Learn (`w`) →
- * Reuse (`c`) → Knowledge review (`k`) → session lineage (Shift+M merge,
- * Shift+S split), using the TUI's own real key handlers. sessions.js is not
- * hooked into for narration in general — this module mostly just ALSO
- * listens for the same keypresses, alongside whatever sessions.js's real
- * handlers do with them — but the 5 action handlers reachable from the `.`
- * action palette (doScan/doOrganize/doKnowledge/doMerge/doSplit) each call
- * one tutorial-only hook, `app.tutorialSignal?.(name)`, past their own
- * guard checks (see each call site's own comment). That's the one thing raw
+ * Capture (`s`) → Organize (`o`) → Learn (`w`) → Reuse (`c`) → Knowledge
+ * review (`k`) → session lineage (Shift+M merge, Shift+S split), using the
+ * TUI's own real key handlers. sessions.js is not hooked into for narration
+ * in general — this module mostly just ALSO listens for the same
+ * keypresses, alongside whatever sessions.js's real handlers do with them —
+ * but the 5 action handlers reachable from the `.` action palette
+ * (doScan/doOrganize/doKnowledge/doMerge/doSplit) each call one
+ * tutorial-only hook, `app.tutorialSignal?.(name)`, past their own guard
+ * checks (see each call site's own comment). That's the one thing raw
  * keypress-watching structurally can't do: selecting a palette item
  * confirms via Enter, same as confirming any other dialog, so there's no
  * key identity left by the time the real handler runs that would tell this
  * module which action just happened — only the handler itself still knows
  * that. See app.tutorialSignal's own comment below for how it's consumed.
  * `o`/`w`/`k`/Shift+S all call llm.js's complete() under the hood —
- * seedMockSessions() swaps that over to tutorialMockProvider() (fast,
+ * prepareTutorialProvider() swaps that over to tutorialMockProvider() (fast,
  * deterministic, English — see tutorial-mock-llm.js for why, including why
  * it's deliberately not instant) for as long as the mock sessions are in
  * the store, so the tutorial stays fast without depending on a real
  * claude/codex subprocess.
+ *
+ * The mock sessions themselves are NOT written to the store up front. The
+ * real product flow (index.js) mounts the Sessions view genuinely empty and
+ * calls prepareTutorialProvider() only (LLM mock + knowledge pre-stage,
+ * nothing visible) — injectDemoSessions() is what actually writes them, and
+ * it fires from app.tutorialSignal('scan') below, timed to the same
+ * keypress that satisfies the Scan step. That's what lets that step's
+ * "press s to capture them" instruction be literally true instead of
+ * decorative: pressing s is the first moment anything appears on screen,
+ * exactly like a brand new install's first real scan. seedMockSessions()
+ * below still does both steps eagerly, back-to-back — kept for callers
+ * (mostly tests) that want the full demo store ready immediately without
+ * driving the tutorial through its own Scan step to get there.
  */
 
 // `thenWait: 'open'|'close'` marks steps whose key triggers a REAL o/w LLM
@@ -77,7 +90,7 @@ const STEPS = [
   // open/close transition, not "opened AND user acknowledged AND closed
   // themselves" — same shape as steps 2/3 and 5/6.
   { titleKey: 'tutorial.stepPaletteTitle', bodyKey: 'tutorial.stepPaletteBody', waitFor: '.', thenWait: 'open', waitingKey: 'tutorial.waitingPalette' },
-  { titleKey: 'tutorial.stepPaletteAckTitle', bodyKey: 'tutorial.stepPaletteAckBody', waitFor: 'escape', thenWait: 'close' },
+  { titleKey: 'tutorial.stepPaletteAckTitle', bodyKey: 'tutorial.stepPaletteAckBody', waitFor: 'escape', thenWait: 'close', waitingKey: 'tutorial.waitingPaletteClose' },
   // Capture, taught right where the palette showed it first (FOLDER group's
   // own top entry) — signalFor only, no waitFor/thenWait at all: doScan()
   // has no review modal for isModalOpen() to poll (unlike organize/
@@ -86,6 +99,9 @@ const STEPS = [
   // signal is placed at genuine completion (scan.done) rather than
   // function-entry the way the other four are. Advances the instant it
   // fires, same as any other step with no thenWait (e.g. step4 below).
+  // This step is also where injectDemoSessions() actually runs (see
+  // app.tutorialSignal above) — the Sessions view is genuinely empty until
+  // this exact keypress, so "press s to capture them" is real, not staged.
   { titleKey: 'tutorial.stepScanTitle', bodyKey: 'tutorial.stepScanBody', signalFor: 'scan' },
   { titleKey: 'tutorial.step2Title', bodyKey: 'tutorial.step2Body', waitFor: 'o', signalFor: 'organize', thenWait: 'open', waitingKey: 'tutorial.waitingOrganize' },
   { titleKey: 'tutorial.step3Title', bodyKey: 'tutorial.step3Body', waitFor: 'enter', thenWait: 'close', waitingKey: 'tutorial.waitingApply' },
@@ -158,9 +174,25 @@ const STEPS = [
   { titleKey: 'tutorial.step16Title', bodyKey: 'tutorial.step16Body' },
 ];
 
-export function seedMockSessions(personaId = 'swe') {
+/** Writes the persona's mock sessions straight to the store — the one part
+ * of setup that's actually visible on screen. Split out from
+ * prepareTutorialProvider() so the real tutorial flow can defer it to the
+ * Scan step's own signal (see app.tutorialSignal below) instead of showing
+ * it before the tour even starts. NOT idempotent on its own — buildMockSessions()
+ * stamps a fresh randomUUID() per session on every call, so calling this
+ * twice adds a second full set rather than overwriting the first. Callers
+ * that might run after a caller-side seedMockSessions() (e.g.
+ * app.tutorialSignal's 'scan' handling below, reachable from a test helper
+ * that pre-seeded) are responsible for checking whether demo sessions
+ * already exist first. */
+export function injectDemoSessions(personaId = 'swe') {
   for (const n of buildMockSessions(personaId)) saveRaw(n);
   reindex();
+}
+
+/** LLM mock + knowledge pre-stage only — no session rows written, so the
+ * Sessions view stays genuinely empty until injectDemoSessions() runs. */
+export function prepareTutorialProvider(personaId = 'swe') {
   __setTestProvider(createTutorialMockProvider(personaId));
   // Pre-stage a knowledge-refresh proposal for the merge-target folder, as
   // if the daemon's independent knowledgeReviewCycle had already computed
@@ -178,6 +210,16 @@ export function seedMockSessions(personaId = 'swe') {
   const persona = findPersona(personaId);
   const mergeStoryline = persona.storylines[persona.mergeStorylineIndex];
   writePendingKnowledgeText(mergeStoryline.folder, mergeStoryline.knowledge[getLocale()]);
+}
+
+/** Convenience for callers that want the whole demo store ready immediately
+ * (mostly tests not specifically exercising the Scan step's own reveal) —
+ * everything prepareTutorialProvider()/injectDemoSessions() do, eagerly,
+ * back-to-back. The real tutorial flow (index.js) calls the two separately
+ * instead — see this module's doc comment above. */
+export function seedMockSessions(personaId = 'swe') {
+  prepareTutorialProvider(personaId);
+  injectDemoSessions(personaId);
 }
 
 /** Remove every mock session (and whatever empty folders o/w created along
@@ -200,15 +242,27 @@ export const DEMO_HANDOFF_EXIT_CODE = 42;
 
 /**
  * Mounts the narrator overlay and drives it through STEPS. `app`'s sessions
- * view must already be showing the freshly-seeded mock data (see index.js/
- * cli.js for the seed-then-mount ordering). `q` exits the tutorial from
- * anywhere, immediately, no confirm — the only key the tutorial itself
- * reacts to; Escape is left alone entirely (see onKeypress). `onDone
- * (completed)` fires once, with cleanup already done — `completed: true`
- * only if `q` was pressed on the actual last step, `false` otherwise (q
- * anywhere earlier is just "done early").
+ * view is expected to be mounted already — genuinely empty is fine (and
+ * expected, in the real product flow: see this module's doc comment above),
+ * since the Scan step's own signal is what injects the mock data. `q` exits
+ * the tutorial from anywhere, immediately, no confirm — the only key the
+ * tutorial itself reacts to; Escape is left alone entirely (see onKeypress).
+ * `onDone(completed)` fires once, with cleanup already done — `completed:
+ * true` only if `q` was pressed on the actual last step, `false` otherwise
+ * (q anywhere earlier is just "done early"). `reloadSessions`, if given, is
+ * called right after the Scan step's signal injects the mock sessions, so
+ * they actually render — omit it for callers (tests) that pre-seeded via
+ * seedMockSessions() and don't need a live reveal. `sessionsPreSeeded: true`
+ * tells the Scan step's signal to skip injectDemoSessions() entirely (for
+ * exactly those pre-seeded callers) — deliberately an explicit flag from the
+ * caller, not inferred by checking the store for existing demo sessions:
+ * this file's own test suite shares one store across many tests without
+ * per-test cleanup, so "does a demo session already exist anywhere" is true
+ * far more often than "did THIS caller pre-seed", and the same ambiguity
+ * would misfire in production too, on a stale leftover from a tutorial that
+ * exited uncleanly.
  */
-export function startTutorial(app, onDone, personaId = 'swe') {
+export function startTutorial(app, onDone, personaId = 'swe', { reloadSessions, sessionsPreSeeded = false } = {}) {
   const persona = findPersona(personaId);
   const mergeFolder = persona.storylines[persona.mergeStorylineIndex].folder;
   const sessionCount = persona.storylines.reduce((n, s) => n + s.sessions.length, 0);
@@ -281,7 +335,24 @@ export function startTutorial(app, onDone, personaId = 'swe') {
     if (done || waiting) return;
     let j = i;
     while (j < STEPS.length && STEPS[j].signalFor !== action) j++;
-    if (j < STEPS.length) advanceFrom(j);
+    if (j >= STEPS.length) return;
+    // Scan is the one action that also makes something real happen in the
+    // store, not just in the narration: this is the actual moment the mock
+    // sessions get written — timed to this signal, not to startTutorial()'s
+    // own setup, so a still-empty Sessions view genuinely fills in right as
+    // this step's key is pressed. Skipped when sessionsPreSeeded is true
+    // (see this function's own doc comment): injectDemoSessions() is NOT
+    // idempotent on its own (fresh randomUUID() per call), so a caller that
+    // already ran seedMockSessions() before starting the tutorial would
+    // otherwise end up with two full sets once this signal fires.
+    // reloadSessions is what makes a genuine injection visible immediately
+    // rather than on the next unrelated re-render; harmless to call even
+    // when injection was skipped.
+    if (action === 'scan') {
+      if (!sessionsPreSeeded) injectDemoSessions(personaId);
+      reloadSessions?.();
+    }
+    advanceFrom(j);
   };
 
   const render = () => {

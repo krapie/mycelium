@@ -93,15 +93,18 @@ export function textPrompt(app, label, initial, cb) {
 /**
  * A small menu picker returning the chosen value.
  *
- * `dismissOnBlur` (default `false`) auto-destroys the menu without firing
- * `cb` if focus moves elsewhere — used by the action palette (`.`), whose
- * screen-key shortcuts (e.g. `o` while the palette is open) don't consume
- * the keypress: sessions.js's own `o` handler fires and opens its own
- * modal on top, leaving the palette stranded underneath. isModalOpen()
- * (tutorial.js) then never sees children drop back to baseline and the
- * narrator's close-poll hangs forever. Normal menus (folder picker,
- * resume choices, etc.) legitimately open sub-modals in their own `cb`
- * and must NOT auto-dismiss — hence opt-in.
+ * `dismissOnBlur` (default `false`) auto-destroys the menu if focus moves
+ * elsewhere, firing `cb(undefined)` rather than a chosen value — used by
+ * the action palette (`.`), whose screen-key shortcuts (e.g. `o` while the
+ * palette is open) don't consume the keypress: sessions.js's own `o`
+ * handler fires and opens its own modal on top, leaving the palette
+ * stranded underneath. isModalOpen() (tutorial.js) then never sees
+ * children drop back to baseline and the narrator's close-poll hangs
+ * forever. `cb(undefined)` is indistinguishable from a plain Escape
+ * dismissal — callers already treat "no value" as a no-op either way (see
+ * sessions.js's own `cb`), so this never needs a separate signal. Normal
+ * menus (folder picker, resume choices, etc.) legitimately open sub-modals
+ * in their own `cb` and must NOT auto-dismiss — hence opt-in.
  */
 export function menu(app, label, choices, cb, { width = '40%', dismissOnBlur = false } = {}) {
   // A choice with `header: true` is a non-selectable section label (e.g. the
