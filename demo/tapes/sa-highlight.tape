@@ -5,6 +5,11 @@
 # was confirmed with a throwaway interactive dry-run against an isolated
 # /tmp store before writing this tape, not guessed.
 #
+# Markers are anchored on each step's own stable subtitle (or, for the
+# handful of titleless "confirm/apply" steps, the real modal content that
+# opened right before them) rather than absolute step numbers — see
+# swe-highlight.tape's header comment for why.
+#
 # Safety: see swe-highlight.tape's header comment — same direct
 # `tui --tutorial` invocation, same disposable /tmp MYCELIUM_HOME.
 
@@ -38,24 +43,38 @@ Down
 Sleep 300ms
 Enter
 
-# Step 1/16 — intro + panel-nav merged
-Wait+Screen@6s /Step 1\/16/
+# Step 1/19 — intro + panel-nav merged
+Wait+Screen@6s /Step 1\/19/
 Sleep 2s
 Enter
 
-# Step 2/16 — Organize
-Wait+Screen@6s /Step 2\/16/
+# Step 2/19 — action palette intro
+Wait+Screen@6s /Step \d+\/\d+ — Menu/
+Sleep 1s
+Type "."
+Wait+Screen@6s /What do you want to do\?/
+Sleep 2s
+Escape
+
+# Step 4/19 — Capture
+Wait+Screen@6s /Step \d+\/\d+ — Capture/
+Sleep 1s
+Type "s"
+
+# Step 5/19 — Organize
+Wait+Screen@6s /Step \d+\/\d+ — Organize/
 Sleep 1s
 Type "o"
 
-# Step 3/16 — real suggestPlacements() review modal opened
-Wait+Screen@10s /Step 3\/16/
+# Real suggestPlacements() review modal opened.
+Wait+Screen@10s /Suggested placements/
 Sleep 2s
 Enter
 
-# Step 4/16 — back to Folders, walk down into the organized folder
-# (Root → New → customers → nimbustech — 4 downs).
-Wait+Screen@6s /Step 4\/16/
+# Step 7/19 — back to Folders, walk down into the organized folder
+# (Root → New → customers → nimbustech — 4 downs). No stable
+# subtitle/modal to anchor this arrival on — numbered exception.
+Wait+Screen@6s /Step 7\/19/
 Sleep 1s
 Left
 Sleep 500ms
@@ -69,26 +88,26 @@ Down
 Sleep 500ms
 Enter
 
-# Step 5/16 — Learn
-Wait+Screen@6s /Step 5\/16/
+# Step 8/19 — Learn
+Wait+Screen@6s /Step \d+\/\d+ — Learn/
 Sleep 1s
 Type "w"
 
-# Step 6/16 — real knowledge draft ready to save
-Wait+Screen@10s /Step 6\/16/
+# Real knowledge draft ready to save.
+Wait+Screen@10s /KNOWLEDGE\.md preview/
 Sleep 2s
 Enter
 
-# Step 7/16 — Reuse
-Wait+Screen@6s /Step 7\/16/
+# Step 10/19 — Reuse
+Wait+Screen@6s /Step \d+\/\d+ — Reuse/
 Sleep 1s
 Type "c"
 
-# Step 8/16 — real inherited-context viewer open
-Wait+Screen@10s /Step 8\/16/
+# Real inherited-context viewer open.
+Wait+Screen@10s /Context ·/
 Sleep 2s
 Escape
 
-# Step 9/16 — closing on a clean, settled list so the GIF loops smoothly.
-Wait+Screen@6s /Step 9\/16/
+# Step 12/19 — closing on a clean, settled list so the GIF loops smoothly.
+Wait+Screen@6s /Step \d+\/\d+ — Knowledge Review/
 Sleep 2s
