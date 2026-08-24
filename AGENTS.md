@@ -111,7 +111,8 @@ Keep GitHub issue/PR bodies short — a few bullets, not prose paragraphs restat
 
 - **PR summary**: 2-4 bullets max. Each bullet is one change + its one-line reason, not a paragraph. Skip anything a reviewer can already see in the diff (file names, "added X function") unless it needs context the diff can't show (why, not what).
 - **Checklist**: match `.github/PULL_REQUEST_TEMPLATE.md`'s heading (`## Checklist`, not `## Test plan`) — a short list of checkboxes (`- [x] npm test`, `- [x] npm run lint`, `- [ ] manual: ...`), not a narrative.
-- **Issue bodies**: state the problem/request in 1-3 sentences plus repro steps or a code pointer if relevant. Don't restate the codebase context the maintainer already knows.
+- **Issue bodies**: follow the matching template's exact field structure — `.github/ISSUE_TEMPLATE/bug_report.md` (`What happened` / `What you expected to happen` / `How to reproduce it` / `Anything else we need to know?` / `Environment`) or `feature_request.md` (`What would you like to be added` / `Why is this needed`) — filled in concisely, not the template's own guide text left in place. Don't restate the codebase context the maintainer already knows.
+- Template frontmatter (`labels:`, `assignees: krapie`) only auto-applies through GitHub's web "New Issue" form — `gh issue create`/the API never read it. Pass `--label`/`--assignee` explicitly to match what the template would have set.
 - When drafting via `gh pr create`/`gh issue create` (or editing after the fact via `gh api ... -X PATCH -f body=...` — `gh pr edit` can fail on this repo with an unrelated "Projects (classic)" GraphQL error, in which case fall back to `gh api`), write the concise version directly — don't draft long and plan to trim later.
 
 ## Before you finish a change
