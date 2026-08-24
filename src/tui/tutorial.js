@@ -78,6 +78,15 @@ const STEPS = [
   // themselves" — same shape as steps 2/3 and 5/6.
   { titleKey: 'tutorial.stepPaletteTitle', bodyKey: 'tutorial.stepPaletteBody', waitFor: '.', thenWait: 'open', waitingKey: 'tutorial.waitingPalette' },
   { titleKey: 'tutorial.stepPaletteAckTitle', bodyKey: 'tutorial.stepPaletteAckBody', waitFor: 'escape', thenWait: 'close' },
+  // Capture, taught right where the palette showed it first (FOLDER group's
+  // own top entry) — signalFor only, no waitFor/thenWait at all: doScan()
+  // has no review modal for isModalOpen() to poll (unlike organize/
+  // knowledge/merge/split below), so there's nothing to wait for once the
+  // signal fires — see doScan()'s own call site (sessions.js) for why that
+  // signal is placed at genuine completion (scan.done) rather than
+  // function-entry the way the other four are. Advances the instant it
+  // fires, same as any other step with no thenWait (e.g. step4 below).
+  { titleKey: 'tutorial.stepScanTitle', bodyKey: 'tutorial.stepScanBody', signalFor: 'scan' },
   { titleKey: 'tutorial.step2Title', bodyKey: 'tutorial.step2Body', waitFor: 'o', signalFor: 'organize', thenWait: 'open', waitingKey: 'tutorial.waitingOrganize' },
   { titleKey: 'tutorial.step3Title', bodyKey: 'tutorial.step3Body', waitFor: 'enter', thenWait: 'close', waitingKey: 'tutorial.waitingApply' },
   // waitFor is 'left' here, not 'down' — applying placements (previous

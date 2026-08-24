@@ -988,8 +988,9 @@ test('demo: selecting Organize from the `.` action menu advances the narrator to
     startTutorial(app, () => {});
 
     // Step 1 (intro) -> step 2 (palette-open) -> step 3 (palette-ack, closes
-    // it again) -> lands on the organize step, same steps every other test
-    // walks with direct keys.
+    // it again) -> step 4 (scan, direct key here — the menu path for THIS
+    // step is covered by its own dedicated test below) -> lands on the
+    // organize step, same steps every other test walks with direct keys.
     sendKey(input, 'enter');
     await settle();
     let baseline = app.screen.children.length;
@@ -999,7 +1000,11 @@ test('demo: selecting Organize from the `.` action menu advances the narrator to
     sendKey(input, 'escape');
     await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 2000 });
     await settle();
-    assert.equal(narratorStepIndex(app), 4, 'landed on the organize step via the normal path');
+    assert.equal(narratorStepIndex(app), 4, 'landed on the scan step via the normal path');
+    sendKey(input, 's');
+    await waitFor(() => narratorStepIndex(app) === 5, { timeoutMs: 2000 });
+    await settle();
+    assert.equal(narratorStepIndex(app), 5, 'landed on the organize step after scan');
 
     // Now trigger the SAME organize step's action through the menu instead
     // of pressing `o` directly.
@@ -1027,10 +1032,59 @@ test('demo: selecting Organize from the `.` action menu advances the narrator to
     );
     // And the narrator itself actually advanced off the organize step —
     // the actual regression this test guards against.
-    assert.equal(narratorStepIndex(app), 5, 'narrator advanced to the apply step via the menu path, not stuck');
+    assert.equal(narratorStepIndex(app), 6, 'narrator advanced to the apply step via the menu path, not stuck');
 
     sendKey(input, 'enter'); // apply, close the review modal
     await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 2000 });
+  } finally {
+    cleanup(app);
+  }
+});
+
+test('demo: the new Scan step advances via the `.` menu too, and never touches real adapters', async () => {
+  // MYCELIUM_DEMO_MODE isn't set by this test harness (only cli.js's real
+  // `demo` command sets it, on the CHILD process's env — see scanner.js's
+  // scan() and cli.js's own comment) — so this also doubles as a check that
+  // the real adapters genuinely run here, and simply find nothing (no real
+  // ~/.claude/~/.codex/~/.kiro sessions matching this sandboxed CI/test
+  // environment) rather than the step secretly depending on the guard to
+  // pass. What this test actually guards: the store's session count doesn't
+  // change from a demo-triggered scan, regardless of why.
+  const { app, input } = await mountDemo();
+  try {
+    const settle = () => new Promise((r) => setTimeout(r, 320));
+    const before = allRaw().length;
+    startTutorial(app, () => {});
+
+    sendKey(input, 'enter'); // intro
+    await settle();
+    let baseline = app.screen.children.length;
+    sendKey(input, '.'); // palette-open
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 2000 });
+    await settle();
+    sendKey(input, 'escape'); // palette-ack, closes it
+    await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 2000 });
+    await settle();
+    assert.equal(narratorStepIndex(app), 4, 'landed on the scan step');
+
+    // Trigger it through the menu instead of pressing `s` directly.
+    baseline = app.screen.children.length;
+    sendKey(input, '.');
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 2000 });
+    await settle();
+    const menuBox = app.screen.children.find((c) => c.type === 'list' && /want to do/.test(c._label?.content || ''));
+    assert.ok(menuBox, 'action menu opened');
+    const scanIdx = menuBox.items.findIndex((it) => /Scan for new sessions.*\(s\)/.test(it.content));
+    assert.ok(scanIdx >= 0, 'Scan entry present in the menu');
+    for (let n = menuBox.selected; n < scanIdx; n++) sendKey(input, 'down');
+    await settle();
+    sendKey(input, 'enter'); // selects Scan — runs doScan() for real
+    await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 2000 }); // menu itself closes immediately
+
+    // Scan has no review modal — the narrator only advances once doScan()'s
+    // own signal fires at genuine completion (see tutorial.js/sessions.js).
+    await waitFor(() => narratorStepIndex(app) === 5, { timeoutMs: 3000 });
+    assert.equal(allRaw().length, before, "store's session count is unchanged by a demo-triggered scan");
   } finally {
     cleanup(app);
   }

@@ -206,6 +206,9 @@ const en = {
   'tutorial.stepPaletteAckTitle': '',
   'tutorial.stepPaletteAckBody': (fg) =>
     `That's it — press {${fg}-fg}Esc{/} to close. From here on, whenever a step says "press {${fg}-fg}o{/}" (or any other key), you can either press it directly or open the menu with {${fg}-fg}.{/} and pick it. Both do exactly the same thing.`,
+  'tutorial.stepScanTitle': ' — Capture',
+  'tutorial.stepScanBody': (fg) =>
+    `Every session below was already captured automatically — that's Capture, step one of the loop. Press {${fg}-fg}s{/} (or {${fg}-fg}.{/} → Scan) to trigger it yourself; it's the exact same action that runs quietly in the background for Claude Code, Codex, and Kiro.`,
   'tutorial.step2Title': ' — Organize',
   'tutorial.step2Body': (fg, count) => `${count} fresh, unfiled sessions are sitting below. Press {${fg}-fg}o{/} (or {${fg}-fg}.{/} → Organize) to have Mycelium read them and suggest folders.`,
   'tutorial.step3Title': '',
@@ -498,6 +501,9 @@ const ko = {
   'tutorial.stepPaletteAckTitle': '',
   'tutorial.stepPaletteAckBody': (fg) =>
     `이게 전부입니다 — {${fg}-fg}Esc{/}로 닫으세요. 이후 스텝에서 "'{${fg}-fg}o{/}'를 누르세요" 같은 안내가 나오면, 그 키를 직접 눌러도 되고 {${fg}-fg}.{/}로 메뉴를 열어서 해당 항목을 골라도 됩니다. 결과는 완전히 동일합니다.`,
+  'tutorial.stepScanTitle': ' — 캡처',
+  'tutorial.stepScanBody': (fg) =>
+    `아래 세션들은 이미 자동으로 캡처된 것입니다 — 루프의 첫 단계인 Capture입니다. {${fg}-fg}s{/}를 눌러 (또는 {${fg}-fg}.{/} → Scan) 직접 실행해보세요 — Claude Code, Codex, Kiro를 대상으로 백그라운드에서 조용히 도는 것과 동일한 동작입니다.`,
   'tutorial.step2Title': ' — 조직화',
   'tutorial.step2Body': (fg, count) => `아직 정리 안 된 세션 ${count}개가 아래에 있습니다. {${fg}-fg}o{/}를 눌러 (또는 {${fg}-fg}.{/} → 세션 정리) Mycelium이 내용을 읽고 폴더를 제안하게 해보세요.`,
   'tutorial.step3Title': '',
