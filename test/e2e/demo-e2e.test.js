@@ -615,6 +615,17 @@ test('demo: finishing the tutorial on the actual last step reports completed:tru
     sendKey(input, 'escape');
     await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 1000 });
     await settle();
+    // Reuse palette-showcase (new pair after step 8): `.` opens the action
+    // menu so the human sees where n/h live, Esc closes it without
+    // launching a real agent. Structurally identical to the palette-intro
+    // pair at the top of the tutorial.
+    baseline = app.screen.children.length;
+    sendKey(input, '.');
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 2000 });
+    await settle();
+    sendKey(input, 'escape');
+    await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 2000 });
+    await settle();
     // Steps 9/10 — k: knowledge review (mirrors o's own two-step shape —
     // see tutorial.js). Nothing was pre-queued, so this computes fresh for
     // today via the mocked LLM before the review modal opens.
@@ -730,6 +741,17 @@ test('demo: pressing a later step\'s key early (skipping step 1) still lets the 
     await settle();
     sendKey(input, 'escape');
     await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 1000 });
+    await settle();
+    // Reuse palette-showcase (new pair after step 8): `.` opens the action
+    // menu so the human sees where n/h live, Esc closes it without
+    // launching a real agent. Structurally identical to the palette-intro
+    // pair at the top of the tutorial.
+    baseline = app.screen.children.length;
+    sendKey(input, '.');
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 2000 });
+    await settle();
+    sendKey(input, 'escape');
+    await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 2000 });
     await settle();
     // Steps 9/10 — k: knowledge review (mirrors o's own two-step shape —
     // see tutorial.js). Nothing was pre-queued, so this computes fresh for
