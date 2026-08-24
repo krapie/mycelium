@@ -34,6 +34,7 @@ const { sessionsView } = await import('../../src/tui/views/sessions.js');
 const { seedMockSessions, startTutorial } = await import('../../src/tui/tutorial.js');
 const { setLocale } = await import('../../src/tui/i18n.js');
 const { writePendingKnowledgeText, pendingKnowledgeReviews, dismissPendingKnowledge } = await import('../../src/insight.js');
+const { queueSuggestions } = await import('../../src/organize.js');
 
 // seedMockSessions()/createTutorialMockProvider() default their locale to
 // i18n.js's getLocale() — setLocale('ko') (used by exactly one test below)
@@ -948,6 +949,87 @@ test('action menu: FOLDER group lists Scan first, then Organize/Knowledge/New ta
 
     const baseline = app.screen.children.length - 1; // -1: the menu itself, about to close
     sendKey(input, 'escape');
+    await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 2000 });
+  } finally {
+    cleanup(app);
+  }
+});
+
+test('demo: selecting Organize from the `.` action menu advances the narrator too, not just direct `o`', async () => {
+  // Regression test for the exact gap this fix closes: tutorial.js's step
+  // advancement used to be gated purely on matchesWaitFor()'s exact key
+  // identity. Selecting a palette item confirms via Enter — the same key
+  // that confirms/closes lots of other dialogs — so the narrator had no way
+  // to tell "Enter selected Organize from the menu" apart from "Enter did
+  // something unrelated", and stayed stuck on the organize step forever if
+  // a human used the menu instead of pressing `o` directly. Now doOrganize()
+  // itself fires app.tutorialSignal('organize') past its own guards,
+  // regardless of which path called it — see sessions.js's own call site.
+  const { app, input } = await mountDemo();
+  try {
+    const settle = () => new Promise((r) => setTimeout(r, 320));
+
+    // Pre-queue a suggestion directly, same technique test/cli.test.js uses
+    // for the same reason: this file's tests share ONE store (useTempHome(),
+    // no per-test reset), and a couple of earlier tests in this same file
+    // (the "action menu" ones just above) seed mock sessions via mountDemo()
+    // but never run a tutorial to completion, so nothing ever cleans them
+    // up — by the time THIS test runs, suggestPlacements()'s real
+    // (unscoped, whole-store) classification call can land on a mix of
+    // leftover sessions the mock classifier wasn't tuned for and return no
+    // confident placements at all, closing no modal for this test to catch.
+    // Queuing one directly sidesteps the classifier entirely — this test is
+    // about the MENU triggering the real doOrganize()/review-modal flow at
+    // all, not about classification accuracy (already covered elsewhere).
+    const target = allRaw().find((s) => !s.folder);
+    assert.ok(target, 'seedMockSessions() left at least one unfiled session to suggest a placement for');
+    queueSuggestions([{ id: target.id, folder: 'e2e-menu-test/target', reason: 'pre-queued for this test' }]);
+
+    startTutorial(app, () => {});
+
+    // Step 1 (intro) -> step 2 (palette-open) -> step 3 (palette-ack, closes
+    // it again) -> lands on the organize step, same steps every other test
+    // walks with direct keys.
+    sendKey(input, 'enter');
+    await settle();
+    let baseline = app.screen.children.length;
+    sendKey(input, '.');
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 2000 });
+    await settle();
+    sendKey(input, 'escape');
+    await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 2000 });
+    await settle();
+    assert.equal(narratorStepIndex(app), 4, 'landed on the organize step via the normal path');
+
+    // Now trigger the SAME organize step's action through the menu instead
+    // of pressing `o` directly.
+    baseline = app.screen.children.length;
+    sendKey(input, '.');
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 2000 });
+    await settle();
+    const menuBox = app.screen.children.find((c) => c.type === 'list' && /want to do/.test(c._label?.content || ''));
+    assert.ok(menuBox, 'action menu opened');
+    const organizeIdx = menuBox.items.findIndex((it) => /Organize session.*\(o\)/.test(it.content));
+    assert.ok(organizeIdx >= 0, 'Organize entry present in the menu');
+    for (let n = menuBox.selected; n < organizeIdx; n++) sendKey(input, 'down');
+    await settle();
+    sendKey(input, 'enter'); // selects Organize — runs doOrganize() for real, same as pressing `o`
+
+    // Real effect (same proxy the direct-`o` walkthrough test above uses):
+    // the pre-queued placement is what's now showing in the real review
+    // modal doOrganize() opened.
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 3000 });
+    await settle();
+    assert.equal(
+      allRaw().find((s) => s.id === target.id)?.suggestedFolder,
+      'e2e-menu-test/target',
+      'the real organize action ran through the menu path, not just a UI no-op',
+    );
+    // And the narrator itself actually advanced off the organize step —
+    // the actual regression this test guards against.
+    assert.equal(narratorStepIndex(app), 5, 'narrator advanced to the apply step via the menu path, not stuck');
+
+    sendKey(input, 'enter'); // apply, close the review modal
     await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 2000 });
   } finally {
     cleanup(app);
