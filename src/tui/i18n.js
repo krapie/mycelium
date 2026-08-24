@@ -504,7 +504,7 @@ const ko = {
     `이게 전부입니다. {${fg}-fg}Esc{/}로 닫으세요. 이후 스텝 중 이 메뉴에도 있는 동작(정리, 지식 추출, 캡처, 병합, 분할)이라면, 그 키를 직접 눌러도 되고 {${fg}-fg}.{/}로 메뉴를 열어서 해당 항목을 골라도 됩니다. 결과는 완전히 동일합니다.`,
   'tutorial.stepScanTitle': ' — 캡처',
   'tutorial.stepScanBody': (fg) =>
-    `아직 아무 세션도 캡처되지 않았습니다. {${fg}-fg}s{/}를 눌러 (또는 {${fg}-fg}.{/} → Scan) AI 세션들을 가져와보세요. 루프의 첫 단계인 Capture이며, Claude Code, Codex, Kiro를 대상으로 백그라운드에서 조용히 도는 것과 동일한 동작입니다.`,
+    `아직 아무 세션도 캡처되지 않았습니다. {${fg}-fg}s{/}를 눌러 (또는 {${fg}-fg}.{/} → 새 세션 스캔) AI 세션들을 가져와보세요. 루프의 첫 단계인 Capture이며, Claude Code, Codex, Kiro를 대상으로 백그라운드에서 조용히 도는 것과 동일한 동작입니다.`,
   'tutorial.step2Title': ' — 조직화',
   'tutorial.step2Body': (fg, count) => `아직 정리 안 된 세션 ${count}개가 아래에 있습니다. {${fg}-fg}o{/}를 눌러 (또는 {${fg}-fg}.{/} → 세션 정리) Mycelium이 내용을 읽고 폴더를 제안하게 해보세요.`,
   'tutorial.step3Title': '',

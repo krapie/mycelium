@@ -35,6 +35,7 @@ const { seedMockSessions, prepareTutorialProvider, startTutorial } = await impor
 const { setLocale } = await import('../../src/tui/i18n.js');
 const { writePendingKnowledgeText, pendingKnowledgeReviews, dismissPendingKnowledge } = await import('../../src/insight.js');
 const { queueSuggestions } = await import('../../src/organize.js');
+const { __clearTestProvider } = await import('../../src/llm.js');
 
 // seedMockSessions()/createTutorialMockProvider() default their locale to
 // i18n.js's getLocale() — setLocale('ko') (used by exactly one test below)
@@ -42,7 +43,20 @@ const { queueSuggestions } = await import('../../src/organize.js');
 // would otherwise also see, since node's test runner shares one process per
 // file. Reset after every test, not just the one that sets it, so a test
 // order change can't leak Korean into an English-content assertion.
-test.afterEach(() => setLocale('en'));
+//
+// __clearTestProvider() too: prepareTutorialProvider()/seedMockSessions()
+// call __setTestProvider() directly (not through startTutorial()), and
+// endTutorial()'s own __clearTestProvider() only runs if a test drives the
+// tutorial all the way to completion (q or the final step) — a test that
+// stops partway (e.g. to assert mid-tutorial state) would otherwise leave a
+// stale mock provider active for whatever runs after it in this shared
+// process. Harmless in practice (every test in this file only ever calls
+// llm.js's complete() through one of these mock providers, never a real
+// subprocess), but cheap to clean up properly regardless.
+test.afterEach(() => {
+  setLocale('en');
+  __clearTestProvider();
+});
 
 function findByKeyword(sessions, re) {
   return sessions.filter((s) => re.test(s.extracted.summary || ''));
@@ -461,6 +475,54 @@ test('demo: q exits the tutorial immediately from any step, no confirm dialog', 
     assert.equal(doneArg, false, 'q on an early step is not a "completed" run — no demo→real handoff');
     assert.equal(allRaw().filter((s) => s.demo).length, 0, 'endTutorial() cleanup ran');
   } finally {
+    cleanup(app);
+  }
+});
+
+test('demo: startTutorial() sets MYCELIUM_DEMO_MODE for its own lifetime and restores whatever was there before', async () => {
+  // Guards a real scenario, not just an implementation detail: first-run
+  // onboarding runs startTutorial() in the SAME process as the rest of the
+  // real ~/.mycelium CLI, with nothing else to set this env var ahead of
+  // time (unlike `mycelium demo`, which gets it from cli.js's own spawned
+  // child process env) — so if startTutorial() didn't toggle it itself, a
+  // real first-run press of `s` would call a real, unguarded scan().
+  //
+  // Explicitly cleared (not asserted-clean) before starting: this file's
+  // tests share one process, and an earlier test's own startTutorial() run
+  // that never reached finish() would otherwise leave this env var already
+  // set — harmless to those other tests either way, but it would make this
+  // one's own "started unset, ends unset" claim meaningless. The outer
+  // ambient value (whatever it was) is restored in `finally` regardless.
+  const outerValue = process.env.MYCELIUM_DEMO_MODE;
+  delete process.env.MYCELIUM_DEMO_MODE;
+  const { app, input } = await mountDemo();
+  try {
+    let doneArg;
+    startTutorial(app, (completed) => (doneArg = completed), 'swe', { sessionsPreSeeded: true });
+    assert.equal(process.env.MYCELIUM_DEMO_MODE, '1', 'set for the tutorial\'s duration, even outside mycelium demo\'s own child process');
+    sendKey(input, 'q');
+    await waitFor(() => doneArg !== undefined, { timeoutMs: 1000 });
+    assert.equal(process.env.MYCELIUM_DEMO_MODE, undefined, 'restored to unset once the tutorial ends, not left on for the rest of the real session');
+  } finally {
+    if (outerValue === undefined) delete process.env.MYCELIUM_DEMO_MODE;
+    else process.env.MYCELIUM_DEMO_MODE = outerValue;
+    cleanup(app);
+  }
+});
+
+test('demo: startTutorial() leaves a pre-existing MYCELIUM_DEMO_MODE alone after finishing (mycelium demo\'s own child-process case)', async () => {
+  const outerValue = process.env.MYCELIUM_DEMO_MODE;
+  process.env.MYCELIUM_DEMO_MODE = '1'; // simulates cli.js's demo command's own child-process env
+  const { app, input } = await mountDemo();
+  try {
+    let doneArg;
+    startTutorial(app, (completed) => (doneArg = completed), 'swe', { sessionsPreSeeded: true });
+    sendKey(input, 'q');
+    await waitFor(() => doneArg !== undefined, { timeoutMs: 1000 });
+    assert.equal(process.env.MYCELIUM_DEMO_MODE, '1', 'still \'1\' after finish() — restored to its PRIOR value, not force-deleted');
+  } finally {
+    if (outerValue === undefined) delete process.env.MYCELIUM_DEMO_MODE;
+    else process.env.MYCELIUM_DEMO_MODE = outerValue;
     cleanup(app);
   }
 });
@@ -966,7 +1028,6 @@ test('demo: selecting Organize from the `.` action menu advances the narrator to
   // itself fires app.tutorialSignal('organize') past its own guards,
   // regardless of which path called it — see sessions.js's own call site.
   const { app, input } = await mountDemo();
-  const prevDemoMode = process.env.MYCELIUM_DEMO_MODE;
   try {
     const settle = () => new Promise((r) => setTimeout(r, 320));
 
@@ -1002,12 +1063,9 @@ test('demo: selecting Organize from the `.` action menu advances the narrator to
     await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 2000 });
     await settle();
     assert.equal(narratorStepIndex(app), 4, 'landed on the scan step via the normal path');
-    // Set right before the real doScan() → scan() call this key triggers —
-    // on a real developer machine, scan() reads the genuine ~/.claude/
-    // ~/.codex/~/.kiro global stores regardless of MYCELIUM_HOME, so an
-    // un-set default here risks real personal session content landing in
-    // this test's temp store. Restored in `finally`.
-    process.env.MYCELIUM_DEMO_MODE = '1';
+    // startTutorial() itself sets MYCELIUM_DEMO_MODE for the tutorial's
+    // whole lifetime (see tutorial.js) — this scan() call is guarded
+    // without this test needing to touch the env var itself.
     sendKey(input, 's');
     await waitFor(() => narratorStepIndex(app) === 5, { timeoutMs: 2000 });
     await settle();
@@ -1044,29 +1102,21 @@ test('demo: selecting Organize from the `.` action menu advances the narrator to
     sendKey(input, 'enter'); // apply, close the review modal
     await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 2000 });
   } finally {
-    if (prevDemoMode === undefined) delete process.env.MYCELIUM_DEMO_MODE;
-    else process.env.MYCELIUM_DEMO_MODE = prevDemoMode;
     cleanup(app);
   }
 });
 
 test('demo: the new Scan step advances via the `.` menu too, and never touches real adapters', async () => {
-  // MYCELIUM_DEMO_MODE isn't set by cli.js's real `demo` command until this
-  // test sets it itself, right before triggering scan below — set any
-  // earlier and the "landed on the scan step" walk above wouldn't be
-  // exercising the un-set default at all. Explicitly set (not left absent):
-  // on a real developer machine, doScan() → scan() reads the genuine
-  // ~/.claude/~/.codex/~/.kiro global stores regardless of MYCELIUM_HOME,
-  // so an un-set default here risks importing real personal session content
-  // into this test's temp store and failing the unchanged-count assertion
-  // below nondeterministically. Restored in `finally` either way. This test
-  // uses mountDemo(), which pre-seeds via seedMockSessions() (unlike the
-  // real product flow — see the dedicated "genuinely empty until Scan" test
-  // below), so what it actually guards here is that a demo-triggered scan on
-  // an ALREADY-seeded store doesn't double the mock sessions on top
-  // (app.tutorialSignal's own guard in tutorial.js).
+  // startTutorial() itself sets MYCELIUM_DEMO_MODE for the tutorial's whole
+  // lifetime (see tutorial.js), so the real ~/.claude/~/.codex/~/.kiro
+  // adapters are guarded off automatically here — no test-side env
+  // wrangling needed. This test uses mountDemo(), which pre-seeds via
+  // seedMockSessions() (unlike the real product flow — see the dedicated
+  // "genuinely empty until Scan" test below), so what it actually guards
+  // here is that a demo-triggered scan on an ALREADY-seeded store doesn't
+  // double the mock sessions on top (app.tutorialSignal's own guard in
+  // tutorial.js).
   const { app, input } = await mountDemo();
-  const prevDemoMode = process.env.MYCELIUM_DEMO_MODE;
   try {
     const settle = () => new Promise((r) => setTimeout(r, 320));
     const before = allRaw().length;
@@ -1085,7 +1135,6 @@ test('demo: the new Scan step advances via the `.` menu too, and never touches r
 
     // Trigger it through the menu instead of pressing `s` directly.
     baseline = app.screen.children.length;
-    process.env.MYCELIUM_DEMO_MODE = '1';
     sendKey(input, '.');
     await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 2000 });
     await settle();
@@ -1103,8 +1152,6 @@ test('demo: the new Scan step advances via the `.` menu too, and never touches r
     await waitFor(() => narratorStepIndex(app) === 5, { timeoutMs: 3000 });
     assert.equal(allRaw().length, before, 'already-seeded demo sessions are not duplicated by a second demo-triggered scan');
   } finally {
-    if (prevDemoMode === undefined) delete process.env.MYCELIUM_DEMO_MODE;
-    else process.env.MYCELIUM_DEMO_MODE = prevDemoMode;
     cleanup(app);
   }
 });
@@ -1131,7 +1178,6 @@ test('demo: the Sessions view is genuinely empty until the Scan step, matching t
   const app = createApp({ input, output });
   let api;
   await app.show(sessionsView({ onReady: (a) => (api = a) }));
-  const prevDemoMode = process.env.MYCELIUM_DEMO_MODE;
   try {
     const settle = () => new Promise((r) => setTimeout(r, 320));
     const demoCountBefore = allRaw().filter((s) => s.demo).length;
@@ -1151,14 +1197,9 @@ test('demo: the Sessions view is genuinely empty until the Scan step, matching t
     assert.equal(allRaw().filter((s) => s.demo).length, demoCountBefore, 'still nothing captured — the Scan step has not fired yet');
     const listItemsBefore = api.listBox.items.length;
 
-    // Set right before the real doScan() → scan() call this key triggers,
-    // not any earlier — on a real developer machine, scan() reads the
-    // genuine ~/.claude/~/.codex/~/.kiro global stores regardless of
-    // MYCELIUM_HOME, so an un-set default here risks real personal session
-    // content landing in this test's temp store (harmless to the demo-count
-    // assertions below, which filter on `.demo`, but not something a test
-    // should risk regardless). Restored in `finally`.
-    process.env.MYCELIUM_DEMO_MODE = '1';
+    // startTutorial() above already set MYCELIUM_DEMO_MODE for the
+    // tutorial's whole lifetime (see tutorial.js) — this scan() call is
+    // guarded without this test needing to touch the env var itself.
     sendKey(input, 's');
     await waitFor(() => narratorStepIndex(app) === 5, { timeoutMs: 2000 });
     await settle();
@@ -1173,8 +1214,6 @@ test('demo: the Sessions view is genuinely empty until the Scan step, matching t
       'the mounted view actually re-rendered the newly-injected sessions (reloadSessions), not just the raw store',
     );
   } finally {
-    if (prevDemoMode === undefined) delete process.env.MYCELIUM_DEMO_MODE;
-    else process.env.MYCELIUM_DEMO_MODE = prevDemoMode;
     cleanup(app);
   }
 });

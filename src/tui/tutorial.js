@@ -319,6 +319,28 @@ export function startTutorial(app, onDone, personaId = 'swe', { reloadSessions, 
   // — see app.js — Ctrl+C stays a hard exit throughout the tutorial too.
   app.quitGuard = () => true;
 
+  // scanner.js's scan() already checks this env var to skip the real
+  // ADAPTERS loop — cli.js's `demo` command sets it once, on its own
+  // isolated child process, before this module ever runs. First-run
+  // onboarding runs in THIS SAME process against the real ~/.mycelium
+  // though, with nothing to set it on ahead of time, so without this it's
+  // unset there and a first-run press of `s` calls a real, unguarded
+  // scan() — importing whatever real ~/.claude/~/.codex/~/.kiro sessions
+  // exist right into the same batch injectDemoSessions() is about to add,
+  // both appearing in one indistinguishable reveal. Toggling it here (not
+  // in scanner.js) scopes the guard to exactly the tutorial's own
+  // lifetime, in either flow, without scanner.js needing to know a
+  // tutorial is running at all. The real first-run scan a new user needs
+  // still happens — just moments later, once startUpkeepAndRecheck's
+  // scanCycle() kicks in after onboarding concludes (see index.js), not
+  // interleaved with the demo walkthrough itself. Saved/restored, not
+  // force-set to a fixed value: `mycelium demo`'s child process already
+  // has it as '1' before this runs, and must still have it as '1' after
+  // finish() (the process exits moments later regardless, but leaving it
+  // correct costs nothing).
+  const prevDemoMode = process.env.MYCELIUM_DEMO_MODE;
+  process.env.MYCELIUM_DEMO_MODE = '1';
+
   // Tutorial-only signal from sessions.js's action handlers — see this
   // module's own doc comment above. `action` is one of 'scan'/'organize'/
   // 'knowledge'/'merge'/'split'; each real handler fires it past its own
@@ -418,6 +440,8 @@ export function startTutorial(app, onDone, personaId = 'swe', { reloadSessions, 
     setImmediate(() => {
       app.quitGuard = null;
     });
+    if (prevDemoMode === undefined) delete process.env.MYCELIUM_DEMO_MODE;
+    else process.env.MYCELIUM_DEMO_MODE = prevDemoMode;
     box.destroy();
     endTutorial();
     app.render();
