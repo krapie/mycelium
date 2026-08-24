@@ -58,14 +58,20 @@ const { __clearTestProvider } = await import('../../src/llm.js');
 // own lifetime and restores it in finish() (see tutorial.js), but finish()
 // only runs if a test drives the tutorial to completion — a test that
 // mounts one and stops partway (many in this file do, deliberately, to
-// assert mid-tutorial state) leaves it set to '1' for whatever runs next.
-// Unconditionally deleted here rather than saved/restored per-test, same
-// as setLocale('en') above: no test in this file legitimately depends on
-// it surviving into a later, unrelated test.
+// assert mid-tutorial state) leaves it set to '1' for whatever runs next,
+// and a later test's own scan() call would then silently skip real
+// adapters in demo mode without ever setting that up itself. Captured once
+// here (the file's own ambient value before any test ever runs, almost
+// always undefined) and restored to exactly that after every test, rather
+// than unconditionally deleted — the same save/restore shape
+// startTutorial() itself uses, in case something outside this file ever
+// legitimately has it set before the suite starts.
+const initialDemoMode = process.env.MYCELIUM_DEMO_MODE;
 test.afterEach(() => {
   setLocale('en');
   __clearTestProvider();
-  delete process.env.MYCELIUM_DEMO_MODE;
+  if (initialDemoMode === undefined) delete process.env.MYCELIUM_DEMO_MODE;
+  else process.env.MYCELIUM_DEMO_MODE = initialDemoMode;
 });
 
 function findByKeyword(sessions, re) {
