@@ -31,10 +31,11 @@ const { emptyNeutral } = await import('../../src/schema.js');
 const { TREE_DIR } = await import('../../src/paths.js');
 const { createApp } = await import('../../src/tui/app.js');
 const { sessionsView } = await import('../../src/tui/views/sessions.js');
-const { seedMockSessions, startTutorial } = await import('../../src/tui/tutorial.js');
+const { seedMockSessions, prepareTutorialProvider, startTutorial } = await import('../../src/tui/tutorial.js');
 const { setLocale } = await import('../../src/tui/i18n.js');
 const { writePendingKnowledgeText, pendingKnowledgeReviews, dismissPendingKnowledge } = await import('../../src/insight.js');
 const { queueSuggestions } = await import('../../src/organize.js');
+const { __clearTestProvider } = await import('../../src/llm.js');
 
 // seedMockSessions()/createTutorialMockProvider() default their locale to
 // i18n.js's getLocale() — setLocale('ko') (used by exactly one test below)
@@ -42,7 +43,36 @@ const { queueSuggestions } = await import('../../src/organize.js');
 // would otherwise also see, since node's test runner shares one process per
 // file. Reset after every test, not just the one that sets it, so a test
 // order change can't leak Korean into an English-content assertion.
-test.afterEach(() => setLocale('en'));
+//
+// __clearTestProvider() too: prepareTutorialProvider()/seedMockSessions()
+// call __setTestProvider() directly (not through startTutorial()), and
+// endTutorial()'s own __clearTestProvider() only runs if a test drives the
+// tutorial all the way to completion (q or the final step) — a test that
+// stops partway (e.g. to assert mid-tutorial state) would otherwise leave a
+// stale mock provider active for whatever runs after it in this shared
+// process. Harmless in practice (every test in this file only ever calls
+// llm.js's complete() through one of these mock providers, never a real
+// subprocess), but cheap to clean up properly regardless.
+//
+// MYCELIUM_DEMO_MODE too, same reasoning: startTutorial() sets it for its
+// own lifetime and restores it in finish() (see tutorial.js), but finish()
+// only runs if a test drives the tutorial to completion — a test that
+// mounts one and stops partway (many in this file do, deliberately, to
+// assert mid-tutorial state) leaves it set to '1' for whatever runs next,
+// and a later test's own scan() call would then silently skip real
+// adapters in demo mode without ever setting that up itself. Captured once
+// here (the file's own ambient value before any test ever runs, almost
+// always undefined) and restored to exactly that after every test, rather
+// than unconditionally deleted — the same save/restore shape
+// startTutorial() itself uses, in case something outside this file ever
+// legitimately has it set before the suite starts.
+const initialDemoMode = process.env.MYCELIUM_DEMO_MODE;
+test.afterEach(() => {
+  setLocale('en');
+  __clearTestProvider();
+  if (initialDemoMode === undefined) delete process.env.MYCELIUM_DEMO_MODE;
+  else process.env.MYCELIUM_DEMO_MODE = initialDemoMode;
+});
 
 function findByKeyword(sessions, re) {
   return sessions.filter((s) => re.test(s.extracted.summary || ''));
@@ -392,7 +422,7 @@ test('demo: the narrator box stays visible (in front) once a real modal opens on
   try {
     const settle = () => new Promise((r) => setTimeout(r, 320));
     let doneArg;
-    startTutorial(app, (completed) => (doneArg = completed));
+    startTutorial(app, (completed) => (doneArg = completed), 'swe', { sessionsPreSeeded: true });
 
     sendKey(input, 'enter');
     await settle();
@@ -454,7 +484,7 @@ test('demo: q exits the tutorial immediately from any step, no confirm dialog', 
     let doneArg;
     startTutorial(app, (completed) => {
       doneArg = completed;
-    });
+    }, 'swe', { sessionsPreSeeded: true });
     // The opening step — q here is an early exit, not a completed run.
     sendKey(input, 'q');
     await waitFor(() => doneArg !== undefined, { timeoutMs: 1000 });
@@ -465,13 +495,61 @@ test('demo: q exits the tutorial immediately from any step, no confirm dialog', 
   }
 });
 
+test('demo: startTutorial() sets MYCELIUM_DEMO_MODE for its own lifetime and restores whatever was there before', async () => {
+  // Guards a real scenario, not just an implementation detail: first-run
+  // onboarding runs startTutorial() in the SAME process as the rest of the
+  // real ~/.mycelium CLI, with nothing else to set this env var ahead of
+  // time (unlike `mycelium demo`, which gets it from cli.js's own spawned
+  // child process env) — so if startTutorial() didn't toggle it itself, a
+  // real first-run press of `s` would call a real, unguarded scan().
+  //
+  // Explicitly cleared (not asserted-clean) before starting: this file's
+  // tests share one process, and an earlier test's own startTutorial() run
+  // that never reached finish() would otherwise leave this env var already
+  // set — harmless to those other tests either way, but it would make this
+  // one's own "started unset, ends unset" claim meaningless. The outer
+  // ambient value (whatever it was) is restored in `finally` regardless.
+  const outerValue = process.env.MYCELIUM_DEMO_MODE;
+  delete process.env.MYCELIUM_DEMO_MODE;
+  const { app, input } = await mountDemo();
+  try {
+    let doneArg;
+    startTutorial(app, (completed) => (doneArg = completed), 'swe', { sessionsPreSeeded: true });
+    assert.equal(process.env.MYCELIUM_DEMO_MODE, '1', 'set for the tutorial\'s duration, even outside mycelium demo\'s own child process');
+    sendKey(input, 'q');
+    await waitFor(() => doneArg !== undefined, { timeoutMs: 1000 });
+    assert.equal(process.env.MYCELIUM_DEMO_MODE, undefined, 'restored to unset once the tutorial ends, not left on for the rest of the real session');
+  } finally {
+    if (outerValue === undefined) delete process.env.MYCELIUM_DEMO_MODE;
+    else process.env.MYCELIUM_DEMO_MODE = outerValue;
+    cleanup(app);
+  }
+});
+
+test('demo: startTutorial() leaves a pre-existing MYCELIUM_DEMO_MODE alone after finishing (mycelium demo\'s own child-process case)', async () => {
+  const outerValue = process.env.MYCELIUM_DEMO_MODE;
+  process.env.MYCELIUM_DEMO_MODE = '1'; // simulates cli.js's demo command's own child-process env
+  const { app, input } = await mountDemo();
+  try {
+    let doneArg;
+    startTutorial(app, (completed) => (doneArg = completed), 'swe', { sessionsPreSeeded: true });
+    sendKey(input, 'q');
+    await waitFor(() => doneArg !== undefined, { timeoutMs: 1000 });
+    assert.equal(process.env.MYCELIUM_DEMO_MODE, '1', 'still \'1\' after finish() — restored to its PRIOR value, not force-deleted');
+  } finally {
+    if (outerValue === undefined) delete process.env.MYCELIUM_DEMO_MODE;
+    else process.env.MYCELIUM_DEMO_MODE = outerValue;
+    cleanup(app);
+  }
+});
+
 test('demo: Escape does not abort the tutorial when no modal is open', async () => {
   const { app, input } = await mountDemo();
   try {
     let doneArg = 'not called';
     startTutorial(app, (completed) => {
       doneArg = completed;
-    });
+    }, 'swe', { sessionsPreSeeded: true });
     sendKey(input, 'escape');
     await new Promise((r) => setTimeout(r, 100));
     assert.equal(doneArg, 'not called', 'Escape must not end the tutorial on its own');
@@ -487,7 +565,7 @@ test('demo: finishing the tutorial on the actual last step reports completed:tru
     let doneArg;
     startTutorial(app, (completed) => {
       doneArg = completed;
-    });
+    }, 'swe', { sessionsPreSeeded: true });
     // The narrator's own pollUntil() checks every 250ms (see tutorial.js) —
     // independent of, and slower than, this test's own waitFor() (20ms
     // interval) on the real screen/data state. A real modal can close well
@@ -623,7 +701,7 @@ test('demo: pressing a later step\'s key early (skipping step 1) still lets the 
     let doneArg;
     startTutorial(app, (completed) => {
       doneArg = completed;
-    });
+    }, 'swe', { sessionsPreSeeded: true });
     const settle = () => new Promise((r) => setTimeout(r, 320));
 
     // No `enter` here — step 1's own key is skipped entirely.
@@ -714,7 +792,7 @@ test('demo: a stray Enter on step 1 does not falsely cascade the narrator forwar
     let doneArg;
     startTutorial(app, (completed) => {
       doneArg = completed;
-    });
+    }, 'swe', { sessionsPreSeeded: true });
     await new Promise((r) => setTimeout(r, 50));
     assert.equal(narratorStepIndex(app), 1, 'starts on the opening step');
 
@@ -985,7 +1063,7 @@ test('demo: selecting Organize from the `.` action menu advances the narrator to
     assert.ok(target, 'seedMockSessions() left at least one unfiled session to suggest a placement for');
     queueSuggestions([{ id: target.id, folder: 'e2e-menu-test/target', reason: 'pre-queued for this test' }]);
 
-    startTutorial(app, () => {});
+    startTutorial(app, () => {}, 'swe', { sessionsPreSeeded: true });
 
     // Step 1 (intro) -> step 2 (palette-open) -> step 3 (palette-ack, closes
     // it again) -> step 4 (scan, direct key here — the menu path for THIS
@@ -1001,6 +1079,9 @@ test('demo: selecting Organize from the `.` action menu advances the narrator to
     await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 2000 });
     await settle();
     assert.equal(narratorStepIndex(app), 4, 'landed on the scan step via the normal path');
+    // startTutorial() itself sets MYCELIUM_DEMO_MODE for the tutorial's
+    // whole lifetime (see tutorial.js) — this scan() call is guarded
+    // without this test needing to touch the env var itself.
     sendKey(input, 's');
     await waitFor(() => narratorStepIndex(app) === 5, { timeoutMs: 2000 });
     await settle();
@@ -1042,19 +1123,20 @@ test('demo: selecting Organize from the `.` action menu advances the narrator to
 });
 
 test('demo: the new Scan step advances via the `.` menu too, and never touches real adapters', async () => {
-  // MYCELIUM_DEMO_MODE isn't set by this test harness (only cli.js's real
-  // `demo` command sets it, on the CHILD process's env — see scanner.js's
-  // scan() and cli.js's own comment) — so this also doubles as a check that
-  // the real adapters genuinely run here, and simply find nothing (no real
-  // ~/.claude/~/.codex/~/.kiro sessions matching this sandboxed CI/test
-  // environment) rather than the step secretly depending on the guard to
-  // pass. What this test actually guards: the store's session count doesn't
-  // change from a demo-triggered scan, regardless of why.
+  // startTutorial() itself sets MYCELIUM_DEMO_MODE for the tutorial's whole
+  // lifetime (see tutorial.js), so the real ~/.claude/~/.codex/~/.kiro
+  // adapters are guarded off automatically here — no test-side env
+  // wrangling needed. This test uses mountDemo(), which pre-seeds via
+  // seedMockSessions() (unlike the real product flow — see the dedicated
+  // "genuinely empty until Scan" test below), so what it actually guards
+  // here is that a demo-triggered scan on an ALREADY-seeded store doesn't
+  // double the mock sessions on top (app.tutorialSignal's own guard in
+  // tutorial.js).
   const { app, input } = await mountDemo();
   try {
     const settle = () => new Promise((r) => setTimeout(r, 320));
     const before = allRaw().length;
-    startTutorial(app, () => {});
+    startTutorial(app, () => {}, 'swe', { sessionsPreSeeded: true });
 
     sendKey(input, 'enter'); // intro
     await settle();
@@ -1084,7 +1166,140 @@ test('demo: the new Scan step advances via the `.` menu too, and never touches r
     // Scan has no review modal — the narrator only advances once doScan()'s
     // own signal fires at genuine completion (see tutorial.js/sessions.js).
     await waitFor(() => narratorStepIndex(app) === 5, { timeoutMs: 3000 });
-    assert.equal(allRaw().length, before, "store's session count is unchanged by a demo-triggered scan");
+    assert.equal(allRaw().length, before, 'already-seeded demo sessions are not duplicated by a second demo-triggered scan');
+  } finally {
+    cleanup(app);
+  }
+});
+
+test('demo: the Sessions view is genuinely empty until the Scan step, matching the real product flow (not mountDemo()\'s pre-seed)', async () => {
+  // Every other test in this file uses mountDemo(), which pre-seeds via
+  // seedMockSessions() before the tutorial ever starts — a deliberate
+  // shortcut for tests that aren't about the Scan step itself. This one
+  // instead mirrors exactly what index.js's real forceTutorial/onboarding
+  // branches do: mount the (empty) view, call prepareTutorialProvider() only
+  // (LLM mock + knowledge pre-stage, no session rows), then start the
+  // tutorial with a real reloadSessions callback — see tutorial.js's
+  // app.tutorialSignal for where injectDemoSessions() actually fires.
+  //
+  // Counting demo sessions from a BASELINE, not asserting an absolute 0: this
+  // file shares one store across every test (useTempHome(), no per-test
+  // reset — see the "action menu" tests' own comment further up), and a
+  // couple of earlier tests mount via mountDemo() but never run a tutorial
+  // to completion, leaving their own demo:true sessions behind. This test's
+  // own claim is narrower and still fully verified by a diff: THIS run
+  // contributes zero new demo sessions until Scan fires, then exactly 6.
+  prepareTutorialProvider('swe');
+  const { input, output } = createTestApp();
+  const app = createApp({ input, output });
+  let api;
+  await app.show(sessionsView({ onReady: (a) => (api = a) }));
+  try {
+    const settle = () => new Promise((r) => setTimeout(r, 320));
+    const demoCountBefore = allRaw().filter((s) => s.demo).length;
+
+    startTutorial(app, () => {}, 'swe', { reloadSessions: () => api.reloadAll() });
+
+    sendKey(input, 'enter'); // intro
+    await settle();
+    let baseline = app.screen.children.length;
+    sendKey(input, '.'); // palette-open
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 2000 });
+    await settle();
+    sendKey(input, 'escape'); // palette-ack, closes it
+    await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 2000 });
+    await settle();
+    assert.equal(narratorStepIndex(app), 4, 'landed on the scan step');
+    assert.equal(allRaw().filter((s) => s.demo).length, demoCountBefore, 'still nothing captured — the Scan step has not fired yet');
+    const listItemsBefore = api.listBox.items.length;
+
+    // startTutorial() above already set MYCELIUM_DEMO_MODE for the
+    // tutorial's whole lifetime (see tutorial.js) — this scan() call is
+    // guarded without this test needing to touch the env var itself.
+    sendKey(input, 's');
+    await waitFor(() => narratorStepIndex(app) === 5, { timeoutMs: 2000 });
+    await settle();
+
+    assert.equal(
+      allRaw().filter((s) => s.demo).length,
+      demoCountBefore + 6,
+      'pressing s injected the persona\'s full mock session set, not before or partially',
+    );
+    assert.ok(
+      api.listBox.items.length > listItemsBefore,
+      'the mounted view actually re-rendered the newly-injected sessions (reloadSessions), not just the raw store',
+    );
+  } finally {
+    cleanup(app);
+  }
+});
+
+test('demo: a scan signal arriving while the narrator is waiting on a different step still injects the mock sessions', async () => {
+  // Regression test for a real race found via review: doScan() reports
+  // completion from a setImmediate() callback (see its call site in
+  // sessions.js), so app.tutorialSignal('scan') can arrive an event-loop
+  // tick after the keypress that triggered it. If the human's very next
+  // keypress in that tiny window happens to start ANOTHER step's own wait
+  // (e.g. pressing `o` immediately after `s`), `waiting` is already true by
+  // the time the scan signal's callback runs — the old code's single
+  // `if (done || waiting) return;` at the top of app.tutorialSignal dropped
+  // the signal entirely, so injectDemoSessions() never ran and the Sessions
+  // view stayed silently empty for the rest of the demo (with the narrator
+  // having already moved on, nothing left to prompt a retry).
+  //
+  // Forced deterministically, not by racing a real timer: calling
+  // app.tutorialSignal('organize') directly (no real `o` keypress, no real
+  // doOrganize()/classification call at all) still runs the exact same
+  // advanceFrom() → pollUntil('open') path a real one would, setting
+  // `waiting = true` and scheduling a 250ms poll tick — since no real modal
+  // is ever going to open behind it, that poll never resolves on its own,
+  // giving a genuinely sustained (not microsecond) `waiting === true`
+  // window with zero side effects (no async classification chain left
+  // dangling past cleanup()). app.tutorialSignal('scan') immediately after
+  // lands inside that window every time, no timing sensitivity at all. `q`
+  // at the end both proves the tutorial can still be exited cleanly out of
+  // a stuck wait (matches onKeypress's own documented q-from-anywhere
+  // behavior) and stops that poll's setTimeout chain via `done`, so nothing
+  // is left running past this test.
+  //
+  // Counting from a BASELINE, not an absolute 0: this file shares one store
+  // across every test (useTempHome(), no per-test reset — see the "action
+  // menu" tests' own comment further up), and earlier tests that mount a
+  // tutorial without driving it to completion leave their own demo:true
+  // sessions behind. This test's own claim is narrower and still fully
+  // verified by a diff: THIS run contributes zero new demo sessions until
+  // the signal fires, then exactly 6.
+  prepareTutorialProvider('swe');
+  const { input, output } = createTestApp();
+  const app = createApp({ input, output });
+  let api;
+  await app.show(sessionsView({ onReady: (a) => (api = a) }));
+  try {
+    const settle = () => new Promise((r) => setTimeout(r, 320));
+    const demoCountBefore = allRaw().filter((s) => s.demo).length;
+    let doneArg;
+    startTutorial(app, (completed) => (doneArg = completed), 'swe', { reloadSessions: () => api.reloadAll() });
+
+    sendKey(input, 'enter'); // intro
+    await settle();
+
+    app.tutorialSignal('organize'); // forces waiting=true via the real advanceFrom()/pollUntil('open') path, no real modal behind it
+    assert.equal(
+      allRaw().filter((s) => s.demo).length,
+      demoCountBefore,
+      'sanity: nothing injected yet',
+    );
+
+    app.tutorialSignal('scan'); // simulates doScan()'s deferred signal arriving mid-wait
+
+    assert.equal(
+      allRaw().filter((s) => s.demo).length,
+      demoCountBefore + 6,
+      'injection still happens even though the narrator was waiting on a different step',
+    );
+
+    sendKey(input, 'q'); // q works from anywhere, including stuck mid-wait — also stops the dangling poll
+    await waitFor(() => doneArg !== undefined, { timeoutMs: 1000 });
   } finally {
     cleanup(app);
   }
