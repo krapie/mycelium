@@ -91,7 +91,19 @@ export function scan({ onImport } = {}) {
   let skipped = 0;
   let failed = 0;
 
-  for (const adapter of ADAPTERS) {
+  // ADAPTERS read from each agent's REAL global store (~/.claude, ~/.codex,
+  // ~/.kiro — see adapters/index.js), completely unaffected by MYCELIUM_HOME.
+  // That's correct for the real store (including the first-run tutorial,
+  // which runs against it on purpose) but not for `mycelium demo`'s
+  // isolated walkthrough: MYCELIUM_HOME already points at a throwaway
+  // ~/.mycelium-demo specifically so nothing real gets touched, and pressing
+  // scan there (directly or via the `.` menu — see tutorial.js) would
+  // otherwise still pull real, potentially sensitive session content in
+  // regardless. cli.js's `demo` command sets MYCELIUM_DEMO_MODE on the
+  // child process alongside MYCELIUM_HOME; skip the real adapters entirely
+  // when it's set, rather than trying to scope by MYCELIUM_HOME's path.
+  const skipRealAdapters = process.env.MYCELIUM_DEMO_MODE === '1';
+  for (const adapter of skipRealAdapters ? [] : ADAPTERS) {
     let refs;
     try {
       refs = adapter.listSessions();
