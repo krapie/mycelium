@@ -15,21 +15,11 @@ Sessions keep branching across multiple round trips, but converge back together 
    `continuationOf`/`continuedTo`, shown as `↩`/`→` markers in the list
    and "continued from/to" links in detail. They are tracked as one flow,
    not disconnected sessions.
-2. **Convergence through folder knowledge.** The real merge point is not
-   an individual session file, it is the folder's `KNOWLEDGE.md`.
-   Pressing `w` compiles the summaries and decisions of every session in
-   that folder, regardless of agent, into one document, which gets auto
-   injected into `AGENTS.md` the next time an agent launches in that
-   folder (`n`/`h`). Resuming with `r` continues the same session and
-   log, so there's no new agent process to inject into.
+2. **Convergence through folder knowledge.** The real merge point is not an individual session file, it is the folder's `KNOWLEDGE.md`. Pressing `w` compiles the summaries and decisions of every session in that folder, regardless of agent, into one document, which gets auto injected into `AGENTS.md` the next time an agent launches in that folder (`n`/`h`). Resuming with `r` continues the same session and log, so there's no new agent process to inject into.
 
 ## Recommended order before a return handoff (B→C)
 
-1. `a`. If the session you are handing off (B) has no summary yet,
-   generate one first. The handoff prompt always carries the original
-   request, working directory, last message, and any inherited folder
-   knowledge; `summary`, `decisions`, and `todos` are included only when
-   present, so without `a` first, the next agent starts without them.
+1. `a`. If the session you are handing off (B) has no summary yet, generate one first. The handoff prompt always carries the original request, working directory, last message, and any inherited folder knowledge; `summary`, `decisions`, and `todos` are included only when present, so without `a` first, the next agent starts without them.
 2. `w`. Refresh the folder's knowledge. The `AGENTS.md` injected when the
    next agent starts reflects `KNOWLEDGE.md` as of this moment.
 3. `h`. Hand off from B, pick whichever agent you want, for example

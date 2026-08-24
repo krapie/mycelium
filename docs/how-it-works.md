@@ -18,9 +18,9 @@ flowchart LR
 
 **`o` Organize.** Mycelium reads unfiled sessions, compares them to your existing folders, and suggests where each one belongs. You review the list and confirm. A session you filed yourself is never moved again by automation. See [Learn/Reuse loop](./learn-reuse.md) for the full rules.
 
-**`w` Learn.** Once a folder has a few sessions, `w` compiles their summaries and decisions into that folder's `KNOWLEDGE.md`. You see a preview before it saves. This is the one step Mycelium keeps manual by design, deciding what counts as a settled convention deserves a human look.
+**`w` Learn.** Once a folder has a few sessions, `w` compiles their summaries and decisions into that folder's `KNOWLEDGE.md`. You see a preview before it saves. This is the one step Mycelium keeps manual by design. Deciding what counts as a settled convention deserves a human look.
 
-**`n` Reuse.** Starting a new session from Mycelium injects the folder's current knowledge into `AGENTS.md`, so the agent already knows the conventions before it writes a line. Handing work to a different agent mid task works the same way, see [Handoff](./handoff.md).
+**`n` Reuse.** Starting a new session from Mycelium injects the folder's current knowledge into `AGENTS.md`, so the agent already knows the conventions before it writes a line. Handing work to a different agent mid-task works the same way; see [Handoff](./handoff.md).
 
 Most of this already runs in the background. Pressing these keys is mostly reviewing and confirming what is already waiting for you. See [TUI](./tui.md) for every key, and [CLI](./cli.md) to run the same steps without the interface.
 

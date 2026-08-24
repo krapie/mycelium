@@ -66,11 +66,7 @@ mycelium cleanup index      # rebuild just the sqlite index (if search looks off
 mycelium cleanup reset --yes # full reset: delete ~/.mycelium entirely → re-scan
 ```
 
-- **`tidy` (default), `folders`, and `index` are safe.** The original
-  agent logs (`~/.claude`, `~/.codex`, `~/.kiro`, OpenCode's
-  `opencode.db`) are always untouched. `tidy` does remove Mycelium's own
-  synthetic meta-call records from `raw/` (sessions Mycelium's own LLM
-  calls accidentally left behind), never a real captured session.
+- **`tidy` (default), `folders`, and `index` are safe.** The original agent logs (`~/.claude`, `~/.codex`, `~/.kiro`, OpenCode's `opencode.db`) are always untouched. `tidy` does remove Mycelium's own synthetic meta-call records from `raw/` (sessions Mycelium's own LLM calls accidentally left behind), never a real captured session.
 - **`archive`** deletes sessions filed under `_archive` from the store.
   The original `~/.claude`/`~/.codex`/`~/.kiro` logs and OpenCode's own
   `opencode.db` are untouched, so a re-scan brings them back, but this

@@ -19,26 +19,12 @@ Mycelium "getting smarter automatically" does **not** mean it edits skills like 
    with `m` into `case/foo` (later sessions from the same working
    directory get auto-assigned by rule).
 4. **Learn**
-   - `a`. Summarizes and tags the session. To have a cleanup rule show up
-     as a `decision`, ask once before wrapping up: "summarize the
-     documentation conventions we settled on this time." `a` structures
-     that answer into `decisions`. Each press updates whichever of
-     summary, tags, decisions, and todos the latest extraction actually
-     returns, leaving the rest as they were; press it again whenever the
-     session has moved forward. Only the title, once set (whether `a`
-     generated it first or you wrote it with `e`), stays put; fix it
-     with `e` if the auto-extracted one isn't right.
+   - `a`. Summarizes and tags the session. To have a cleanup rule show up as a `decision`, ask once before wrapping up: "summarize the documentation conventions we settled on this time." `a` structures that answer into `decisions`. Each press updates whichever of summary, tags, decisions, and todos the latest extraction actually returns, leaving the rest as they were; press it again whenever the session has moved forward. Only the title, once set (whether `a` generated it first or you wrote it with `e`), stays put; fix it with `e` if the auto-extracted one isn't right.
    - `w`. **Extracts the folder's (`case/foo`) knowledge**: compiles the
      summaries and decisions of every session in that folder, not just
      this case but past cases in the same folder too, into
      `KNOWLEDGE.md`.
-5. **Reuse.** The next time you open a new session in the same folder
-   (`n`/`h`), Mycelium automatically injects that folder's current
-   `KNOWLEDGE.md` into the working directory's `AGENTS.md`. Claude
-   Code, Codex, Kiro, and OpenCode already know this folder's settled
-   conventions the moment the session starts. `/write` and `/proofread`
-   are unchanged, but the background knowledge underneath them has
-   changed, so the output differs.
+5. **Reuse.** The next time you open a new session in the same folder (`n`/`h`), Mycelium automatically injects that folder's current `KNOWLEDGE.md` into the working directory's `AGENTS.md`. Claude Code, Codex, Kiro, and OpenCode already know this folder's settled conventions the moment the session starts. `/write` and `/proofread` are unchanged, but the background knowledge underneath them has changed, so the output differs.
 
 ## What's actually automatic
 
