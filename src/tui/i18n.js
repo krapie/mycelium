@@ -199,7 +199,7 @@ const en = {
   'tutorial.stepCounter': (n, total) => `Step ${n}/${total}`,
   'tutorial.introTitle': '',
   'tutorial.introBody': (fg) =>
-    `{bold}Welcome to Mycelium{/}: organize your AI sessions, and carry what they know into the next one, through {${fg}-fg}Capture → Organize → Learn → Reuse{/}. Every session from Claude Code, Codex, or Kiro gets captured automatically; this tour shows you the loop that keeps them useful instead of lost. Three panels — Folders → Sessions → Detail — walked with {${fg}-fg}→{/}/{${fg}-fg}←{/}. Press {${fg}-fg}Enter{/} now to step into your first folder and begin.`,
+    `{bold}Welcome to Mycelium{/}: organize your AI sessions, and carry what they know into the next one, through {${fg}-fg}Capture → Organize → Learn → Reuse{/}. Every session from Claude Code, Codex, Kiro, or OpenCode gets captured automatically; this tour shows you the loop that keeps them useful instead of lost. Three panels — Folders → Sessions → Detail — walked with {${fg}-fg}→{/}/{${fg}-fg}←{/}. Press {${fg}-fg}Enter{/} now to step into your first folder and begin.`,
   'tutorial.stepPaletteTitle': ' — Menu',
   'tutorial.stepPaletteBody': (fg) =>
     `No need to memorize shortcuts: press {${fg}-fg}.{/} from the Folders or Sessions panel and you'll get a menu of what you can actually do from there. Each item shows its key, grouped as SESSION (acts on the session) and FOLDER (acts on the folder).`,
@@ -208,7 +208,7 @@ const en = {
     `That's it. Press {${fg}-fg}Esc{/} to close. From here on, whenever a step's action also appears in this menu (Organize, Knowledge, Scan, Merge, Split), you can either press its key directly or open the menu with {${fg}-fg}.{/} and pick it; both do exactly the same thing.`,
   'tutorial.stepScanTitle': ' — Capture',
   'tutorial.stepScanBody': (fg) =>
-    `Nothing has been captured yet. Press {${fg}-fg}s{/} (or {${fg}-fg}.{/} → Scan) to pull your AI sessions in; that's Capture, step one of the loop, the exact same action that runs quietly in the background for Claude Code, Codex, and Kiro.`,
+    `Nothing has been captured yet. Press {${fg}-fg}s{/} (or {${fg}-fg}.{/} → Scan) to pull your AI sessions in; that's Capture, step one of the loop, the exact same action that runs quietly in the background for Claude Code, Codex, Kiro, and OpenCode.`,
   'tutorial.step2Title': ' — Organize',
   'tutorial.step2Body': (fg, count) => `${count} fresh, unfiled sessions are sitting below. Press {${fg}-fg}o{/} (or {${fg}-fg}.{/} → Organize) to have Mycelium read them and suggest folders.`,
   'tutorial.step3Title': '',
@@ -291,7 +291,7 @@ const en = {
   'actions.lineage': 'View details',
 
   // launch.js
-  'launch.noAgents': 'No agent CLI installed (claude/codex/kiro-cli)',
+  'launch.noAgents': 'No agent CLI installed (claude/codex/kiro-cli/opencode)',
   'launch.selectAgent': 'Choose agent',
   'launch.selectAgentHandoff': 'Continue this task on another agent — choose agent',
   'launch.selectAgentNew': "New task with this folder's context — choose agent",
@@ -495,7 +495,7 @@ const ko = {
   'tutorial.stepCounter': (n, total) => `${n}/${total}단계`,
   'tutorial.introTitle': '',
   'tutorial.introBody': (fg) =>
-    `{bold}Mycelium에 오신 걸 환영합니다{/}: AI 세션을 정리하고, 그 안의 지식을 다음 세션으로 이어줍니다. {${fg}-fg}Capture → Organize → Learn → Reuse{/} 흐름으로 동작합니다. Claude Code, Codex, Kiro의 모든 세션이 자동으로 캡처됩니다 — 이 투어는 그 세션들을 잃어버리지 않고 계속 쓸모 있게 만드는 흐름을 보여줍니다. 세 개의 패널 — 폴더 → 세션 → 상세 — 은 {${fg}-fg}→{/}/{${fg}-fg}←{/}로 이동합니다. 지금 {${fg}-fg}Enter{/}를 눌러 첫 폴더로 들어가 시작하세요.`,
+    `{bold}Mycelium에 오신 걸 환영합니다{/}: AI 세션을 정리하고, 그 안의 지식을 다음 세션으로 이어줍니다. {${fg}-fg}Capture → Organize → Learn → Reuse{/} 흐름으로 동작합니다. Claude Code, Codex, Kiro, OpenCode의 모든 세션이 자동으로 캡처됩니다 — 이 투어는 그 세션들을 잃어버리지 않고 계속 쓸모 있게 만드는 흐름을 보여줍니다. 세 개의 패널 — 폴더 → 세션 → 상세 — 은 {${fg}-fg}→{/}/{${fg}-fg}←{/}로 이동합니다. 지금 {${fg}-fg}Enter{/}를 눌러 첫 폴더로 들어가 시작하세요.`,
   'tutorial.stepPaletteTitle': ' — 메뉴',
   'tutorial.stepPaletteBody': (fg) =>
     `단축키를 외울 필요 없이, 폴더와 세션에서 {${fg}-fg}.{/}를 누르면 각각 지금 실행해볼 수 있는 것들의 메뉴가 나옵니다. 각 항목에 단축키가 함께 표시되고, SESSION(세션 대상)과 FOLDER(폴더 대상)로 묶여 있습니다.`,
@@ -504,7 +504,7 @@ const ko = {
     `이게 전부입니다. {${fg}-fg}Esc{/}로 닫으세요. 이후 스텝 중 이 메뉴에도 있는 동작(정리, 지식 추출, 캡처, 병합, 분할)이라면, 그 키를 직접 눌러도 되고 {${fg}-fg}.{/}로 메뉴를 열어서 해당 항목을 골라도 됩니다. 결과는 완전히 동일합니다.`,
   'tutorial.stepScanTitle': ' — 캡처',
   'tutorial.stepScanBody': (fg) =>
-    `아직 아무 세션도 캡처되지 않았습니다. {${fg}-fg}s{/}를 눌러 (또는 {${fg}-fg}.{/} → 새 세션 스캔) AI 세션들을 가져와보세요. 루프의 첫 단계인 Capture이며, Claude Code, Codex, Kiro를 대상으로 백그라운드에서 조용히 도는 것과 동일한 동작입니다.`,
+    `아직 아무 세션도 캡처되지 않았습니다. {${fg}-fg}s{/}를 눌러 (또는 {${fg}-fg}.{/} → 새 세션 스캔) AI 세션들을 가져와보세요. 루프의 첫 단계인 Capture이며, Claude Code, Codex, Kiro, OpenCode를 대상으로 백그라운드에서 조용히 도는 것과 동일한 동작입니다.`,
   'tutorial.step2Title': ' — 조직화',
   'tutorial.step2Body': (fg, count) => `아직 정리 안 된 세션 ${count}개가 아래에 있습니다. {${fg}-fg}o{/}를 눌러 (또는 {${fg}-fg}.{/} → 세션 정리) Mycelium이 내용을 읽고 폴더를 제안하게 해보세요.`,
   'tutorial.step3Title': '',
@@ -577,7 +577,7 @@ const ko = {
   'actions.newAgent': '폴더 컨텍스트로 새 작업 시작',
   'actions.lineage': '상세 보기',
 
-  'launch.noAgents': '설치된 에이전트(claude/codex/kiro-cli)가 없습니다',
+  'launch.noAgents': '설치된 에이전트(claude/codex/kiro-cli/opencode)가 없습니다',
   'launch.selectAgent': '에이전트 선택',
   'launch.selectAgentHandoff': '하던 작업을 다른 에이전트로 이어서 — 에이전트 선택',
   'launch.selectAgentNew': '이 폴더 컨텍스트로 새 작업 — 에이전트 선택',
@@ -704,7 +704,7 @@ Sessions linked by handoff show {${spore}-fg}↩{/}/{${spore}-fg}→{/} markers 
 en['welcome.body'] = (fg) => `Mycelium keeps AI coding-agent sessions from getting lost —
 each one moves through 4 stages, all inside this screen:
 
-{${fg}-fg}Capture{/}   Sessions from Claude Code / Codex / Kiro get pulled in automatically
+{${fg}-fg}Capture{/}   Sessions from Claude Code / Codex / Kiro / OpenCode get pulled in automatically
               (every 5 min while this is open, or press {${fg}-fg}s{/} to do it now).
               Nothing gets sorted into a folder yet at this point.
 
@@ -782,7 +782,7 @@ ko['help.text'] = (fg, spore) => `{bold}Context Flywheel{/}
 ko['welcome.body'] = (fg) => `Mycelium은 AI 코딩 에이전트 세션이 흩어지지 않게 관리합니다 —
 이 화면 안에서 4단계를 거칩니다:
 
-{${fg}-fg}생성(Capture){/}   Claude Code/Codex/Kiro 세션을 자동으로 가져옵니다
+{${fg}-fg}생성(Capture){/}   Claude Code/Codex/Kiro/OpenCode 세션을 자동으로 가져옵니다
               (켜져 있는 동안 5분마다, 또는 {${fg}-fg}s{/}로 지금 바로).
               이 시점엔 아직 어느 폴더에도 안 들어갑니다.
 

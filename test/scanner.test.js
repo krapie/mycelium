@@ -9,9 +9,10 @@ const { loadRaw, saveRaw, deleteRaw, allRaw, findSession, purgeMeta, scan, reeva
 const { META_MARKER } = await import('../src/llm.js');
 const adaptersIndex = await import('../src/adapters/index.js');
 
-// scan() iterates the real ADAPTERS array, and the real claude/codex/kiro
-// adapters read from the actual ~/.claude, ~/.codex, ~/.kiro on this machine
-// regardless of MYCELIUM_HOME (only the neutral session it WRITES lands under
+// scan() iterates the real ADAPTERS array, and the real claude/codex/kiro/
+// opencode adapters read from the actual ~/.claude, ~/.codex, ~/.kiro, and
+// opencode's own opencode.db on this machine regardless of MYCELIUM_HOME
+// (only the neutral session it WRITES lands under
 // the isolated temp home). To test scan() deterministically — without also
 // re-importing this machine's real sessions and blowing up the expected
 // counts below — temporarily swap the array's contents down to just the fake

@@ -19,4 +19,4 @@ assignees: krapie
 - OS:
 - Node version (`node --version`):
 - Mycelium version (`mycelium --version` or `package.json`):
-- Agent CLI(s) involved and their versions (Claude Code / Codex / Kiro):
+- Agent CLI(s) involved and their versions (Claude Code / Codex / Kiro / OpenCode):
