@@ -11,9 +11,10 @@
 // This is index.js's own runTui() tail (mount sessionsView, notifyPostMount)
 // with ONE thing removed: the unconditional startTuiRoutine() call every
 // normal launch makes. That call immediately runs a real scanCycle(), and
-// adapters always read the ACTUAL ~/.claude/~/.codex/~/.kiro history
-// regardless of MYCELIUM_HOME (AGENTS.md: "Adapters intentionally read
-// from the real ~/.claude/~/.codex/~/.kiro... not MYCELIUM_HOME") — so a
+// adapters always read the ACTUAL ~/.claude/~/.codex/~/.kiro/opencode.db
+// history regardless of MYCELIUM_HOME (AGENTS.md: "Adapters intentionally
+// read from the real ~/.claude/~/.codex/~/.kiro/opencode.db... not
+// MYCELIUM_HOME") — so a
 // normal launch against even a disposable MYCELIUM_HOME would still pull
 // in and display the presenter's real personal sessions within seconds.
 // Confirmed live: launching plain `node src/cli.js` against a freshly

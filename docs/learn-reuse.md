@@ -39,7 +39,7 @@ settled in past sessions, from the moment it starts.
 5. **Reuse** — the next time you open a new session in the same folder
    (`n`/`h`/`r`), Mycelium automatically injects that folder's current
    `KNOWLEDGE.md` into the working directory's `AGENTS.md`. Claude
-   Code/Codex/Kiro already know this folder's settled conventions the
+   Code/Codex/Kiro/OpenCode already know this folder's settled conventions the
    moment the session starts — `/write` and `/proofread` are unchanged, but
    the background knowledge underneath them has, so the output differs.
 
@@ -99,7 +99,7 @@ cycle from burning LLM calls on the same unmatched session repeatedly;
 pressing `o` yourself ignores this cooldown and re-evaluates immediately.
 
 **"Automatic" only applies to sessions launched with `n`/`h`.** A session
-you open by typing `claude`/`codex`/`kiro-cli` directly in a terminal, or
+you open by typing `claude`/`codex`/`kiro-cli`/`opencode` directly in a terminal, or
 via a script, never goes through Mycelium, so this injection never
 triggers — `AGENTS.md` is just a file on disk, so if it was ever injected
 once before, that snapshot keeps being read, but **it won't automatically

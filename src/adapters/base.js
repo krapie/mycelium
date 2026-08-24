@@ -2,7 +2,7 @@
  * Adapter contract. Each adapter is a module exporting:
  *
  *   name: string                        — matches the session's `source` field
- *                                          exactly ("claude" | "codex" | "kiro" | ...)
+ *                                          exactly ("claude" | "codex" | "kiro" | "opencode" | ...)
  *   label: string                       — human-readable name for the agent
  *                                          picker ("Claude Code")
  *   bin: string                         — the CLI binary to spawn

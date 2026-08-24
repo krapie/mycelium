@@ -51,10 +51,15 @@ export function assembleContext(folderPath) {
 /**
  * Render ancestor-path knowledge into a marker block inside the target dir's
  * AGENTS.md. AGENTS.md is read natively by Codex (walks up the directory
- * tree, plus a separate global ~/.codex/AGENTS.md) and read as steering
+ * tree, plus a separate global ~/.codex/AGENTS.md), read as steering
  * context by Kiro (though a still-open upstream bug —
  * kirodotdev/Kiro#6755 — means it's sometimes *listed* as loaded context
- * without actually being read; nothing Mycelium can work around from here).
+ * without actually being read; nothing Mycelium can work around from here),
+ * and read natively by OpenCode too (confirmed against opencode.ai's own
+ * docs and the actual installed v1.18.20 — same directory-tree walk, with
+ * CLAUDE.md only as its own lower-priority fallback; not re-verified
+ * against any other OpenCode release, so this is scoped to what was
+ * actually checked, not a permanent cross-version guarantee).
  * **Claude Code does not read AGENTS.md at all** — confirmed against
  * Anthropic's own current docs, it only ever auto-loads CLAUDE.md — so
  * writing AGENTS.md alone would make the entire inject/n/h "self-improving

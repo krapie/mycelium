@@ -92,7 +92,8 @@ export function scan({ onImport } = {}) {
   let failed = 0;
 
   // ADAPTERS read from each agent's REAL global store (~/.claude, ~/.codex,
-  // ~/.kiro — see adapters/index.js), completely unaffected by MYCELIUM_HOME.
+  // ~/.kiro, plus OpenCode's own opencode.db — see adapters/index.js),
+  // completely unaffected by MYCELIUM_HOME.
   // Wrong for BOTH tutorial-launch paths, not just `mycelium demo`'s
   // isolated walkthrough: first-run onboarding runs against the real
   // ~/.mycelium, and without a guard pressing scan there (directly or via

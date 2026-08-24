@@ -1124,8 +1124,8 @@ test('demo: selecting Organize from the `.` action menu advances the narrator to
 
 test('demo: the new Scan step advances via the `.` menu too, and never touches real adapters', async () => {
   // startTutorial() itself sets MYCELIUM_DEMO_MODE for the tutorial's whole
-  // lifetime (see tutorial.js), so the real ~/.claude/~/.codex/~/.kiro
-  // adapters are guarded off automatically here — no test-side env
+  // lifetime (see tutorial.js), so the real ~/.claude/~/.codex/~/.kiro/
+  // opencode.db adapters are guarded off automatically here — no test-side env
   // wrangling needed. This test uses mountDemo(), which pre-seeds via
   // seedMockSessions() (unlike the real product flow — see the dedicated
   // "genuinely empty until Scan" test below), so what it actually guards

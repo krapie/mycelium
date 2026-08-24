@@ -328,7 +328,7 @@ export const PERSONAS = [
             ],
           },
           {
-            source: 'claude',
+            source: 'opencode',
             daysAgo: 6,
             title: {
               en: 'Add lazy-loading for below-the-fold product images',
@@ -555,7 +555,7 @@ export const PERSONAS = [
         },
         sessions: [
           {
-            source: 'claude',
+            source: 'opencode',
             daysAgo: 6,
             title: {
               en: 'Investigate S3 cross-account AccessDenied for partner account',
@@ -936,7 +936,7 @@ export const PERSONAS = [
             ],
           },
           {
-            source: 'kiro',
+            source: 'opencode',
             daysAgo: 9,
             title: {
               en: 'Migration architecture review with Initech',

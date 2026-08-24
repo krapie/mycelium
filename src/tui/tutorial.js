@@ -325,8 +325,8 @@ export function startTutorial(app, onDone, personaId = 'swe', { reloadSessions, 
   // onboarding runs in THIS SAME process against the real ~/.mycelium
   // though, with nothing to set it on ahead of time, so without this it's
   // unset there and a first-run press of `s` calls a real, unguarded
-  // scan() — importing whatever real ~/.claude/~/.codex/~/.kiro sessions
-  // exist right into the same batch injectDemoSessions() is about to add,
+  // scan() — importing whatever real ~/.claude/~/.codex/~/.kiro/opencode.db
+  // sessions exist right into the same batch injectDemoSessions() is about to add,
   // both appearing in one indistinguishable reveal. Toggling it here (not
   // in scanner.js) scopes the guard to exactly the tutorial's own
   // lifetime, in either flow, without scanner.js needing to know a
