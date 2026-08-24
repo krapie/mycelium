@@ -15,7 +15,7 @@ Sessions keep branching across multiple round trips, but converge back together 
    `continuationOf`/`continuedTo`, shown as `↩`/`→` markers in the list
    and "continued from/to" links in detail. They are tracked as one flow,
    not disconnected sessions.
-2. **Convergence through folder knowledge.** The real merge point is not an individual session file, it is the folder's `KNOWLEDGE.md`. Pressing `w` compiles the summaries and decisions of every session in that folder, regardless of agent, into one document, which gets auto injected into `AGENTS.md` the next time an agent launches in that folder (`n`/`h`). Resuming with `r` continues the same session and log, so there's no new agent process to inject into.
+2. **Convergence through folder knowledge.** The real merge point is not an individual session file, it is the folder's `KNOWLEDGE.md`. Pressing `w` compiles the summaries and decisions of every session in that folder, regardless of agent, into one document, which gets auto-injected into `AGENTS.md` the next time an agent launches in that folder (`n`/`h`). Resuming with `r` continues the same session and log, so there's no new agent process to inject into.
 
 ## Recommended order before a return handoff (B→C)
 
