@@ -223,9 +223,10 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   though a still-open upstream bug (`kirodotdev/Kiro#6755`) means it's
   sometimes listed as loaded without actually being read — not something
   Mycelium can work around from its side. OpenCode also needs no bridge —
-  confirmed against opencode.ai's own docs, it reads `AGENTS.md` natively by
-  walking up the directory tree (with `CLAUDE.md` only as its own fallback,
-  same tree-walk, lower priority). The bridge is one line
+  confirmed against opencode.ai's own docs and the actual installed
+  v1.18.20, it reads `AGENTS.md` natively by walking up the directory tree
+  (with `CLAUDE.md` only as its own fallback, same tree-walk, lower
+  priority) — not re-verified against any other OpenCode release. The bridge is one line
   (`@AGENTS.md`), idempotent (checks for that substring first, so repeat
   injects never duplicate it), and additive — prepended ahead of whatever a
   real `CLAUDE.md` already has, never rewriting it. Unconditional rather

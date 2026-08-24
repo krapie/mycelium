@@ -37,9 +37,16 @@ export function listSessions() {
 }
 
 // Prose summary only — never `state.output` or full `input.content`/`input.diff`,
-// same rule claude-code.js/codex.js/kiro.js follow for tool activity.
+// same rule claude-code.js/codex.js/kiro.js follow for tool activity. Only
+// `filePath` is safe to echo verbatim: `command` (bash) and `query`
+// (search) can carry secrets a user never typed for Mycelium to keep — a
+// `bash` call like `export API_KEY=...` would otherwise land straight in
+// toolActivity, get persisted to raw/<id>.json, and get fed to whatever LLM
+// autotag/organize calls next. Deliberately narrower here than the other
+// three adapters' equivalent summaries (a pre-existing gap there, not
+// something this file should also introduce).
 function toolTarget(input) {
-  return input?.filePath || input?.command || input?.pattern || input?.query || '';
+  return input?.filePath || '';
 }
 
 function textOf(parts) {

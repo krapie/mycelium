@@ -56,8 +56,10 @@ export function assembleContext(folderPath) {
  * kirodotdev/Kiro#6755 — means it's sometimes *listed* as loaded context
  * without actually being read; nothing Mycelium can work around from here),
  * and read natively by OpenCode too (confirmed against opencode.ai's own
- * docs — same directory-tree walk, with CLAUDE.md only as its own
- * lower-priority fallback).
+ * docs and the actual installed v1.18.20 — same directory-tree walk, with
+ * CLAUDE.md only as its own lower-priority fallback; not re-verified
+ * against any other OpenCode release, so this is scoped to what was
+ * actually checked, not a permanent cross-version guarantee).
  * **Claude Code does not read AGENTS.md at all** — confirmed against
  * Anthropic's own current docs, it only ever auto-loads CLAUDE.md — so
  * writing AGENTS.md alone would make the entire inject/n/h "self-improving

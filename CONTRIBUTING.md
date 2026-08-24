@@ -49,7 +49,7 @@ No Prettier — the codebase already has a consistent hand-written style; `npm r
 
 ### Adding a New AI Agent CLI
 
-Mycelium captures sessions from AI coding-agent CLIs (Claude Code, Codex, Kiro, OpenCode today) through a small adapter interface. Adding support for a new one touches exactly two files:
+Mycelium captures sessions from AI coding-agent CLIs (Claude Code, Codex, Kiro, OpenCode today) through a small adapter interface. The adapter itself — the part that makes scanning/resuming/launching/the picker work — is exactly two required files:
 
 1. Write `src/adapters/<name>.js` implementing the contract documented in `src/adapters/base.js`: `name`, `label`, `bin`, `newArgs(seed)`, `resumeArgs(sessionId)`, `listSessions()`, `parse(ref)`. Look at `src/adapters/codex.js` for the simplest existing example.
 2. Register it in `src/adapters/index.js`'s `ADAPTERS` array.

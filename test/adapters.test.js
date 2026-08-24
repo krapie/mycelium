@@ -189,3 +189,56 @@ test('opencode adapter falls back to session.directory when the project is the s
   assert.equal(neutral.cwd, '/Users/someone');
   assert.equal(neutral.projectDir, '/Users/someone');
 });
+
+// A bash/search tool's raw input can carry secrets a user never typed for
+// Mycelium to keep (e.g. `export API_KEY=...`) — toolTarget() must only
+// ever echo filePath, never command/pattern/query, even though the other
+// three adapters' equivalent summaries aren't this strict.
+test('opencode adapter never echoes a tool\'s raw command/query into toolActivity, only filePath', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'mycelium-opencode-test-'));
+  const dbPath = join(dir, 'opencode.db');
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+  const db = new DatabaseSync(dbPath);
+  db.exec(`
+    CREATE TABLE project (id TEXT PRIMARY KEY, worktree TEXT);
+    CREATE TABLE session (id TEXT PRIMARY KEY, project_id TEXT, directory TEXT, time_created INTEGER, time_updated INTEGER);
+    CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT, time_created INTEGER, data TEXT);
+    CREATE TABLE part (id TEXT PRIMARY KEY, message_id TEXT, time_created INTEGER, data TEXT);
+  `);
+  db.prepare('INSERT INTO project (id, worktree) VALUES (?, ?)').run('proj1', '/tmp/proj');
+  db.prepare('INSERT INTO session (id, project_id, directory, time_created, time_updated) VALUES (?, ?, ?, ?, ?)').run(
+    'ses3',
+    'proj1',
+    '/tmp/proj',
+    1700000000000,
+    1700000000000,
+  );
+  db.prepare('INSERT INTO message (id, session_id, time_created, data) VALUES (?, ?, ?, ?)').run(
+    'msg1',
+    'ses3',
+    1700000000000,
+    JSON.stringify({ role: 'assistant' }),
+  );
+  db.prepare('INSERT INTO part (id, message_id, time_created, data) VALUES (?, ?, ?, ?)').run(
+    'prt1',
+    'msg1',
+    1700000000000,
+    JSON.stringify({ type: 'tool', tool: 'bash', state: { input: { command: 'export API_KEY=sk-super-secret' } } }),
+  );
+  db.prepare('INSERT INTO part (id, message_id, time_created, data) VALUES (?, ?, ?, ?)').run(
+    'prt2',
+    'msg1',
+    1700000001000,
+    JSON.stringify({ type: 'tool', tool: 'websearch', state: { input: { query: 'our internal roadmap for project X' } } }),
+  );
+  db.close();
+
+  const opencode = getAdapter('opencode');
+  const neutral = opencode.parse({ id: 'ses3', path: dbPath, mtimeMs: 1700000000000 });
+
+  assert.deepEqual(neutral.toolActivity, ['bash', 'websearch']);
+  const joined = neutral.toolActivity.join(' ');
+  assert.ok(!joined.includes('API_KEY'), 'raw bash command must never be persisted');
+  assert.ok(!joined.includes('roadmap'), 'raw search query must never be persisted');
+});
