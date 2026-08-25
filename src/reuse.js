@@ -1,13 +1,31 @@
 import { join } from 'node:path';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { TREE_DIR } from './paths.js';
+import { TREE_DIR, isSafeFolderPath } from './paths.js';
 import { loadRaw, allRaw } from './scanner.js';
 import { isInSubtree } from './organize.js';
 import { contentLocale } from './config.js';
 
-const BEGIN = '<!-- mycelium:begin -->';
-const END = '<!-- mycelium:end -->';
+// Pre-fix (issue #90) marker — one unscoped block per file, so a directory
+// that received injects for two different folders (e.g. a monorepo root
+// with sessions classified into both `frontend` and `backend`) silently
+// lost whichever folder was injected first on the next inject. Kept around
+// only to detect and migrate an old block on first post-fix inject.
+const LEGACY_BEGIN = '<!-- mycelium:begin -->';
+const LEGACY_END = '<!-- mycelium:end -->';
 const CLAUDE_BRIDGE = '@AGENTS.md';
+
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// One block per folder, not per file — see the LEGACY_BEGIN comment above
+// for why.
+function blockMarkers(folderPath) {
+  return {
+    begin: `<!-- mycelium:begin:${folderPath} -->`,
+    end: `<!-- mycelium:end:${folderPath} -->`,
+  };
+}
 
 /**
  * Distinct existing working directories of the sessions in a folder subtree
@@ -36,6 +54,12 @@ export function dirsForFolder(folder) {
  */
 export function assembleContext(folderPath) {
   if (!folderPath) return '';
+  // '..' segments would otherwise let the TREE_DIR join below escape it
+  // entirely and read a KNOWLEDGE.md from anywhere readable on disk (see
+  // isSafeFolderPath()'s own comment, paths.js) — fails the same way as
+  // "no ancestor has a KNOWLEDGE.md" rather than a distinct error, since
+  // there's no legitimate answer to reveal either way.
+  if (!isSafeFolderPath(folderPath)) return '';
   const segments = folderPath.split('/');
   const blocks = [];
   for (let i = 1; i <= segments.length; i++) {
@@ -68,10 +92,24 @@ export function assembleContext(folderPath) {
  * to run — cheap and harmless either way, and covers manual `i`-key inject,
  * which doesn't know the target agent up front).
  *
- * Only the marker block (AGENTS.md) / the bridge import (CLAUDE.md) is ever
- * touched; the rest of either file's own content is never modified.
+ * Only marker blocks (AGENTS.md) / the bridge import (CLAUDE.md) are ever
+ * touched; the rest of either file's own content is never modified. The
+ * block is scoped to `folderPath` (issue #90) — a directory that hosts
+ * sessions from more than one folder (a monorepo root, say) keeps one
+ * independently-replaceable block per folder instead of the most recent
+ * inject silently discarding whatever an earlier, different folder wrote.
  */
 export function injectAgentsMd(targetDir, folderPath) {
+  // folderPath reaches here from the CLI's raw --folder flag (unlike the
+  // TUI, which only ever passes an already-real, listTreeDirs()-sourced
+  // folder), so a value containing "-->" would otherwise close the marker's
+  // HTML comment early and land as literal, unbounded content in a file
+  // agents read as instructions — a real prompt-injection vector, not just
+  // a cosmetic escaping bug.
+  if (folderPath.includes('-->')) {
+    return { ok: false, error: `invalid folder path (contains '-->'): ${folderPath}` };
+  }
+
   const context = assembleContext(folderPath);
   if (!context) return { ok: false, error: `no KNOWLEDGE.md along ${folderPath}` };
 
@@ -83,14 +121,22 @@ export function injectAgentsMd(targetDir, folderPath) {
     contentLocale() === 'ko'
       ? '<!-- Mycelium이 관리하는 영역입니다. 직접 수정하지 마세요. -->'
       : '<!-- Managed by Mycelium. Do not edit directly. -->';
-  const block = `${BEGIN}\n${marker}\n\n${context}\n${END}`;
+  const { begin, end } = blockMarkers(folderPath);
+  const block = `${begin}\n${marker}\n\n${context}\n${end}`;
   const path = join(targetDir, 'AGENTS.md');
 
   let content = '';
   if (existsSync(path)) content = readFileSync(path, 'utf8');
 
-  if (content.includes(BEGIN) && content.includes(END)) {
-    content = content.replace(new RegExp(`${BEGIN}[\\s\\S]*?${END}`), block);
+  const scopedRe = new RegExp(`${escapeRegExp(begin)}[\\s\\S]*?${escapeRegExp(end)}`);
+  if (scopedRe.test(content)) {
+    content = content.replace(scopedRe, block);
+  } else if (content.includes(LEGACY_BEGIN) && content.includes(LEGACY_END)) {
+    // Pre-fix file: exactly one unscoped block existed per directory, so it
+    // can only have come from this folder or a since-replaced one either
+    // way — migrate it in place rather than leaving an orphaned block
+    // alongside a second, newly-scoped one.
+    content = content.replace(new RegExp(`${escapeRegExp(LEGACY_BEGIN)}[\\s\\S]*?${escapeRegExp(LEGACY_END)}`), block);
   } else {
     content = content.trim() ? `${content.trim()}\n\n${block}\n` : `${block}\n`;
   }
