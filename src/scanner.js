@@ -10,14 +10,10 @@ function rawPath(id) {
   return join(RAW_DIR, `${id.replace(/[^\w.-]/g, '_')}.json`);
 }
 
-// Mycelium runs its own LLM calls via `claude -p` / `codex exec`, which the
-// agents then store as sessions — capturing those back would pollute the store
-// with the tagging/digest/knowledge prompts. llm.js now stamps every one of
-// its own prompts with META_MARKER, which is the reliable signal. The string
-// list below only exists to retroactively purge older prompt wordings (from
-// before the marker existed) that already got captured as real sessions —
-// don't rely on it for new detections, it drifts every time a prompt is
-// rewritten (it already has, twice).
+// llm.js stamps every one of its own prompts with META_MARKER, the reliable
+// signal that a session is Mycelium's own LLM call, not real work. This
+// list only retroactively purges older prompt wordings captured before the
+// marker existed — don't rely on it for new detections, it drifts.
 const META_SIGNATURES = [
   '실제로 수행된 작업(task) 관점에서',
   '다음은 AI 코딩/업무 세션의 대화 기록',
@@ -53,12 +49,6 @@ export function deleteRaw(id) {
   if (existsSync(p)) rmSync(p);
 }
 
-/**
- * Scan every adapter's session store, parse new/changed sessions into the
- * neutral schema, and write them to raw/. Preserves any `extracted`/`folder`/
- * `organizedBy` already stored (those are owned by later lifecycle stages, not
- * by capture). Returns a summary { scanned, imported, skipped, failed }.
- */
 /** Remove already-stored raw files that are Mycelium's own LLM calls. */
 export function purgeMeta() {
   ensureDirs();
@@ -79,6 +69,12 @@ export function purgeMeta() {
   return removed;
 }
 
+/**
+ * Scan every adapter's session store, parse new/changed sessions into the
+ * neutral schema, and write them to raw/. Preserves any `extracted`/`folder`/
+ * `organizedBy` already stored (those are owned by later lifecycle stages, not
+ * by capture). Returns a summary { scanned, imported, skipped, failed }.
+ */
 export function scan({ onImport } = {}) {
   ensureDirs();
   purgeMeta();
@@ -91,20 +87,12 @@ export function scan({ onImport } = {}) {
   let skipped = 0;
   let failed = 0;
 
-  // ADAPTERS read from each agent's REAL global store (~/.claude, ~/.codex,
-  // ~/.kiro, plus OpenCode's own opencode.db — see adapters/index.js),
-  // completely unaffected by MYCELIUM_HOME.
-  // Wrong for BOTH tutorial-launch paths, not just `mycelium demo`'s
-  // isolated walkthrough: first-run onboarding runs against the real
-  // ~/.mycelium, and without a guard pressing scan there (directly or via
-  // the `.` menu — see tutorial.js) would import the user's actual real
-  // content into the very same batch injectDemoSessions() is about to add,
-  // both landing in one indistinguishable reveal. cli.js's `demo` command
-  // sets MYCELIUM_DEMO_MODE on its child process alongside MYCELIUM_HOME;
-  // tutorial.js's startTutorial() sets it too, for either flow, for the
-  // tutorial's whole lifetime (see that function's own comment) — skip the
-  // real adapters entirely when it's set, rather than trying to scope by
-  // MYCELIUM_HOME's path.
+  // ADAPTERS read from each agent's real global store, unaffected by
+  // MYCELIUM_HOME. Wrong for both tutorial-launch paths without a guard —
+  // first-run onboarding runs against the real store too, not just
+  // `mycelium demo`. cli.js's `demo` command and tutorial.js's
+  // startTutorial() both set MYCELIUM_DEMO_MODE for their duration; skip
+  // real adapters entirely when it's set, rather than scoping by MYCELIUM_HOME.
   const skipRealAdapters = process.env.MYCELIUM_DEMO_MODE === '1';
   for (const adapter of skipRealAdapters ? [] : ADAPTERS) {
     let refs;
@@ -188,16 +176,10 @@ export function scan({ onImport } = {}) {
         neutral.summarizedTurnCount = existing.summarizedTurnCount ?? neutral.summarizedTurnCount;
       }
       // First-time capture of an already-old session: file it straight into
-      // _archive rather than New/unfiled. _archive is already hidden from
-      // New/Root/calendar (index-db.js/data.js) and skipped by o/a
-      // (classify.js/learn.js), so this keeps a large historical backlog out
-      // of the triage flow while still capturing it losslessly. Deliberately
-      // gated on `!existing` (first import only) and folder==null (never
-      // organized): an already-stored session keeps whatever folder the
-      // carry-forward block above restored, so this never retroactively
-      // archives sessions already sitting in New — only newly discovered ones.
-      // Recency = last activity (endedAt||startedAt), same basis the calendar
-      // uses (index-db.js's sessionCountsByDay()).
+      // _archive instead of New, keeping a large historical backlog out of
+      // triage while still capturing it losslessly. Gated on `!existing`
+      // (first import only) so this never retroactively archives a session
+      // already sitting in New. Recency matches the calendar's own basis.
       if (!existing && archiveDays > 0 && neutral.folder == null && neutral.organizedBy !== 'human') {
         const last = Date.parse(neutral.endedAt || neutral.startedAt || '');
         if (Number.isFinite(last) && last < archiveCutoff) neutral.folder = '_archive';

@@ -441,18 +441,10 @@ async function main() {
       const { existsSync, rmSync } = await import('node:fs');
       const demoHome = join(homedir(), '.mycelium-demo');
       if (existsSync(demoHome)) rmSync(demoHome, { recursive: true, force: true });
-      // Fired off now, awaited (if needed at all) only much later in the
-      // handoff branch below — the tutorial itself takes at least tens of
-      // seconds of real interaction, plenty of time for this to fully
-      // resolve in the background. tui/index.js transitively pulls in
-      // nearly the whole app (app.js/neo-blessed, sessions.js and
-      // everything IT imports) — all cold, since only the CHILD process
-      // below has loaded any of it so far. Without this, that whole load
-      // happened serially, visibly, in the gap between the child exiting
-      // and the real screen painting — see cli.js's own handoff comment
-      // and i18n.js's demo.handoffTransition for the rest of that fix. A
-      // presenter who never finishes the tutorial (no handoff) just never
-      // awaits this — the resolved module sits unused, harmless.
+      // Fired off now, awaited only later in the handoff branch below — the
+      // tutorial takes tens of seconds, plenty of time for this cold import
+      // (nearly the whole app) to resolve in the background instead of
+      // blocking visibly in the gap between child exit and real screen paint.
       const tuiIndexPromise = import('./tui/index.js');
       const child = spawn(process.execPath, [process.argv[1], 'tui', '--tutorial'], {
         // MYCELIUM_DEMO_MODE: scanner.js's own guard against pulling real
@@ -464,63 +456,22 @@ async function main() {
         child.on('exit', async (code) => {
           const { DEMO_HANDOFF_EXIT_CODE } = await import('./tui/tutorial.js');
           if (code === DEMO_HANDOFF_EXIT_CODE) {
-            // Actively discard stdin for the duration of this handoff.
-            // Confirmed via a disposable VHS debug tape (not committed —
-            // see this session's history) that an impatient repeat `q`
-            // right after the first genuinely leaks through: the child's
-            // screen.destroy() (app.js, called by its own quit()) restores
-            // cooked mode before this exit handler runs, so a keystroke
-            // typed in the gap sits in the terminal's normal input queue
-            // until SOMETHING reads it — and once the real TUI's own
-            // raw-mode reader starts below, that stale keystroke arrives
-            // indistinguishable from a live press, landing on whatever's
-            // focused (observed: it closed firstScanModal() AND armed
-            // app.js's quit-confirm in the same event, both being
-            // independent listeners on the same keypress — one more stray
-            // `q` from there would have actually exited the just-launched
-            // real session). Resuming then immediately dropping the
-            // listener flips the stream back to blessed's expected paused
-            // starting state (Node auto-pauses a readable once its last
-            // 'data' listener is removed) — createApp() (inside runTui()
-            // below) sets up its own raw-mode reading same as always.
-            //
-            // The short wait below is deliberate, not decorative: a first
-            // attempt without it still let the stray keystroke through
-            // (confirmed by re-running the same VHS tape) — resume() asks
-            // Node to read the fd, but that read isn't synchronous with the
-            // call, and the async work following used to finish (now that
-            // it's pre-warmed) before the OS had actually delivered the
-            // buffered byte into this listener. 120ms is well inside what a
-            // human "impatient repeat press" already takes to physically
-            // happen, and imperceptible against the handoff's overall
-            // duration.
+            // Actively discard stdin for the handoff: an impatient repeat
+            // `q` typed in the gap between child exit and the real TUI's
+            // raw-mode reader starting arrives as a live press otherwise
+            // (confirmed via VHS). The 120ms wait is load-bearing —
+            // resume()'s read isn't synchronous.
             const discardStdin = () => {};
             if (process.stdin.isTTY) {
               process.stdin.resume();
               process.stdin.on('data', discardStdin);
               await new Promise((r) => setTimeout(r, 120));
             }
-            // The presenter went all the way through the tutorial (not an
-            // early Esc bail) — hand off straight into a real TUI session.
-            // This process's own env was never touched (only the CHILD's
-            // env got the MYCELIUM_HOME override above), so paths.js
-            // resolves the user's actual ~/.mycelium here, not the demo
-            // store — no separate spawn needed, just run it in-process.
-            //
-            // Carry the language picked during the demo into the real tool
-            // too, but ONLY here, on a full-completion handoff — continuing
-            // straight into real data in the same terminal right after
-            // finishing the demo should feel seamless, not switch back to
-            // whatever language was set before. An early Esc bail (no
-            // handoff, separate branch below) deliberately does NOT do
-            // this: exploring a different language just to preview/present
-            // the demo shouldn't silently change real settings unless you
-            // actually continue into real data right after. Read straight
-            // off the demo's own config.json (still on disk — only wiped at
-            // the START of a future `mycelium demo` run, not on exit),
-            // since loadConfig()/i18n.js's getLocale() in this process
-            // resolve against THIS process's own real MYCELIUM_HOME, not
-            // the child's isolated one.
+            // Full tutorial completion — hand off in-process (this
+            // process's own env was never touched, only the child's).
+            // Carry the demo's picked language, but only on this
+            // full-completion path — an early Esc bail shouldn't silently
+            // change real settings.
             try {
               const demoConfigPath = join(demoHome, 'config.json');
               if (existsSync(demoConfigPath)) {
@@ -535,35 +486,17 @@ async function main() {
               // the real tool keeps whatever language it already had, not
               // a hard failure blocking the handoff itself.
             }
-            // Printed immediately, in whatever locale was just set above,
-            // before any of the (usually fast now, thanks to the pre-warmed
-            // import above, but not guaranteed on a slower machine) real-TUI
-            // mount work below. screen.destroy() (app.js, called by the
-            // child's own quit()) already restored the terminal to normal/
-            // cooked mode before this process's exit handler even ran, so a
-            // plain console.log() here is safe — nothing blessed-related is
-            // mounted yet to corrupt. Without this, a silent gap here read
-            // as "did that even do anything?" — enough that a user might
-            // press q again, which (once the real screen DOES mount and
-            // starts reading input) risks landing on the just-launched real
-            // session's own quit-confirm instead of a no-op.
+            // Printed immediately, before the real-TUI mount work below —
+            // console.log() is safe since screen.destroy() already restored
+            // cooked mode. Without this, the silent gap read as "did that
+            // even do anything?", risking a second stray q.
             const { t } = await import('./tui/i18n.js');
             console.log(t('demo.handoffTransition'));
-            // A real bug found in production: on a real ~/.mycelium that's
-            // ALSO never been onboarded yet (a brand new install, or one
-            // where the user tried `mycelium demo` before ever running plain
-            // `mycelium`), runTui() below would immediately show its OWN
-            // first-run onboarding prompt — language picker, "want a tour?",
-            // persona picker — right on top of the demo the human just
-            // finished. Someone who just sat through the interactive
-            // tutorial does not expect an equivalent second one a moment
-            // later; it read as the demo breaking/restarting rather than
-            // handing off. Mark the real store onboarded here, same as
-            // finishing (or declining) the real tutorial already does —
-            // this handoff only ever happens after a FULL completion
-            // (DEMO_HANDOFF_EXIT_CODE, not an early Esc bail), so treating
-            // it as equivalent real onboarding is exactly right, not a
-            // shortcut around it.
+            // Real bug: on a real ~/.mycelium that's also never been
+            // onboarded, runTui() would show its own first-run prompt right
+            // on top of the demo just finished. Mark it onboarded here, same
+            // as finishing/declining the real tutorial already does — this
+            // only runs on full completion, so it's equivalent real onboarding.
             saveConfig({ ...loadConfig(), onboarded: true });
             // Awaits the SAME promise kicked off right after spawning the
             // child above — already resolved (or resolving) by now, so this

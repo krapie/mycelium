@@ -170,14 +170,10 @@ export function menu(app, label, choices, cb, { width = '40%', dismissOnBlur = f
  * Esc applies nothing.
  */
 // `previewText(value)` (optional): when given, `p` opens a full scrollable
-// textView of that content for whichever row is currently highlighted —
-// for content bound for somewhere as consequential as an external
-// project's AGENTS.md (the knowledge review, `k`), the one-line label
-// truncation isn't enough to actually review before approving; this is
-// the confirmText()-style "see it before it lands on disk" checkpoint
-// applied to a per-item preview instead of a single whole-batch one.
-// Optional (not every multiSelectList caller has long-form content per
-// item worth a dedicated preview — o's placement suggestions don't).
+// textView of the highlighted row — for content as consequential as an
+// external project's AGENTS.md (`k`'s knowledge review), the one-line label
+// isn't enough to review before approving. Optional since not every caller
+// has long-form content worth it (o's placement suggestions don't).
 export function multiSelectList(app, label, items, cb, { defaultAll = false, previewText } = {}) {
   const selected = new Set(defaultAll ? items.map((_, i) => i) : []);
   const render = (it, i) => `${selected.has(i) ? `{${C.fox}-fg}✓{/} ` : '  '}${it.label}`;

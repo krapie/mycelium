@@ -2,52 +2,11 @@ import { findPersona } from './personas.js';
 import { getLocale } from './i18n.js';
 
 // Deterministic, instant stand-ins for the tutorial's real o/w/Shift+S LLM
-// calls, wired up via llm.js's __setTestProvider() for the lifetime of the
-// mock session store (see tutorial.js's seedMockSessions()/endTutorial()).
-// Two problems this solves at once: (1) speed — a real claude/codex
-// subprocess call takes anywhere from ~1 to 10+ seconds per call, several
-// times over in one tutorial run; (2) determinism — a real call's output
-// isn't scripted/repeatable the way a demo needs. Canned English/Korean
-// folder names (matching whichever locale the demo is running in) sidestep
-// that without needing a real subprocess at all.
-//
-// organize/classify.js's/learn.js's/insight.js's/split.js's real prompts
-// now follow config.json's locale themselves (config.js's contentLocale()
-// — no longer hardcoded Korean regardless of locale, see AGENTS.md), so the
-// parsing below (mockPlacements()'s id/summary regex, mockKnowledge()'s
-// folder-name regex, mockSplit()'s turn-number regex) has to recognize
-// BOTH language's label text now, not just Korean — each takes the same
-// `locale` this factory already resolves once, matching the real prompt's
-// own choice of label exactly.
-//
-// Dispatch is by a substring unique to each call site's own JSON response
-// schema: classify.js's suggestPlacements() prompt asks for `{"placements":
-// [...`, split.js's suggestSplitBoundaries() asks for `{"ranges":[...`,
-// learn.js's autoTagSession() asks for `{"title": "", ..., "decisions": [],
-// ...`; insight.js's buildKnowledgeText() has none of those (freeform
-// prose), so it's the fallback case. Not fully exhaustive — mycelium demo's
-// freeform explore step lets a curious user press `d` (digest) too, which
-// also routes through complete() while this is still active; that one gets
-// the knowledge-shaped fallback, a harmless mismatch (wrong-shaped text
-// shown, nothing crashes or corrupts data), not worth a 5th detector for a
-// path the tutorial doesn't script. `a` (autotag) DOES get its own case
-// below — it's no longer just the manual explore-step key, since Shift+M/
-// Shift+S's merge/split handlers now call autoTagSession() on their own
-// result right after (see sessions.js) to avoid leaving a demo merge/split
-// looking empty until a separate manual `a`.
-//
-// Storyline content (folder/keywords/knowledge/splitLabels) lives in
-// personas.js, shared with tutorial-data.js, so the two can't drift out of
-// sync the way separate hardcoded copies once did (see git history: merge/
-// split regressions traced back to folder-name mismatches between this file
-// and tutorial-data.js).
-//
-// personas.js's keywords/knowledge/splitLabels are `{en, ko}` — resolved
-// once per createTutorialMockProvider() call against the active locale, so
-// every function below keeps working against plain values exactly as
-// before locale support existed. Exported so demo/pitch-launch.js can reuse
-// it against demo/pitch-data.js's own storylines, which use this exact same
-// {en, ko}-per-field shape.
+// calls, for speed and determinism a real subprocess can't offer. Dispatch
+// is by a substring unique to each call site's JSON schema (`"placements"`,
+// `"ranges"`, `"decisions"`, else the knowledge freeform fallback), parsing
+// both en/ko label text. Storyline content lives in personas.js, shared
+// with tutorial-data.js so the two can't drift.
 export function resolveStorylines(storylines, locale) {
   return storylines.map((s) => ({
     folder: s.folder,
@@ -129,16 +88,10 @@ function mockSplit(mergeStoryline, prompt, locale) {
   });
 }
 
-// A genuinely instant (0ms) response is its own regression here: the
-// animated spinner (app.js's startSpinner()) never gets to animate a single
-// frame, and the flow reads as "did that actually run?" rather than a
-// (much faster, but still real) version of the production wait. 5s is
-// still well under a real claude/codex call (which can run into the tens
-// of seconds), but long enough for the spinner to visibly cycle several
-// frames (120ms/frame) rather than just flash. Overridable so
-// test/tutorial-mock-llm.test.js isn't stuck waiting 5s per call — see
-// that file's dynamic import for how it sets this before loading the
-// module.
+// A genuinely instant (0ms) response is its own regression: the animated
+// spinner never gets to animate, reading as "did that actually run?" 5s is
+// well under a real call but long enough for the spinner to visibly cycle.
+// Overridable so test/tutorial-mock-llm.test.js isn't stuck waiting per call.
 const MOCK_DELAY_MS = Number(process.env.MYCELIUM_DEMO_MOCK_DELAY_MS) || 5000;
 
 function delayed(value) {
@@ -146,13 +99,8 @@ function delayed(value) {
 }
 
 // Low-level factory, independent of personas.js's persona/id lookup — takes
-// already-resolved storylines (folder/keywords/knowledge as plain values,
-// not {en,ko}) plus the one storyline merge/split operates on. Pulled out of
-// createTutorialMockProvider() below so demo/pitch-launch.js's flagship
-// pitch video can build its own mock provider from demo/pitch-data.js's own
-// (differently-shaped) storyline bundle without duplicating this dispatch/
-// parsing logic in a second file — see AGENTS.md's own documented history of
-// exactly that kind of duplication drifting out of sync.
+// already-resolved (plain-value) storylines, pulled out so demo/
+// pitch-launch.js can reuse this dispatch logic against its own bundle.
 export function createMockProvider(storylines, mergeStoryline, locale) {
   return function mockProvider(prompt) {
     if (prompt.includes('"placements"')) return delayed(mockPlacements(storylines, prompt, locale));

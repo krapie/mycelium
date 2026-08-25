@@ -10,19 +10,13 @@ export const bin = 'kiro-cli';
 export const newArgs = (seed) => ['chat', ...(seed ? [seed] : [])];
 export const resumeArgs = (sessionId) => ['chat', '--resume-id', sessionId];
 
-// Kiro CLI has three on-disk formats, verified directly against a real
-// installed kiro-cli (v2.13.0) on this machine — not just docs:
-//   v2 (current, confirmed live): SQLite conversations_v2(key, conversation_id,
-//     value, created_at, updated_at) — key is the launch cwd, created_at/
-//     updated_at are epoch ms (per the DB's own inline comments). This is the
-//     path that actually gets written by both `kiro-cli chat` and
-//     `kiro-cli chat --legacy-ui`/`--classic` in the installed version.
-//   v1 (legacy): same DB, conversations(key, value) — PRIMARY KEY is just the
-//     directory, so at most one row per cwd, no timestamps.
-//   v3 (JSONL sidecar, seen only as an empty stub on this machine — kept as a
-//     best-effort path in case another kiro-cli version/mode does write real
-//     content there): ~/.kiro/sessions/cli/<uuid>.json (metadata) +
-//     <uuid>.jsonl (turns, one JSON object per line).
+// Kiro CLI has three on-disk formats, verified against a real installed
+// kiro-cli (v2.13.0):
+//   v2 (current, live): SQLite conversations_v2(key, conversation_id, value,
+//     created_at, updated_at) — key is the launch cwd, timestamps epoch ms.
+//   v1 (legacy): same DB, conversations(key, value) — no timestamps, one row per cwd.
+//   v3 (JSONL sidecar, only seen as an empty stub, kept best-effort):
+//     ~/.kiro/sessions/cli/<uuid>.json + <uuid>.jsonl.
 const SESSIONS_DIR = process.env.KIRO_SESSIONS_DIR || join(homedir(), '.kiro', 'sessions', 'cli');
 const SQLITE_CANDIDATES = [
   process.env.KIRO_SQLITE_DB,
