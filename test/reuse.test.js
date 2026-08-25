@@ -40,6 +40,17 @@ test('assembleContext() skips ancestor levels that have no KNOWLEDGE.md', () => 
   assert.equal(context, 'Only the leaf has knowledge.');
 });
 
+test('assembleContext() refuses a folderPath with \'..\' segments instead of reading outside TREE_DIR', async () => {
+  const { TREE_DIR } = await import('../src/paths.js');
+  const outsideDir = join(TREE_DIR, '..', 'outside-tree-dir');
+  mkdirSync(outsideDir, { recursive: true });
+  writeFileSync(join(outsideDir, 'KNOWLEDGE.md'), 'Secret content outside TREE_DIR.');
+
+  assert.equal(assembleContext('../outside-tree-dir'), '');
+  assert.equal(assembleContext('../../outside-tree-dir'), '');
+  assert.equal(assembleContext('team/../../outside-tree-dir'), '');
+});
+
 test('injectAgentsMd() fails with no context when no ancestor has a KNOWLEDGE.md', () => {
   mkdir('empty-of-knowledge');
   const targetDir = mkdtempSync(join(tmpdir(), 'mycelium-agents-'));

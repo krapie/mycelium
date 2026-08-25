@@ -21,3 +21,19 @@ export function ensureDirs() {
     if (!existsSync(d)) mkdirSync(d, { recursive: true });
   }
 }
+
+/**
+ * Is `folderPath` safe to join onto TREE_DIR? Several call sites
+ * (reuse.js's assembleContext(), organize/folders.js's folder CRUD,
+ * insight.js's KNOWLEDGE.md writers) turn a folderPath into a real
+ * directory via `join(TREE_DIR, ...folderPath.split('/'))` — a value
+ * containing '..' segments would otherwise let that resolve outside
+ * TREE_DIR entirely (found via CodeRabbit review on #91; folderPath can
+ * reach these from external input like the CLI's --folder/mkdir/mv args
+ * with no upstream validation).
+ */
+export function isSafeFolderPath(folderPath) {
+  if (!folderPath || typeof folderPath !== 'string') return false;
+  if (folderPath.startsWith('/') || folderPath.startsWith('\\')) return false;
+  return folderPath.split('/').every((seg) => seg !== '' && seg !== '.' && seg !== '..');
+}

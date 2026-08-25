@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { TREE_DIR } from './paths.js';
+import { TREE_DIR, isSafeFolderPath } from './paths.js';
 import { loadRaw, allRaw } from './scanner.js';
 import { isInSubtree } from './organize.js';
 import { contentLocale } from './config.js';
@@ -54,6 +54,12 @@ export function dirsForFolder(folder) {
  */
 export function assembleContext(folderPath) {
   if (!folderPath) return '';
+  // '..' segments would otherwise let the TREE_DIR join below escape it
+  // entirely and read a KNOWLEDGE.md from anywhere readable on disk (see
+  // isSafeFolderPath()'s own comment, paths.js) — fails the same way as
+  // "no ancestor has a KNOWLEDGE.md" rather than a distinct error, since
+  // there's no legitimate answer to reveal either way.
+  if (!isSafeFolderPath(folderPath)) return '';
   const segments = folderPath.split('/');
   const blocks = [];
   for (let i = 1; i <= segments.length; i++) {

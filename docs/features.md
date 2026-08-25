@@ -211,7 +211,14 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
 
 - **Inherit ancestor-folder knowledge.** `assembleContext(folderPath)`.
   Walks root to leaf, concatenating every ancestor's `KNOWLEDGE.md` that
-  exists (missing ones silently skipped). [tested]
+  exists (missing ones silently skipped). Refuses a `folderPath` with `..`
+  segments (`isSafeFolderPath()`, `paths.js`) rather than letting the
+  `TREE_DIR` join escape outside it and read an arbitrary file — found via
+  CodeRabbit review on #91; the same unguarded join pattern still exists
+  in `organize/folders.js`'s folder CRUD and `insight.js`'s KNOWLEDGE.md
+  writers, tracked separately (issue #92) rather than fixed here since it
+  touches CLI/TUI error-handling contracts in more files than this PR's
+  scope. [tested]
 - **Inject knowledge into a project's `AGENTS.md`.**
   `injectAgentsMd(targetDir, folderPath)`. **The riskiest write in the
   app: edits a file Mycelium doesn't own**, outside `~/.mycelium`. Only
