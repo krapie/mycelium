@@ -1191,6 +1191,13 @@ export function sessionsView(opts = {}) {
         // and seeds the copied command with a prompt that makes the
         // handed-off agent immediately report what it inherited.
         const inTutorial = !!app.tutorialSignal;
+        // Restore whichever panel actually had focus when `n` fired
+        // (foldersBox or listBox), not unconditionally listBox — found via
+        // CodeRabbit review on #97: pressing `n` from the Folders panel and
+        // then cancelling used to leave focus stranded on Sessions instead
+        // of back on Folders. Same state.level check doKnowledge()'s own
+        // refocus() already uses for the identical situation.
+        const refocus = () => (state.level === 'folders' ? foldersBox : listBox).focus();
         launchAgent(
           app,
           {
@@ -1202,7 +1209,7 @@ export function sessionsView(opts = {}) {
           () => {
             reloadFolders();
             reloadList();
-            listBox.focus();
+            refocus();
             app.render();
           },
         );

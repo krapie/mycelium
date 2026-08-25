@@ -125,9 +125,13 @@ const OWNERSHIP_MARKER = '.mycelium-tutorial-owned';
  * sessions first. */
 export function injectDemoSessions(personaId = 'swe') {
   const dir = tutorialProjectDir();
-  const preexisting = existsSync(dir);
-  mkdirSync(dir, { recursive: true });
-  if (!preexisting) writeFileSync(join(dir, OWNERSHIP_MARKER), '');
+  // mkdirSync(recursive:true) itself is the ownership check, not a separate
+  // existsSync() before it (found via CodeRabbit review on #97) — Node
+  // returns the created path when it actually made the directory, or
+  // undefined when it already existed, with no gap between "check" and
+  // "act" for another process to have created it in between.
+  const created = mkdirSync(dir, { recursive: true });
+  if (created) writeFileSync(join(dir, OWNERSHIP_MARKER), '');
   for (const n of buildMockSessions(personaId, undefined, dir)) saveRaw(n);
   reindex();
 }

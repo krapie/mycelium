@@ -7,6 +7,14 @@ import { useTempHome } from './helpers.js';
 useTempHome();
 
 const { injectDemoSessions, endTutorial, tutorialProjectDir } = await import('../src/tui/tutorial.js');
+const { __clearTestProvider } = await import('../src/llm.js');
+
+// endTutorial() clears the test provider as one of its own side effects,
+// but only when a test actually reaches it — if an assertion throws first,
+// nothing here explicitly resets it. AGENTS.md's own convention: always
+// __clearTestProvider() in afterEach(), regardless of whether this file's
+// own tests ever call __setTestProvider() directly.
+test.afterEach(() => __clearTestProvider());
 
 test('injectDemoSessions()/endTutorial() create and remove tutorialProjectDir() when nothing was there before', () => {
   const dir = tutorialProjectDir();
