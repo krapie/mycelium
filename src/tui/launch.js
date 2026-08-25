@@ -38,9 +38,25 @@ import { AGENTS, which, binFor, resumeArgsFor, workDirFor, newCommandLine } from
  * <args>` shell command to the clipboard, to paste into a separate terminal
  * tab/window — the only way to get real parallelism, since only the human
  * (not this process) can open one.
+ *
+ * `copyOnly` (used only by tutorial.js's `n` step) skips the open-here/
+ * copy-command choice entirely and always takes the copy path — a real
+ * first-run tour must never risk foregrounding a real, possibly-billed
+ * agent subprocess on a stray click.
  */
-export function launchAgent(app, { folder, seed, parentId, title, defaultDir } = {}, done) {
-  const available = Object.entries(AGENTS).filter(([, a]) => which(a.bin));
+export function launchAgent(app, { folder, seed, parentId, title, defaultDir, copyOnly = false } = {}, done) {
+  // MYCELIUM_DEMO_MODE (set for the tutorial's whole run) falls back to the
+  // full registry instead of the real which()-filtered list — CI/most
+  // contributors' machines have no agent CLI installed at all, which would
+  // otherwise leave the picker with zero entries and the tutorial's `n`
+  // step waiting forever for a modal that never opens. Unconditional in
+  // demo mode (not just "when the real list is empty") so a tape/test run
+  // is deterministic regardless of what happens to be on the recording
+  // machine's PATH.
+  const available =
+    process.env.MYCELIUM_DEMO_MODE === '1'
+      ? Object.entries(AGENTS)
+      : Object.entries(AGENTS).filter(([, a]) => which(a.bin));
   if (!available.length) {
     app.notify(t('launch.noAgents'), 3);
     return done && done();
@@ -54,6 +70,7 @@ export function launchAgent(app, { folder, seed, parentId, title, defaultDir } =
       if (!agentKey) return done && done();
       resolveDir(app, folder, defaultDir, (dir) => {
         if (!dir) return done && done();
+        if (copyOnly) return copyNewCommand(app, { agentKey, dir, folder, seed }, done);
         menu(
           app,
           t('launch.chooseAction'),
