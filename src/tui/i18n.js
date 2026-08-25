@@ -212,10 +212,12 @@ const en = {
   'tutorial.step6Title': '',
   'tutorial.step6Body': (fg) => `Review the knowledge draft, then press {${fg}-fg}Enter{/} to save it. Next: see exactly what a new session here would inherit from it.`,
   'tutorial.step7Title': ' — Reuse',
-  'tutorial.step7Body': (fg) => `Press {${fg}-fg}c{/} to see the context a new session in this folder would inherit.`,
+  'tutorial.step7Body': (fg) =>
+    `Press {${fg}-fg}n{/} (or {${fg}-fg}.{/} → New task with folder context) to start a new agent session with this folder's context. You'll pick an agent, then a directory — this tutorial always copies the launch command instead of actually opening one, so it's safe to click through.`,
   'tutorial.step8Title': '',
-  'tutorial.step8Body': (fg) =>
-    `This is exactly what gets injected into AGENTS.md automatically whenever you start a session here with {${fg}-fg}n{/} or {${fg}-fg}h{/} — or press {${fg}-fg}i{/} to inject it into a project manually, right now. Press {${fg}-fg}c{/} or {${fg}-fg}Esc{/} to close.`,
+  'tutorial.step8Body': (_fg) =>
+    `Pick any agent, then the suggested directory.\n\n` +
+    `A real AGENTS.md just got written into that directory, and the copied command even asks the agent to summarize what it inherited — paste it into a new terminal tab to see for yourself, or check the file (or the project context) directly.`,
   'tutorial.step9Title': ' — Knowledge Review',
   'tutorial.step9Body': (fg) =>
     `That was one folder, by hand. Every folder's knowledge can also be refreshed in one place — press {${fg}-fg}k{/} to check for (or compute) today's knowledge updates, unrelated to Digest.`,
@@ -250,7 +252,14 @@ const en = {
   'tutorial.waitingApply': 'Applying…',
   'tutorial.waitingKnowledge': "Distilling this folder's sessions into a knowledge draft…",
   'tutorial.waitingSave': 'Saving…',
-  'tutorial.waitingContext': 'Assembling inherited context…',
+  // Near-instant, synchronous menu() open, same as waitingPalette — not an
+  // LLM-call wait like waitingOrganize/waitingKnowledge.
+  'tutorial.waitingLaunch': 'Waiting for the agent picker to open…',
+  // Seeds the tutorial's copied launch command (doNewAgent(), sessions.js)
+  // with a prompt, so pasting it into a new tab makes the agent report
+  // back what it inherited immediately, instead of sitting at a blank
+  // prompt with nothing to demonstrate the injection actually happened.
+  'tutorial.newAgentSeed': 'What do you already know about this project? Summarize the context you inherited before I ask anything else.',
   'tutorial.waitingKnowledgeReview': 'Checking today\'s active folders for a knowledge refresh…',
   'tutorial.waitingMerge': "Waiting for Shift+M — make sure you've selected two sessions with Space first.",
   'tutorial.waitingSplit': 'Analyzing the merged session for topic boundaries…',
@@ -509,10 +518,12 @@ const ko = {
   'tutorial.step6Title': '',
   'tutorial.step6Body': (fg) => `지식 초안을 확인하고 {${fg}-fg}Enter{/}로 저장하세요. 다음: 새 세션이 여기서 무엇을 물려받는지 직접 확인해봅니다.`,
   'tutorial.step7Title': ' — 재사용',
-  'tutorial.step7Body': (fg) => `{${fg}-fg}c{/}를 눌러 이 폴더의 새 세션이 물려받을 컨텍스트를 확인해보세요.`,
+  'tutorial.step7Body': (fg) =>
+    `{${fg}-fg}n{/}을 눌러 (또는 {${fg}-fg}.{/} → 폴더 컨텍스트로 새 작업) 이 폴더의 컨텍스트로 새 에이전트 세션을 시작해보세요. 에이전트를 고른 뒤 디렉토리를 고르게 됩니다 — 이 튜토리얼은 실제로 여는 대신 항상 실행 명령을 복사하므로 마음 편히 클릭해도 됩니다.`,
   'tutorial.step8Title': '',
-  'tutorial.step8Body': (fg) =>
-    `{${fg}-fg}n{/} 또는 {${fg}-fg}h{/}로 이 폴더에서 세션을 시작할 때마다 이 내용이 AGENTS.md에 자동으로 주입됩니다 — 또는 {${fg}-fg}i{/}로 지금 바로 프로젝트에 직접 주입할 수도 있습니다. {${fg}-fg}c{/} 또는 {${fg}-fg}Esc{/}로 닫으세요.`,
+  'tutorial.step8Body': (_fg) =>
+    `아무 에이전트나 고른 뒤 제안된 디렉토리를 선택하세요.\n\n` +
+    `그 디렉토리에 실제 AGENTS.md가 방금 작성되었고, 복사된 명령어에는 물려받은 내용을 요약해달라는 프롬프트까지 들어있습니다 — 새 터미널 탭에 붙여넣어 직접 확인해보거나, 파일(또는 프로젝트 컨텍스트)을 바로 확인해보세요.`,
   'tutorial.step9Title': ' — 지식 검토',
   'tutorial.step9Body': (fg) =>
     `방금은 폴더 하나를 손으로 했죠. 모든 폴더의 지식을 한 곳에서 한 번에 갱신할 수도 있습니다 — {${fg}-fg}k{/}를 눌러 오늘의 지식 업데이트를 확인(또는 계산)해보세요. Digest와는 무관한 별개 기능입니다.`,
@@ -542,7 +553,8 @@ const ko = {
   'tutorial.waitingApply': '적용하는 중…',
   'tutorial.waitingKnowledge': '이 폴더의 세션들을 지식 초안으로 압축하는 중…',
   'tutorial.waitingSave': '저장하는 중…',
-  'tutorial.waitingContext': '상속받을 컨텍스트를 조합하는 중…',
+  'tutorial.waitingLaunch': '에이전트 선택 메뉴가 열리기를 기다리는 중…',
+  'tutorial.newAgentSeed': '이 프로젝트에 대해 이미 알고 있는 게 있다면 무엇인가요? 다른 걸 묻기 전에, 물려받은 컨텍스트를 먼저 요약해 주세요.',
   'tutorial.waitingKnowledgeReview': '오늘 활동이 있었던 폴더를 확인해 지식을 갱신하는 중…',
   'tutorial.waitingMerge': 'Shift+M을 기다리는 중 — 먼저 Space로 세션 두 개를 선택했는지 확인하세요.',
   'tutorial.waitingSplit': '병합된 세션을 나눌 지점을 찾는 중…',
