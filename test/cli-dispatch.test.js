@@ -30,12 +30,13 @@ function runCli(args) {
 }
 
 function runCliExpectFail(args) {
+  let out;
   try {
-    runCli(args);
-    assert.fail(`expected "mycelium ${args.join(' ')}" to exit non-zero`);
+    out = runCli(args);
   } catch (err) {
     return { status: err.status, stdout: err.stdout, stderr: err.stderr };
   }
+  assert.fail(`expected "mycelium ${args.join(' ')}" to exit non-zero, got: ${out}`);
 }
 
 test('unknown command prints help and exits 1', () => {
