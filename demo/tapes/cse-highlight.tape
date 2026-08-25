@@ -117,6 +117,12 @@ Wait+Screen@6s /Choose working directory/
 Sleep 1500ms
 Enter
 
+# copyOnly's toast shows the real copied command, including the seeded
+# prompt (tutorial.newAgentSeed, i18n.js) that makes the next agent report
+# its inherited context immediately — worth holding on screen.
+Wait+Screen@6s /Command copied to clipboard/
+Sleep 3s
+
 # Step 12/19 — closing on a clean, settled list so the GIF loops smoothly.
 # Knowledge Review's own subtitle is just a clean landing point, never
 # interacted with in this shortened cut.

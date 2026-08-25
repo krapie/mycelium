@@ -1,6 +1,7 @@
 import pkg from 'neo-blessed';
 const blessed = pkg.default || pkg;
-import { mkdirSync, rmSync } from 'node:fs';
+import { mkdirSync, rmSync, existsSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { C } from './theme.js';
 import { t, getLocale } from './i18n.js';
 import { saveRaw, deleteRaw, allRaw } from '../scanner.js';
@@ -107,6 +108,15 @@ export function tutorialProjectDir() {
   return `${HOME}-tutorial-repo`;
 }
 
+// This is a fixed, predictable path (found via CodeRabbit review on #97) —
+// if it happened to already exist as some unrelated real directory (the
+// user's own, or a leftover from something else entirely), endTutorial()'s
+// rmSync() would otherwise destroy it. The marker records "the tutorial
+// itself created this directory," written only when injectDemoSessions()
+// finds nothing there yet — endTutorial() then only ever removes a
+// directory carrying its own marker, never a pre-existing one.
+const OWNERSHIP_MARKER = '.mycelium-tutorial-owned';
+
 /** Writes the persona's mock sessions to the store — the one visible part
  * of setup, split out so the tutorial flow can defer it to the Scan step's
  * signal instead of showing it before the tour starts. NOT idempotent —
@@ -114,8 +124,11 @@ export function tutorialProjectDir() {
  * after a caller-side seedMockSessions() must check for existing demo
  * sessions first. */
 export function injectDemoSessions(personaId = 'swe') {
-  mkdirSync(tutorialProjectDir(), { recursive: true });
-  for (const n of buildMockSessions(personaId, undefined, tutorialProjectDir())) saveRaw(n);
+  const dir = tutorialProjectDir();
+  const preexisting = existsSync(dir);
+  mkdirSync(dir, { recursive: true });
+  if (!preexisting) writeFileSync(join(dir, OWNERSHIP_MARKER), '');
+  for (const n of buildMockSessions(personaId, undefined, dir)) saveRaw(n);
   reindex();
 }
 
@@ -148,8 +161,11 @@ export function seedMockSessions(personaId = 'swe') {
  * Also removes tutorialProjectDir() — the `n` step's AGENTS.md write is a
  * real file on disk, outside ~/.mycelium entirely, so it needs its own
  * cleanup here rather than anything reindex()/pruneEmptyFolders() already
- * cover. force:true since a tutorial that never reached the `n` step never
- * created the directory at all. */
+ * cover. Only removes it if OWNERSHIP_MARKER is present (this tutorial run
+ * created it fresh, see injectDemoSessions()) — never a directory that
+ * happened to already exist at that fixed, predictable path. A tutorial
+ * that never reached the `n` step never created the directory (or the
+ * marker) at all, so this is just a no-op then. */
 export function endTutorial() {
   for (const n of allRaw()) {
     if (n.demo) deleteRaw(n.id);
@@ -157,7 +173,8 @@ export function endTutorial() {
   pruneEmptyFolders();
   reindex();
   __clearTestProvider();
-  rmSync(tutorialProjectDir(), { recursive: true, force: true });
+  const dir = tutorialProjectDir();
+  if (existsSync(join(dir, OWNERSHIP_MARKER))) rmSync(dir, { recursive: true, force: true });
 }
 
 // Exit code `mycelium demo`'s child process uses to signal "tour finished,

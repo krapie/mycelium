@@ -1167,13 +1167,18 @@ export function sessionsView(opts = {}) {
       // launchAgent() (launch.js) asks "open here or copy command" — "copy
       // command" doesn't capture anything, so the refresh below is a
       // harmless no-op in that case. Named so the `.` menu can reuse it.
-      // FOLDER-scoped (state.folder, not the selected row) like o/w/s, so
-      // it's bound the same way they are, below — a real bug found while
-      // wiring up the tutorial's own `n` step: it used to be a
+      // FOLDER-scoped (state.folder, not the selected row) — real bug found
+      // while wiring up the tutorial's own `n` step: it used to be a
       // listBox-only binding, so pressing `n` while the Folders panel had
       // focus silently did nothing, even though the `.` menu's own FOLDER
       // group already documented it as "available from both the sessions
-      // list and the folders panel."
+      // list and the folders panel." Bound explicitly on both boxes below
+      // (matching w/doKnowledge's own pattern), not a global screenKey —
+      // confirmed via a headless dry run that screenKey would let a second
+      // `n` press re-enter this whole flow while the agent/directory picker
+      // it just opened still has focus, stacking a second one on top; an
+      // explicit per-box binding naturally can't fire once focus has moved
+      // to a different widget.
       function doNewAgent() {
         // Tutorial-only hook, same reasoning as doOrganize's — a real
         // modal (the agent picker) follows, so isModalOpen() polling is
@@ -1202,7 +1207,8 @@ export function sessionsView(opts = {}) {
           },
         );
       }
-      screenKey(app, ['n'], doNewAgent);
+      listBox.key('n', doNewAgent);
+      foldersBox.key('n', doNewAgent);
 
       // Resume/handoff/copy-command trio — shared with the Calendar tab's
       // day-list/detail (see resume-handoff.js). Only the "what's currently
