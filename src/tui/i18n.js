@@ -216,6 +216,18 @@ const en = {
   'tutorial.step8Title': '',
   'tutorial.step8Body': (fg) =>
     `This is exactly what gets injected into AGENTS.md automatically whenever you start a session here with {${fg}-fg}n{/} or {${fg}-fg}h{/} — or press {${fg}-fg}i{/} to inject it into a project manually, right now. Press {${fg}-fg}c{/} or {${fg}-fg}Esc{/} to close.`,
+  'tutorial.stepReuseNTitle': ' — Start a NEW task (n)',
+  'tutorial.stepReuseNBody': (fg) =>
+    `Press {${fg}-fg}.{/} — under FOLDER, "New task with folder context" ({${fg}-fg}n{/}) starts a fresh session on any agent, seeded ONLY with this folder's KNOWLEDGE — no prior conversation carried over. Just look for now, don't press n; it would spawn a real claude/codex/kiro. Esc when you've seen it.`,
+  'tutorial.stepReuseNAckTitle': '',
+  'tutorial.stepReuseNAckBody': (_fg) =>
+    `That's how you START. Next: how you CONTINUE — different key, different intent.`,
+  'tutorial.stepReuseHTitle': ' — Continue on another agent (h)',
+  'tutorial.stepReuseHBody': (fg) =>
+    `Open the palette one more time — press {${fg}-fg}.{/}. Under SESSION, "Continue this task on another agent" ({${fg}-fg}h{/}) is different from n: it hands off THIS session (its full transcript + the folder's KNOWLEDGE) to a new agent, linked as a continuation. n resets; h persists. Same rule — look, don't press. Esc when done.`,
+  'tutorial.stepReuseHAckTitle': '',
+  'tutorial.stepReuseHAckBody': (fg) =>
+    `Good. In your own store, {${fg}-fg}n{/} and {${fg}-fg}h{/} are the two ways any Mycelium session flows into the next real one.`,
   'tutorial.step9Title': ' — Knowledge Review',
   'tutorial.step9Body': (fg) =>
     `That was one folder, by hand. Every folder's knowledge can also be refreshed in one place — press {${fg}-fg}k{/} to check for (or compute) today's knowledge updates, unrelated to Digest.`,
@@ -251,6 +263,10 @@ const en = {
   'tutorial.waitingKnowledge': "Distilling this folder's sessions into a knowledge draft…",
   'tutorial.waitingSave': 'Saving…',
   'tutorial.waitingContext': 'Assembling inherited context…',
+  'tutorial.waitingReuseN': 'Waiting for the action menu to open…',
+  'tutorial.waitingReuseNClose': 'Closing the action menu…',
+  'tutorial.waitingReuseH': 'Waiting for the action menu to open…',
+  'tutorial.waitingReuseHClose': 'Closing the action menu…',
   'tutorial.waitingKnowledgeReview': 'Checking today\'s active folders for a knowledge refresh…',
   'tutorial.waitingMerge': "Waiting for Shift+M — make sure you've selected two sessions with Space first.",
   'tutorial.waitingSplit': 'Analyzing the merged session for topic boundaries…',
@@ -513,6 +529,18 @@ const ko = {
   'tutorial.step8Title': '',
   'tutorial.step8Body': (fg) =>
     `{${fg}-fg}n{/} 또는 {${fg}-fg}h{/}로 이 폴더에서 세션을 시작할 때마다 이 내용이 AGENTS.md에 자동으로 주입됩니다 — 또는 {${fg}-fg}i{/}로 지금 바로 프로젝트에 직접 주입할 수도 있습니다. {${fg}-fg}c{/} 또는 {${fg}-fg}Esc{/}로 닫으세요.`,
+  'tutorial.stepReuseNTitle': ' — 새 작업 시작 (n)',
+  'tutorial.stepReuseNBody': (fg) =>
+    `{${fg}-fg}.{/}를 눌러보세요 — FOLDER 그룹의 "폴더 컨텍스트로 새 작업 시작"({${fg}-fg}n{/})은 이 폴더의 KNOWLEDGE만 넘겨서 새 세션을 시작합니다. 이전 대화 이력은 넘어가지 않아요. 지금은 눈으로만 확인하세요 — n을 실제로 누르면 claude/codex/kiro가 실행됩니다. Esc로 닫으세요.`,
+  'tutorial.stepReuseNAckTitle': '',
+  'tutorial.stepReuseNAckBody': (_fg) =>
+    `이게 "새로 시작"입니다. 다음은 "이어서 하기" — 키도 다르고 의미도 다릅니다.`,
+  'tutorial.stepReuseHTitle': ' — 다른 에이전트로 이어서 (h)',
+  'tutorial.stepReuseHBody': (fg) =>
+    `팔레트를 한 번 더 열어보세요 — {${fg}-fg}.{/}. SESSION 그룹의 "다른 에이전트로 작업을 이어서"({${fg}-fg}h{/})는 n과 다릅니다: 지금 이 세션의 전체 대화 이력 + 폴더 KNOWLEDGE를 새 에이전트로 넘겨서 후속 세션으로 연결합니다. n은 초기화, h는 계승. 마찬가지로 실제로 누르진 마세요. 확인했으면 Esc.`,
+  'tutorial.stepReuseHAckTitle': '',
+  'tutorial.stepReuseHAckBody': (fg) =>
+    `좋습니다. 실제 스토어에서 {${fg}-fg}n{/}과 {${fg}-fg}h{/}는 Mycelium 세션이 다음 실제 세션으로 넘어가는 두 가지 통로입니다.`,
   'tutorial.step9Title': ' — 지식 검토',
   'tutorial.step9Body': (fg) =>
     `방금은 폴더 하나를 손으로 했죠. 모든 폴더의 지식을 한 곳에서 한 번에 갱신할 수도 있습니다 — {${fg}-fg}k{/}를 눌러 오늘의 지식 업데이트를 확인(또는 계산)해보세요. Digest와는 무관한 별개 기능입니다.`,
@@ -543,6 +571,10 @@ const ko = {
   'tutorial.waitingKnowledge': '이 폴더의 세션들을 지식 초안으로 압축하는 중…',
   'tutorial.waitingSave': '저장하는 중…',
   'tutorial.waitingContext': '상속받을 컨텍스트를 조합하는 중…',
+  'tutorial.waitingReuseN': '액션 메뉴가 열리기를 기다리는 중…',
+  'tutorial.waitingReuseNClose': '액션 메뉴를 닫는 중…',
+  'tutorial.waitingReuseH': '액션 메뉴가 열리기를 기다리는 중…',
+  'tutorial.waitingReuseHClose': '액션 메뉴를 닫는 중…',
   'tutorial.waitingKnowledgeReview': '오늘 활동이 있었던 폴더를 확인해 지식을 갱신하는 중…',
   'tutorial.waitingMerge': 'Shift+M을 기다리는 중 — 먼저 Space로 세션 두 개를 선택했는지 확인하세요.',
   'tutorial.waitingSplit': '병합된 세션을 나눌 지점을 찾는 중…',

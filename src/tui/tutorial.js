@@ -61,6 +61,18 @@ const STEPS = [
   // since textView accepts 'c'/'q'/'escape' as equally valid closes.
   { titleKey: 'tutorial.step7Title', bodyKey: 'tutorial.step7Body', waitFor: 'c', thenWait: 'open', waitingKey: 'tutorial.waitingContext' },
   { titleKey: 'tutorial.step8Title', bodyKey: 'tutorial.step8Body', pollOnEntry: 'close' },
+  // Reuse in practice: two palette openings, one per key. n and h look
+  // similar in the palette but differ in what they carry — n launches a
+  // NEW task with only the folder's KNOWLEDGE, h continues THIS session
+  // with its full transcript, both on a possibly different agent. Show
+  // them in separate steps so that distinction sinks in. Neither key is
+  // actually pressed inside the tutorial — both spawn a real
+  // claude/codex/kiro subprocess (foreground()), which the demo
+  // deliberately avoids; open the palette, look, Esc, move on.
+  { titleKey: 'tutorial.stepReuseNTitle', bodyKey: 'tutorial.stepReuseNBody', waitFor: '.', thenWait: 'open', waitingKey: 'tutorial.waitingReuseN' },
+  { titleKey: 'tutorial.stepReuseNAckTitle', bodyKey: 'tutorial.stepReuseNAckBody', waitFor: 'escape', thenWait: 'close', waitingKey: 'tutorial.waitingReuseNClose' },
+  { titleKey: 'tutorial.stepReuseHTitle', bodyKey: 'tutorial.stepReuseHBody', waitFor: '.', thenWait: 'open', waitingKey: 'tutorial.waitingReuseH' },
+  { titleKey: 'tutorial.stepReuseHAckTitle', bodyKey: 'tutorial.stepReuseHAckBody', waitFor: 'escape', thenWait: 'close', waitingKey: 'tutorial.waitingReuseHClose' },
   // Knowledge review (`k`) — deliberately unrelated to Digest (`d`),
   // positioned here as the natural "faster, across every folder" follow-up.
   // Structurally identical to steps 2/3: a real multiSelectList opens either
@@ -316,7 +328,11 @@ export function startTutorial(app, onDone, personaId = 'swe', { reloadSessions, 
   // that wait instantly (no real modal ever closed) and cascade the
   // narrator forward. `o`/`w`/`c`/Shift+M/Shift+S are safe: each has exactly
   // one meaning and thenWait 'open', which only resolves on a real modal.
-  const AMBIGUOUS_KEYS = new Set(['enter', 'left', 'right']);
+  // '.' is now waitFor for three steps by design — palette-intro up top,
+  // then two more (n and h) mid-Reuse. Without this, a `.` on an earlier
+  // step would forward-match one of those later ones and cascade the
+  // narrator straight through, skipping the actual action in between.
+  const AMBIGUOUS_KEYS = new Set(['enter', 'left', 'right', '.']);
 
   function onKeypress(ch, key) {
     if (done || !key) return;
@@ -335,7 +351,9 @@ export function startTutorial(app, onDone, personaId = 'swe', { reloadSessions, 
     // "abort," so closing a real modal with Escape silently ended the tutorial.
     let j = i;
     if (!matchesWaitFor(STEPS[j], ch, key)) {
-      if (AMBIGUOUS_KEYS.has(key.name)) return;
+      // Punctuation keys arrive with key.name undefined (see matchesWaitFor's
+      // ch fallback), so check both when deciding what's ambiguous.
+      if (AMBIGUOUS_KEYS.has(key.name) || (!key.name && AMBIGUOUS_KEYS.has(ch))) return;
       while (j < STEPS.length && !matchesWaitFor(STEPS[j], ch, key)) j++;
       if (j >= STEPS.length) return;
     }

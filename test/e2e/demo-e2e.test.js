@@ -615,6 +615,25 @@ test('demo: finishing the tutorial on the actual last step reports completed:tru
     sendKey(input, 'escape');
     await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 1000 });
     await settle();
+    // Reuse pair for `n` (new task): `.` opens the palette so the human
+    // sees where n lives, Esc closes without launching a real agent.
+    baseline = app.screen.children.length;
+    sendKey(input, '.');
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 2000 });
+    await settle();
+    sendKey(input, 'escape');
+    await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 2000 });
+    await settle();
+    // Reuse pair for `h` (handoff/continue) — same shape, different action
+    // in the palette. Kept separate from n's pair so the two intents don't
+    // blur together for the human reading along.
+    baseline = app.screen.children.length;
+    sendKey(input, '.');
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 2000 });
+    await settle();
+    sendKey(input, 'escape');
+    await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 2000 });
+    await settle();
     // Steps 9/10 — k: knowledge review (mirrors o's own two-step shape —
     // see tutorial.js). Nothing was pre-queued, so this computes fresh for
     // today via the mocked LLM before the review modal opens.
@@ -730,6 +749,25 @@ test('demo: pressing a later step\'s key early (skipping step 1) still lets the 
     await settle();
     sendKey(input, 'escape');
     await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 1000 });
+    await settle();
+    // Reuse pair for `n` (new task): `.` opens the palette so the human
+    // sees where n lives, Esc closes without launching a real agent.
+    baseline = app.screen.children.length;
+    sendKey(input, '.');
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 2000 });
+    await settle();
+    sendKey(input, 'escape');
+    await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 2000 });
+    await settle();
+    // Reuse pair for `h` (handoff/continue) — same shape, different action
+    // in the palette. Kept separate from n's pair so the two intents don't
+    // blur together for the human reading along.
+    baseline = app.screen.children.length;
+    sendKey(input, '.');
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 2000 });
+    await settle();
+    sendKey(input, 'escape');
+    await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 2000 });
     await settle();
     // Steps 9/10 — k: knowledge review (mirrors o's own two-step shape —
     // see tutorial.js). Nothing was pre-queued, so this computes fresh for
