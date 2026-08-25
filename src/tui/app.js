@@ -108,17 +108,11 @@ export function createApp({ input, output } = {}) {
 
   // See startSpinner()'s own comment (below) for why this exists — counts
   // active startSpinner()/startProgressBar() calls, since both reuse a
-  // permanent screen child (show()/hide() only toggle visibility) that
-  // tutorial.js's screen.children.length-based isModalOpen() can't see.
+  // permanent screen child that tutorial.js's isModalOpen() can't see.
   let busyWidgets = 0;
-  // Shared by both stop() methods below — startProgressBar()'s own stop()
-  // decrementing busyWidgets to 0 needs to be able to hide `toast` too, not
-  // just its own progressBox: a spinner and a progress bar both increment
-  // the same counter, so whichever of the two stop()s happens to be the
-  // LAST one out is the one that actually needs to hide the toast, and
-  // that isn't always the spinner's own stop(). Only startSpinner() ever
-  // shows the toast, but either stop() can be what finally makes it safe
-  // to hide.
+  // Shared by both stop() methods: a spinner and a progress bar increment
+  // the same counter, so whichever stop() is last out is the one that
+  // needs to hide `toast`, and that isn't always the spinner's own stop().
   const hideToastIfIdle = () => {
     if (busyWidgets <= 0) {
       toast.hide();
@@ -127,12 +121,9 @@ export function createApp({ input, output } = {}) {
   };
 
   // Separate from `toast`: a real filling bar for the two smart-organize
-  // phases (summarize, classify) that already know a true total up front
-  // (see sessions.js's runSmartOrganize()) — unlike the spinner, which
-  // exists precisely because most LLM-bound calls elsewhere DON'T know a
-  // total. Kept as its own persistent widget (not built/destroyed per
-  // call) for the same flicker/re-arm reasons `toast` is — see
-  // startSpinner()'s comments just below.
+  // phases that already know a true total (see sessions.js's
+  // runSmartOrganize()), unlike the spinner. Kept as its own persistent
+  // widget for the same flicker/re-arm reasons as `toast` — see startSpinner().
   const progressBox = blessed.box({
     parent: screen,
     top: 'center',
@@ -186,78 +177,28 @@ export function createApp({ input, output } = {}) {
       toast.hide();
       screen.render();
     },
-    // Animated wait indicator for LLM-bound calls — re-displays the toast
-    // every 120ms with a cycling braille spinner frame (same family npm/
-    // yarn/ora use; the screen is created with fullUnicode: true so this is
-    // safe to render). update(msg) lets a caller with real progress (a
-    // batch count, a completed-item count) change the label without
-    // restarting the spinner itself — see sessions.js's summarize/smart-
-    // organize progress toasts.
-    //
-    // A real, confirmed-in-production bug lived here: blessed.message's own
-    // `display(text, seconds, cb)` (used by notify() elsewhere, and by an
-    // earlier version of this method's own "rearm" logic) schedules an
-    // internal setTimeout that calls `self.hide()` unconditionally once
-    // `seconds` elapses — and neo-blessed's implementation (message.js)
-    // never clears that timeout on a LATER show()/display()/hide() call.
-    // Every `display()` call creates its own independent hide-timer that
-    // WILL fire at its own scheduled time no matter what happens afterward.
-    // A previous version of this method tried to "re-arm" against this by
-    // calling `toast.display(frame(), 60, cb)` every 20s — that doesn't
-    // cancel the earlier timer, it just piles up ANOTHER one; the ORIGINAL
-    // deadline (from THIS spinner's own first tick, or — worse — from any
-    // earlier, wholly unrelated notify() call still pending when THIS
-    // spinner starts) still fires and calls hide() out from under an
-    // actively-running spinner. Confirmed via VHS against a REAL (non-
-    // mocked) merge: the "Summarizing…" toast was invisible for the entire
-    // ~15s duration of a real claude call, with nothing on screen until the
-    // final result toast — exactly the "gone after a few seconds but
-    // actually still running" symptom reported. Fixed below by having
-    // tick() defensively call show() on every 120ms frame, not just once at
-    // start — decisively overriding any stale hide() from ANY source with
-    // at most a 120ms flicker, without needing to know where that hide()
-    // came from. update() now uses the same safe setContent()+render()
-    // path as tick() (previously used display(), which had the identical
-    // stale-timer problem) instead of blessed's auto-hide machinery.
+    // Animated wait indicator — re-displays the toast every 120ms with a
+    // cycling braille frame; update(msg) changes the label without restarting.
+    // Real bug: blessed.message's own hide() timeout is never cleared on a
+    // later show()/display(), so a stale timer could hide an active spinner
+    // mid-call — fixed by having tick() defensively call show() every frame.
     startSpinner(msg) {
-      // Counted, not just toggled — busyWidgets++/-- below is what
-      // isBusy() reports, since `toast` itself is a permanent screen child
-      // created once here in createApp() (show()/hide() just toggle
-      // visibility, never actually add/remove it from screen.children).
-      // tutorial.js's own isModalOpen() heuristic (screen.children.length
-      // > a baseline captured after this app already exists) is blind to
-      // that — a real bug found in production: sessions.js's merge/split
-      // handlers start a SECOND spinner (auto-summarizing the result) right
-      // after their own review modal (a real, counted widget) closes; the
-      // narrator's thenWait:'close' step saw the review modal's close and
-      // advanced immediately, landing on the next step's caption while this
-      // second spinner was still visibly running underneath it — two things
-      // on screen the narrator never accounted for both being true at once.
-      // isBusy() closes that blind spot without changing `toast`'s own
-      // architecture (it's reused for plain notify() toasts too, elsewhere).
+      // Counted, not just toggled — `toast` is a permanent screen child, so
+      // tutorial.js's screen.children.length-based isModalOpen() can't see
+      // it. Real bug this closes: merge/split's second auto-summarize
+      // spinner was invisible to the narrator, which advanced the instant
+      // the (separate, counted) review modal closed.
       busyWidgets++;
       const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
       let i = 0;
       let label = msg;
       const frame = () => `${frames[(i = (i + 1) % frames.length)]} ${label}`;
-      // Per-frame ticks use setContent(text, true) (noClear), not
-      // toast.display() — display() calls setContent() without noClear,
-      // which clears the toast's screen region before every redraw
-      // (element.js's clearPos()). Doing that every 120ms is invisible for
-      // a call that resolves in under a second, but visibly flickers (a
-      // real clear-then-redraw flash) once sustained over several real
-      // seconds — only became noticeable after mycelium demo's mock LLM
-      // delay grew from near-instant to a deliberate multi-second wait
-      // (tutorial-mock-llm.js). Safe to skip the clear here since the
-      // label text is identical frame to frame — only the leading
-      // single-width braille glyph changes, so there's nothing stale left
-      // over to expose.
+      // Per-frame ticks use setContent(text, true) (noClear) instead of
+      // toast.display() — display() clears the region before every redraw,
+      // which flickers once sustained over several seconds. Safe to skip
+      // the clear since only the leading glyph changes frame to frame.
       const tick = () => {
-        // show() every frame, not just once at start — see this method's
-        // own header comment for why: decisively overrides any stale
-        // hide() (blessed's own uncleared auto-hide timeout, from this
-        // spinner or an unrelated earlier notify()) within 120ms, without
-        // needing to know where that hide() call came from.
+        // show() every frame — see this method's header comment for why.
         toast.show();
         toast.setContent(frame(), true);
         screen.render();
@@ -265,15 +206,9 @@ export function createApp({ input, output } = {}) {
       tick();
       const timer = setInterval(tick, 120);
       return {
-        // Deliberately WITHOUT noClear, unlike tick() above — update() means
-        // the label itself changed (e.g. sessions.js's progress toasts,
-        // "3/6" → "4/6"), so the region genuinely needs clearing in case the
-        // new text is shorter than what it's replacing (setContent()'s own
-        // noClear param controls exactly this — element.js's clearPos()).
-        // Uses setContent() directly rather than display() (which the
-        // original version of this method used) for the same stale-timer
-        // reason tick() now calls show() defensively — see this method's
-        // header comment.
+        // Deliberately without noClear, unlike tick() — the label itself
+        // changed (e.g. "3/6" → "4/6"), so a shorter replacement needs the
+        // region actually cleared.
         update(newMsg) {
           label = newMsg;
           toast.show();
@@ -283,42 +218,18 @@ export function createApp({ input, output } = {}) {
         stop() {
           clearInterval(timer);
           busyWidgets--;
-          // Only actually hide the shared toast once NOTHING else is still
-          // busy — a real bug found in production: `toast` is one widget
-          // shared by every startSpinner() call (merge/split's own summarize
-          // spinner, any other in-flight LLM-bound action), and this used to
-          // call toast.hide() unconditionally. Two overlapping spinners —
-          // e.g. an impatient re-trigger of the same action before its own
-          // first spinner had stopped (merge, before it had a guard against
-          // this — see sessions.js) — meant whichever one finished FIRST hid
-          // the toast for BOTH, reading as "the modal closed early" while
-          // the other operation kept genuinely running, landing its real
-          // result later with nothing on screen to show for it in between.
-          // (The daemon's own periodic scan/tag/organize cycles — see
-          // daemon/cycles.js — never touch this widget at all: those run
-          // headless, with no spinner of their own, so they can't collide
-          // with a user's spinner here regardless.) Leaves whatever label is
-          // currently showing alone if something else is still in flight;
-          // that other spinner's own tick() (still running on its own
-          // interval) corrects the label on its next frame if it changed.
-          // A startProgressBar() call sharing busyWidgets with this spinner
-          // (not exercised by any real UI flow today — see
-          // hideToastIfIdle()'s own comment) is exactly why this delegates
-          // to the shared helper instead of checking/hiding inline: whoever
-          // decrements busyWidgets to 0 needs to hide the toast, and that
-          // isn't always this method.
+          // Only hide the shared toast once NOTHING else is busy — real bug:
+          // this used to hide unconditionally, so two overlapping spinners
+          // (e.g. an impatient re-trigger before the first stopped) meant
+          // whichever finished first hid the toast for both, reading as
+          // "closed early" while the other kept genuinely running.
           hideToastIfIdle();
         },
       };
     },
     // Real progress, for the two runSmartOrganize() phases that already
-    // track a true total (summarize count, placement chunk count) rather
-    // than an open-ended LLM wait — startSpinner()'s animated-but-fake
-    // motion is the right call when there's no total to show; this is for
-    // when there is one. `label` is a static prefix (no counts baked in —
-    // update() appends "(current/total)" itself so every caller formats
-    // the same way); progressBar is a child of progressBox, so hiding the
-    // box on stop() takes the bar with it.
+    // track a true total — startSpinner()'s fake motion is for when there
+    // isn't one. `label` is a static prefix; update() appends "(current/total)".
     startProgressBar(label) {
       // Same permanent-widget blind spot as startSpinner() above (see its
       // comment) — counted the same way.
@@ -376,15 +287,9 @@ export function createApp({ input, output } = {}) {
       screen.destroy();
       process.exit(code);
     },
-    // Lets a caller (the tutorial, which handles its own q directly — see
-    // tutorial.js) intercept the global q quit below instead of it also
-    // firing right behind/instead of that. Set to a function that returns
-    // true to swallow the keypress and handle it yourself; leave null (the
-    // default, restored once done) for the normal one-press-then-confirm
-    // quit every other screen in the app already relies on. Deliberately
-    // does NOT gate C-c at all (see the key bindings below) — Ctrl+C is
-    // meant to work as a hard, unconditional exit no matter what's on
-    // screen, guard or not.
+    // Lets a caller (the tutorial) intercept the global q quit instead of
+    // it also firing right behind. Return true to swallow the keypress;
+    // leave null (default) for the normal confirm-quit. Never gates C-c.
     quitGuard: null,
   };
 
@@ -420,19 +325,10 @@ export function createApp({ input, output } = {}) {
     screen.on('keypress', onKey);
   };
 
-  // l: switch UI language (en <-> ko — only two exist, so a toggle rather
-  // than another picker menu). No live re-render: sessionsView() doesn't
-  // clean up its own screen.key() bindings on unmount (a real bug this
-  // codebase already hit once — re-mounting it in place left stale closures
-  // capturing already-detached boxes), so the safe way to apply a new
-  // locale to everything already on screen is to persist it and restart,
-  // same as the existing `mycelium lang <en|ko>` CLI command already
-  // requires. setLocale() itself does take effect immediately for any t()
-  // call made AFTER this point, which is what already-updates-live things
-  // like the confirm box below rely on, and what the whole demo/first-run
-  // language-picker flow (index.js) leans on to avoid needing this
-  // restart at all — this key is specifically for an ALREADY-RUNNING
-  // real session someone wants to switch on the fly.
+  // l: switch UI language (en <-> ko, so a toggle). No live re-render:
+  // sessionsView() doesn't clean up its own screen.key() bindings on
+  // unmount, so re-mounting in place left stale closures over detached
+  // boxes — persist and restart instead, same as `mycelium lang <en|ko>`.
   let langConfirmBox = null;
   const confirmLanguageSwitch = () => {
     if (langConfirmBox) return; // already showing — a second l while it's up is the confirm itself, handled below
@@ -482,16 +378,10 @@ export function createApp({ input, output } = {}) {
     if (app.quitGuard && app.quitGuard()) return;
     confirmLanguageSwitch();
   });
-  // C-c: unconditional hard exit, on top of q — never gated by quitGuard,
-  // never asks first. The standard "just kill it" expectation for Ctrl+C
-  // specifically, unlike q (which is allowed to confirm, and which a
-  // caller like the tutorial can intercept to handle its own way).
-  // Deliberate trade-off: this skips the tutorial's own endTutorial()
-  // cleanup if one is active in the real ~/.mycelium store (the first-run
-  // path, not `mycelium demo`'s already-isolated store) — a few leftover
-  // demo:true sessions, not data loss, recoverable via `mycelium cleanup`.
-  // Not worth adding cleanup-ordering complexity to what Ctrl+C users
-  // expect to be an immediate, no-questions-asked exit.
+  // C-c: unconditional hard exit, never gated by quitGuard. Skips the
+  // tutorial's own endTutorial() cleanup if one is active against the real
+  // store — a few leftover demo:true sessions, recoverable via `mycelium
+  // cleanup`, not data loss; not worth complicating Ctrl+C's semantics for.
   screen.key(['C-c'], () => app.quit());
 
   return app;

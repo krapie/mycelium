@@ -104,18 +104,9 @@ const en = {
   'detail.splitInto': (n, labels) => `Split into ${n}: ${labels}`,
 
   // sessions.js — status bar. Used to spell out the full 4-stage/11-key
-  // breakdown on every single screen (Capture·s → Organize·m/t/o →
-  // Learn·a/w → Reuse·n/h/r/i) — a permanent status bar is the wrong place
-  // to teach the whole model every render; that detail now lives in the ?
-  // modal (help.text's new leading section) instead. The footer now names
-  // the day-to-day loop's four stages by their canonical names (matching
-  // README.md/AGENTS.md's own Capture → Organize → Learn → Reuse), each
-  // paired with its one flywheel key — s (capture/scan), o (organize),
-  // w (learn — generate a folder's knowledge; `w` is the tangible "learn"
-  // action a person actually presses, unlike `k`, which only *reviews*
-  // already-prepared knowledge), n (reuse — new session). Digest (`d`) is
-  // real and still listed in its own Global line below, it's just not one
-  // of these four canonical stages, so it isn't part of this loop.
+  // breakdown on every screen; that detail now lives in the `?` modal
+  // instead, and this just names the loop's four canonical stages
+  // (matching README.md/AGENTS.md) with their one flywheel key each.
   'lifecycle.bar': (fg) =>
     `Capture·{${fg}-fg}s{/} → Organize·{${fg}-fg}o{/} → Learn·{${fg}-fg}w{/} → Reuse·{${fg}-fg}n{/}`,
   'status.helpFallback': '. menu   ? all shortcuts   q quit',

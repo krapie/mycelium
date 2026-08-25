@@ -1,35 +1,10 @@
 // Shared source of truth for the tutorial/`mycelium demo`'s mock content —
-// one place per persona holding everything about each of its storylines
-// (mock session content, the folder it should classify into, the keywords
-// tutorial-mock-llm.js matches on, and the canned KNOWLEDGE.md/split-label
-// text) instead of two separate files independently hardcoding folder
-// names/keywords that have to stay in sync by hand. tutorial-data.js
-// (session building) and tutorial-mock-llm.js (classification/knowledge/
-// split mocking) both read from this file rather than each other.
-//
-// Each persona's `mergeStorylineIndex` names which of its storylines is the
-// one the tutorial's Shift+M/Shift+S steps operate on — that storyline's
-// sessions all classify into the SAME folder (so mergeSessions()'s real
-// "keep the shared folder" behavior has something to preserve) and carries
-// `splitLabels` for the two pieces Shift+S produces after merging.
-//
-// Bilingual (en/ko) content, resolved by whichever field actually varies by
-// language, not by duplicating the whole persona/storyline/session tree:
-// `label`/`description` (persona), `knowledge`/`splitLabels`/`keywords`
-// (storyline), `title`/`summary` (session) are `{en, ko}` objects; each
-// turn is `{role, en, ko}` (one object per turn, not two parallel arrays —
-// so the two languages can't silently drift out of sync in length/order the
-// way two separate arrays could). `folder` (a real directory name under
-// ~/.mycelium-demo/tree/) and `tags` stay single, shared, ASCII values in
-// both languages — mirroring how real project folder names and tech-stack
-// tags stay English/kebab-case even on Korean-speaking teams. `keywords` is
-// the one field that's genuinely language-SPECIFIC rather than just
-// translated: it's matched against whichever language the mock summary is
-// actually rendered in (see tutorial-mock-llm.js's storylineForText()), so
-// an English regex would never match a Korean summary and vice versa.
-// resolveLocale() in tutorial-data.js/tutorial-mock-llm.js is what actually
-// picks `.en`/`.ko` out of these at build time, driven by i18n.js's
-// getLocale() — nothing in this file itself is locale-aware.
+// one place per persona/storyline instead of two files independently
+// hardcoding folder names. `mergeStorylineIndex` names the storyline the
+// tutorial's Shift+M/S steps operate on. Most fields are `{en, ko}`;
+// `folder`/`tags` stay single ASCII values, and `keywords` is genuinely
+// language-specific, not just a translation (matched against whichever
+// language the mock summary renders in).
 
 function turn(role, en, ko) {
   return { role, en, ko };

@@ -38,19 +38,11 @@ const SUMMARIZE_CONCURRENCY = Number(process.env.MYCELIUM_SUMMARIZE_CONCURRENCY 
 let scanRunning = false;
 let organizeRunning = false;
 
-// `onScanned`, if passed, fires once — right after scan()+reindex(), before
-// the (much slower, LLM-bound) tagAll() call below. A real bug found via
-// VHS: a first version of this hook (see runDaemon()'s own comment) fired
-// only after tagAll() too, since it lived on the OUTSIDE of this whole
-// function's await — tagAll() can mean up to TAG_BATCH_LIMIT real
-// claude/codex subprocess calls, tens of seconds to minutes on a real
-// backlog, not the ~2s scan()+reindex() itself takes. A caller that wants
-// to refresh a just-mounted view (tui/index.js's startUpkeepAndRecheck())
-// needs to know as soon as the data is actually queryable, not after the
-// whole cycle — waiting for tagAll() meant the sessions view's own header/
-// folders/list stayed built from pre-scan (empty) state for however long
-// tagging took, even though notifyPostMount()'s own immediate call (which
-// re-queries data.sessions() fresh) already had the right numbers by then.
+// `onScanned`, if passed, fires once right after scan()+reindex(), before
+// the much slower tagAll() call below. Real bug: an earlier version fired
+// only after tagAll() too, so a caller refreshing a just-mounted view
+// (tui/index.js's startUpkeepAndRecheck()) stayed built from pre-scan state
+// for however long tagging took, well past when the data was queryable.
 export async function scanCycle(log, { onScanned } = {}) {
   if (scanRunning) return log.log('[scan] skip — previous cycle still running');
   scanRunning = true;

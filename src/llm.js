@@ -22,15 +22,10 @@ const CODEX_MODEL = process.env.MYCELIUM_CODEX_MODEL || 'gpt-5.5';
 // marker on every call is the part that can't drift.
 export const META_MARKER = '​[mycelium:meta-call]​';
 
-// Injection point — every LLM-dependent module (learn.js, insight.js,
-// organize.js's classification, split.js) calls complete() rather than
+// Injection point — every LLM-dependent module calls complete() rather than
 // spawning directly, so overriding it here is the one seam needed to
-// unit-test all of them without a real claude/codex subprocess. Real
-// production callers never touch this. The one non-test caller is
-// tui/tutorial.js's seedMockSessions(), for the same reason tests use it —
-// deterministic output instead of a real subprocess — so the first-run
-// tutorial / `mycelium demo` stays fast (though not literally instant on
-// purpose, see tui/tutorial-mock-llm.js).
+// unit-test all of them. The one non-test caller is tui/tutorial.js's
+// seedMockSessions(), for the same deterministic-output reason.
 let _testProvider = null;
 export function __setTestProvider(fn) {
   _testProvider = fn;
@@ -39,17 +34,10 @@ export function __clearTestProvider() {
   _testProvider = null;
 }
 
-// Every in-flight complete() child, tracked so killInFlight() (called by
-// app.js's quit()/Ctrl+C) can actually stop them — a real bug found in
-// production: spawn() below has no `detached` flag and nothing tracked
-// these beyond the local Promise closure, so quit()'s unconditional
-// process.exit() left any still-running claude/codex subprocess (a user's
-// own merge/split/organize call, or the background daemon's periodic scan/
-// tag/organize cycles — see daemon/cycles.js) orphaned: it kept running
-// after mycelium itself had exited, consuming real API quota and
-// eventually writing its result to raw/<id>.json with nothing left alive
-// to show for it, which read as "sessions still running even after
-// exiting mycelium."
+// Every in-flight complete() child, tracked so killInFlight() (app.js's
+// quit()/Ctrl+C) can actually stop them — real bug: nothing tracked these
+// beyond the local Promise closure, so quit()'s process.exit() left a
+// still-running claude/codex subprocess orphaned, consuming quota after exit.
 const inFlight = new Set();
 
 // Test-only seam, same naming/purpose convention as __setTestProvider()
