@@ -94,6 +94,16 @@ export function assembleContext(folderPath) {
  * inject silently discarding whatever an earlier, different folder wrote.
  */
 export function injectAgentsMd(targetDir, folderPath) {
+  // folderPath reaches here from the CLI's raw --folder flag (unlike the
+  // TUI, which only ever passes an already-real, listTreeDirs()-sourced
+  // folder), so a value containing "-->" would otherwise close the marker's
+  // HTML comment early and land as literal, unbounded content in a file
+  // agents read as instructions — a real prompt-injection vector, not just
+  // a cosmetic escaping bug.
+  if (folderPath.includes('-->')) {
+    return { ok: false, error: `invalid folder path (contains '-->'): ${folderPath}` };
+  }
+
   const context = assembleContext(folderPath);
   if (!context) return { ok: false, error: `no KNOWLEDGE.md along ${folderPath}` };
 
