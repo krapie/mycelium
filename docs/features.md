@@ -215,13 +215,19 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
 - **Inject knowledge into a project's `AGENTS.md`.**
   `injectAgentsMd(targetDir, folderPath)`. **The riskiest write in the
   app: edits a file Mycelium doesn't own**, outside `~/.mycelium`. Only
-  touches content between `<!-- mycelium:begin -->`/`<!-- mycelium:end -->`
-  markers; replaces in place if present, appends (preserving existing
-  content) if not; no-ops if no `KNOWLEDGE.md` exists in the ancestor
-  path. The one marker comment Mycelium itself writes (not quoted from a
-  `KNOWLEDGE.md`) follows `contentLocale()` too. [tested] (including the
-  repeated-call/no-duplication invariant, no longer the untested
-  riskiest write in the app)
+  touches content between `<!-- mycelium:begin:<folder> -->`/
+  `<!-- mycelium:end:<folder> -->` markers, one block per folder rather
+  than one per file (issue #90 — a directory hosting sessions from two
+  different folders, e.g. a monorepo root, used to have the second
+  inject silently discard whatever the first folder had already
+  written); replaces in place if that folder's own block is present,
+  appends a new block (preserving existing content, including any other
+  folder's own block) if not; a pre-fix unscoped block is migrated to the
+  new format on first inject rather than left orphaned; no-ops if no
+  `KNOWLEDGE.md` exists in the ancestor path. The one marker comment
+  Mycelium itself writes (not quoted from a `KNOWLEDGE.md`) follows
+  `contentLocale()` too. [tested] (repeated-call/no-duplication,
+  multi-folder-same-directory, and legacy-block-migration all covered)
 - **`CLAUDE.md` bridge, so Claude Code actually sees any of this.**
   `injectAgentsMd()` also unconditionally calls `ensureClaudeBridge(targetDir)`,
   confirmed against Anthropic's own current docs that **Claude Code does
