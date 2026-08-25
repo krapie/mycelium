@@ -30,3 +30,38 @@ test('ensureDirs() creates every directory it promises to, idempotently', () => 
   }
   paths.ensureDirs(); // second call must not throw
 });
+
+test('isSafeFolderPath() accepts ordinary nested folder paths', () => {
+  assert.equal(paths.isSafeFolderPath('auth'), true);
+  assert.equal(paths.isSafeFolderPath('auth/token-refresh'), true);
+});
+
+test('isSafeFolderPath() rejects POSIX traversal and absolute paths', () => {
+  assert.equal(paths.isSafeFolderPath('..'), false);
+  assert.equal(paths.isSafeFolderPath('../outside'), false);
+  assert.equal(paths.isSafeFolderPath('team/../../outside'), false);
+  assert.equal(paths.isSafeFolderPath('/outside'), false);
+  assert.equal(paths.isSafeFolderPath('team/./project'), false);
+});
+
+// Checked with path.win32 explicitly (not the host's own platform-default
+// path module), since these must be rejected the same way on a Mac/Linux
+// CI runner as on a real Windows user's machine — found via CodeRabbit
+// review on #91, one round after the first POSIX-only version of this
+// function shipped.
+test('isSafeFolderPath() rejects Windows-style traversal, drive-qualified, and UNC paths', () => {
+  assert.equal(paths.isSafeFolderPath('..\\outside'), false);
+  assert.equal(paths.isSafeFolderPath('team\\..\\outside'), false);
+  assert.equal(paths.isSafeFolderPath('C:\\outside'), false);
+  assert.equal(paths.isSafeFolderPath('C:/outside'), false);
+  assert.equal(paths.isSafeFolderPath('C:foo'), false);
+  assert.equal(paths.isSafeFolderPath('\\\\server\\share'), false);
+  assert.equal(paths.isSafeFolderPath('//server/share'), false);
+  assert.equal(paths.isSafeFolderPath('\\outside'), false);
+});
+
+test('isSafeFolderPath() rejects non-string/empty input', () => {
+  assert.equal(paths.isSafeFolderPath(''), false);
+  assert.equal(paths.isSafeFolderPath(null), false);
+  assert.equal(paths.isSafeFolderPath(undefined), false);
+});
