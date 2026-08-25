@@ -45,9 +45,9 @@ import { copyToClipboard } from '../clipboard.js';
 import { t } from '../i18n.js';
 import { createResumeHandoff } from '../resume-handoff.js';
 
-// Caps concurrent LLM calls for a large first-time backlog, so one `o`
-// press can't exhaust a tight usage quota. Tighter than suggestPlacements()'s
-// limit:200 below since summarizing costs more per item.
+// Caps the number of sessions summarized by one `o` run, so a large
+// first-time backlog cannot exhaust a tight usage quota. Lower than
+// suggestPlacements()'s limit:200 because summarizing costs more per item.
 const SUMMARIZE_BATCH_LIMIT = Number(process.env.MYCELIUM_SUMMARIZE_BATCH_LIMIT || 30);
 
 // Plain-text rendering of a session for the clipboard (title, summary, and the
@@ -97,7 +97,7 @@ export function sessionsView(opts = {}) {
   // the New pseudo-folder (genuinely unfiled only), a path = that folder's
   // subtree.
   let state = { folder: undefined, query: '', tags: [], selected: new Set(), sortBy: 'recent' };
-  // Guards o/w/Shift+S/Shift+M against a double-press race stacking a
+  // Guards o/k/w/Shift+S/Shift+M against a double-press race stacking a
   // second review modal (breaks tutorial.js's isModalOpen() baseline).
   // Released once the "immediate" part finishes, not through merge/split's
   // later auto-summarize — holding it longer broke legitimate follow-ups.
@@ -862,8 +862,7 @@ export function sessionsView(opts = {}) {
         let matches = pendingSuggestions();
         if (!matches.length) {
           // Only summarizes sessions actually being classified, not the
-          // whole backlog. startSpinner() keeps the toast alive across the
-          // batch even if every concurrent lane stalls at once.
+          // whole backlog.
           const pending = classificationCandidates({ cooldownMs: 0, folder: state.folder }).filter(
             (n) => !n.extracted.summary,
           ).length;

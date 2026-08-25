@@ -38,11 +38,11 @@ const SUMMARIZE_CONCURRENCY = Number(process.env.MYCELIUM_SUMMARIZE_CONCURRENCY 
 let scanRunning = false;
 let organizeRunning = false;
 
-// `onScanned`, if passed, fires once right after scan()+reindex(), before
-// the much slower tagAll() call below. Real bug: an earlier version fired
-// only after tagAll() too, so a caller refreshing a just-mounted view
-// (tui/index.js's startUpkeepAndRecheck()) stayed built from pre-scan state
-// for however long tagging took, well past when the data was queryable.
+// `onScanned`, if passed, fires once after scan() and any import-triggered
+// reindex(), before the much slower tagAll() call below. Real bug: an
+// earlier version fired only after tagAll() too, so a caller refreshing a
+// just-mounted view (tui/index.js's startUpkeepAndRecheck()) stayed built
+// from pre-scan state for however long tagging took.
 export async function scanCycle(log, { onScanned } = {}) {
   if (scanRunning) return log.log('[scan] skip — previous cycle still running');
   scanRunning = true;

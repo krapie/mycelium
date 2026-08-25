@@ -12,22 +12,17 @@ import { findPersona } from './personas.js';
 import { writePendingKnowledgeText } from '../insight.js';
 
 /**
- * First-run interactive tutorial (and `mycelium demo`'s engine): mock
- * sessions dropped into the real store just long enough to walk through
- * Capture → Organize → Learn → Reuse → Knowledge review → session lineage,
- * using the TUI's own real key handlers. The 5 action handlers reachable
- * from the `.` palette also call `app.tutorialSignal?.(name)` past their own
- * guards, since selecting a palette item confirms via Enter — indistinguishable
- * from any other dialog by keypress alone. `o`/`w`/`k`/Shift+S's LLM calls
- * are swapped to tutorialMockProvider() (see tutorial-mock-llm.js) for as
- * long as mock sessions are in the store.
+ * First-run interactive tutorial (and `mycelium demo`'s engine). The 5
+ * action handlers reachable from the `.` palette also call
+ * `app.tutorialSignal?.(name)` past their own guards, since selecting a
+ * palette item confirms via Enter — indistinguishable from any other
+ * dialog by keypress alone.
  *
- * Mock sessions are NOT written up front: the real flow (index.js) mounts
- * the Sessions view empty and calls prepareTutorialProvider() only;
- * injectDemoSessions() fires from app.tutorialSignal('scan'), timed to the
- * Scan step's own keypress, so "press s to capture them" is literally true.
- * seedMockSessions() does both eagerly for callers (mostly tests) that don't
- * need that reveal.
+ * Mock sessions are NOT written up front: the real flow mounts the
+ * Sessions view empty, and injectDemoSessions() fires from
+ * app.tutorialSignal('scan'), timed to the Scan step's own keypress, so
+ * "press s to capture them" is literally true. seedMockSessions() does
+ * both eagerly for callers (mostly tests) that don't need that reveal.
  */
 
 // `thenWait: 'open'|'close'` marks steps whose key triggers a real LLM call
@@ -338,9 +333,6 @@ export function startTutorial(app, onDone, personaId = 'swe', { reloadSessions, 
     if (waiting) return;
     // Escape is deliberately not handled here — it used to double as
     // "abort," so closing a real modal with Escape silently ended the tutorial.
-    // This listener only narrates alongside sessions.js's own bindings — an
-    // exact match on the current step wins; otherwise jump to the first
-    // later step a non-ambiguous key satisfies, skipping past instructions.
     let j = i;
     if (!matchesWaitFor(STEPS[j], ch, key)) {
       if (AMBIGUOUS_KEYS.has(key.name)) return;
