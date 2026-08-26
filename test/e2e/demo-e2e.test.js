@@ -79,7 +79,7 @@ function findByKeyword(sessions, re) {
 }
 
 // Reads the narrator overlay's own step number straight off its blessed
-// label content (tutorial.js's `box.setLabel(...)`, e.g. " Step 3/16 ") —
+// label content (tutorial.js's `box.setLabel(...)`, e.g. " Step 3/20 ") —
 // not rendered pixel/ANSI output, just the plain string setLabel()/
 // setContent() already stored on the element (element.js's `_label.content`
 // / `.content`). Needed only for the skip-ahead regression test below,
