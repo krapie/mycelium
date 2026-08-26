@@ -50,7 +50,7 @@ Every lifecycle operation lives in one small set of core modules under `src/`, i
 - `config.js` — `config.json` read/write (locale, excluded ids, etc.).
 - `llm.js` — headless LLM calls via the user's own `claude`/`codex` CLI subscription.
 - `agents.js`, `adapters/*.js` — the agent-CLI registry (`binFor`/`resumeArgsFor`, per-adapter `parse()`).
-- `daemon.js` (barrel → `daemon/{cycles,process.js}`) — background cadence over the modules above; a scheduler, not a fourth interface.
+- `daemon.js` (barrel → `daemon/{cycles,process}.js`) — background cadence over the modules above; a scheduler, not a fourth interface.
 
 **Interface** (parse input → call core → render/format output, and nothing else):
 

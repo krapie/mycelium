@@ -164,15 +164,7 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
 
 ## Insight: Digests and folder knowledge (`src/insight.js`, `insight/digest.js`, `insight/knowledge.js`)
 
-`insight.js` is a barrel (Phase 3 split, issue #89, same `export * from`
-pattern as `organize.js`/`daemon.js`): `insight/digest.js` owns
-`sessionsForPeriod()`/`generateDigest()`, `insight/knowledge.js` owns
-everything else below — the `d` vs. `k` distinction. `knowledge.js`'s
-`foldersActiveOn()` imports `sessionsForPeriod` from `digest.js` (a
-cross-sibling import, same shape as `organize/classify.js` importing from
-`organize/folders.js`) since it's knowledge-side scoping that happens to
-reuse the digest feature's day-filter helper. Every existing importer keeps
-using `'../insight.js'` unchanged.
+`insight.js` is a barrel (Phase 3 split, issue #89, same `export * from` pattern as `organize.js`/`daemon.js`): `insight/digest.js` owns `sessionsForPeriod()`/`generateDigest()`, `insight/knowledge.js` owns everything else below — the `d` vs. `k` distinction. `knowledge.js`'s `foldersActiveOn()` imports `sessionsForPeriod` from `digest.js` (a cross-sibling import, same shape as `organize/classify.js` importing from `organize/folders.js`) since it's knowledge-side scoping that happens to reuse the digest feature's day-filter helper. Every existing importer keeps using `'../insight.js'` unchanged.
 
 - **Generate a daily/weekly narrative digest.** `generateDigest({period, date})`.
   ISO week computation (Monday-based, UTC); no sessions for the period
