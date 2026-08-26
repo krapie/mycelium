@@ -3,14 +3,10 @@ import { emptyNeutral } from '../schema.js';
 import { findPersona } from './personas.js';
 import { getLocale } from './i18n.js';
 
-// Realistic mock sessions for the first-run tutorial / `mycelium demo` — NOT
-// real captures. Content lives in personas.js (one shared source for this
-// file and tutorial-mock-llm.js, so folder names/keywords/knowledge can't
-// drift out of sync between the two the way they used to). Dates are
-// computed relative to "now" each time this is called, not hardcoded, so a
-// demo run always looks fresh on the calendar. Every session is `demo: true`
-// (tutorial.js's endTutorial() sweeps on that) and starts `folder: null` so
-// the o step has real work to do.
+// Realistic mock sessions for the first-run tutorial / `mycelium demo` — not
+// real captures. Content lives in personas.js, shared with tutorial-mock-llm.js
+// so the two can't drift. Dates are relative to "now" so a demo always looks
+// fresh; every session is `demo: true` and starts `folder: null`.
 
 function daysAgo(n, hour = 10) {
   const d = new Date();
@@ -21,12 +17,19 @@ function daysAgo(n, hour = 10) {
 
 // personas.js's title/summary/turns are `{en, ko}` (turns: `{role, en, ko}`)
 // — resolved here against whichever locale is active at seed time (index.js
-// picks language before calling seedMockSessions(), so getLocale() already
-// reflects it by the time this runs). `locale` defaults to getLocale()
+// picks language before the tutorial ever calls injectDemoSessions(), so
+// getLocale() already reflects it by the time this runs). `locale` defaults to getLocale()
 // rather than always reading it live, so a caller can pin a specific
 // language explicitly (see the tests) without needing to call setLocale()
 // first and risk leaking that change to whatever runs after it.
-export function buildMockSessions(personaId = 'swe', locale = getLocale()) {
+//
+// `projectDir` (optional) is a real, existing directory every mock session
+// gets stamped with, so the tutorial's `n` step's directory picker
+// (dirsForFolder(), reuse.js) has a real suggestion instead of falling
+// through to a free-text prompt pre-filled with wherever the user happened
+// to launch mycelium from. Stays a plain field stamp here — no fs access —
+// tutorial.js's injectDemoSessions() is the one that actually creates it.
+export function buildMockSessions(personaId = 'swe', locale = getLocale(), projectDir) {
   const persona = findPersona(personaId);
   const sessions = persona.storylines.flatMap((s) => s.sessions);
   return sessions.map((s) => {
@@ -39,6 +42,7 @@ export function buildMockSessions(personaId = 'swe', locale = getLocale()) {
     n.extracted.tags = s.tags;
     n.summarizedTurnCount = n.turns.length;
     n.demo = true; // tutorial.js's endTutorial() sweeps on this flag
+    if (projectDir) n.projectDir = projectDir;
     return n;
   });
 }

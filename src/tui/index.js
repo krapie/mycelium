@@ -2,7 +2,7 @@ import { createApp } from './app.js';
 import { sessionsView } from './views/sessions.js';
 import { welcomeModal, firstScanModal } from './widgets/viewers.js';
 import { menu } from './widgets/pickers.js';
-import { seedMockSessions, startTutorial, DEMO_HANDOFF_EXIT_CODE } from './tutorial.js';
+import { prepareTutorialProvider, startTutorial, DEMO_HANDOFF_EXIT_CODE } from './tutorial.js';
 import { PERSONAS } from './personas.js';
 import { C } from './theme.js';
 import { t, getLocale, setLocale } from './i18n.js';
@@ -12,14 +12,9 @@ import { startTuiRoutine } from '../daemon.js';
 import { loadConfig, saveConfig } from '../config.js';
 import * as data from './data.js';
 
-// Shown before pickPersona, for both `mycelium demo` and first-run
-// onboarding — the very first choice a human makes here, so unlike every
-// other picker in this file it can't go through t() (the language isn't
-// known yet). Shown bilingually; each label is that language's own native
-// name, not a translation. `cb` receives undefined if dismissed with
-// Escape; callers default that to 'en'. setLocale() (called by the caller,
-// not here) takes effect immediately — every t() call from this point on,
-// including pickPersona's own label below, reflects the pick.
+// Shown before pickPersona — the first choice a human makes, so unlike
+// every other picker here it can't go through t() (language isn't known
+// yet). Shown bilingually. `cb` receives undefined if dismissed with Escape.
 function pickLanguage(app, cb) {
   menu(
     app,
@@ -33,9 +28,9 @@ function pickLanguage(app, cb) {
   );
 }
 
-// Shown before seeding mock sessions, both for `mycelium demo` and for a
+// Shown before the tutorial starts, both for `mycelium demo` and for a
 // first-run user who opted into the tour — which persona's storylines
-// (personas.js) seedMockSessions()/startTutorial() should use. `cb` receives
+// (personas.js) prepareTutorialProvider()/startTutorial() should use. `cb` receives
 // undefined if the picker is dismissed with Escape; callers default that to
 // 'swe' rather than leaving the demo in a half-started state. personas.js's
 // label/description are `{en, ko}` — resolved here against whatever
@@ -102,22 +97,12 @@ export async function runTui({ forceTutorial = false } = {}) {
   }
   const app = createApp();
 
-  // Shared by every startTuiRoutine() call site below (the accepted-tour,
-  // declined-tour, and already-onboarded branches) — startTuiRoutine()'s own
-  // scanCycle() is fire-and-forget, so whichever notifyPostMount() call ran
-  // right after mount can easily run before that first scan has imported
-  // anything: a genuinely fresh store reads 0 sessions and the first-scan-
-  // modal's threshold check never clears. A real bug (confirmed via VHS)
-  // came from this helper only being applied to ONE of the three call
-  // sites — the other two silently missed the modal's only fair chance to
-  // fire, so it didn't show up until whichever LATER launch happened to
-  // have the scan already done before its own immediate notifyPostMount()
-  // ran, reading as "the modal showed up again after I already exited and
-  // came back" rather than "it finally got shown." `getApi` is a closure
-  // (not a plain `api` value) since each call site's own `api` variable is
-  // still `undefined` at the moment this function is defined/passed in —
-  // only set once `sessionsView()`'s `onReady` fires, before
-  // startTuiRoutine()'s callback can ever run.
+  // Shared by every startTuiRoutine() call site — scanCycle() is
+  // fire-and-forget, so notifyPostMount() right after mount can run before
+  // the first scan imports anything. A real bug (confirmed via VHS) came
+  // from this only being applied to one of the three call sites — the
+  // others missed the modal's only fair chance to fire. `getApi` is a
+  // closure since each site's `api` is still undefined when this runs.
   const startUpkeepAndRecheck = (getApi) =>
     startTuiRoutine(() => {
       getApi()?.reloadAll();
@@ -130,71 +115,45 @@ export async function runTui({ forceTutorial = false } = {}) {
   // No background daemon either — a one-shot demo shouldn't be scanning
   // for real agent sessions in the background.
   if (forceTutorial) {
-    // Mount the (empty, pre-seed) sessions view FIRST, then show the
-    // persona picker on top of it — so the picker has the real TUI chrome
-    // (header/panels/statusbar) behind it instead of a bare screen. Seeding
-    // happens after the pick, so `api.reloadAll()` is what makes the
-    // already-mounted view pick up the newly-written mock sessions (seeding
-    // writes straight to the raw store/index, bypassing this view's own
-    // in-memory state).
+    // Mount the (empty) sessions view FIRST, so the persona picker has real
+    // TUI chrome behind it. Genuinely empty is the point: session rows land
+    // later, the moment the tutorial's Scan step fires (see tutorial.js).
     let api;
     await app.show(sessionsView({ onReady: (a) => (api = a) }));
     app.render();
     pickLanguage(app, (locale = 'en') => {
       setLocale(locale);
-      // Refresh right away, not only once seedMockSessions() below also
-      // calls reloadAll() — panel border labels (`sessions.foldersPanelLabel`
+      // Refresh right away — panel border labels (`sessions.foldersPanelLabel`
       // etc.) are blessed widget construction options, only re-applied when
       // something calls reloadAll()'s updatePanelLabels(); without this call
-      // here too, any picker still shown on screen before persona/seeding
+      // here too, any picker still shown on screen before persona pick
       // (there is none in this branch, but see the onboarding branch below
       // for where it matters) would sit next to stale-language chrome.
       api.reloadAll();
       pickPersona(app, async (personaId = 'swe') => {
-        seedMockSessions(personaId);
-        api.reloadAll();
-        // Once the demo sessions are cleaned up, this isolated ~/.mycelium-demo
-        // store is empty — resetToRoot() used to just drop back into that empty
-        // view, which reads as "the demo is broken" (0 sessions, no obvious way
-        // out except the normal `q` quit). If the presenter went all the way
-        // through (completed:true — the final step's own q+confirm, not an
-        // early Esc bail), quit THIS process with a sentinel exit code instead;
-        // cli.js's demo command is watching for it and hands off straight into
-        // a real TUI against the user's actual ~/.mycelium. An early Esc bail
-        // (completed:false) just quits plainly — someone who bailed out mid-
-        // tour didn't ask to see real data next.
+        prepareTutorialProvider(personaId);
+        // A completed run (q on the actual last step) quits with a sentinel
+        // exit code instead — cli.js's demo command watches for it and hands
+        // off into a real TUI. An early Esc bail just quits plainly.
         startTutorial(
           app,
           (completed) => {
             app.quit(completed ? DEMO_HANDOFF_EXIT_CODE : 0);
           },
           personaId,
+          { reloadSessions: () => api.reloadAll() },
         );
       });
     });
     return;
   }
 
-  // Background upkeep (scan/organize/digest) runs inside this same process
-  // for as long as the TUI is open, on the same timers a standalone daemon
-  // would use — see daemon.js's startTuiRoutine() for why this replaced an
-  // auto-spawned separate process. Stops naturally when the TUI exits.
-  //
-  // Deliberately NOT called here, before the onboarded check below — a real
-  // bug found in production (v0.1.0): startTuiRoutine() kicks off scanCycle()
-  // without awaiting it, so it runs concurrently with the first-run
-  // onboarding flow below. On a brand new install, that flow spends real
-  // wall-clock time on language/tour/persona pickers before seedMockSessions()
-  // ever writes the first mock session — plenty of time for the real scan to
-  // import actual ~/.claude/~/.codex/~/.kiro history into ~/.mycelium first.
-  // sessionsView() shows ALL unfiled sessions, not just demo:true ones, so
-  // the tutorial ended up showing a mix of real personal session titles
-  // alongside the mock ones — exactly the "adapters read real data
-  // regardless of MYCELIUM_HOME" hazard demo/pitch-launch.js's own header
-  // comment warns about, just triggered by a real user's real first launch
-  // instead of a recording. Fixed by moving each call below to fire only
-  // once onboarding has genuinely concluded (tutorial completed or
-  // declined, or this isn't a first launch at all) — never racing it.
+  // Background upkeep (scan/organize/digest) runs inside this process for
+  // as long as the TUI is open — see daemon.js's startTuiRoutine().
+  // Deliberately NOT called here, before the onboarded check — a real bug
+  // (v0.1.0): scanCycle() ran unawaited, concurrently with first-run
+  // onboarding, so a real scan could import real history alongside the
+  // mock sessions. Fixed by firing these calls only once onboarding concludes.
   const cfg = loadConfig();
 
   // First-ever launch: offer the interactive tutorial before dropping into
@@ -205,10 +164,9 @@ export async function runTui({ forceTutorial = false } = {}) {
   // second app.show()) to drop the by-then-deleted mock rows — see that
   // method's comment for why re-mounting a second time isn't safe here.
   if (!cfg.onboarded) {
-    // Mount the (real, pre-seed) sessions view FIRST, same reasoning as the
-    // forceTutorial branch above — every picker shown from here on (language,
-    // tour prompt, persona) gets real TUI chrome behind it instead of a bare
-    // screen.
+    // Mount the (empty) sessions view FIRST, same reasoning as the
+    // forceTutorial branch above — every picker from here gets real TUI
+    // chrome behind it. Stays empty even if the human picks the tour.
     let api;
     await app.show(sessionsView({ onReady: (a) => (api = a) }));
     app.render();
@@ -233,8 +191,7 @@ export async function runTui({ forceTutorial = false } = {}) {
           saveConfig({ ...loadConfig(), onboarded: true });
           if (choice === 'yes') {
             pickPersona(app, (personaId = 'swe') => {
-              seedMockSessions(personaId);
-              api.reloadAll();
+              prepareTutorialProvider(personaId);
               startTutorial(
                 app,
                 () => {
@@ -251,6 +208,7 @@ export async function runTui({ forceTutorial = false } = {}) {
                   startUpkeepAndRecheck(() => api);
                 },
                 personaId,
+                { reloadSessions: () => api.reloadAll() },
               );
             });
           } else {
@@ -268,49 +226,19 @@ export async function runTui({ forceTutorial = false } = {}) {
     return;
   }
 
-  // Already onboarded — no tutorial/mock-seeding race to avoid here, so this
-  // is the one path where starting real background upkeep right away (same
-  // as it always did) is safe. See startUpkeepAndRecheck()'s own comment
-  // (top of this function) for why the re-check callback matters — this is
-  // the branch a `mycelium demo` handoff always lands on (cli.js stamps
-  // onboarded:true before calling runTui()), so it's also the one every
-  // earlier VHS verification pass exercised. Calling notifyPostMount()
-  // twice (once here immediately, once again once the callback fires) is
-  // safe: gated on config.json's firstScanModalShown (won't double-show the
-  // modal), and on the common, non-fresh case (index already has data from
-  // a prior run) the immediate call below already has accurate numbers, so
-  // the callback just re-does the same no-op check a moment later.
-  //
-  // Mount + render FIRST, THEN start upkeep — a real bug found via VHS
-  // frame timing: scan() (scanner.js) is a plain synchronous function
-  // (readFileSync/readdirSync throughout, no async I/O), so scanCycle()
-  // calling it (`const res = scan();`, no await) blocks the ENTIRE event
-  // loop for however long a real scan takes (measured ~1.9s for 65
-  // sessions via the daemon log; scales with real backlog size) —
-  // "fire-and-forget" only describes the Promise chain, not actual CPU
-  // time. Calling startUpkeepAndRecheck() before app.show()/app.render()
-  // used to mean that synchronous block ran BEFORE the first paint could
-  // even happen, since both statements share the same synchronous call
-  // stack up to the first real await — nothing reaches the terminal until
-  // scan() returns. The transitional message in cli.js's handoff branch
-  // (demo.handoffTransition) was staying on screen for that whole
-  // multi-second stretch with no visible progress, exactly the "still
-  // delays, feels frozen" symptom. Painting first means the shell (however
-  // briefly empty) is what's on screen during that unavoidable block,
-  // instead of nothing — startUpkeepAndRecheck()'s own callback still
-  // fixes up the numbers once the scan actually finishes.
+  // Already onboarded — safe to start real background upkeep right away.
+  // Also the branch a `mycelium demo` handoff always lands on. notifyPostMount()
+  // firing twice (here and from the callback) is safe: gated on firstScanModalShown.
   let api;
+  // Mount + render BEFORE starting upkeep — scan() is fully synchronous, so
+  // scanCycle() blocks the event loop for the duration of a real scan;
+  // starting upkeep first left the screen frozen through that block.
   await app.show(sessionsView({ onReady: (a) => (api = a) }));
   app.render();
   startUpkeepAndRecheck(() => api);
-  // Belt-and-suspenders alongside startUpkeepAndRecheck()'s own callback:
-  // scanCycle()'s onScanned hook now fires synchronously within THIS same
-  // call stack (right after scan()+reindex(), before its own first real
-  // await), so by the time control reaches this line the callback above
-  // has typically already run once — this second reloadAll() is a no-op
-  // in that case. Kept explicit anyway so this stays correct even if that
-  // synchronous coupling ever changes (e.g. scan() becoming real async
-  // I/O), rather than depending on exact timing between two files.
+  // Belt-and-suspenders: scanCycle()'s onScanned hook usually fires
+  // synchronously before this line, making this a no-op, but kept explicit
+  // in case that timing coupling ever changes.
   api?.reloadAll();
   notifyPostMount(app);
 }

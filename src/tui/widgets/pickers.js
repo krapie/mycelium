@@ -90,8 +90,23 @@ export function textPrompt(app, label, initial, cb) {
   });
 }
 
-/** A small menu picker returning the chosen value. */
-export function menu(app, label, choices, cb, { width = '40%' } = {}) {
+/**
+ * A small menu picker returning the chosen value.
+ *
+ * `dismissOnBlur` (default `false`) auto-destroys the menu if focus moves
+ * elsewhere, firing `cb(undefined)` rather than a chosen value — used by
+ * the action palette (`.`), whose screen-key shortcuts (e.g. `o` while the
+ * palette is open) don't consume the keypress: sessions.js's own `o`
+ * handler fires and opens its own modal on top, leaving the palette
+ * stranded underneath. isModalOpen() (tutorial.js) then never sees
+ * children drop back to baseline and the narrator's close-poll hangs
+ * forever. `cb(undefined)` is indistinguishable from a plain Escape
+ * dismissal — callers already treat "no value" as a no-op either way (see
+ * sessions.js's own `cb`), so this never needs a separate signal. Normal
+ * menus (folder picker, resume choices, etc.) legitimately open sub-modals
+ * in their own `cb` and must NOT auto-dismiss — hence opt-in.
+ */
+export function menu(app, label, choices, cb, { width = '40%', dismissOnBlur = false } = {}) {
   // A choice with `header: true` is a non-selectable section label (e.g. the
   // action palette's SESSION/FOLDER groups) — shown dimmed, indented siblings,
   // and skipped on select so Enter/click on it does nothing. Only affects
@@ -120,16 +135,25 @@ export function menu(app, label, choices, cb, { width = '40%' } = {}) {
   if (firstSelectable > 0) box.select(firstSelectable);
   box.focus();
   app.render();
-  box.key(['escape'], () => {
+  let closed = false;
+  const close = (value) => {
+    if (closed) return;
+    closed = true;
     box.destroy();
     app.render();
-    cb(undefined);
-  });
+    cb(value);
+  };
+  if (dismissOnBlur) {
+    // Fires when another widget calls .focus() — a real user picking a menu
+    // item routes through `select` first (which sets `closed`), so this
+    // path only trips when something ELSE stole focus (a screen-key like
+    // `o` opening its own modal on top of the palette).
+    box.on('blur', () => close(undefined));
+  }
+  box.key(['escape'], () => close(undefined));
   box.on('select', (_, idx) => {
     if (choices[idx]?.header) return; // header row — not a choice
-    box.destroy();
-    app.render();
-    cb(choices[idx].value);
+    close(choices[idx].value);
   });
 }
 
@@ -146,14 +170,10 @@ export function menu(app, label, choices, cb, { width = '40%' } = {}) {
  * Esc applies nothing.
  */
 // `previewText(value)` (optional): when given, `p` opens a full scrollable
-// textView of that content for whichever row is currently highlighted —
-// for content bound for somewhere as consequential as an external
-// project's AGENTS.md (the knowledge review, `k`), the one-line label
-// truncation isn't enough to actually review before approving; this is
-// the confirmText()-style "see it before it lands on disk" checkpoint
-// applied to a per-item preview instead of a single whole-batch one.
-// Optional (not every multiSelectList caller has long-form content per
-// item worth a dedicated preview — o's placement suggestions don't).
+// textView of the highlighted row — for content as consequential as an
+// external project's AGENTS.md (`k`'s knowledge review), the one-line label
+// isn't enough to review before approving. Optional since not every caller
+// has long-form content worth it (o's placement suggestions don't).
 export function multiSelectList(app, label, items, cb, { defaultAll = false, previewText } = {}) {
   const selected = new Set(defaultAll ? items.map((_, i) => i) : []);
   const render = (it, i) => `${selected.has(i) ? `{${C.fox}-fg}✓{/} ` : '  '}${it.label}`;

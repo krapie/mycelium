@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { ADAPTERS } from '../src/adapters/index.js';
 import { useTempHome } from './helpers.js';
 
 // buildMockSessions() now defaults its `locale` param to i18n.js's
@@ -9,6 +10,8 @@ import { useTempHome } from './helpers.js';
 // not whatever locale happens to be set in the real ~/.mycelium/config.json.
 useTempHome();
 const { buildMockSessions } = await import('../src/tui/tutorial-data.js');
+
+const realSources = new Set(ADAPTERS.map((a) => a.name));
 
 test('buildMockSessions() returns 6 fully-formed, unfiled demo sessions', () => {
   const sessions = buildMockSessions();
@@ -30,9 +33,27 @@ test('buildMockSessions() ids are unique', () => {
   assert.deepEqual(ids, [...new Set(ids)]);
 });
 
+test('buildMockSessions(personaId, locale, projectDir) stamps every session with the given directory when provided, and omits it entirely otherwise', () => {
+  const withDir = buildMockSessions('swe', 'en', '/fake/tutorial/repo');
+  assert.ok(withDir.length > 0);
+  for (const s of withDir) assert.equal(s.projectDir, '/fake/tutorial/repo');
+
+  // No fs access here — buildMockSessions() stays pure; the caller
+  // (tutorial.js's injectDemoSessions()) is the one that actually creates
+  // the real directory before passing its path in. emptyNeutral()'s own
+  // default (schema.js) is null, not undefined — left untouched when no
+  // projectDir is given.
+  const withoutDir = buildMockSessions('swe', 'en');
+  for (const s of withoutDir) assert.equal(s.projectDir, null);
+});
+
 test('buildMockSessions() only uses real adapter sources', () => {
+  // realSources is derived from the actual adapter registry (not a
+  // hardcoded list) so this can't silently go stale again the way it
+  // already had once — personas.js's mock sessions can freely use any real
+  // adapter's source without this assertion needing a matching edit.
   const sessions = buildMockSessions();
-  for (const s of sessions) assert.ok(['claude', 'codex', 'kiro'].includes(s.source), s.source);
+  for (const s of sessions) assert.ok(realSources.has(s.source), s.source);
 });
 
 test('buildMockSessions() supports every persona, each fully-formed and unfiled', () => {
@@ -52,6 +73,7 @@ test('buildMockSessions() supports every persona, each fully-formed and unfiled'
       assert.equal(s.folder, null, `${personaId} session must start unfiled`);
       assert.ok(s.extracted.title, `${personaId} session needs a title`);
       assert.ok(s.turns.length >= 2, `${personaId} session needs a believable conversation`);
+      assert.ok(realSources.has(s.source), `${personaId} session has unknown source ${s.source}`);
     }
   }
 });

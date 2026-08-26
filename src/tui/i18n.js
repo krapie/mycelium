@@ -87,9 +87,7 @@ const en = {
   // of classification, not an instant.
   'sessions.firstScanModalLabel': ' First scan done — nothing organized yet (Enter/Esc to dismiss) ',
   'sessions.firstScanBody': (n, fg) =>
-    `{bold}${n} sessions captured, nothing organized yet.{/}\n\n` +
-    `Press {${fg}-fg}o{/} to sort them all by content — Mycelium reads and classifies each one, which takes real time for a backlog this size.\n\n` +
-    `Feel free to switch away and do something else in the meantime — it keeps running. Come back and review the suggestions whenever you're ready.\n\n` +
+    `{bold}${n} sessions captured, nothing organized yet.{/} Press {${fg}-fg}o{/} to sort them all by content — Mycelium reads and classifies each one, which takes real time for a backlog this size. Feel free to switch away and do something else in the meantime — it keeps running; come back and review the suggestions whenever you're ready.\n\n` +
     `Tip: don't need all of these? Press {${fg}-fg}Space{/} to select sessions, then {${fg}-fg}x{/} to delete them — fewer sessions means fewer LLM calls when you press o.`,
   'detail.noSummary': '(no summary yet — press a in the session to summarize/tag)',
   'detail.lastActive': 'last active',
@@ -106,18 +104,9 @@ const en = {
   'detail.splitInto': (n, labels) => `Split into ${n}: ${labels}`,
 
   // sessions.js — status bar. Used to spell out the full 4-stage/11-key
-  // breakdown on every single screen (Capture·s → Organize·m/t/o →
-  // Learn·a/w → Reuse·n/h/r/i) — a permanent status bar is the wrong place
-  // to teach the whole model every render; that detail now lives in the ?
-  // modal (help.text's new leading section) instead. The footer now names
-  // the day-to-day loop's four stages by their canonical names (matching
-  // README.md/AGENTS.md's own Capture → Organize → Learn → Reuse), each
-  // paired with its one flywheel key — s (capture/scan), o (organize),
-  // w (learn — generate a folder's knowledge; `w` is the tangible "learn"
-  // action a person actually presses, unlike `k`, which only *reviews*
-  // already-prepared knowledge), n (reuse — new session). Digest (`d`) is
-  // real and still listed in its own Global line below, it's just not one
-  // of these four canonical stages, so it isn't part of this loop.
+  // breakdown on every screen; that detail now lives in the `?` modal
+  // instead, and this just names the loop's four canonical stages
+  // (matching README.md/AGENTS.md) with their one flywheel key each.
   'lifecycle.bar': (fg) =>
     `Capture·{${fg}-fg}s{/} → Organize·{${fg}-fg}o{/} → Learn·{${fg}-fg}w{/} → Reuse·{${fg}-fg}n{/}`,
   'status.helpFallback': '. menu   ? all shortcuts   q quit',
@@ -199,23 +188,36 @@ const en = {
   'tutorial.stepCounter': (n, total) => `Step ${n}/${total}`,
   'tutorial.introTitle': '',
   'tutorial.introBody': (fg) =>
-    `{bold}Welcome to Mycelium{/} — a Context Lifecycle platform for AI collaboration: {${fg}-fg}Capture → Organize → Learn → Reuse{/}. Every session from Claude Code, Codex, or Kiro gets captured automatically; this tour shows you the loop that keeps them useful instead of lost. Three panels — Folders → Sessions → Detail — walked with {${fg}-fg}→{/}/{${fg}-fg}←{/}. Press {${fg}-fg}Enter{/} now to step into your first folder and begin.`,
+    `{bold}Welcome to Mycelium{/}: organize your AI sessions, and carry what they know into the next one, through {${fg}-fg}Capture → Organize → Learn → Reuse{/}. Every session from Claude Code, Codex, Kiro, or OpenCode gets captured automatically; this tour shows you the loop that keeps them useful instead of lost.\n\n` +
+    `Three panels — Folders → Sessions → Detail — walked with {${fg}-fg}→{/}/{${fg}-fg}←{/}. Press {${fg}-fg}Enter{/} now to step into your first folder and begin.`,
+  'tutorial.stepPaletteTitle': ' — Menu',
+  'tutorial.stepPaletteBody': (fg) =>
+    `No need to memorize shortcuts: press {${fg}-fg}.{/} from the Folders or Sessions panel and you'll get a menu of what you can actually do from there. Each item shows its key, grouped as SESSION (acts on the session) and FOLDER (acts on the folder).`,
+  'tutorial.stepPaletteAckTitle': '',
+  'tutorial.stepPaletteAckBody': (fg) =>
+    `That's it. Press {${fg}-fg}Esc{/} to close.\n\n` +
+    `From here on, whenever a step's action also appears in this menu (Organize, Knowledge, Scan, Merge, Split), you can either press its key directly or open the menu with {${fg}-fg}.{/} and pick it; both do exactly the same thing.`,
+  'tutorial.stepScanTitle': ' — Capture',
+  'tutorial.stepScanBody': (fg) =>
+    `Nothing has been captured yet. Press {${fg}-fg}s{/} (or {${fg}-fg}.{/} → Scan) to pull your AI sessions in; that's Capture, step one of the loop, the exact same action that runs quietly in the background for Claude Code, Codex, Kiro, and OpenCode.`,
   'tutorial.step2Title': ' — Organize',
-  'tutorial.step2Body': (fg, count) => `${count} fresh, unfiled sessions are sitting below. Press {${fg}-fg}o{/} to have Mycelium read them and suggest folders.`,
+  'tutorial.step2Body': (fg, count) => `${count} fresh, unfiled sessions are sitting below. Press {${fg}-fg}o{/} (or {${fg}-fg}.{/} → Organize) to have Mycelium read them and suggest folders.`,
   'tutorial.step3Title': '',
   'tutorial.step3Body': (fg) => `Review the suggested folders, then press {${fg}-fg}Enter{/} to apply them.`,
   'tutorial.step4Title': '',
   'tutorial.step4Body': (fg, count, folder) =>
     `Folders were created automatically and your sessions are sorted — several landed together in \`${folder}\`. Press {${fg}-fg}←{/} to get back to the Folders panel, then {${fg}-fg}↓{/} to find it and {${fg}-fg}Enter{/}/→ to open it.`,
   'tutorial.step5Title': ' — Learn',
-  'tutorial.step5Body': (fg, count, folder) => `With \`${folder}\` open, press {${fg}-fg}w{/} — Mycelium distills everything in it into one KNOWLEDGE.md.`,
+  'tutorial.step5Body': (fg, count, folder) => `With \`${folder}\` open, press {${fg}-fg}w{/} (or {${fg}-fg}.{/} → Generate folder insights) — Mycelium distills everything in it into one KNOWLEDGE.md.`,
   'tutorial.step6Title': '',
   'tutorial.step6Body': (fg) => `Review the knowledge draft, then press {${fg}-fg}Enter{/} to save it. Next: see exactly what a new session here would inherit from it.`,
   'tutorial.step7Title': ' — Reuse',
-  'tutorial.step7Body': (fg) => `Press {${fg}-fg}c{/} to see the context a new session in this folder would inherit.`,
+  'tutorial.step7Body': (fg) =>
+    `Press {${fg}-fg}n{/} (or {${fg}-fg}.{/} → New task with folder context) to start a new agent session with this folder's context. You'll pick an agent, then a directory — this tutorial always copies the launch command instead of actually opening one, so it's safe to click through.`,
   'tutorial.step8Title': '',
-  'tutorial.step8Body': (fg) =>
-    `This is exactly what gets injected into AGENTS.md automatically whenever you start a session here with {${fg}-fg}n{/} or {${fg}-fg}h{/} — or press {${fg}-fg}i{/} to inject it into a project manually, right now. Press {${fg}-fg}c{/} or {${fg}-fg}Esc{/} to close.`,
+  'tutorial.step8Body': (_fg) =>
+    `Pick any agent, then the suggested directory.\n\n` +
+    `A real AGENTS.md just got written into that directory, and the copied command even asks the agent to summarize what it inherited — paste it into a new terminal tab to see for yourself, or check the file (or the project context) directly.`,
   'tutorial.step9Title': ' — Knowledge Review',
   'tutorial.step9Body': (fg) =>
     `That was one folder, by hand. Every folder's knowledge can also be refreshed in one place — press {${fg}-fg}k{/} to check for (or compute) today's knowledge updates, unrelated to Digest.`,
@@ -224,12 +226,12 @@ const en = {
     `Everything's pre-checked. Press {${fg}-fg}Enter{/} to approve — this writes KNOWLEDGE.md AND injects straight into AGENTS.md wherever each folder's sessions have run, all in one step.`,
   'tutorial.step11Title': ' — Merge',
   'tutorial.step11Body': (fg) =>
-    `These sessions are actually one story. Select them with {${fg}-fg}Space{/}, then press {${fg}-fg}Shift+M{/} to merge them into one continuous record.`,
+    `These sessions are actually one story. In the Sessions panel, select each with {${fg}-fg}Space{/}, then press {${fg}-fg}Shift+M{/} (or {${fg}-fg}.{/} → Merge sessions) to merge them into one continuous record.`,
   'tutorial.step12Title': '',
   'tutorial.step12Body': (fg) => `Type a title (or leave it blank for a default), then press {${fg}-fg}Enter{/}.`,
   'tutorial.step13Title': ' — Split',
   'tutorial.step13Body': (fg, count, folder) =>
-    `Fully reversible, the other direction too. The merged session stayed right here in \`${folder}\` — with it selected, press {${fg}-fg}Shift+S{/} for topic-boundary suggestions.`,
+    `Fully reversible, the other direction too. The merged session stayed right here in \`${folder}\` — with it selected, press {${fg}-fg}Shift+S{/} (or {${fg}-fg}.{/} → Split session) for topic-boundary suggestions.`,
   'tutorial.step14Title': '',
   'tutorial.step14Body': (fg) => `Press {${fg}-fg}*{/} to select all the proposed ranges, then {${fg}-fg}Enter{/} to apply.`,
   'tutorial.step15Title': '',
@@ -237,17 +239,27 @@ const en = {
     `Press {${fg}-fg}/{/} and search for a keyword you remember from these sessions, then press {${fg}-fg}v{/} to check the calendar and find the date they're on. Press {${fg}-fg}Enter{/} to continue.`,
   'tutorial.step16Title': ' — Complete!',
   'tutorial.step16Body': (fg) =>
-    `That's the full lifecycle. Day to day, it's a simple loop — the {bold}Context Flywheel{/}: {${fg}-fg}s{/} capture → {${fg}-fg}o{/} organize → {${fg}-fg}w{/} learn → {${fg}-fg}n{/} start the next session with everything it needs. Most of that already happens by itself in the background — Mycelium keeps capturing, organizing, and refreshing what it's learned on its own; pressing these keys is mostly just reviewing and confirming what's already waiting for you, not starting the work from scratch. Press {${fg}-fg}q{/} when you're done. The mock sessions get cleaned up and you're switched over to your own, existing data.`,
+    `That's the full lifecycle. Day to day, it's a simple loop, the {bold}Context Flywheel{/}: {${fg}-fg}s{/} capture → {${fg}-fg}o{/} organize → {${fg}-fg}w{/} learn → {${fg}-fg}n{/} start the next session with everything it needs. Most of that already happens by itself in the background; Mycelium keeps capturing, organizing, and refreshing what it's learned on its own, so pressing these keys is mostly just reviewing and confirming what's already waiting for you, not starting the work from scratch.\n\n` +
+    `Forget a key? Press {${fg}-fg}.{/} for the menu instead. Press {${fg}-fg}q{/} when you're done; the mock sessions get cleaned up and you're switched over to your own, existing data.`,
   // Interim text shown while a real handler is in flight (o/w/k/Shift+S's
   // LLM calls are mocked during the tutorial — see tutorial-mock-llm.js —
   // so these resolve almost instantly, but the narrator still has to wait
   // for the actual modal to open/close (see tutorial.js's isModalOpen
   // polling) rather than trusting the raw keypress alone).
+  'tutorial.waitingPalette': 'Waiting for the action menu to open…',
+  'tutorial.waitingPaletteClose': 'Closing the action menu…',
   'tutorial.waitingOrganize': 'Reading sessions and drafting folder suggestions…',
   'tutorial.waitingApply': 'Applying…',
   'tutorial.waitingKnowledge': "Distilling this folder's sessions into a knowledge draft…",
   'tutorial.waitingSave': 'Saving…',
-  'tutorial.waitingContext': 'Assembling inherited context…',
+  // Near-instant, synchronous menu() open, same as waitingPalette — not an
+  // LLM-call wait like waitingOrganize/waitingKnowledge.
+  'tutorial.waitingLaunch': 'Waiting for the agent picker to open…',
+  // Seeds the tutorial's copied launch command (doNewAgent(), sessions.js)
+  // with a prompt, so pasting it into a new tab makes the agent report
+  // back what it inherited immediately, instead of sitting at a blank
+  // prompt with nothing to demonstrate the injection actually happened.
+  'tutorial.newAgentSeed': 'What do you already know about this project? Summarize the context you inherited before I ask anything else.',
   'tutorial.waitingKnowledgeReview': 'Checking today\'s active folders for a knowledge refresh…',
   'tutorial.waitingMerge': "Waiting for Shift+M — make sure you've selected two sessions with Space first.",
   'tutorial.waitingSplit': 'Analyzing the merged session for topic boundaries…',
@@ -280,7 +292,7 @@ const en = {
   'actions.lineage': 'View details',
 
   // launch.js
-  'launch.noAgents': 'No agent CLI installed (claude/codex/kiro-cli)',
+  'launch.noAgents': 'No agent CLI installed (claude/codex/kiro-cli/opencode)',
   'launch.selectAgent': 'Choose agent',
   'launch.selectAgentHandoff': 'Continue this task on another agent — choose agent',
   'launch.selectAgentNew': "New task with this folder's context — choose agent",
@@ -405,9 +417,7 @@ const ko = {
   'sessions.unfiledHint': (n) => `${n}개 세션을 가져왔지만 아직 폴더가 없습니다 — o를 눌러 내용 기준으로 정리해보세요`,
   'sessions.firstScanModalLabel': ' 첫 스캔 완료 — 아직 정리되지 않음 (Enter/Esc로 닫기) ',
   'sessions.firstScanBody': (n, fg) =>
-    `{bold}${n}개 세션을 가져왔지만 아직 정리되지 않았습니다.{/}\n\n` +
-    `{${fg}-fg}o{/}를 눌러 내용 기준으로 전부 정리해보세요 — Mycelium이 각 세션을 읽고 분류하는데, 세션이 많으면 실제로 시간이 걸립니다.\n\n` +
-    `그 동안 다른 작업을 하다 와도 괜찮습니다 — 계속 진행되고 있으니, 준비되면 돌아와서 제안 내용을 검토하세요.\n\n` +
+    `{bold}${n}개 세션을 가져왔지만 아직 정리되지 않았습니다.{/} {${fg}-fg}o{/}를 눌러 내용 기준으로 전부 정리해보세요 — Mycelium이 각 세션을 읽고 분류하는데, 세션이 많으면 실제로 시간이 걸립니다. 그 동안 다른 작업을 하다 와도 괜찮습니다 — 계속 진행되고 있으니, 준비되면 돌아와서 제안 내용을 검토하세요.\n\n` +
     `팁: 필요 없는 세션이 있다면 {${fg}-fg}Space{/}로 선택한 뒤 {${fg}-fg}x{/}로 삭제하세요 — 세션이 적을수록 o를 눌렀을 때 LLM 호출도 줄어듭니다.`,
   'detail.noSummary': '(요약 없음 — 세션에서 a를 눌러 요약·태깅 생성)',
   'detail.lastActive': '최근 활동',
@@ -484,23 +494,36 @@ const ko = {
   'tutorial.stepCounter': (n, total) => `${n}/${total}단계`,
   'tutorial.introTitle': '',
   'tutorial.introBody': (fg) =>
-    `{bold}Mycelium에 오신 걸 환영합니다{/} — AI 협업을 위한 Context Lifecycle 플랫폼입니다: {${fg}-fg}Capture → Organize → Learn → Reuse{/}. Claude Code, Codex, Kiro의 모든 세션이 자동으로 캡처됩니다 — 이 투어는 그 세션들을 잃어버리지 않고 계속 쓸모 있게 만드는 흐름을 보여줍니다. 세 개의 패널 — 폴더 → 세션 → 상세 — 은 {${fg}-fg}→{/}/{${fg}-fg}←{/}로 이동합니다. 지금 {${fg}-fg}Enter{/}를 눌러 첫 폴더로 들어가 시작하세요.`,
+    `{bold}Mycelium에 오신 걸 환영합니다{/}: AI 세션을 정리하고, 그 안의 지식을 다음 세션으로 이어줍니다. {${fg}-fg}Capture → Organize → Learn → Reuse{/} 흐름으로 동작합니다. Claude Code, Codex, Kiro, OpenCode의 모든 세션이 자동으로 캡처됩니다 — 이 투어는 그 세션들을 잃어버리지 않고 계속 쓸모 있게 만드는 흐름을 보여줍니다.\n\n` +
+    `세 개의 패널 — 폴더 → 세션 → 상세 — 은 {${fg}-fg}→{/}/{${fg}-fg}←{/}로 이동합니다. 지금 {${fg}-fg}Enter{/}를 눌러 첫 폴더로 들어가 시작하세요.`,
+  'tutorial.stepPaletteTitle': ' — 메뉴',
+  'tutorial.stepPaletteBody': (fg) =>
+    `단축키를 외울 필요 없이, 폴더와 세션에서 {${fg}-fg}.{/}를 누르면 각각 지금 실행해볼 수 있는 것들의 메뉴가 나옵니다. 각 항목에 단축키가 함께 표시되고, SESSION(세션 대상)과 FOLDER(폴더 대상)로 묶여 있습니다.`,
+  'tutorial.stepPaletteAckTitle': '',
+  'tutorial.stepPaletteAckBody': (fg) =>
+    `이게 전부입니다. {${fg}-fg}Esc{/}로 닫으세요.\n\n` +
+    `이후 스텝 중 이 메뉴에도 있는 동작(정리, 지식 추출, 캡처, 병합, 분할)이라면, 그 키를 직접 눌러도 되고 {${fg}-fg}.{/}로 메뉴를 열어서 해당 항목을 골라도 됩니다. 결과는 완전히 동일합니다.`,
+  'tutorial.stepScanTitle': ' — 캡처',
+  'tutorial.stepScanBody': (fg) =>
+    `아직 아무 세션도 캡처되지 않았습니다. {${fg}-fg}s{/}를 눌러 (또는 {${fg}-fg}.{/} → 새 세션 스캔) AI 세션들을 가져와보세요. 루프의 첫 단계인 Capture이며, Claude Code, Codex, Kiro, OpenCode를 대상으로 백그라운드에서 조용히 도는 것과 동일한 동작입니다.`,
   'tutorial.step2Title': ' — 조직화',
-  'tutorial.step2Body': (fg, count) => `아직 정리 안 된 세션 ${count}개가 아래에 있습니다. {${fg}-fg}o{/}를 눌러 Mycelium이 내용을 읽고 폴더를 제안하게 해보세요.`,
+  'tutorial.step2Body': (fg, count) => `아직 정리 안 된 세션 ${count}개가 아래에 있습니다. {${fg}-fg}o{/}를 눌러 (또는 {${fg}-fg}.{/} → 세션 정리) Mycelium이 내용을 읽고 폴더를 제안하게 해보세요.`,
   'tutorial.step3Title': '',
   'tutorial.step3Body': (fg) => `제안된 폴더를 확인하고 {${fg}-fg}Enter{/}로 적용해보세요.`,
   'tutorial.step4Title': '',
   'tutorial.step4Body': (fg, count, folder) =>
     `폴더가 자동으로 생성되고 세션들이 정리됐습니다 — 관련 세션 여럿이 \`${folder}\`로 함께 모였습니다. {${fg}-fg}←{/}로 Folders 패널로 돌아간 뒤 {${fg}-fg}↓{/}로 찾고 {${fg}-fg}Enter{/}/→로 열어보세요.`,
   'tutorial.step5Title': ' — 학습',
-  'tutorial.step5Body': (fg, count, folder) => `\`${folder}\`를 연 상태에서 {${fg}-fg}w{/}를 눌러보세요 — 그 폴더의 모든 세션을 하나의 KNOWLEDGE.md로 압축합니다.`,
+  'tutorial.step5Body': (fg, count, folder) => `\`${folder}\`를 연 상태에서 {${fg}-fg}w{/}를 눌러보세요 (또는 {${fg}-fg}.{/} → 폴더 안의 인사이트 생성) — 그 폴더의 모든 세션을 하나의 KNOWLEDGE.md로 압축합니다.`,
   'tutorial.step6Title': '',
   'tutorial.step6Body': (fg) => `지식 초안을 확인하고 {${fg}-fg}Enter{/}로 저장하세요. 다음: 새 세션이 여기서 무엇을 물려받는지 직접 확인해봅니다.`,
   'tutorial.step7Title': ' — 재사용',
-  'tutorial.step7Body': (fg) => `{${fg}-fg}c{/}를 눌러 이 폴더의 새 세션이 물려받을 컨텍스트를 확인해보세요.`,
+  'tutorial.step7Body': (fg) =>
+    `{${fg}-fg}n{/}을 눌러 (또는 {${fg}-fg}.{/} → 폴더 컨텍스트로 새 작업) 이 폴더의 컨텍스트로 새 에이전트 세션을 시작해보세요. 에이전트를 고른 뒤 디렉토리를 고르게 됩니다 — 이 튜토리얼은 실제로 여는 대신 항상 실행 명령을 복사하므로 마음 편히 클릭해도 됩니다.`,
   'tutorial.step8Title': '',
-  'tutorial.step8Body': (fg) =>
-    `{${fg}-fg}n{/} 또는 {${fg}-fg}h{/}로 이 폴더에서 세션을 시작할 때마다 이 내용이 AGENTS.md에 자동으로 주입됩니다 — 또는 {${fg}-fg}i{/}로 지금 바로 프로젝트에 직접 주입할 수도 있습니다. {${fg}-fg}c{/} 또는 {${fg}-fg}Esc{/}로 닫으세요.`,
+  'tutorial.step8Body': (_fg) =>
+    `아무 에이전트나 고른 뒤 제안된 디렉토리를 선택하세요.\n\n` +
+    `그 디렉토리에 실제 AGENTS.md가 방금 작성되었고, 복사된 명령어에는 물려받은 내용을 요약해달라는 프롬프트까지 들어있습니다 — 새 터미널 탭에 붙여넣어 직접 확인해보거나, 파일(또는 프로젝트 컨텍스트)을 바로 확인해보세요.`,
   'tutorial.step9Title': ' — 지식 검토',
   'tutorial.step9Body': (fg) =>
     `방금은 폴더 하나를 손으로 했죠. 모든 폴더의 지식을 한 곳에서 한 번에 갱신할 수도 있습니다 — {${fg}-fg}k{/}를 눌러 오늘의 지식 업데이트를 확인(또는 계산)해보세요. Digest와는 무관한 별개 기능입니다.`,
@@ -509,12 +532,12 @@ const ko = {
     `전부 기본으로 체크되어 있습니다. {${fg}-fg}Enter{/}를 눌러 승인하세요 — 이 한 번으로 각 폴더의 KNOWLEDGE.md를 갱신하고, 그 폴더의 세션들이 실행됐던 모든 곳의 AGENTS.md에도 바로 주입됩니다.`,
   'tutorial.step11Title': ' — 병합',
   'tutorial.step11Body': (fg) =>
-    `이 세션들은 사실 하나의 이야기입니다. {${fg}-fg}Space{/}로 선택한 뒤 {${fg}-fg}Shift+M{/}으로 하나의 연속된 기록으로 병합해보세요.`,
+    `이 세션들은 사실 하나의 이야기입니다. 세션 창에서 각 세션들을 {${fg}-fg}Space{/}로 선택한 뒤 {${fg}-fg}Shift+M{/}으로 (또는 {${fg}-fg}.{/} → 세션 병합) 하나의 연속된 기록으로 병합해보세요.`,
   'tutorial.step12Title': '',
   'tutorial.step12Body': (fg) => `제목을 입력하거나(비워두면 기본값) {${fg}-fg}Enter{/}를 누르세요.`,
   'tutorial.step13Title': ' — 분할',
   'tutorial.step13Body': (fg, count, folder) =>
-    `반대 방향도 완전히 되돌릴 수 있습니다. 병합된 세션은 그대로 \`${folder}\`에 남아 있습니다 — 선택된 상태에서 {${fg}-fg}Shift+S{/}로 세션을 나눌 지점 제안을 받아보세요.`,
+    `반대 방향도 완전히 되돌릴 수 있습니다. 병합된 세션은 그대로 \`${folder}\`에 남아 있습니다 — 선택된 상태에서 {${fg}-fg}Shift+S{/}로 (또는 {${fg}-fg}.{/} → 세션 분할) 세션을 나눌 지점 제안을 받아보세요.`,
   'tutorial.step14Title': '',
   'tutorial.step14Body': (fg) => `{${fg}-fg}*{/}로 제안된 구간을 모두 선택한 뒤 {${fg}-fg}Enter{/}로 적용하세요.`,
   'tutorial.step15Title': '',
@@ -522,12 +545,16 @@ const ko = {
     `{${fg}-fg}/{/}를 눌러 방금 본 세션들에서 기억나는 키워드로 검색해보고, {${fg}-fg}v{/}를 눌러 캘린더에서 해당 세션이 있는 날짜를 확인해보세요. {${fg}-fg}Enter{/}로 계속하세요.`,
   'tutorial.step16Title': ' — 완료!',
   'tutorial.step16Body': (fg) =>
-    `전체 라이프사이클을 다 보셨습니다. 일상적으로는 단순한 반복입니다 — {bold}Context Flywheel{/}: {${fg}-fg}s{/} 캡처 → {${fg}-fg}o{/} 정리 → {${fg}-fg}w{/} 학습 → {${fg}-fg}n{/} 필요한 모든 게 준비된 채로 다음 세션 시작. 대부분은 이미 백그라운드에서 저절로 돌아갑니다 — Mycelium이 알아서 캡처하고 정리하고 배운 것을 갱신해둡니다. 이 키들을 누르는 건 대부분 처음부터 뭔가 시작시키는 게 아니라 이미 준비된 걸 검토/확인하는 것에 가깝습니다. 다 보셨으면 {${fg}-fg}q{/}를 누르세요. 데모 세션이 정리되고 원래(기존) 데이터로 전환됩니다.`,
+    `전체 라이프사이클을 다 보셨습니다. 일상적으로는 단순한 반복입니다, 바로 {bold}Context Flywheel{/}: {${fg}-fg}s{/} 캡처 → {${fg}-fg}o{/} 정리 → {${fg}-fg}w{/} 학습 → {${fg}-fg}n{/} 필요한 모든 게 준비된 채로 다음 세션 시작. 대부분은 이미 백그라운드에서 저절로 돌아갑니다. Mycelium이 알아서 캡처하고 정리하고 배운 것을 갱신해둡니다. 이 키들을 누르는 건 대부분 처음부터 뭔가 시작시키는 게 아니라 이미 준비된 걸 검토/확인하는 것에 가깝습니다.\n\n` +
+    `키가 기억나지 않으면 {${fg}-fg}.{/}로 메뉴를 열어보세요. 다 보셨으면 {${fg}-fg}q{/}를 누르세요. 데모 세션이 정리되고 원래(기존) 데이터로 전환됩니다.`,
+  'tutorial.waitingPalette': '액션 메뉴가 열리기를 기다리는 중…',
+  'tutorial.waitingPaletteClose': '액션 메뉴를 닫는 중…',
   'tutorial.waitingOrganize': '세션을 읽고 폴더를 제안하는 중…',
   'tutorial.waitingApply': '적용하는 중…',
   'tutorial.waitingKnowledge': '이 폴더의 세션들을 지식 초안으로 압축하는 중…',
   'tutorial.waitingSave': '저장하는 중…',
-  'tutorial.waitingContext': '상속받을 컨텍스트를 조합하는 중…',
+  'tutorial.waitingLaunch': '에이전트 선택 메뉴가 열리기를 기다리는 중…',
+  'tutorial.newAgentSeed': '이 프로젝트에 대해 이미 알고 있는 게 있다면 무엇인가요? 다른 걸 묻기 전에, 물려받은 컨텍스트를 먼저 요약해 주세요.',
   'tutorial.waitingKnowledgeReview': '오늘 활동이 있었던 폴더를 확인해 지식을 갱신하는 중…',
   'tutorial.waitingMerge': 'Shift+M을 기다리는 중 — 먼저 Space로 세션 두 개를 선택했는지 확인하세요.',
   'tutorial.waitingSplit': '병합된 세션을 나눌 지점을 찾는 중…',
@@ -555,7 +582,7 @@ const ko = {
   'actions.newAgent': '폴더 컨텍스트로 새 작업 시작',
   'actions.lineage': '상세 보기',
 
-  'launch.noAgents': '설치된 에이전트(claude/codex/kiro-cli)가 없습니다',
+  'launch.noAgents': '설치된 에이전트(claude/codex/kiro-cli/opencode)가 없습니다',
   'launch.selectAgent': '에이전트 선택',
   'launch.selectAgentHandoff': '하던 작업을 다른 에이전트로 이어서 — 에이전트 선택',
   'launch.selectAgentNew': '이 폴더 컨텍스트로 새 작업 — 에이전트 선택',
@@ -682,7 +709,7 @@ Sessions linked by handoff show {${spore}-fg}↩{/}/{${spore}-fg}→{/} markers 
 en['welcome.body'] = (fg) => `Mycelium keeps AI coding-agent sessions from getting lost —
 each one moves through 4 stages, all inside this screen:
 
-{${fg}-fg}Capture{/}   Sessions from Claude Code / Codex / Kiro get pulled in automatically
+{${fg}-fg}Capture{/}   Sessions from Claude Code / Codex / Kiro / OpenCode get pulled in automatically
               (every 5 min while this is open, or press {${fg}-fg}s{/} to do it now).
               Nothing gets sorted into a folder yet at this point.
 
@@ -760,7 +787,7 @@ ko['help.text'] = (fg, spore) => `{bold}Context Flywheel{/}
 ko['welcome.body'] = (fg) => `Mycelium은 AI 코딩 에이전트 세션이 흩어지지 않게 관리합니다 —
 이 화면 안에서 4단계를 거칩니다:
 
-{${fg}-fg}생성(Capture){/}   Claude Code/Codex/Kiro 세션을 자동으로 가져옵니다
+{${fg}-fg}생성(Capture){/}   Claude Code/Codex/Kiro/OpenCode 세션을 자동으로 가져옵니다
               (켜져 있는 동안 5분마다, 또는 {${fg}-fg}s{/}로 지금 바로).
               이 시점엔 아직 어느 폴더에도 안 들어갑니다.
 

@@ -50,14 +50,22 @@ export function resumeCommandLine(session) {
 /** Same shape as resumeCommandLine(), but for starting a brand-new session
  * (no existing session id to resume against) — there's no `n`/`h`
  * equivalent of "resume in place" that makes sense to skip, since launching
- * IS the whole action, so this only ever backs the TUI's "copy command
- * (new tab)" alternative to launch.js's normal in-terminal foreground()
- * handoff — see launchAgent()'s `copyOnly` option. `agentKey` is one of
- * AGENTS' own keys (the same picker launch.js already uses to choose it). */
+ * IS the whole action, so this only ever backs the TUI's "copy command"
+ * alternative to launch.js's normal in-terminal foreground() handoff — see
+ * launchAgent()'s `copyOnly` option. `agentKey` is one of AGENTS' own keys
+ * (the same picker launch.js already uses to choose it). */
 export function newCommandLine({ agentKey, dir, seed }) {
   const agent = AGENTS[agentKey];
   if (!agent) return { ok: false, error: 'unknown agent' };
-  if (!which(agent.bin)) return { ok: false, error: `${agent.bin} not installed` };
+  // MYCELIUM_DEMO_MODE (set for the tutorial's whole run, see tutorial.js's
+  // startTutorial() and scanner.js's own identical branch) skips the real
+  // which() check — CI/most contributors' machines have no agent CLI
+  // installed at all, which would otherwise make the tutorial's copy-only
+  // `n` step fail with "<bin> not installed" instead of the intended
+  // "copied to clipboard" confirmation.
+  if (process.env.MYCELIUM_DEMO_MODE !== '1' && !which(agent.bin)) {
+    return { ok: false, error: `${agent.bin} not installed` };
+  }
   if (!dir || !existsSync(dir)) return { ok: false, error: 'no working directory found' };
   const args = agent.newArgs(seed);
   return { ok: true, line: `cd ${quoteArg(dir)} && ${quoteArg(agent.bin)} ${args.map(quoteArg).join(' ')}`, bin: agent.bin, args, cwd: dir };

@@ -1,16 +1,18 @@
 # Mycelium
 
 [![npm version](https://img.shields.io/npm/v/@kevinprk/mycelium)](https://www.npmjs.com/package/@kevinprk/mycelium)
+[![npm downloads](https://img.shields.io/npm/dt/@kevinprk/mycelium)](https://www.npmjs.com/package/@kevinprk/mycelium)
 [![CI](https://github.com/krapie/mycelium/actions/workflows/ci.yml/badge.svg)](https://github.com/krapie/mycelium/actions/workflows/ci.yml)
 [![coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/krapie/511d91209145406ab7f7ed1e9fbcd49c/raw/mycelium-coverage.json)](https://github.com/krapie/mycelium/actions/workflows/coverage.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D22.16-brightgreen)](https://nodejs.org)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/krapie/mycelium)
 
 **Organize your AI sessions, and carry what they know into the next one.**
 
 You create a lot of AI sessions while working, and most of them get lost the moment they end. Mycelium organizes the ones worth remembering and extracts their knowledge, insights, and context, so the next one already knows what mattered.
 
-- **Capture** — Claude Code, Codex, and Kiro sessions land in one place, automatically.
+- **Capture** — Claude Code, Codex, Kiro, and OpenCode sessions land in one place, automatically.
 - **Organize** — grouped by the project, case, or service they belong to.
 - **Learn** — what repeats across a folder's sessions becomes durable knowledge.
 - **Reuse** — your next session inherits that knowledge, insights, and context automatically when started from Mycelium.
@@ -34,14 +36,14 @@ Engineer by picking a different persona when it asks.
 > `MYCELIUM_NO_AUTOSTART=1`, or tune it in [`docs/cli.md`](./docs/cli.md).
 
 - Node.js ≥ 22.16, git
-- AI agents: `claude` / `codex` / `kiro-cli`
+- AI agents: `claude` / `codex` / `kiro-cli` / `opencode`
 
 ## Install
 
 ```sh
-brew install krapie/tap/mycelium    # via Homebrew
+npm install -g @kevinprk/mycelium   # via npm
 # or
-npm install -g @kevinprk/mycelium   # then run `mycelium` from anywhere
+brew install krapie/tap/mycelium    # via Homebrew
 ```
 
 To hack on it, clone instead:
@@ -57,7 +59,7 @@ mycelium        # launch the TUI — first run offers a guided tour
 mycelium demo   # try it risk-free first — separate store, your real data untouched
 ```
 
-Sessions from Claude Code, Codex, and Kiro are captured automatically in the
+Sessions from Claude Code, Codex, Kiro, and OpenCode are captured automatically in the
 background — no manual scan needed. Day to day it's a simple loop, the
 **Context Flywheel**: `s` capture → `o` organize → `w` learn → `n` start the
 next session with everything it needs. Most of that already runs by itself
@@ -85,6 +87,7 @@ the same as any direct CLI use.
 
 Full guide in [`docs/`](./docs):
 
+- [**How It Works**](./docs/how-it-works.md): the loop, and why it holds together, in two diagrams
 - [**TUI**](./docs/tui.md) — the 3-column interface + every keyboard shortcut
 - [**Learn/Reuse loop**](./docs/learn-reuse.md) — how sessions pass knowledge forward
 - [**Handoff**](./docs/handoff.md) — continuing work across agent CLIs

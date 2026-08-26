@@ -10,50 +10,20 @@ import {
   deleteFolder,
   deleteSession,
   setContent,
-  suggestPlacements,
-  applyPlacements,
-  summarizeCandidates,
-  pendingSuggestions,
-  queueSuggestions,
-  clearSuggestions,
-  classificationCandidates,
-  listTreeDirs,
-  mergeSessions,
-  unmerge,
 } from '../../organize.js';
-import { suggestSplitBoundaries, applySplit, unsplit } from '../../split.js';
-import { scan } from '../../scanner.js';
-import { pickFolder, editTags, menu, multiSelectList } from '../widgets/pickers.js';
+import { pickFolder, editTags, menu } from '../widgets/pickers.js';
 import { createCalendarTab } from './calendar.js';
 import { formatSessionDetail } from '../render.js';
 import { basename } from 'node:path';
-import { launchAgent } from '../launch.js';
 import { autoTagSession } from '../../learn.js';
 import { mapConcurrent } from '../../llm.js';
-import {
-  buildKnowledgeText,
-  writeKnowledgeText,
-  pendingKnowledgeReviews,
-  promoteKnowledge,
-  dismissPendingKnowledge,
-  proposeKnowledgeRefreshes,
-} from '../../insight.js';
-import { assembleContext, injectAgentsMd, dirsForFolder } from '../../reuse.js';
+import { assembleContext, injectAgentsMd } from '../../reuse.js';
 import { textView, digestReader, confirmText, helpModal, welcomeModal } from '../widgets/viewers.js';
 import { textPrompt } from '../widgets/pickers.js';
 import { copyToClipboard } from '../clipboard.js';
 import { t } from '../i18n.js';
 import { createResumeHandoff } from '../resume-handoff.js';
-
-// A large first-time backlog (hundreds of unfiled sessions from a fresh
-// import) would otherwise mean that many real claude/codex subprocess
-// calls in one `o` press — easily enough to exhaust a tighter usage quota
-// mid-run (see "session 100% usage" reports). Same env-override convention
-// as daemon/cycles.js's TAG_BATCH_LIMIT/SMART_ORGANIZE_BATCH_LIMIT. Kept
-// separate from suggestPlacements()'s own limit:200 below — summarizing is
-// the more expensive per-item cost (a full session's turns vs. a compact
-// summary line), so it gets the tighter cap.
-const SUMMARIZE_BATCH_LIMIT = Number(process.env.MYCELIUM_SUMMARIZE_BATCH_LIMIT || 30);
+import * as actions from './sessions-actions.js';
 
 // Plain-text rendering of a session for the clipboard (title, summary, and the
 // full transcript — everything you'd want to paste elsewhere).
@@ -70,30 +40,6 @@ function sessionToText(n) {
   return L.join('\n');
 }
 
-// Prefills the merge title prompt with a sensible default instead of a bare
-// blank field — same "shared folder" agreement mergeSessions() itself uses
-// to decide where the merged record lands (folders.size === 1 && truthy),
-// so the suggestion only appears when it's actually meaningful (sessions
-// merged from different/unfiled folders get no suggestion, same as they get
-// no folder placement). The folder's own leaf name is usually a good stand-in
-// for "what this merge is about" — e.g. `cases/onprem-connectivity` suggests
-// "Onprem Connectivity" — cheap, local, and needs no LLM call, unlike a
-// real summary would. Purely a starting point: still a plain textPrompt, so
-// it's fully editable or clearable before merging.
-function suggestMergeTitle(ids) {
-  const folders = new Set(ids.map((id) => data.detail(id)?.folder || null));
-  if (folders.size !== 1) return '';
-  const folder = [...folders][0];
-  if (!folder) return '';
-  return folder
-    .split('/')
-    .pop()
-    .split(/[-_]+/)
-    .filter(Boolean)
-    .map((w) => w[0].toUpperCase() + w.slice(1))
-    .join(' ');
-}
-
 /**
  * The main cockpit view: folder tree (left), session list (right top), detail
  * (right bottom). Tab cycles focus; / searches; Enter drills into detail. The
@@ -106,33 +52,7 @@ export function sessionsView(opts = {}) {
   // translation anywhere they're used: undefined = Root (everything), null =
   // the New pseudo-folder (genuinely unfiled only), a path = that folder's
   // subtree.
-  let state = { folder: undefined, query: '', tags: [], selected: new Set(), sortBy: 'recent' };
-  // Guards o/w/Shift+S/Shift+M — each is an async LLM-bound flow that shows
-  // a spinner, awaits a real complete() call (anywhere from under a second
-  // to 10+ seconds), then opens a review modal (o/w/Shift+S) or applies
-  // directly (Shift+M has no review step). None of them disable their own
-  // key while in flight, so an impatient repeat press (nothing visibly
-  // happened yet) used to start a SECOND concurrent run — a second spinner,
-  // a second LLM call, and eventually a second review modal stacking on top
-  // of the first (each independently `parent: app.screen`). Closing just the
-  // top one left the other still parented underneath, so anything watching
-  // `app.screen.children.length` against a pre-press baseline (the
-  // tutorial's own isModalOpen()) never saw it drop back down — stuck
-  // waiting for a "close" that could never fully arrive. One shared flag
-  // is enough since these four are mutually exclusive anyway (nothing sane
-  // comes from running two of them at once regardless of which two).
-  // Deliberately narrow scope for all four: released as soon as the
-  // "immediate" part of the flow finishes (a review modal opening, or for
-  // Shift+M, the title prompt closing) — never held through a later async
-  // best-effort auto-summarize phase (merge/split both have one). An
-  // earlier attempt DID hold it through that phase specifically to stop two
-  // overlapping spinners from fighting over the shared toast widget
-  // (app.js) — that broke legitimate immediate follow-up actions instead
-  // (e.g. Shift+S right after a merge silently did nothing, confirmed by a
-  // real e2e regression). The toast-hiding bug is fixed at its actual
-  // source now — see app.js's startSpinner() stop(), reference-counted on
-  // busyWidgets instead of hiding unconditionally.
-  let asyncReviewFlowRunning = false;
+  const state = { folder: undefined, query: '', tags: [], selected: new Set(), sortBy: 'recent' };
   const SORT_CYCLE = ['recent', 'title', 'agent'];
   let app;
   let foldersBox, listBox, detailBox;
@@ -179,40 +99,21 @@ export function sessionsView(opts = {}) {
       keys.push(f);
     }
     foldersBox._keys = keys;
-    // A real bug: neo-blessed's List.prototype.setItems() tries to keep the
-    // cursor on "the same item" across a full items replacement by matching
-    // the PREVIOUSLY selected row's rendered TEXT against the new array
-    // (`items.indexOf(oldRenderedText)`) — a content match, not an identity/
-    // index one. Two folders sharing a leaf name under different parents
-    // (e.g. cases/CW and projects/CW) render byte-identical rows whenever
-    // neither is the current one (same dim color, same leaf, same count) —
-    // so the instant the cursor moves onto one of them, setItems()'s own
-    // heuristic can match that old identical text against the OTHER
-    // same-named folder and silently relocate the cursor there instead.
-    // Confirmed via a real reproduction: navigating onto cases/CW jumped the
-    // real selection to projects/CW while state.folder (computed from the
-    // index just before this call) still correctly said "cases/CW" — a
-    // genuine desync where the highlighted "current folder" and the actual
-    // cursor disagreed, and the next move/rename/delete acted on the wrong
-    // one. Since reloadFolders() runs on every keystroke (previewFolder()'s
-    // live preview) and every folder op's own refresh, restoring our own
-    // already-correct index right after setItems() unconditionally
-    // overrides that fragile guess.
+    // A real bug: neo-blessed's List.setItems() re-matches the cursor by
+    // comparing rendered TEXT against the old selection, not identity/index.
+    // Two folders sharing a leaf name under different parents (e.g.
+    // cases/CW vs projects/CW) can render identical rows and silently swap
+    // the cursor onto the wrong one — restoring our own already-correct
+    // index right after setItems() overrides that fragile guess.
     const wantIndex = foldersBox.selected;
     foldersBox.setItems(items);
     foldersBox.select(Math.min(wantIndex, items.length - 1));
   }
 
-  // Recent is whatever order data.sessions() already returns (most-recent
-  // first when browsing, but FTS relevance order while a search/query is
-  // active — see data.js's sessions()) — left untouched, since that's the
-  // established Shift+O behavior. date-desc is a DIFFERENT, always-literal
-  // "newest first" for Shift+T's picker (below): a real comparator, not a
-  // pass-through, so picking it explicitly still means date order even
-  // mid-search, instead of silently reusing whatever relevance order was
-  // already on screen. title-desc/date-asc are the reverse direction of
-  // title/date-desc; recent itself has no comparator to flip (that's
-  // exactly why it can't safely stand in for "newest first" here).
+  // "recent" passes through data.sessions()'s own order (relevance during
+  // search, else most-recent) — established Shift+O behavior. date-desc is
+  // a real comparator for Shift+T's picker, so "newest first" always means
+  // date order there, even mid-search.
   function sortRows(list) {
     if (state.sortBy === 'title') {
       return [...list].sort((a, b) =>
@@ -240,23 +141,11 @@ export function sessionsView(opts = {}) {
   }
 
   function reloadList() {
-    // A real bug (same class as reloadFolders()'s own fix — see that
-    // function's comment): neo-blessed's List.prototype.setItems() tries to
-    // keep the cursor on "the same item" by matching the PREVIOUSLY selected
-    // row's rendered TEXT against the new items array — a content match, not
-    // an identity one. Two sessions can render byte-identical rows (same
-    // title, same badges, same agent, no snippet difference) — reloadList()
-    // runs after essentially every mutation (rename, tag, move, delete,
-    // merge, split, auto-tag), any of which can also resort the list (e.g.
-    // a title edit while sorted by title), so restoring by the OLD numeric
-    // index alone (reloadFolders()'s fix) isn't enough here — the same
-    // index can legitimately now belong to a different session even without
-    // any duplicate-text collision. Tracking the actual session id instead
-    // sidesteps both problems: it's correct across a resort, and immune to
-    // setItems()'s own fragile text-matching heuristic. currentRow()/`e`/
-    // `m`/`t`/`x`/etc. all read listBox.selected afterward, so getting this
-    // wrong meant a subsequent action could silently act on the wrong
-    // session.
+    // Same setItems() cursor bug as reloadFolders() (see that comment), but
+    // higher-risk here: reloadList() runs after nearly every mutation, some
+    // of which resort the list, so restoring by old numeric index alone
+    // isn't reliable. Tracking the session id instead survives a resort and
+    // is immune to setItems()'s text-matching heuristic.
     const wantId = rows[listBox.selected]?.id;
     const prevIndex = listBox.selected;
     rows = sortRows(data.sessions({ folder: state.folder, query: state.query, tags: state.tags }));
@@ -397,6 +286,27 @@ export function sessionsView(opts = {}) {
       reloadFolders();
       reloadList();
 
+      // The Scan/Organize/Knowledge-review/Merge/Split/New-agent action
+      // handlers (Phase 2 split, issue #88) live in sessions-actions.js as
+      // functions taking this shared ctx, built once here so every key
+      // binding/menu entry below can reference the same stable wrapper
+      // regardless of where it's defined — a const/ctx alternative to the
+      // function-declaration hoisting the old inline versions relied on
+      // (`screenKey(app, ['o'], doOrganize)` used to precede `doOrganize`'s
+      // own declaration). asyncReviewFlowRunning guards o/k/w/Shift+S/
+      // Shift+M against a double-press race stacking a second review modal
+      // (breaks tutorial.js's isModalOpen() baseline) — released once the
+      // "immediate" part finishes, not through merge/split's later
+      // auto-summarize — holding it longer broke legitimate follow-ups.
+      const ctx = { app, state, foldersBox, listBox, detailBox, currentRow, reloadFolders, reloadList, asyncReviewFlowRunning: false };
+      const doScan = () => actions.doScan(ctx);
+      const doOrganize = () => actions.doOrganize(ctx);
+      const doRefreshKnowledge = () => actions.doRefreshKnowledge(ctx);
+      const doMerge = () => actions.doMerge(ctx);
+      const doSplit = () => actions.doSplit(ctx);
+      const doKnowledge = () => actions.doKnowledge(ctx);
+      const doNewAgent = () => actions.doNewAgent(ctx);
+
       // Each column's fraction is of the FULL width, not "whatever's left
       // after folders" — the old scheme capped folders at a fixed ~18-30
       // columns no matter what, so it never actually grew when focused, and
@@ -426,30 +336,17 @@ export function sessionsView(opts = {}) {
       });
 
       // ── k9s-style drill-down: Folders → Sessions → Detail, Enter=in, Esc=out ──
-      // Status bar shows the short Context Flywheel loop (Capture·s →
-      // Organize·o → Learn·k → Reuse·n) instead of per-level nav hints or
-      // the full stage-by-stage breakdown — no free row anywhere on screen
-      // to show more than this,
-      // and the detailed version now lives in the ? modal (help.text) where
-      // someone can actually read it once instead of relearning the whole
-      // model from a permanent status line on every screen. Factored out of
-      // setLevel() so reloadAll() can also refresh it — the status bar is
-      // otherwise only re-set on a level change, so it stayed in whatever
-      // language was active at mount time even after a later setLocale()
-      // call (e.g. index.js's language picker, which mounts the view
-      // BEFORE the human has actually picked a language, deliberately, so
-      // the persona picker shown right after has real chrome behind it —
-      // see index.js's pickLanguage()).
+      // Status bar shows the short Context Flywheel loop; the full
+      // breakdown lives in the `?` modal instead. Factored out of setLevel()
+      // so reloadAll() can also refresh it — index.js's language picker
+      // mounts this view before the human picks a language, so a later
+      // setLocale() needs a way to update chrome that's otherwise only
+      // re-set on a level change.
       const updateStatusBar = () => {
         app.setStatus(' ' + t('lifecycle.bar', C.text) + '    ' + t('status.helpFallback'));
       };
-      // Same staleness problem as updateStatusBar() above, same fix shape —
-      // these three border labels are blessed widget CONSTRUCTION options
-      // (`label: t(...)` passed to blessed.list()/blessed.box() once, at
-      // mount time), not something re-applied on every render the way row
-      // content is. A setLocale() call after mount (index.js's language
-      // picker, deliberately mounted before the human has picked a
-      // language) left them stuck in whatever was active at mount time.
+      // Same staleness problem as updateStatusBar() above: these are blessed
+      // widget CONSTRUCTION options (`label:`), not re-applied on render.
       const updatePanelLabels = () => {
         foldersBox.setLabel(t('sessions.foldersPanelLabel'));
         listBox.setLabel(t('sessions.sessionsPanelLabel'));
@@ -642,17 +539,11 @@ export function sessionsView(opts = {}) {
         app.render();
       });
 
-      // Shift+T: pick a sort order directly instead of cycling blind
-      // (issue #51) — newest/oldest-first/title A-Z/title Z-A, the two
-      // directions Shift+O's cycle above can't reach on its own. Left as a
-      // fully separate entry point rather than folded into SORT_CYCLE: both
-      // just write the same state.sortBy strings, so they can't disagree
-      // with each other, and Shift+O keeps working unchanged (still the
-      // only way to sort by agent). "Newest first" here is 'date-desc', NOT
-      // 'recent' — Shift+O's 'recent' is a pass-through that can be FTS
-      // relevance order mid-search (see sortRows()'s own comment), so
-      // picking "newest first" explicitly needs its own real comparator to
-      // actually mean date order every time, search or not.
+      // Shift+T: pick a sort order directly instead of cycling blind (issue
+      // #51) — reaches the two directions Shift+O's cycle can't. Kept
+      // separate from SORT_CYCLE (both just write state.sortBy, so they
+      // can't disagree); "newest first" here is the real 'date-desc'
+      // comparator, not 'recent's search-relevance pass-through.
       listBox.key('S-t', () => {
         menu(
           app,
@@ -687,211 +578,12 @@ export function sessionsView(opts = {}) {
       });
 
       // Shift+M: merge the multi-selected sessions into one new synthetic
-      // session — git-like (mergeSessions() never rewrites the originals'
-      // turns, just supersedes them; fully reversible via `mycelium
-      // unmerge`). Blessed reports Shift+letter as 'S-<letter>', not the
-      // literal uppercase character (confirmed in neo-blessed's program.js).
-      //
-      // Same key also REVERTS, when there's nothing to merge in the first
-      // place: 0 or 1 target (selected, or just the row under the cursor if
-      // nothing's selected) that turns out to BE a merge product. unmerge()/
-      // unsplit() were previously CLI-only — `mycelium unmerge <id>` — which
-      // meant actually reverting meant leaving the TUI, even though the toast
-      // (merge.done below) has told you the command exists since it was
-      // added. Doesn't touch the "merge 2+ selected" path at all: this only
-      // fires when that path wouldn't have had enough targets anyway.
-      const doUnmerge = (id) => {
-        const n = data.detail(id);
-        if (!n?.mergedFrom?.length) return false;
-        const res = unmerge(id);
-        if (!res.ok) {
-          app.notify(res.error, 3);
-          return true;
-        }
-        state.selected.clear();
-        data.refreshMany([id, ...res.restored.map((s) => s.id)]);
-        reloadFolders();
-        reloadList();
-        app.notify(t('merge.reverted', res.restored.length), 3);
-        listBox.focus();
-        app.render();
-        return true;
-      };
-      function doMerge() {
-        const ids = [...state.selected];
-        if (ids.length <= 1) {
-          const targetId = ids[0] ?? currentRow()?.id;
-          if (targetId && doUnmerge(targetId)) return;
-        }
-        if (ids.length < 2) return app.notify(t('merge.needsTwo'), 3);
-        // See asyncReviewFlowRunning's own comment (near `state`'s
-        // declaration) — only guards the title prompt itself (a second
-        // Shift+M while it's open), released the instant it closes, same
-        // scope as o/w/Shift+S's own guards. Deliberately NOT held through
-        // the async auto-summarize below — the UI (and the very next
-        // keypress, e.g. Shift+S right after a merge) is meant to be usable
-        // immediately once the merge itself has applied, summary filling in
-        // independently in the background; a prior attempt at holding the
-        // guard through that whole phase broke exactly this (confirmed by a
-        // real e2e regression — merge-then-immediate-split silently did
-        // nothing, split's own key press swallowed by the still-held
-        // guard). The toast-hiding bug this was meant to prevent is fixed
-        // at its actual source instead — see app.js's startSpinner()
-        // stop(), gated on busyWidgets instead of hiding unconditionally.
-        if (asyncReviewFlowRunning) return;
-        asyncReviewFlowRunning = true;
-        textPrompt(app, t('merge.titlePrompt'), suggestMergeTitle(ids), async (title) => {
-          asyncReviewFlowRunning = false;
-          if (title === null) return listBox.focus(); // Esc — cancelled
-          const res = mergeSessions(ids, { title: title.trim() || undefined });
-          if (!res.ok) return app.notify(res.error, 3);
-          state.selected.clear();
-          data.refreshMany([res.merged.id, ...ids]);
-          reloadFolders();
-          reloadList();
-          // Restore focus/render synchronously, before the async
-          // auto-summarize below — textPrompt's own blessed.prompt takes
-          // focus while open and doesn't hand it back on its own once
-          // destroyed, so leaving this until after an awaited LLM call
-          // left listBox unfocused (and therefore deaf to the very next
-          // keypress, e.g. Shift+S right after a merge) for however long
-          // that call took.
-          listBox.focus();
-          app.render();
-          // Real title/summary/tags for the merged result, same LLM call `a`
-          // uses — without this, mergeSessions() alone leaves summary empty
-          // (and title empty too, unless typed above) until a separate
-          // manual `a`, which read as "merge produces a broken/empty
-          // session." Best-effort: a failed call here doesn't undo the
-          // merge that already happened, just leaves it for a later manual
-          // `a` — same degrade-gracefully shape autoTagSession() already
-          // has everywhere else it's called. Runs AFTER the UI has already
-          // recovered — the merged session shows up immediately (title
-          // blank unless typed above), summary fills in a moment later.
-          const spin = app.startSpinner(t('merge.summarizing'));
-          try {
-            await autoTagSession(res.merged.id);
-          } catch {
-            /* best-effort — merge already succeeded regardless */
-          }
-          spin.stop();
-          data.refreshOne(res.merged.id);
-          reloadList();
-          // Includes the actual id so the toast itself says how to undo
-          // (`mycelium unmerge <id>`) — a bare "Merged N sessions" gave no
-          // hint it could be undone at all, let alone how. 4s (was 6s, felt
-          // too long lingering on screen) — still enough to read the id.
-          app.notify(t('merge.done', ids.length, res.merged.id.slice(0, 8)), 4);
-          app.render();
-        });
-      }
+      // session (git-like, reversible via `mycelium unmerge`) — same key
+      // REVERTS when there's nothing to merge. See sessions-actions.js.
       listBox.key('S-m', doMerge);
 
       // Shift+S: LLM-suggested split — propose topic boundaries, human
-      // reviews via the same multiSelectList pattern smart-organize (`o`)
-      // uses, apply only the checked ranges (unchecked ranges simply stay
-      // part of the original — nothing is lost either way).
-      const doSplit = async () => {
-        const r = currentRow();
-        if (!r) return;
-        // Same key REVERTS when the current row IS a split piece — same
-        // "same key, no valid forward action here anyway" pattern as
-        // Shift+M's doUnmerge() above. A piece proposing its OWN fresh
-        // split (on its own partial content) was never a meaningful action
-        // to preserve here, and unsplit()/unmerge() were previously
-        // CLI-only — this is the TUI-reachable path the merge/split.done
-        // toasts have pointed at since `mycelium unsplit <id>` was added.
-        if (r.splitFrom) {
-          const res = unsplit(r.splitFrom);
-          if (!res.ok) return app.notify(res.error, 3);
-          data.refreshMany([r.splitFrom, ...res.removed]);
-          reloadFolders();
-          reloadList();
-          app.notify(t('split.reverted', res.removed.length), 3);
-          listBox.focus();
-          app.render();
-          return;
-        }
-        // See asyncReviewFlowRunning's own comment (near `state`'s
-        // declaration) — an impatient repeat press while the LLM call is
-        // still in flight used to start a second concurrent run: a second
-        // spinner, a second suggestSplitBoundaries() call, and eventually a
-        // second review modal stacking on top of the first. Closing just the
-        // top one left the other still parented to app.screen underneath,
-        // so anything watching screen.children.length against a pre-press
-        // baseline (the tutorial's own isModalOpen()) never saw it drop back
-        // down — stuck waiting for a "close" that could never fully arrive.
-        if (asyncReviewFlowRunning) return;
-        asyncReviewFlowRunning = true;
-        const spin = app.startSpinner(t('split.suggesting'));
-        const res = await suggestSplitBoundaries(r.id);
-        spin.stop();
-        if (!res.ok) {
-          asyncReviewFlowRunning = false;
-          return app.notify(res.error, 3);
-        }
-        const items = res.ranges.map((rg) => ({ label: t('split.turnRangeLabel', rg.from, rg.to, rg.label), value: rg }));
-        // defaultAll: true — same as smart-organize's placement review.
-        // Without it, a bare Enter (the obvious first thing to try) checked
-        // nothing, applied nothing, and closed the modal with zero
-        // feedback — indistinguishable from the keypress just not
-        // registering. The LLM already proposed these ranges; reviewing
-        // them is "uncheck the wrong one," not "check the right ones",
-        // same reasoning organize's own review already uses.
-        // Guard is released the instant this modal actually opens (not only
-        // once its callback later fires) — same scope as `o`/`w`'s guards,
-        // which release once their own review modal opens rather than
-        // staying held through however long the human takes to review it.
-        asyncReviewFlowRunning = false;
-        multiSelectList(app, t('split.reviewTitle'), items, async (chosen) => {
-          if (!chosen?.length) return; // Esc or everything unchecked — original untouched
-          const applied = applySplit(r.id, chosen);
-          if (!applied.ok) return app.notify(applied.error, 3);
-          data.refreshMany([r.id, ...applied.pieces.map((p) => p.id)]);
-          reloadFolders();
-          reloadList();
-          // Restore focus/render synchronously, before the async
-          // auto-summarize below — same reasoning as the merge handler
-          // above: multiSelectList's own review box takes focus while
-          // open, and leaving this until after an awaited LLM call left
-          // listBox unfocused for however long that took.
-          listBox.focus();
-          app.render();
-          // Real summary/tags for each piece, same LLM call `a` uses —
-          // applySplit() alone leaves summary empty on every piece (title
-          // is already real, from the boundary label, and locked above so
-          // this doesn't replace it). Concurrency bounded the same way
-          // organize.js's summarizeCandidates()/suggestPlacements() already
-          // are — a split with several ranges shouldn't fire that many LLM
-          // subprocesses all at once (see issue #3). Best-effort per piece:
-          // one failing doesn't undo the split or block the others. Runs
-          // AFTER the UI has already recovered — pieces show up immediately
-          // (with their real boundary-label titles), summaries fill in a
-          // moment later. Deliberately NOT re-arming asyncReviewFlowRunning
-          // here (a prior attempt did, to guard against this overlapping a
-          // second trigger's own spinner on the same shared toast) — that
-          // blocked legitimate immediate follow-up actions (e.g. another
-          // Shift+S right after this one), confirmed by a real e2e
-          // regression. The toast-hiding bug is fixed at its actual source
-          // instead — see app.js's startSpinner() stop(), gated on
-          // busyWidgets instead of hiding unconditionally.
-          const spin = app.startSpinner(t('split.summarizing'));
-          try {
-            await mapConcurrent(applied.pieces, 2, (p) => autoTagSession(p.id).catch(() => {}));
-          } finally {
-            spin.stop();
-          }
-          data.refreshMany(applied.pieces.map((p) => p.id));
-          reloadList();
-          // Includes the original's id so the toast itself says how to
-          // undo (`mycelium unsplit <id>`, pieces deleted, original
-          // untouched) — a bare "Split into N sessions" gave no hint it
-          // could be undone at all, let alone how. 4s (was 6s, felt too
-          // long lingering on screen) — still enough to read the id.
-          app.notify(t('split.done', applied.pieces.length, r.id.slice(0, 8)), 4);
-          app.render();
-        }, { defaultAll: true });
-      };
+      // reviews, apply only the checked ranges. See sessions-actions.js.
       listBox.key('S-s', doSplit);
       detailBox.key('S-s', doSplit);
 
@@ -930,287 +622,30 @@ export function sessionsView(opts = {}) {
 
       // s: scan only (capture new/changed sessions from every tab/terminal +
       // reindex), without leaving the TUI. Mirrors `mycelium scan`. Captured
-      // sessions land unfiled — use `o` (or `mycelium organize`) to place them.
-      // Named (not inline) so the `.` action palette's FOLDER group can reuse
-      // the exact same handler, same reasoning as doOrganize/doMerge/
-      // doNewAgent below.
-      const doScan = () => {
-        app.notify(t('scan.inProgress'), 30);
-        setImmediate(() => {
-          let s;
-          try {
-            s = scan();
-          } catch (err) {
-            app.notify(t('scan.failed', err.message), 4);
-            return;
-          }
-          data.refresh();
-          reloadFolders();
-          reloadList();
-          app.notify(t('scan.done', s.imported, s.scanned, s.skipped, s.failed), 4);
-          app.render();
-        });
-      };
+      // sessions land unfiled — use `o` (or `mycelium organize`) to place
+      // them. See sessions-actions.js.
       screenKey(app, ['s'], doScan);
 
-      // o: smart organize — LLM content-based folder suggestions, comparing
-      // candidates against the sessions already filed in each folder (see
-      // organize.js's suggestPlacements()). Computing FRESH candidates is
-      // scoped to wherever you're currently browsing (state.folder — Root =
-      // everything, New = only genuinely-unfiled, a folder = itself +
-      // subtree), same three-way semantics data.sessions() already uses —
-      // so reviewing "this folder" doesn't drag in the whole store unless
-      // you're actually standing at Root. Always a preview-then-confirm flow
-      // (like w/i), and never run automatically by the daemon — unlike `s`'s
-      // plain scan, this makes real LLM calls and moves things.
+      // o: smart organize — LLM content-based folder suggestions, scoped to
+      // state.folder, always preview-then-confirm. See sessions-actions.js.
       screenKey(app, ['o'], doOrganize);
-      // Named (not an inline screenKey closure) so the `.` action menu can
-      // invoke the exact same guarded flow — see openActionMenu().
-      async function doOrganize() {
-        // See asyncReviewFlowRunning's own comment above — an impatient
-        // repeat press while the LLM call is still in flight used to start
-        // a second concurrent run.
-        if (asyncReviewFlowRunning) return;
-        asyncReviewFlowRunning = true;
-        try {
-          await runSmartOrganize();
-        } finally {
-          asyncReviewFlowRunning = false;
-        }
-      }
-      async function runSmartOrganize() {
-        // Reuse whatever the daemon already queued (see organize.js's
-        // smartOrganizeCycle) instead of recomputing — makes `o` instant when
-        // the daemon's been doing the work in the background. Deliberately
-        // UNSCOPED (not filtered to state.folder) — this is already-computed
-        // work, not a fresh classification run, so there's no reason to
-        // throw it away just because you're not standing in the matching
-        // folder right now. Scoping this too was an earlier attempt that
-        // backfired: pressing `o` outside the exact folder silently ignored
-        // a real pending suggestion and fell through to recomputing it from
-        // scratch (a wasted LLM call for something already sitting there).
-        let matches = pendingSuggestions();
-        if (!matches.length) {
-          // Only summarizes the sessions actually being classified below —
-          // not the whole store's summary backlog. Calls the LLM once per
-          // such session lacking one (in bounded concurrent chunks, see
-          // organize.js). startSpinner() (app.js) both animates the wait and
-          // — since it re-displays on its own 120ms timer, independent of
-          // how often onProgress actually fires — keeps the toast alive even
-          // if every concurrent lane happens to be stalled on a slow call at
-          // once; the old plain notify() could expire mid-batch and make a
-          // still-running classification look hung.
-          const pending = classificationCandidates({ cooldownMs: 0, folder: state.folder }).filter(
-            (n) => !n.extracted.summary,
-          ).length;
-          // Real progress bars, not the animated-but-fake spinner — both
-          // phases already know a true total up front (pending count,
-          // chunk count), which is exactly what startProgressBar() is for
-          // (see app.js). A large first scan can mean minutes of real work
-          // here, so a filling bar sets honest expectations instead of
-          // looking hung.
-          const summarizeSpin = pending ? app.startProgressBar(t('sessions.summarizingLabel')) : null;
-          const summarized = [];
-          let summarizedDone = 0;
-          const summarizeRes = await summarizeCandidates({
-            folder: state.folder,
-            // Bounds this call's own subprocess volume — see
-            // SUMMARIZE_BATCH_LIMIT's own comment above. Pressing `o` again
-            // continues where this left off (already-summarized candidates
-            // are excluded up front, see classificationCandidates() above).
-            limit: SUMMARIZE_BATCH_LIMIT,
-            onProgress: (s) => {
-              if (s) summarized.push(s.id);
-              summarizeSpin?.update(++summarizedDone, pending);
-            },
-          });
-          summarizeSpin?.stop();
-          // Only the just-summarized sessions actually changed.
-          if (summarized.length) data.refreshMany(summarized);
-          // A real usage-limit exhaustion trips summarizeCandidates()'s own
-          // circuit breaker (see organize.js) before suggestPlacements() is
-          // even attempted — every already-summarized session's progress is
-          // safe (each one is written to disk as it completes), so this is
-          // "stop here, not everything is lost," not a hard failure.
-          if (summarizeRes.stoppedEarly) {
-            return app.notify(t('smart.summarizeStoppedEarly', summarizeRes.done, summarizeRes.total), 8);
-          }
-          const placeSpin = app.startProgressBar(t('smart.running'));
-          const res = await suggestPlacements({
-            cooldownMs: 0,
-            folder: state.folder,
-            // Same reasoning as daemon.js's SMART_ORGANIZE_BATCH_LIMIT — a
-            // large backlog could otherwise mean hundreds of LLM calls in
-            // one `o` press.
-            limit: 200,
-            onProgress: (batch, total) => placeSpin.update(batch, total),
-          });
-          placeSpin.stop();
-          if (!res.ok) return app.notify(res.error, 4);
-          matches = res.placements.filter((p) => p.folder);
-          // A partial failure (some chunks succeeded, one hit real usage
-          // exhaustion) still has real placements worth reviewing — surface
-          // both: whatever's usable below, plus why the rest is missing.
-          if (res.error) app.notify(t('smart.placementsStoppedEarly', res.error), 6);
-          if (!matches.length) return app.notify(t('smart.noMatches'), 3);
-          queueSuggestions(matches);
-        }
-        // Cherry-pick which suggestions to actually apply — every suggestion
-        // starts checked (LLM already did the picking; this is a chance to
-        // catch a bad one, not to opt in one at a time) — Enter alone applies
-        // everything, Space toggles off whichever ones look wrong.
-        const existingDirs = new Set(listTreeDirs());
-        const items = matches.map((p) => ({
-          label: `${p.id.slice(0, 8)}  → {${C.fox}-fg}${p.folder}{/}${
-            existingDirs.has(p.folder) ? '' : `  {${C.spore}-fg}(${t('smart.newFolder')}){/}`
-          }${p.reason ? `  {${C.faint}-fg}(${p.reason}){/}` : ''}`,
-          value: p,
-        }));
-        multiSelectList(app, t('smart.previewTitle'), items, (chosen) => {
-          // Esc means what its own "esc cancel" label says — dismiss this
-          // batch. Reviewed (Esc or Enter, applied or passed on) either way,
-          // so it's cleared from the queue and won't keep reappearing next
-          // `o` — re-pressing `o` later recomputes fresh candidates instead.
-          clearSuggestions(matches.map((p) => p.id));
-          if (chosen) {
-            applyPlacements(chosen);
-            // Only the applied ones' `folder` actually changed — the rest
-            // just had suggestedFolder cleared, which isn't indexed at all.
-            data.refreshMany(chosen.map((p) => p.id));
-          }
-          reloadFolders();
-          reloadList();
-          app.render();
-        }, { defaultAll: true });
-      }
 
-      // k: knowledge review — mirrors o's own shape exactly (reuse whatever
-      // the daemon already queued overnight if present, else compute fresh
-      // right now) rather than nesting inside Digest (`d`), a deliberately
-      // separate, unrelated feature. This is the expected, primary way a
-      // human reviews/approves a day's KNOWLEDGE.md refreshes; the daemon's
-      // independent knowledgeReviewCycle (daemon/cycles.js) is only the
-      // fallback for whenever a human didn't get to it — both call the same
-      // insight.js proposeKnowledgeRefreshes(), so either path produces an
-      // identical result.
+      // k: knowledge review — mirrors o's shape (reuse what the daemon
+      // queued overnight, else compute fresh), deliberately separate from
+      // Digest (`d`). See sessions-actions.js.
       screenKey(app, ['k'], doRefreshKnowledge);
-      // Named for the `.` action menu, same reasoning as doOrganize above.
-      async function doRefreshKnowledge() {
-        if (asyncReviewFlowRunning) return;
-        asyncReviewFlowRunning = true;
-        try {
-          await runKnowledgeReview();
-        } finally {
-          asyncReviewFlowRunning = false;
-        }
-      }
-      async function runKnowledgeReview() {
-        let pending = pendingKnowledgeReviews();
-        if (!pending.length) {
-          // Nothing queued from an overnight cycle — compute fresh for
-          // TODAY's active folders, right now. This is the "compute on the
-          // spot" branch o's own runSmartOrganize() also falls back to when
-          // nothing's pre-queued.
-          const today = new Date().toISOString().slice(0, 10);
-          const spin = app.startSpinner(t('knowledge.reviewRunning'));
-          await proposeKnowledgeRefreshes(today);
-          spin.stop();
-          pending = pendingKnowledgeReviews();
-          if (!pending.length) return app.notify(t('knowledge.reviewNone'), 3);
-        }
-        const items = pending.map((p) => ({
-          label: `${p.folder}  {${C.faint}-fg}${p.text.split('\n').find((l) => l.trim() && !l.startsWith('#'))?.trim().slice(0, 60) || ''}{/}`,
-          value: p.folder,
-        }));
-        multiSelectList(app, t('knowledge.reviewTitle'), items, (chosen) => {
-          const chosenSet = new Set(chosen || []);
-          const toPromote = [];
-          for (const p of pending) {
-            if (chosenSet.has(p.folder)) toPromote.push(p);
-            else dismissPendingKnowledge(p.folder);
-          }
-          applyKnowledgeApprovals(toPromote);
-        }, {
-          defaultAll: true,
-          // Full-content review before approving — the one-line label
-          // snippet isn't enough to actually judge what's about to land in
-          // KNOWLEDGE.md (and from there, some real project's AGENTS.md).
-          previewText: (folder) => pending.find((p) => p.folder === folder)?.text || '',
-        });
-      }
-
-      // Approving the KNOWLEDGE.md content is one decision; which real
-      // project directories actually get it is a separate one — a folder
-      // can span several directories a session merely happened to run in
-      // (e.g. a quick "what is X" question asked from an unrelated repo's
-      // terminal, content-classified into a real project folder), and
-      // dirsForFolder() has no way to tell "the project" from "somewhere a
-      // session incidentally ran". Auto-injecting into all of them
-      // regardless — the original behavior — silently wrote into
-      // directories that had nothing to do with the actual project. `n`'s
-      // own directory picker already lets a human choose from exactly
-      // these candidates instead of guessing; this mirrors that: 0 or 1
-      // directory (no ambiguity) injects straight through same as before,
-      // 2+ shows a checklist (all pre-checked, same trust level as the
-      // knowledge approval itself) so a stray directory can be unchecked.
-      function applyKnowledgeApprovals(toPromote) {
-        let applied = 0;
-        const ambiguous = [];
-        for (const p of toPromote) {
-          const res = promoteKnowledge(p.folder);
-          if (!res.ok) continue;
-          applied++;
-          const dirs = dirsForFolder(p.folder);
-          if (dirs.length <= 1) {
-            for (const dir of dirs) {
-              try {
-                injectAgentsMd(dir, p.folder);
-              } catch {
-                /* no reachable AGENTS.md target — fine, best-effort */
-              }
-            }
-          } else {
-            for (const dir of dirs) ambiguous.push({ folder: p.folder, dir });
-          }
-        }
-        if (!ambiguous.length) {
-          return app.notify(applied ? t('knowledge.reviewApplied', applied) : t('knowledge.reviewSkipped'), 4);
-        }
-        const items = ambiguous.map((c) => ({
-          label: `${c.folder}  {${C.faint}-fg}→ ${c.dir}{/}`,
-          value: c,
-        }));
-        multiSelectList(app, t('knowledge.injectDirsTitle'), items, (chosenDirs) => {
-          for (const c of chosenDirs || []) {
-            try {
-              injectAgentsMd(c.dir, c.folder);
-            } catch {
-              /* no reachable AGENTS.md target — fine, best-effort */
-            }
-          }
-          app.notify(applied ? t('knowledge.reviewApplied', applied) : t('knowledge.reviewSkipped'), 4);
-        }, { defaultAll: true });
-      }
 
       // ?: full keymap reference — status bar only shows a short breadcrumb now.
       screenKey(app, ['?'], () => helpModal(app));
 
-      // .: "What do you want to do?" action palette — a discoverable menu of
-      // the session/folder actions, each showing its own single-key shortcut
-      // so the menu doubles as a way to learn the keys. Context-aware: only
-      // offers what's valid for the current selection (Merge needs 2+ picked;
-      // Split/lineage need a current row). Every entry's `value` is the exact
-      // same handler its key triggers — no behavior duplicated, so the two
-      // paths can't drift. Esc closes with no action (menu() → cb(undefined)).
+      // .: "What do you want to do?" action palette — a discoverable menu,
+      // each entry showing its own key. Context-aware (Merge needs 2+
+      // picked, Split/lineage need a current row) and scoped to the panel
+      // you're in (Detail has nothing left to offer; Folders gets only
+      // folder-scoped actions; Sessions gets both groups). Every entry's
+      // `value` is the exact same handler its key triggers, so the two
+      // paths can't drift. Esc closes with no action.
       function openActionMenu() {
-        // Palette content is scoped to the panel the user is standing in, so
-        // it only ever offers actions that make sense from where they are.
-        // - Detail: the user is already inside a session — every remaining
-        //   action lives elsewhere; suppress the palette entirely.
-        // - Folders: they're navigating the tree, so only folder-scoped
-        //   actions (scan/organize/insights/new-task-with-context) apply.
-        // - Sessions: both groups — session actions on the current row, plus
-        //   the folder actions you can still reach from here.
         if (state.level === 'detail') return;
 
         const hint = (k) => `  {${C.text}-fg}(${k}){/}`;
@@ -1245,7 +680,11 @@ export function sessionsView(opts = {}) {
         items.push({ label: `${t('actions.newAgent')}${hint('n')}`, value: doNewAgent });
         menu(app, t('actions.title'), items, (fn) => {
           if (typeof fn === 'function') fn();
-        }, { width: '50%' });
+          // fn===undefined = palette dismissed without a choice (Esc, or a
+          // screen-key like `o` stole focus and opened its own modal on
+          // top). Nothing to do — the real action, if any, ran through
+          // its own key handler already.
+        }, { width: '50%', dismissOnBlur: true });
       }
       screenKey(app, ['.'], openActionMenu);
 
@@ -1322,27 +761,17 @@ export function sessionsView(opts = {}) {
       listBox.key('x', doDelete);
       detailBox.key('x', doDelete);
 
-      // Capture: launch a new agent session in the current folder's context.
-      // Once an agent/directory are picked, launchAgent() (launch.js) itself
-      // asks "open here or copy command (new tab)" — same choice
-      // resume-handoff.js's onDetailEnter offers for an existing session.
-      // "Copy command" doesn't actually capture anything here (no real
-      // launch, no scan()), so reloadFolders()/reloadList() below are a
-      // harmless no-op refresh in that case, not a bug.
-      // Named (not an inline closure) so the `.` action menu can invoke the
-      // exact same "new task with this folder's context" launch — see
-      // openActionMenu().
-      function doNewAgent() {
-        // launchAgent() (launch.js) already reindexes exactly what scan()
-        // captured internally — no need to also reindex the whole store here.
-        launchAgent(app, { folder: state.folder, title: t('launch.selectAgentNew') }, () => {
-          reloadFolders();
-          reloadList();
-          listBox.focus();
-          app.render();
-        });
-      }
+      // Capture: launch a new agent session in the current folder's
+      // context. FOLDER-scoped (state.folder, not the selected row). Bound
+      // explicitly on both boxes (matching w/doKnowledge's own pattern),
+      // not a global screenKey — confirmed via a headless dry run that
+      // screenKey would let a second `n` press re-enter this whole flow
+      // while the agent/directory picker it just opened still has focus,
+      // stacking a second one on top; an explicit per-box binding naturally
+      // can't fire once focus has moved to a different widget. See
+      // sessions-actions.js.
       listBox.key('n', doNewAgent);
+      foldersBox.key('n', doNewAgent);
 
       // Resume/handoff/copy-command trio — shared with the Calendar tab's
       // day-list/detail (see resume-handoff.js). Only the "what's currently
@@ -1367,16 +796,10 @@ export function sessionsView(opts = {}) {
       listBox.key('r', doResume);
       detailBox.key('enter', onDetailEnter);
 
-      // Learn: generate summary + tags (content-based). Works on the multi-
-      // selection if any, else the current row. This is how a session gets its
-      // summary — the LLM reads the session and writes the task summary + tags.
-      // Runs up to 3 at once via mapConcurrent() (llm.js) instead of one at a
-      // time — same bounded-concurrency pattern organize.js's
-      // summarizeCandidates()/suggestPlacements() and learn.js's tagAll()
-      // use, so this (the most directly felt slow path — a human watching a
-      // progress toast crawl through a multi-select) gets the same speedup.
-      // The progress toast now advances on each COMPLETION rather than each
-      // start, since completion order no longer matches selection order.
+      // Learn: generate summary + tags (content-based), multi-selection or
+      // current row. Runs up to 3 at once via mapConcurrent() (llm.js), same
+      // bounded-concurrency pattern as organize.js/learn.js; the progress
+      // toast advances on each completion, not each start.
       const doAutoTag = async () => {
         const ids = state.selected.size ? [...state.selected] : currentRow() ? [currentRow().id] : [];
         if (!ids.length) return;
@@ -1456,57 +879,16 @@ export function sessionsView(opts = {}) {
       detailBox.key('y', doCopy);
 
       // w: extract KNOWLEDGE.md for the current folder — generate, show the
-      // human what it's about to write (it feeds AGENTS.md for every future
-      // session in this folder), and only save on explicit confirm.
-      const doKnowledge = async () => {
-        if (!state.folder) return app.notify(t('folders.selectFirst'), 3);
-        // See asyncReviewFlowRunning's own comment (near `state`'s
-        // declaration) — an impatient repeat press while the LLM call is
-        // still in flight used to start a second concurrent run.
-        if (asyncReviewFlowRunning) return;
-        asyncReviewFlowRunning = true;
-        const refocus = () => (state.level === 'folders' ? foldersBox : listBox).focus();
-        try {
-          // startSpinner() (app.js) both animates the wait and keeps the
-          // toast alive for however long buildKnowledgeText() actually takes
-          // — it used to be a fixed-duration notify() that could expire
-          // mid-call on a slow/large folder, leaving nothing on screen well
-          // before the call actually finished. stop() dismisses it
-          // explicitly either way, same as the old dismissNotify() call did
-          // before the preview opens.
-          const spin = app.startSpinner(t('knowledge.generating'));
-          const gen = await buildKnowledgeText(state.folder);
-          spin.stop();
-          if (!gen.ok) {
-            app.notify(gen.error, 3);
-            return refocus();
-          }
-          confirmText(app, t('knowledge.previewTitle', state.folder), gen.text, (ok) => {
-            if (!ok) {
-              app.notify(t('knowledge.cancelled'), 2);
-              return refocus();
-            }
-            const w = writeKnowledgeText(state.folder, gen.text);
-            app.notify(w.ok ? t('knowledge.saved', state.folder) : w.error, 3);
-            refocus();
-          });
-        } finally {
-          asyncReviewFlowRunning = false;
-        }
-      };
+      // human what it's about to write, and only save on explicit confirm.
+      // See sessions-actions.js.
       listBox.key('w', doKnowledge);
       foldersBox.key('w', doKnowledge);
 
       // d: digest viewer (browse existing; generate new from inside via n/w).
       screenKey(app, ['d'], () => digestReader(app));
-      // c: preview inherited context for the current folder scope — same
-      // state.folder + dual-panel binding as w (doKnowledge) above, not
-      // currentRow().folder. Binding this on listBox only used to mean
-      // pressing c right after returning to the Folders panel (← — the
-      // exact key the previous tutorial step teaches) did nothing at all,
-      // leaving nothing for the tutorial's isModalOpen() poll to ever
-      // detect — found by walking the tutorial live in tmux, not from
-      // reading this handler in isolation.
+      // c: preview inherited context for state.folder (not currentRow().folder),
+      // same dual-panel binding as w — list-only binding left the tutorial's
+      // isModalOpen() poll stuck after pressing ← back to Folders.
       const doContext = () => {
         if (!state.folder) return app.notify(t('folders.selectFirst'), 3);
         const ctx = assembleContext(state.folder);
@@ -1515,13 +897,8 @@ export function sessionsView(opts = {}) {
       listBox.key('c', doContext);
       foldersBox.key('c', doContext);
       // i: inject the folder's KNOWLEDGE.md into a directory's AGENTS.md —
-      // show exactly what will be written before touching that file.
-      // i: inject the current folder scope's KNOWLEDGE.md into a directory's
-      // AGENTS.md. Same state.folder + dual-panel binding as w/c above, not
-      // currentRow().folder — for the same reason: c's list-only binding
-      // left the tutorial's Reuse step stuck if the human had just pressed
-      // ← back to Folders (which the step right before it teaches), and i
-      // had the identical bug.
+      // shows exactly what will be written first. Same state.folder +
+      // dual-panel binding as c, for the same reason (see that comment).
       const doInject = () => {
         if (!state.folder) return app.notify(t('context.needsFolder'), 3);
         const refocus = () => (state.level === 'folders' ? foldersBox : listBox).focus();
@@ -1566,26 +943,13 @@ export function sessionsView(opts = {}) {
           updatePanelLabels();
           app.render();
         },
-        // Same reset mount()'s own tail does (Root, folders pane focused,
-        // fresh data) — for callers that need to drop back to a clean
-        // baseline (e.g. the tutorial ending) WITHOUT a second app.show()/
-        // mount() call. Re-mounting this view was tried first and re-ran
-        // every screenKey()/resize registration on top of the still-live
-        // ones from the first mount (unmount() never tore anything down),
-        // which left stale closures capturing already-detached boxes and
-        // crashed later (Cannot read properties of null (reading 'height'))
-        // the next time a real handler like drillIntoDetail fired.
-        //
-        // A real bug: if the tutorial finished while still on the Calendar
-        // tab (`v`, never toggled back before the last step's `q`), this
-        // reset only touched Sessions' own state — calTab stayed active and
-        // its boxes stayed visible, but `foldersBox.focus()` below yanked
-        // blessed's actual keyboard focus onto the still-HIDDEN Sessions
-        // panel underneath. The result wasn't just "stuck showing Calendar"
-        // — every keypress (Enter, Escape, anything) was being delivered to
-        // an invisible widget, so nothing on screen ever responded, reading
-        // as a frozen/unclosable modal. Mirror showSessionsTab()'s own
-        // tab-exit steps first so focus lands back on something visible.
+        // Same reset mount()'s own tail does, for callers needing a clean
+        // baseline (e.g. tutorial end) without a second mount() call —
+        // re-mounting was tried first, but left stale closures over
+        // detached boxes that crashed later. Also mirrors showSessionsTab()'s
+        // tab-exit steps first: if the tutorial ended on the Calendar tab,
+        // focusing foldersBox directly left focus on a hidden panel, reading
+        // as a frozen, unresponsive app.
         resetToRoot() {
           if (activeTab === 'calendar') {
             if (calTab) calTab.deactivate();
