@@ -215,9 +215,10 @@ const en = {
   'tutorial.step7Body': (fg) =>
     `Press {${fg}-fg}n{/} (or {${fg}-fg}.{/} → New task with folder context) to start a new agent session with this folder's context. You'll pick an agent, then a directory — this tutorial always copies the launch command instead of actually opening one, so it's safe to click through.`,
   'tutorial.step8Title': '',
-  'tutorial.step8Body': (_fg) =>
+  'tutorial.step8Body': (fg) =>
     `Pick any agent, then the suggested directory.\n\n` +
-    `A real AGENTS.md just got written into that directory, and the copied command even asks the agent to summarize what it inherited — paste it into a new terminal tab to see for yourself, or check the file (or the project context) directly.`,
+    `A real AGENTS.md just got written into that directory, and the copied command even asks the agent to summarize what it inherited — paste it into a new terminal tab to see for yourself, or check the file (or the project context) directly.\n\n` +
+    `That's the whole point: Claude Code trims sessions after ~30 days, Codex and Kiro just accumulate — Mycelium snapshots them losslessly at capture, so {${fg}-fg}n{/}/{${fg}-fg}h{/} still work even if the original is gone or on a different agent.`,
   'tutorial.step9Title': ' — Knowledge Review',
   'tutorial.step9Body': (fg) =>
     `That was one folder, by hand. Every folder's knowledge can also be refreshed in one place — press {${fg}-fg}k{/} to check for (or compute) today's knowledge updates, unrelated to Digest.`,
@@ -240,7 +241,6 @@ const en = {
   'tutorial.step16Title': ' — Complete!',
   'tutorial.step16Body': (fg) =>
     `That's the full lifecycle. Day to day, it's a simple loop, the {bold}Context Flywheel{/}: {${fg}-fg}s{/} capture → {${fg}-fg}o{/} organize → {${fg}-fg}w{/} learn → {${fg}-fg}n{/} start the next session with everything it needs. Most of that already happens by itself in the background; Mycelium keeps capturing, organizing, and refreshing what it's learned on its own, so pressing these keys is mostly just reviewing and confirming what's already waiting for you, not starting the work from scratch.\n\n` +
-    `One more thing: agent CLIs keep sessions differently — Claude Code trims after ~30 days, Codex and Kiro just accumulate. Mycelium doesn't fix that by keeping the raw logs longer; it snapshots every session losslessly at capture time and turns those snapshots into the next session via {${fg}-fg}h{/} (continue the same task) and {${fg}-fg}n{/} (start fresh with the folder's KNOWLEDGE.md). So a handoff still works even if the original was deleted or lived on a different agent, and a new session never starts on a blank slate.\n\n` +
     `Forget a key? Press {${fg}-fg}.{/} for the menu instead. Press {${fg}-fg}q{/} when you're done; the mock sessions get cleaned up and you're switched over to your own, existing data.`,
   // Interim text shown while a real handler is in flight (o/w/k/Shift+S's
   // LLM calls are mocked during the tutorial — see tutorial-mock-llm.js —
@@ -522,9 +522,10 @@ const ko = {
   'tutorial.step7Body': (fg) =>
     `{${fg}-fg}n{/}을 눌러 (또는 {${fg}-fg}.{/} → 폴더 컨텍스트로 새 작업) 이 폴더의 컨텍스트로 새 에이전트 세션을 시작해보세요. 에이전트를 고른 뒤 디렉토리를 고르게 됩니다 — 이 튜토리얼은 실제로 여는 대신 항상 실행 명령을 복사하므로 마음 편히 클릭해도 됩니다.`,
   'tutorial.step8Title': '',
-  'tutorial.step8Body': (_fg) =>
+  'tutorial.step8Body': (fg) =>
     `아무 에이전트나 고른 뒤 제안된 디렉토리를 선택하세요.\n\n` +
-    `그 디렉토리에 실제 AGENTS.md가 방금 작성되었고, 복사된 명령어에는 물려받은 내용을 요약해달라는 프롬프트까지 들어있습니다 — 새 터미널 탭에 붙여넣어 직접 확인해보거나, 파일(또는 프로젝트 컨텍스트)을 바로 확인해보세요.`,
+    `그 디렉토리에 실제 AGENTS.md가 방금 작성되었고, 복사된 명령어에는 물려받은 내용을 요약해달라는 프롬프트까지 들어있습니다 — 새 터미널 탭에 붙여넣어 직접 확인해보거나, 파일(또는 프로젝트 컨텍스트)을 바로 확인해보세요.\n\n` +
+    `핵심은 여기입니다: Claude Code는 약 30일이 지나면 세션을 정리하고, Codex와 Kiro는 계속 쌓기만 합니다 — Mycelium은 캡처 시점에 무손실 스냅샷을 남기므로, 원본이 이미 삭제되었거나 다른 에이전트여도 {${fg}-fg}n{/}/{${fg}-fg}h{/}가 그대로 동작합니다.`,
   'tutorial.step9Title': ' — 지식 검토',
   'tutorial.step9Body': (fg) =>
     `방금은 폴더 하나를 손으로 했죠. 모든 폴더의 지식을 한 곳에서 한 번에 갱신할 수도 있습니다 — {${fg}-fg}k{/}를 눌러 오늘의 지식 업데이트를 확인(또는 계산)해보세요. Digest와는 무관한 별개 기능입니다.`,
@@ -547,7 +548,6 @@ const ko = {
   'tutorial.step16Title': ' — 완료!',
   'tutorial.step16Body': (fg) =>
     `전체 라이프사이클을 다 보셨습니다. 일상적으로는 단순한 반복입니다, 바로 {bold}Context Flywheel{/}: {${fg}-fg}s{/} 캡처 → {${fg}-fg}o{/} 정리 → {${fg}-fg}w{/} 학습 → {${fg}-fg}n{/} 필요한 모든 게 준비된 채로 다음 세션 시작. 대부분은 이미 백그라운드에서 저절로 돌아갑니다. Mycelium이 알아서 캡처하고 정리하고 배운 것을 갱신해둡니다. 이 키들을 누르는 건 대부분 처음부터 뭔가 시작시키는 게 아니라 이미 준비된 걸 검토/확인하는 것에 가깝습니다.\n\n` +
-    `한 가지 더: 에이전트마다 세션 보존 정책이 다릅니다 — Claude Code는 약 30일이 지나면 오래된 세션을 정리하고, Codex와 Kiro는 별도의 정리 없이 계속 쌓기만 합니다. Mycelium은 원본 로그를 더 오래 남겨두는 방식이 아니라, 캡처 시점에 모든 세션을 무손실 스냅샷으로 저장하고, {${fg}-fg}h{/}(같은 작업 이어가기)와 {${fg}-fg}n{/}(폴더의 KNOWLEDGE.md 위에서 새 작업 시작)로 그 스냅샷을 다음 세션으로 이어붙입니다. 그래서 원본이 이미 삭제되었거나 다른 에이전트로 넘기는 경우에도 핸드오프가 동작하고, 새 세션도 빈 상태가 아니라 폴더가 쌓아온 맥락 위에서 시작합니다.\n\n` +
     `키가 기억나지 않으면 {${fg}-fg}.{/}로 메뉴를 열어보세요. 다 보셨으면 {${fg}-fg}q{/}를 누르세요. 데모 세션이 정리되고 원래(기존) 데이터로 전환됩니다.`,
   'tutorial.waitingPalette': '액션 메뉴가 열리기를 기다리는 중…',
   'tutorial.waitingPaletteClose': '액션 메뉴를 닫는 중…',
