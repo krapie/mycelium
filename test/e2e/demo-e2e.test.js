@@ -33,7 +33,7 @@ const { createApp } = await import('../../src/tui/app.js');
 const { sessionsView } = await import('../../src/tui/views/sessions.js');
 const { seedMockSessions, prepareTutorialProvider, startTutorial } = await import('../../src/tui/tutorial.js');
 const { setLocale } = await import('../../src/tui/i18n.js');
-const { writePendingKnowledgeText, pendingKnowledgeReviews, dismissPendingKnowledge } = await import('../../src/insight.js');
+const { writeKnowledgeText, writePendingKnowledgeText, pendingKnowledgeReviews, dismissPendingKnowledge } = await import('../../src/insight.js');
 const { queueSuggestions } = await import('../../src/organize.js');
 const { __clearTestProvider } = await import('../../src/llm.js');
 
@@ -454,11 +454,10 @@ test('demo: the narrator box stays visible (in front) once a real modal opens on
     await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 2000 });
     await settle();
 
-    // Step 7: press c to open the real context viewer (textView(), 80%
-    // height/centered — tall enough to overlap the bottom-anchored
-    // narrator box).
+    // Step 7: press n to open the real agent picker (menu(), centered —
+    // still a widget parented after the narrator box, same overlap risk).
     baseline = app.screen.children.length;
-    sendKey(input, 'c');
+    sendKey(input, 'n');
     await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 1000 });
     await settle(); // narrator's own poll catches up, settles onto step 8, calls render()
 
@@ -467,12 +466,81 @@ test('demo: the narrator box stays visible (in front) once a real modal opens on
     assert.equal(
       app.screen.children.indexOf(narratorBox),
       app.screen.children.length - 1,
-      'narrator box is last in app.screen.children (front-most, drawn on top of the context viewer)',
+      'narrator box is last in app.screen.children (front-most, drawn on top of the agent picker)',
     );
 
-    sendKey(input, 'escape'); // close the context viewer, tutorial continues
+    // copyOnly:true means no "open here"/"copy command" choice menu — just
+    // agent, then directory, straight back to baseline.
+    sendKey(input, 'enter'); // pick the first agent (Claude Code)
+    await settle();
+    sendKey(input, 'enter'); // pick the one suggested directory
     await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 1000 });
     void doneArg;
+    // q exits the tutorial immediately (tutorial.js) — lets it reach
+    // finish() and clear its own pollUntil()/setTimeout chain before the
+    // screen is destroyed below.
+    sendKey(input, 'q');
+    await settle();
+  } finally {
+    cleanup(app);
+  }
+});
+
+test('n (tutorial): copyOnly skips the open-here/copy-command choice and writes a real AGENTS.md', async () => {
+  // A real first-run tour must never risk foregrounding a real, possibly-
+  // billed agent subprocess on a stray click — doNewAgent() (sessions.js)
+  // passes copyOnly:!!app.tutorialSignal, which is only truthy while
+  // startTutorial() is actually running (true for the tutorial's whole
+  // duration, not just while its own step counter happens to show step
+  // 7/8 — so this test presses n directly rather than replaying the 6
+  // earlier steps' own keypresses, avoiding any dependency on this file's
+  // shared, cumulative folder tree that other tests in this file also
+  // populate). Uses its own isolated folder/directory instead of a
+  // persona's, and tutorialProjectDir() is covered separately by "the
+  // narrator box stays visible" test above, which does drive the real
+  // step-by-step n flow end to end.
+  const { app, input, api } = await mountDemo();
+  try {
+    let doneArg;
+    startTutorial(app, (completed) => (doneArg = completed), 'swe', { sessionsPreSeeded: true });
+
+    const realDir = mkdtempSync(join(tmpdir(), 'mycelium-n-flow-'));
+    saveRaw({ ...emptyNeutral('n-flow-sess-1', 'claude'), folder: 'n-flow-test-folder', projectDir: realDir });
+    writeKnowledgeText('n-flow-test-folder', '# n-flow-test-folder — Project Knowledge\n\nDistinctive n-flow marker text.\n');
+    api.state.folder = 'n-flow-test-folder';
+    // n is a listBox.key() binding (list-scoped, not a global screenKey()),
+    // and it needs real keyboard focus on listBox to fire — going through
+    // foldersBox's own drillIntoSessions()/previewFolder() would overwrite
+    // the state.folder set above (previewFolder() resets it from whatever
+    // foldersBox currently has selected), so focus listBox directly instead.
+    api.listBox.focus();
+
+    const baseline = app.screen.children.length;
+    sendKey(input, 'n');
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 1000 });
+    await new Promise((r) => setTimeout(r, 80));
+
+    sendKey(input, 'enter'); // pick the first agent (Claude Code)
+    await new Promise((r) => setTimeout(r, 80));
+    // copyOnly:true — still exactly one modal open here (the directory
+    // picker), never a second "open here"/"copy command" choice menu on
+    // top of it. If copyOnly leaked to false, children.length would jump
+    // by one more instead of staying flat across this pick.
+    assert.ok(app.screen.children.length > baseline, 'directory picker is open');
+    sendKey(input, 'enter'); // pick the one suggested directory (realDir)
+    await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 1000 });
+    assert.equal(app.screen.children.length, baseline, 'no extra open-here/copy-command choice menu appeared');
+
+    const agentsMd = readFileSync(join(realDir, 'AGENTS.md'), 'utf8');
+    assert.match(agentsMd, /Distinctive n-flow marker text/, "a real AGENTS.md was written with the folder's actual knowledge");
+    void doneArg;
+    // q exits the tutorial immediately from any step (tutorial.js) — lets
+    // it reach finish() and clear its own pollUntil()/setTimeout chain
+    // before the screen is destroyed below, rather than leaving the
+    // narrator mid-tutorial with startTutorial() never having reached a
+    // quiescent state.
+    sendKey(input, 'q');
+    await new Promise((r) => setTimeout(r, 350));
   } finally {
     cleanup(app);
   }

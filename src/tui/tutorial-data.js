@@ -22,7 +22,14 @@ function daysAgo(n, hour = 10) {
 // rather than always reading it live, so a caller can pin a specific
 // language explicitly (see the tests) without needing to call setLocale()
 // first and risk leaking that change to whatever runs after it.
-export function buildMockSessions(personaId = 'swe', locale = getLocale()) {
+//
+// `projectDir` (optional) is a real, existing directory every mock session
+// gets stamped with, so the tutorial's `n` step's directory picker
+// (dirsForFolder(), reuse.js) has a real suggestion instead of falling
+// through to a free-text prompt pre-filled with wherever the user happened
+// to launch mycelium from. Stays a plain field stamp here — no fs access —
+// tutorial.js's injectDemoSessions() is the one that actually creates it.
+export function buildMockSessions(personaId = 'swe', locale = getLocale(), projectDir) {
   const persona = findPersona(personaId);
   const sessions = persona.storylines.flatMap((s) => s.sessions);
   return sessions.map((s) => {
@@ -35,6 +42,7 @@ export function buildMockSessions(personaId = 'swe', locale = getLocale()) {
     n.extracted.tags = s.tags;
     n.summarizedTurnCount = n.turns.length;
     n.demo = true; // tutorial.js's endTutorial() sweeps on this flag
+    if (projectDir) n.projectDir = projectDir;
     return n;
   });
 }

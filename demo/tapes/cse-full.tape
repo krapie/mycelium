@@ -94,15 +94,32 @@ Wait+Screen@10s /KNOWLEDGE\.md preview/
 Sleep 2s
 Enter
 
-# Step 10/19 — Reuse
+# Step 10/19 — Reuse: n → real agent picker → directory picker → auto-copy
+# (copyOnly:true during the tutorial — see sessions.js's doNewAgent() — so
+# this never risks foregrounding a real agent subprocess). Replaced the
+# old read-only `c` context preview with the real mechanism: a genuine
+# AGENTS.md gets written to disk. Verified via a headless dry run before
+# writing this, not guessed.
 Wait+Screen@6s /Step \d+\/\d+ — Reuse/
 Sleep 1s
-Type "c"
+Type "n"
 
-# Real inherited-context viewer open.
-Wait+Screen@10s /Context ·/
-Sleep 2s
-Escape
+# Real agent picker (launch.selectAgentNew's own title).
+Wait+Screen@10s /New task with this folder's context — choose agent/
+Sleep 1500ms
+Enter
+
+# Real directory picker (launch.selectDir's own title) — the one real,
+# disposable suggestion (tutorialProjectDir(), tutorial.js).
+Wait+Screen@6s /Choose working directory/
+Sleep 1500ms
+Enter
+
+# copyOnly's toast shows the real copied command, including the seeded
+# prompt (tutorial.newAgentSeed, i18n.js) that makes the next agent report
+# its inherited context immediately — worth holding on screen.
+Wait+Screen@6s /Command copied to clipboard/
+Sleep 3s
 
 # Step 12/19 — Knowledge review
 Wait+Screen@6s /Step \d+\/\d+ — Knowledge Review/

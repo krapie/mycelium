@@ -1,5 +1,7 @@
 import pkg from 'neo-blessed';
 const blessed = pkg.default || pkg;
+import { mkdirSync, rmSync, existsSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { C } from './theme.js';
 import { t, getLocale } from './i18n.js';
 import { saveRaw, deleteRaw, allRaw } from '../scanner.js';
@@ -10,6 +12,7 @@ import { __setTestProvider, __clearTestProvider } from '../llm.js';
 import { createTutorialMockProvider } from './tutorial-mock-llm.js';
 import { findPersona } from './personas.js';
 import { writePendingKnowledgeText } from '../insight.js';
+import { HOME } from '../paths.js';
 
 /**
  * First-run interactive tutorial (and `mycelium demo`'s engine). The 5
@@ -55,11 +58,14 @@ const STEPS = [
   { titleKey: 'tutorial.step4Title', bodyKey: 'tutorial.step4Body', waitFor: 'left' },
   { titleKey: 'tutorial.step5Title', bodyKey: 'tutorial.step5Body', waitFor: 'w', signalFor: 'knowledge', thenWait: 'open', waitingKey: 'tutorial.waitingKnowledge' },
   { titleKey: 'tutorial.step6Title', bodyKey: 'tutorial.step6Body', waitFor: 'enter', thenWait: 'close', waitingKey: 'tutorial.waitingSave' },
-  // Reuse: `c` rather than `i` — both are real, instant reads, but `c` opens
-  // one modal where `i` chains two, risking a false "fully closed" read
-  // mid-transition. Step 8 uses `pollOnEntry`, not a tracked waitFor key,
-  // since textView accepts 'c'/'q'/'escape' as equally valid closes.
-  { titleKey: 'tutorial.step7Title', bodyKey: 'tutorial.step7Body', waitFor: 'c', thenWait: 'open', waitingKey: 'tutorial.waitingContext' },
+  // Reuse: `n` (real agent picker -> directory picker -> copy the launch
+  // command) rather than `c`'s read-only preview — shows the actual
+  // mechanism, not just a description of it. copyOnly:true (doNewAgent(),
+  // sessions.js) means the flow never risks foregrounding a real agent
+  // subprocess. Step 8 uses `pollOnEntry`, not a tracked waitFor key, since
+  // the picker chain (agent -> directory) has no single close key of its
+  // own to wait on — same reasoning the old c/textView step used.
+  { titleKey: 'tutorial.step7Title', bodyKey: 'tutorial.step7Body', waitFor: 'n', signalFor: 'newAgent', thenWait: 'open', waitingKey: 'tutorial.waitingLaunch' },
   { titleKey: 'tutorial.step8Title', bodyKey: 'tutorial.step8Body', pollOnEntry: 'close' },
   // Knowledge review (`k`) — deliberately unrelated to Digest (`d`),
   // positioned here as the natural "faster, across every folder" follow-up.
@@ -88,6 +94,29 @@ const STEPS = [
   { titleKey: 'tutorial.step16Title', bodyKey: 'tutorial.step16Body' },
 ];
 
+/** A real, disposable directory every mock session's `projectDir` points at
+ * — sibling to HOME (`${HOME}-tutorial-repo`), same naming shape as the
+ * pitch video's `${MYCELIUM_HOME}-repos/<folder>` (demo/pitch-launch.js).
+ * Gives the `n` step's directory picker (dirsForFolder(), reuse.js) a real
+ * suggestion to offer instead of falling through to a free-text prompt
+ * pre-filled with wherever the user happened to launch mycelium from — and
+ * gives its own "go check the real AGENTS.md" instruction somewhere real
+ * (but fake) to point at, never the user's actual project. Exported so
+ * tests can assert on the exact path rather than recomputing the string
+ * themselves. */
+export function tutorialProjectDir() {
+  return `${HOME}-tutorial-repo`;
+}
+
+// This is a fixed, predictable path (found via CodeRabbit review on #97) —
+// if it happened to already exist as some unrelated real directory (the
+// user's own, or a leftover from something else entirely), endTutorial()'s
+// rmSync() would otherwise destroy it. The marker records "the tutorial
+// itself created this directory," written only when injectDemoSessions()
+// finds nothing there yet — endTutorial() then only ever removes a
+// directory carrying its own marker, never a pre-existing one.
+const OWNERSHIP_MARKER = '.mycelium-tutorial-owned';
+
 /** Writes the persona's mock sessions to the store — the one visible part
  * of setup, split out so the tutorial flow can defer it to the Scan step's
  * signal instead of showing it before the tour starts. NOT idempotent —
@@ -95,7 +124,15 @@ const STEPS = [
  * after a caller-side seedMockSessions() must check for existing demo
  * sessions first. */
 export function injectDemoSessions(personaId = 'swe') {
-  for (const n of buildMockSessions(personaId)) saveRaw(n);
+  const dir = tutorialProjectDir();
+  // mkdirSync(recursive:true) itself is the ownership check, not a separate
+  // existsSync() before it (found via CodeRabbit review on #97) — Node
+  // returns the created path when it actually made the directory, or
+  // undefined when it already existed, with no gap between "check" and
+  // "act" for another process to have created it in between.
+  const created = mkdirSync(dir, { recursive: true });
+  if (created) writeFileSync(join(dir, OWNERSHIP_MARKER), '');
+  for (const n of buildMockSessions(personaId, undefined, dir)) saveRaw(n);
   reindex();
 }
 
@@ -124,7 +161,15 @@ export function seedMockSessions(personaId = 'swe') {
 }
 
 /** Remove every mock session (and whatever empty folders o/w created along
- * the way) — leaves the real store exactly as it was before the tutorial. */
+ * the way) — leaves the real store exactly as it was before the tutorial.
+ * Also removes tutorialProjectDir() — the `n` step's AGENTS.md write is a
+ * real file on disk, outside ~/.mycelium entirely, so it needs its own
+ * cleanup here rather than anything reindex()/pruneEmptyFolders() already
+ * cover. Only removes it if OWNERSHIP_MARKER is present (this tutorial run
+ * created it fresh, see injectDemoSessions()) — never a directory that
+ * happened to already exist at that fixed, predictable path. A tutorial
+ * that never reached the `n` step never created the directory (or the
+ * marker) at all, so this is just a no-op then. */
 export function endTutorial() {
   for (const n of allRaw()) {
     if (n.demo) deleteRaw(n.id);
@@ -132,6 +177,8 @@ export function endTutorial() {
   pruneEmptyFolders();
   reindex();
   __clearTestProvider();
+  const dir = tutorialProjectDir();
+  if (existsSync(join(dir, OWNERSHIP_MARKER))) rmSync(dir, { recursive: true, force: true });
 }
 
 // Exit code `mycelium demo`'s child process uses to signal "tour finished,
@@ -314,7 +361,7 @@ export function startTutorial(app, onDone, personaId = 'swe', { reloadSessions, 
   // match on the CURRENT step. Every step waiting on one of these is also
   // thenWait:'close', so a false-positive match elsewhere used to resolve
   // that wait instantly (no real modal ever closed) and cascade the
-  // narrator forward. `o`/`w`/`c`/Shift+M/Shift+S are safe: each has exactly
+  // narrator forward. `o`/`w`/`n`/Shift+M/Shift+S are safe: each has exactly
   // one meaning and thenWait 'open', which only resolves on a real modal.
   const AMBIGUOUS_KEYS = new Set(['enter', 'left', 'right']);
 

@@ -33,6 +33,20 @@ test('buildMockSessions() ids are unique', () => {
   assert.deepEqual(ids, [...new Set(ids)]);
 });
 
+test('buildMockSessions(personaId, locale, projectDir) stamps every session with the given directory when provided, and omits it entirely otherwise', () => {
+  const withDir = buildMockSessions('swe', 'en', '/fake/tutorial/repo');
+  assert.ok(withDir.length > 0);
+  for (const s of withDir) assert.equal(s.projectDir, '/fake/tutorial/repo');
+
+  // No fs access here — buildMockSessions() stays pure; the caller
+  // (tutorial.js's injectDemoSessions()) is the one that actually creates
+  // the real directory before passing its path in. emptyNeutral()'s own
+  // default (schema.js) is null, not undefined — left untouched when no
+  // projectDir is given.
+  const withoutDir = buildMockSessions('swe', 'en');
+  for (const s of withoutDir) assert.equal(s.projectDir, null);
+});
+
 test('buildMockSessions() only uses real adapter sources', () => {
   // realSources is derived from the actual adapter registry (not a
   // hardcoded list) so this can't silently go stale again the way it
