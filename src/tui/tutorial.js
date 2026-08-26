@@ -3,7 +3,7 @@ const blessed = pkg.default || pkg;
 import { mkdirSync, rmSync, existsSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { C } from './theme.js';
-import { t, getLocale } from './i18n.js';
+import { getLocale } from './i18n.js';
 import { saveRaw, deleteRaw, allRaw } from '../scanner.js';
 import { reindex } from '../index-db.js';
 import { pruneEmptyFolders } from '../cleanup.js';
@@ -13,6 +13,7 @@ import { createTutorialMockProvider } from './tutorial-mock-llm.js';
 import { findPersona } from './personas.js';
 import { writePendingKnowledgeText } from '../insight.js';
 import { HOME } from '../paths.js';
+import { createContext, render, advanceFrom, onKeypress } from './tutorial-runner.js';
 
 /**
  * First-run interactive tutorial (and `mycelium demo`'s engine). The 5
@@ -224,10 +225,6 @@ export function startTutorial(app, onDone, personaId = 'swe', { reloadSessions, 
   const baseline = app.screen.children.length;
   const isModalOpen = () => app.screen.children.length > baseline || app.isBusy();
 
-  let i = 0;
-  let done = false;
-  let waiting = false; // true while polling for a real modal to open/close
-
   // app.js's screen.key(['q']) is a separate, always-on global binding —
   // suppress it for the tutorial's run so a stray `q` doesn't ALSO pop the
   // app's own confirm-quit dialog; restored once finish() runs. Doesn't
@@ -244,151 +241,39 @@ export function startTutorial(app, onDone, personaId = 'swe', { reloadSessions, 
   const prevDemoMode = process.env.MYCELIUM_DEMO_MODE;
   process.env.MYCELIUM_DEMO_MODE = '1';
 
+  // The step-cursor/waiting/done state and the render/finish/settleAt/
+  // pollUntil/advanceFrom/onKeypress step-walking engine live in
+  // tutorial-runner.js (ctx is the shared mutable state they all read/write) —
+  // this function is setup/wiring only. endTutorial is injected via ctx
+  // rather than imported by that module, to avoid a circular import.
+  const ctx = createContext({ app, box, STEPS, mergeFolder, sessionCount, baseline, isModalOpen, onDone, endTutorial, prevDemoMode });
+  ctx.keypressHandler = (ch, key) => onKeypress(ctx, ch, key);
+
   // Tutorial-only signal from sessions.js's action handlers. `action` is
   // one of 'scan'/'organize'/'knowledge'/'merge'/'split'; each real handler
   // fires it past its own guard checks. Cleared in finish(), same as
   // quitGuard. Scans forward from the current step for the first match,
   // same "human jumped ahead" tolerance as matchesWaitFor's own skip-ahead —
   // safe here since every action name is already unambiguous.
-  let scanInjected = false;
   app.tutorialSignal = (action) => {
-    if (done) return;
+    if (ctx.done) return;
     // Runs BEFORE `waiting` and unconditionally: doScan()'s setImmediate
     // completion can land after another keypress already set `waiting`,
     // and the old combined `if (done || waiting) return;` silently dropped
     // it, leaving the Sessions view empty. scanInjected guards double-injection.
-    if (action === 'scan' && !sessionsPreSeeded && !scanInjected) {
-      scanInjected = true;
+    if (action === 'scan' && !sessionsPreSeeded && !ctx.scanInjected) {
+      ctx.scanInjected = true;
       injectDemoSessions(personaId);
       // reloadSessions is what makes a genuine injection visible immediately
       // rather than on the next unrelated re-render.
       reloadSessions?.();
     }
-    if (waiting) return;
-    let j = i;
+    if (ctx.waiting) return;
+    let j = ctx.i;
     while (j < STEPS.length && STEPS[j].signalFor !== action) j++;
-    if (j < STEPS.length) advanceFrom(j);
+    if (j < STEPS.length) advanceFrom(ctx, j);
   };
 
-  const render = () => {
-    const step = STEPS[i];
-    // "Step N/Total" computed from STEPS' own length/index, not baked into
-    // each titleKey — those hold only the subtitle now, so inserting a step
-    // never means renumbering every title in both locales.
-    box.setLabel(` ${t('tutorial.stepCounter', i + 1, STEPS.length)}${t(step.titleKey)} `);
-    // sessionCount/mergeFolder are passed to every step body; only a few
-    // (step2/4/5/11, see i18n.js) actually read them.
-    const body = waiting ? t(step.waitingKey) : t(step.bodyKey, C.fox, sessionCount, mergeFolder);
-    // The last step's "q" hint differs: it hands off to real data instead
-    // of abandoning the tour, and the generic exit hint read as contradictory.
-    const exitOrFinishHint = i === STEPS.length - 1 ? t('tutorial.finishHint') : t('tutorial.exitHint');
-    box.setContent(`${body}\n{${C.faint}-fg}${exitOrFinishHint}{/}`);
-    // A real bug: this box mounts once, so any real widget opened later
-    // (context viewer, multiSelectList, confirmText) draws on top of it
-    // where they overlap, hiding the current step's guidance. setFront()
-    // is a pure z-order move on every render, not a focus change.
-    box.setFront();
-    app.render();
-  };
-
-  const finish = (completed) => {
-    if (done) return;
-    done = true;
-    app.tutorialSignal = null;
-    app.screen.removeListener('keypress', onKeypress);
-    // Deferred, not immediate: program.js fires 'keypress' and the global
-    // quit binding's 'key q' synchronously back-to-back for the same press,
-    // so clearing the guard here directly would still let that same q
-    // trigger the app's own confirm-quit dialog right behind this.
-    setImmediate(() => {
-      app.quitGuard = null;
-    });
-    if (prevDemoMode === undefined) delete process.env.MYCELIUM_DEMO_MODE;
-    else process.env.MYCELIUM_DEMO_MODE = prevDemoMode;
-    box.destroy();
-    endTutorial();
-    app.render();
-    onDone(!!completed);
-  };
-
-  const settleAt = (idx) => {
-    waiting = false;
-    i = idx;
-    render();
-    // pollOnEntry (merge's title-prompt step): blessed.prompt's Enter submit
-    // doesn't reliably bubble a matching keypress here, so waitFor:'enter'
-    // would never fire. Poll for close directly instead, no key needed.
-    if (STEPS[i].pollOnEntry) pollUntil(STEPS[i].pollOnEntry === 'open');
-  };
-
-  // Polls until the real action's review modal opens/closes, then settles
-  // on the next step. Still needed alongside app.tutorialSignal: the signal
-  // only says the handler started, not that its LLM-backed modal has
-  // actually appeared yet.
-  const pollUntil = (want) => {
-    const tick = () => {
-      if (done) return;
-      if (isModalOpen() === want) return settleAt(i + 1);
-      setTimeout(tick, 250);
-    };
-    tick();
-  };
-
-  // Shared tail for "step j's trigger just fired" — used by both a matched
-  // keypress (onKeypress below) and a matched app.tutorialSignal, so a step
-  // reachable from the `.` action menu settles the exact same way regardless
-  // of which path actually fired it.
-  const advanceFrom = (j) => {
-    i = j;
-    const step = STEPS[i];
-    if (step.thenWait) {
-      waiting = true;
-      render();
-      pollUntil(step.thenWait === 'open');
-    } else {
-      settleAt(i + 1);
-    }
-  };
-
-  // Shift+M/Shift+S arrive as key.name 'm'/'s' + key.shift:true, not
-  // blessed's 'S-m' form, so a plain m/s must not satisfy a Shift step.
-  // Punctuation like '.' has no k.name from readline's parser, only `ch`.
-  const matchesWaitFor = (step, ch, k) =>
-    !!step.waitFor && (k.name === step.waitFor || (!k.name && ch === step.waitFor)) && (!step.shift || k.shift);
-
-  // Keys that mean something different almost everywhere (confirming any
-  // dialog, plain navigation) never count toward skip-ahead — only an exact
-  // match on the CURRENT step. Every step waiting on one of these is also
-  // thenWait:'close', so a false-positive match elsewhere used to resolve
-  // that wait instantly (no real modal ever closed) and cascade the
-  // narrator forward. `o`/`w`/`n`/Shift+M/Shift+S are safe: each has exactly
-  // one meaning and thenWait 'open', which only resolves on a real modal.
-  const AMBIGUOUS_KEYS = new Set(['enter', 'left', 'right']);
-
-  function onKeypress(ch, key) {
-    if (done || !key) return;
-    // neo-blessed fires TWO keypress events per physical Enter (synthetic
-    // 'enter' then real 'return') — ignore the redundant half so an
-    // 'enter' waitFor doesn't double-advance.
-    if (key.name === 'return') return;
-    // q exits from anywhere, immediately, checked before `waiting` so it
-    // works mid-wait too. Only counts as "completed" (cli.js's demo hands
-    // off to the real TUI) if pressed on the actual last step.
-    if (key.name === 'q') return finish(i === STEPS.length - 1);
-    // Real modal open/close waits always resolve on their own; only q above
-    // should interrupt one.
-    if (waiting) return;
-    // Escape is deliberately not handled here — it used to double as
-    // "abort," so closing a real modal with Escape silently ended the tutorial.
-    let j = i;
-    if (!matchesWaitFor(STEPS[j], ch, key)) {
-      if (AMBIGUOUS_KEYS.has(key.name)) return;
-      while (j < STEPS.length && !matchesWaitFor(STEPS[j], ch, key)) j++;
-      if (j >= STEPS.length) return;
-    }
-    advanceFrom(j);
-  }
-
-  app.screen.on('keypress', onKeypress);
-  render();
+  app.screen.on('keypress', ctx.keypressHandler);
+  render(ctx);
 }
