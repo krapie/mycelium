@@ -52,7 +52,7 @@ export function sessionsView(opts = {}) {
   // translation anywhere they're used: undefined = Root (everything), null =
   // the New pseudo-folder (genuinely unfiled only), a path = that folder's
   // subtree.
-  let state = { folder: undefined, query: '', tags: [], selected: new Set(), sortBy: 'recent' };
+  const state = { folder: undefined, query: '', tags: [], selected: new Set(), sortBy: 'recent' };
   const SORT_CYCLE = ['recent', 'title', 'agent'];
   let app;
   let foldersBox, listBox, detailBox;
