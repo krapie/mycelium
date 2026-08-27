@@ -4,7 +4,7 @@
 
 ## Data Location
 
-Everything is stored locally under `~/.mycelium/` by default; set `MYCELIUM_HOME` to override that location. **Files are the source of truth; sqlite is a derived index** (rebuild it any time with `mycelium reindex` if it is ever deleted):
+Everything is stored locally under `~/.mycelium/` by default; set `MYCELIUM_HOME` to override that location. **Files are the source of truth; sqlite is a derived index** (rebuild it any time with `mycelium reindex` if it is ever deleted). `raw/<id>.json` is captured once, in full, at scan time — a copy, not a live reference back to the source agent's own session file — so it stays intact regardless of whatever retention/cleanup policy that agent later applies to its own copy (see [Handoff](./handoff.md)):
 
 ```text
 ~/.mycelium/

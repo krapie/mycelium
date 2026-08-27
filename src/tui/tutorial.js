@@ -68,31 +68,38 @@ const STEPS = [
   // own to wait on — same reasoning the old c/textView step used.
   { titleKey: 'tutorial.step7Title', bodyKey: 'tutorial.step7Body', waitFor: 'n', signalFor: 'newAgent', thenWait: 'open', waitingKey: 'tutorial.waitingLaunch' },
   { titleKey: 'tutorial.step8Title', bodyKey: 'tutorial.step8Body', pollOnEntry: 'close' },
+  // Lands right where the user just watched a real AGENTS.md get written —
+  // names why that mattered (Claude Code prunes old sessions, Codex/Kiro
+  // don't) as its own beat instead of folding it into step 8's body. No
+  // real action to demonstrate here, so waitFor 'enter' piggybacks on
+  // Sessions' own real Enter-to-drill-in binding rather than gating on a
+  // key with no effect underneath, same reasoning as the intro step above.
+  { titleKey: 'tutorial.step9Title', bodyKey: 'tutorial.step9Body', waitFor: 'enter' },
   // Knowledge review (`k`) — deliberately unrelated to Digest (`d`),
   // positioned here as the natural "faster, across every folder" follow-up.
   // Structurally identical to steps 2/3: a real multiSelectList opens either
   // way, so the same thenWait:'open'/'close' pair works with no new mechanism.
-  { titleKey: 'tutorial.step9Title', bodyKey: 'tutorial.step9Body', waitFor: 'k', thenWait: 'open', waitingKey: 'tutorial.waitingKnowledgeReview' },
-  { titleKey: 'tutorial.step10Title', bodyKey: 'tutorial.step10Body', waitFor: 'enter', thenWait: 'close', waitingKey: 'tutorial.waitingApply' },
+  { titleKey: 'tutorial.step10Title', bodyKey: 'tutorial.step10Body', waitFor: 'k', thenWait: 'open', waitingKey: 'tutorial.waitingKnowledgeReview' },
+  { titleKey: 'tutorial.step11Title', bodyKey: 'tutorial.step11Body', waitFor: 'enter', thenWait: 'close', waitingKey: 'tutorial.waitingApply' },
   // Session lineage: merge two related sessions, then split the result back
   // apart by topic — both reversible, same as the real feature.
   // mergeSessions() needs no mocking; Shift+S's suggestSplitBoundaries()
   // does. Shift+M no-ops silently unless ≥2 sessions are already selected —
   // nothing here can verify that happened, same as any other step's text.
-  { titleKey: 'tutorial.step11Title', bodyKey: 'tutorial.step11Body', waitFor: 'm', shift: true, signalFor: 'merge', thenWait: 'open', waitingKey: 'tutorial.waitingMerge' },
-  { titleKey: 'tutorial.step12Title', bodyKey: 'tutorial.step12Body', pollOnEntry: 'close' },
-  { titleKey: 'tutorial.step13Title', bodyKey: 'tutorial.step13Body', waitFor: 's', shift: true, signalFor: 'split', thenWait: 'open', waitingKey: 'tutorial.waitingSplit' },
-  { titleKey: 'tutorial.step14Title', bodyKey: 'tutorial.step14Body', waitFor: 'enter', thenWait: 'close', waitingKey: 'tutorial.waitingApply' },
+  { titleKey: 'tutorial.step12Title', bodyKey: 'tutorial.step12Body', waitFor: 'm', shift: true, signalFor: 'merge', thenWait: 'open', waitingKey: 'tutorial.waitingMerge' },
+  { titleKey: 'tutorial.step13Title', bodyKey: 'tutorial.step13Body', pollOnEntry: 'close' },
+  { titleKey: 'tutorial.step14Title', bodyKey: 'tutorial.step14Body', waitFor: 's', shift: true, signalFor: 'split', thenWait: 'open', waitingKey: 'tutorial.waitingSplit' },
+  { titleKey: 'tutorial.step15Title', bodyKey: 'tutorial.step15Body', waitFor: 'enter', thenWait: 'close', waitingKey: 'tutorial.waitingApply' },
   // This step's whole point is "go try the real thing" (v for the calendar,
   // / for search) — both of those use Escape themselves for normal back-
   // navigation (calendar/detail → sessions), which just works: Escape is
   // never intercepted by the tutorial at all (see onKeypress below), on any
   // step, not just this one.
-  { titleKey: 'tutorial.step15Title', bodyKey: 'tutorial.step15Body', waitFor: 'enter' },
+  { titleKey: 'tutorial.step16Title', bodyKey: 'tutorial.step16Body', waitFor: 'enter' },
   // No waitFor at all — q is handled once, globally, at the top of
   // onKeypress, the same way on every step including this one. This step is
   // just the last thing shown before that q lands.
-  { titleKey: 'tutorial.step16Title', bodyKey: 'tutorial.step16Body' },
+  { titleKey: 'tutorial.step17Title', bodyKey: 'tutorial.step17Body' },
 ];
 
 /** A real, disposable directory every mock session's `projectDir` points at

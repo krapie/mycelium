@@ -28,8 +28,9 @@ Sessions keep branching across multiple round trips, but converge back together 
 ## What happens to the previous session (A)?
 
 It is not abandoned, it is done and preserved:
-- The original `.jsonl` log stays put, and you can always reopen it
-  exactly as it was with `r`.
+- The original session log stays put for now, and you can reopen it
+  exactly as it was with `r` — as long as the source agent hasn't pruned
+  it yet (see below; `h` does not share this dependency).
 - Any code or file changes A made already exist on disk in the repo, so
   they do not disappear when the conversation thread moves on.
 - A's summary and decisions are already saved in Mycelium, and `w` folds
@@ -37,3 +38,12 @@ It is not abandoned, it is done and preserved:
 - A does become a branch that stopped at that point, though. Further work
   has to continue in C, or the next resume, and typing into A again later
   will not know about anything that happened in C.
+
+## Outliving the source agent's own retention
+
+Agent CLIs don't keep session history forever. Claude Code, for example, deletes `.jsonl` transcripts older than `cleanupPeriodDays` (30 days by default, `~/.claude/settings.json`); cleanup runs on every launch, not on a background timer, and there is no recycle bin once a transcript is gone. Other agents apply their own retention policies. This is not a Mycelium bug to work around, it is just what session storage upstream looks like, and it creates a real split between Mycelium's two continuation paths:
+
+- `r` (resume) shells out to the source agent's own `--resume <sessionId>`. It genuinely needs that original file to still exist, so once the source agent prunes it, `r` on that session stops working, permanently.
+- `h` (handoff), and the folder knowledge `n` injects into a fresh `AGENTS.md`, are both built from Mycelium's own data — `raw/<id>.json` plus `KNOWLEDGE.md` — captured once, in full, at scan (`s`) time. Neither ever reads the original transcript again, so both keep working long after the source agent has cleaned its copy up.
+
+The practical takeaway: scanning (`s`) is what fixes a session's context in Mycelium, independent of the source agent's own clock. The sooner a finished session gets scanned, the less it matters what that agent's retention window later does to its own copy — `h` and the knowledge it carries forward are already safe.
