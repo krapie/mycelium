@@ -29,12 +29,19 @@ jobs:
           TAG="${{ github.event.release.tag_name }}"
           VERSION="${TAG#v}" # release tags are "v0.1.5"; the npm tarball path has no leading v
           URL="https://registry.npmjs.org/@kevinprk/mycelium/-/mycelium-${VERSION}.tgz"
-          for i in $(seq 1 20); do
+          # 20 x 15s (5 min) used to be the bound here, but it failed this
+          # exact way on 3 of 3 real releases (v0.2.0, v2.5.1, v0.3.0) --
+          # the registry metadata write (what publish.yml's own `npm
+          # publish` waits on) finishes well before the tarball is actually
+          # fetchable through npm's CDN-fronted storage, and that lag has
+          # run past 5 minutes every time observed so far. 50 x 15s (~12.5
+          # min) gives real headroom without an unbounded wait.
+          for i in $(seq 1 50); do
             if curl -sfI "$URL" > /dev/null; then
               echo "tarball is live: $URL"
               exit 0
             fi
-            echo "not live yet ($i/20), waiting 15s..."
+            echo "not live yet ($i/50), waiting 15s..."
             sleep 15
           done
           echo "::error::npm tarball never became available at $URL — is publish.yml still running or did it fail?"
