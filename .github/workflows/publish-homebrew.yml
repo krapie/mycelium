@@ -14,9 +14,23 @@ name: Publish to Homebrew
 # directly. Requires a HOMEBREW_TAP_TOKEN repo secret — a fine-grained
 # GitHub PAT scoped to just krapie/homebrew-tap with contents +
 # pull-requests write.
+#
+# Also runnable manually (workflow_dispatch) with a tag input -- a
+# `release: published` event only fires once per release, so if this
+# workflow's own code was broken at that moment (as it was for v0.2.0,
+# v2.5.1, v0.3.0, and initially v0.3.2), re-running the original failed
+# Actions run replays the workflow file as it existed at that ref, not
+# the fixed one on main. Manual dispatch runs the current main version
+# against any already-published tag instead.
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to bump the formula to (e.g. v0.3.2)"
+        required: true
+        type: string
 
 jobs:
   update-homebrew-tap:
@@ -26,7 +40,7 @@ jobs:
     steps:
       - name: Wait for the npm tarball to be published
         run: |
-          TAG="${{ github.event.release.tag_name }}"
+          TAG="${{ inputs.tag || github.event.release.tag_name }}"
           VERSION="${TAG#v}" # release tags are "v0.1.5"; the npm tarball path has no leading v
           URL="https://registry.npmjs.org/@kevinprk/mycelium/-/mycelium-${VERSION}.tgz"
           # 20 x 15s (5 min) used to be the bound here, but it failed this
@@ -51,7 +65,7 @@ jobs:
         env:
           HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
-          TAG="${{ github.event.release.tag_name }}"
+          TAG="${{ inputs.tag || github.event.release.tag_name }}"
           VERSION="${TAG#v}"
           # brew bump-formula-pr has no --tap flag (confirmed against its own
           # --help, which only lists a bare [formula] positional arg) — the
