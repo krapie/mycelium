@@ -1,6 +1,6 @@
 {
   "name": "@kevinprk/mycelium",
-  "version": "0.3.0",
+  "version": "0.3.2",
   "description": "Organize your AI sessions, and carry what they know into the next one.",
   "type": "module",
   "bin": {
