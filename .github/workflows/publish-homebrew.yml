@@ -56,8 +56,13 @@ jobs:
           # brew bump-formula-pr has no --tap flag (confirmed against its own
           # --help, which only lists a bare [formula] positional arg) — the
           # tap is selected by fully-qualifying the formula name instead,
-          # same as `brew install krapie/tap/mycelium`; auto-taps
-          # krapie/homebrew-tap on this runner if it isn't already tapped.
+          # same as `brew install krapie/tap/mycelium`. It does NOT
+          # auto-tap, though (confirmed against the real v0.3.2 run:
+          # `No available formula with the name "krapie/tap/mycelium".
+          # This command requires the tap krapie/tap.`) -- a fresh
+          # macos-latest runner has no taps beyond Homebrew's own core/cask,
+          # so this has to be explicit.
+          brew tap krapie/tap
           brew bump-formula-pr \
             --url "https://registry.npmjs.org/@kevinprk/mycelium/-/mycelium-${VERSION}.tgz" \
             --no-browse \
