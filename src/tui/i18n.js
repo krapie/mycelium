@@ -220,7 +220,7 @@ const en = {
     `A real AGENTS.md just got written into that directory, and the copied command even asks the agent to summarize what it inherited. Paste it into a new terminal tab to see for yourself, or check the file (or the project context) directly.`,
   'tutorial.step9Title': '',
   'tutorial.step9Body': (fg) =>
-    `For reference, agents differ in how long they keep sessions. Claude Code prunes old sessions after 30 days by default, while Codex and Kiro just keep accumulating them. Mycelium captures and preserves each session independently at scan time, so even if the original is gone or you switch agents, {${fg}-fg}n{/}/{${fg}-fg}h{/} can still pick up where that session left off. So it's not just about keeping logs around, it turns past work into something you can pick back up. Press {${fg}-fg}Enter{/} to continue.`,
+    `For reference, agents differ in how long they keep sessions. Claude Code prunes old sessions after 30 days by default, while Codex and Kiro just keep accumulating them. Mycelium captures and preserves each session independently at scan time, so even if the original is gone or you switch agents, {${fg}-fg}n{/} still starts a new task carrying that folder's context, and {${fg}-fg}h{/} still hands the current task off to another agent from where it left off. So it's not just about keeping logs around, it turns past work into something you can pick back up. Press {${fg}-fg}Enter{/} to continue.`,
   'tutorial.step10Title': ' — Knowledge Review',
   'tutorial.step10Body': (fg) =>
     `That was one folder, by hand. Every folder's knowledge can also be refreshed in one place. Press {${fg}-fg}k{/} to check for (or compute) today's knowledge updates, unrelated to Digest.`,
@@ -529,7 +529,7 @@ const ko = {
     `그 디렉토리에 실제 AGENTS.md가 방금 작성되었고, 복사된 명령어에는 물려받은 내용을 요약해달라는 프롬프트까지 들어있습니다. 새 터미널 탭에 붙여넣어 직접 확인해보거나, 파일(또는 프로젝트 컨텍스트)을 바로 확인해보세요.`,
   'tutorial.step9Title': '',
   'tutorial.step9Body': (fg) =>
-    `참고로 에이전트마다 세션 보존 방식이 다릅니다. Claude Code는 기본 30일 후 오래된 세션을 정리하고, Codex와 Kiro는 장기간 누적합니다. 이때 Mycelium은 세션을 캡처 시점에 독립적으로 보존하기 때문에, 원본이 사라지거나 에이전트를 바꿔도 {${fg}-fg}n{/}/{${fg}-fg}h{/}로 작업의 맥락을 이어갈 수 있습니다. 따라서 로그를 보존하는 것을 넘어, 과거의 기록을 다시 이어지는 작업으로 만듭니다. {${fg}-fg}Enter{/}로 계속하세요.`,
+    `참고로 에이전트마다 세션 보존 방식이 다릅니다. Claude Code는 기본 30일 후 오래된 세션을 정리하고, Codex와 Kiro는 장기간 누적합니다. 이때 Mycelium은 세션을 캡처 시점에 독립적으로 보존하기 때문에, 원본이 사라지거나 에이전트를 바꿔도 {${fg}-fg}n{/}은 그 폴더의 맥락을 물려받아 새 작업을 시작하고, {${fg}-fg}h{/}는 지금까지의 작업을 다른 에이전트로 그대로 넘겨줍니다. 따라서 로그를 보존하는 것을 넘어, 과거의 기록을 다시 이어지는 작업으로 만듭니다. {${fg}-fg}Enter{/}로 계속하세요.`,
   'tutorial.step10Title': ' — 지식 검토',
   'tutorial.step10Body': (fg) =>
     `방금은 폴더 하나를 손으로 했죠. 모든 폴더의 지식을 한 곳에서 한 번에 갱신할 수도 있습니다. {${fg}-fg}k{/}를 눌러 오늘의 지식 업데이트를 확인(또는 계산)해보세요. Digest와는 무관한 별개 기능입니다.`,
