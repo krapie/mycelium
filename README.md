@@ -8,6 +8,8 @@
 [![node](https://img.shields.io/badge/node-%3E%3D22.16-brightgreen)](https://nodejs.org)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/krapie/mycelium)
 
+*[한국어 가이드](./README.ko.md)*
+
 **Organize your AI sessions, and carry what they know into the next one.**
 
 You create a lot of AI sessions while working, and most of them get lost the moment they end. Mycelium organizes the ones worth remembering and extracts their knowledge, insights, and context, so the next one already knows what mattered.
