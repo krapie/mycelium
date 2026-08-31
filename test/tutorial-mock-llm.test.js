@@ -340,13 +340,12 @@ test('provider resolves after a deliberate delay, not instantly', async () => {
 });
 
 // createMockProvider() is the low-level factory createTutorialMockProvider()
-// itself delegates to (extracted so demo/pitch-launch.js's flagship pitch
-// video can drive its own, differently-shaped storyline bundle through the
-// same dispatch/parsing logic instead of a second hand-rolled mock — see
-// that function's own doc comment). Every test above already exercises this
-// same logic indirectly through createTutorialMockProvider(); this is its
-// own direct coverage against a storyline shape a caller builds itself,
-// not persona.js's.
+// itself delegates to — independent of personas.js's own persona/id lookup,
+// so any caller-built storyline bundle can drive the same dispatch/parsing
+// logic instead of a second hand-rolled mock (see that function's own doc
+// comment). Every test above already exercises this same logic indirectly
+// through createTutorialMockProvider(); this is its own direct coverage
+// against a storyline shape a caller builds itself, not persona.js's.
 test('createMockProvider() classifies against a caller-supplied storyline set, not just personas.js', async () => {
   const storylines = [{ folder: 'widgets/build', keywords: /widget/i, knowledge: '## Widgets\n\nBuild notes.' }];
   const provider = createMockProvider(storylines, storylines[0], 'en');
