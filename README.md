@@ -1,7 +1,5 @@
 # Mycelium
 
-*[한국어 가이드](./README.ko.md)*
-
 [![npm version](https://img.shields.io/npm/v/@kevinprk/mycelium)](https://www.npmjs.com/package/@kevinprk/mycelium)
 [![npm downloads](https://img.shields.io/npm/dt/@kevinprk/mycelium)](https://www.npmjs.com/package/@kevinprk/mycelium)
 [![CI](https://github.com/krapie/mycelium/actions/workflows/ci.yml/badge.svg)](https://github.com/krapie/mycelium/actions/workflows/ci.yml)
@@ -9,6 +7,8 @@
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D22.16-brightgreen)](https://nodejs.org)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/krapie/mycelium)
+
+*[한국어 가이드](./README.ko.md)*
 
 **Organize your AI sessions, and carry what they know into the next one.**
 

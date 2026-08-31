@@ -1,6 +1,4 @@
-# Mycelium (한국어 가이드)
-
-*[English guide](./README.md)*
+# Mycelium
 
 [![npm version](https://img.shields.io/npm/v/@kevinprk/mycelium)](https://www.npmjs.com/package/@kevinprk/mycelium)
 [![npm downloads](https://img.shields.io/npm/dt/@kevinprk/mycelium)](https://www.npmjs.com/package/@kevinprk/mycelium)
@@ -9,6 +7,8 @@
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D22.16-brightgreen)](https://nodejs.org)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/krapie/mycelium)
+
+*[English guide](./README.md)*
 
 **AI 세션을 정리하고, 그 세션들이 알게 된 것을 다음 세션으로 이어갑니다.**
 
