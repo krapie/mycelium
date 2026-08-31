@@ -5,7 +5,7 @@ import { useTempHome } from './helpers.js';
 useTempHome();
 
 const { emptyNeutral } = await import('../src/schema.js');
-const { loadRaw, saveRaw, deleteRaw, allRaw, findSession, purgeMeta, scan, reevaluateArchive } = await import('../src/scanner.js');
+const { loadRaw, saveRaw, deleteRaw, allRaw, findSession, purgeMeta, scan, reevaluateArchive, sourceSessionExists } = await import('../src/scanner.js');
 const { META_MARKER } = await import('../src/llm.js');
 const adaptersIndex = await import('../src/adapters/index.js');
 
@@ -321,4 +321,57 @@ test('reevaluateArchive({days:0}) un-archives everything auto (threshold disable
   reevaluateArchive({ days: 0 });
 
   assert.equal(loadRaw('reeval-disable').folder, null);
+});
+
+// resume-handoff.js's doResume() calls this before shelling out to the real
+// agent's --resume, to offer Handoff instead of the real CLI's own "no
+// session exist" error once the source has pruned its own copy.
+test('sourceSessionExists() reflects the adapter\'s current listSessions(), true/false', () => {
+  const fakeAdapter = {
+    name: 'fake-source-exists',
+    listSessions: () => [{ id: 'still-there', mtimeMs: 1 }],
+    parse: (ref) => emptyNeutral(ref.id, 'fake-source-exists'),
+  };
+  withOnlyAdapters([fakeAdapter], () => {
+    assert.equal(sourceSessionExists('fake-source-exists', 'still-there'), true);
+    assert.equal(sourceSessionExists('fake-source-exists', 'pruned-long-ago'), false);
+  });
+});
+
+test('sourceSessionExists() defaults to true for an unregistered source', () => {
+  assert.equal(sourceSessionExists('no-such-adapter', 'whatever'), true);
+});
+
+test('sourceSessionExists() defaults to true when listSessions() itself throws', () => {
+  const fakeAdapter = {
+    name: 'fake-source-throws',
+    listSessions: () => {
+      throw new Error('disk unavailable');
+    },
+    parse: (ref) => emptyNeutral(ref.id, 'fake-source-throws'),
+  };
+  withOnlyAdapters([fakeAdapter], () => {
+    assert.equal(sourceSessionExists('fake-source-throws', 'anything'), true);
+  });
+});
+
+// Same MYCELIUM_DEMO_MODE guard scan() uses (see its own comment above) —
+// a demo/mock session's id was never really written into any real
+// adapter's store, so without this it would always read as "expired".
+test('sourceSessionExists() skips the real check under MYCELIUM_DEMO_MODE, defaults to true', () => {
+  const fakeAdapter = {
+    name: 'fake-source-demo',
+    listSessions: () => [], // would read as "does not exist" if actually consulted
+    parse: (ref) => emptyNeutral(ref.id, 'fake-source-demo'),
+  };
+  const prev = process.env.MYCELIUM_DEMO_MODE;
+  process.env.MYCELIUM_DEMO_MODE = '1';
+  try {
+    withOnlyAdapters([fakeAdapter], () => {
+      assert.equal(sourceSessionExists('fake-source-demo', 'mock-session-id'), true);
+    });
+  } finally {
+    if (prev === undefined) delete process.env.MYCELIUM_DEMO_MODE;
+    else process.env.MYCELIUM_DEMO_MODE = prev;
+  }
 });

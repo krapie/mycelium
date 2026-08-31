@@ -28,6 +28,7 @@ process.env.MYCELIUM_DEMO_MOCK_DELAY_MS = '15';
 
 const { allRaw, saveRaw } = await import('../../src/scanner.js');
 const { emptyNeutral } = await import('../../src/schema.js');
+const adaptersIndex = await import('../../src/adapters/index.js');
 const { TREE_DIR } = await import('../../src/paths.js');
 const { createApp } = await import('../../src/tui/app.js');
 const { sessionsView } = await import('../../src/tui/views/sessions.js');
@@ -110,6 +111,21 @@ async function mountDemo(personaId = 'swe') {
 
 function cleanup(app) {
   app.screen.destroy();
+}
+
+// Same shape as scanner.test.js's own withOnlyAdapters(), async-aware —
+// this file's tests await real UI interactions (waitFor()) inside the
+// callback, so the plain synchronous version would restore ADAPTERS while
+// that work is still pending. node --test runs a file's own top-level
+// tests sequentially by default, which is what makes swapping a shared
+// module-level array safe here as long as it's properly awaited back out.
+async function withOnlyAdapters(fakeAdapters, fn) {
+  const real = adaptersIndex.ADAPTERS.splice(0, adaptersIndex.ADAPTERS.length, ...fakeAdapters);
+  try {
+    return await fn();
+  } finally {
+    adaptersIndex.ADAPTERS.splice(0, adaptersIndex.ADAPTERS.length, ...real);
+  }
 }
 
 test('demo: full lifecycle walkthrough — organize, learn, reuse, merge, split, exit', async () => {
@@ -543,6 +559,51 @@ test('n (tutorial): copyOnly skips the open-here/copy-command choice and writes 
     await new Promise((r) => setTimeout(r, 350));
   } finally {
     cleanup(app);
+  }
+});
+
+test('r: a session whose source has no real record left opens the expired/handoff choice, not a raw resume attempt', async () => {
+  // Deterministic on purpose, per CodeRabbit review on this PR: relying on
+  // the host's real ~/.claude store (empty on CI, populated on a real dev
+  // machine) made this test's outcome depend on the machine running it,
+  // and a leaked MYCELIUM_DEMO_MODE from elsewhere would silently switch
+  // sourceSessionExists() to its true-always fast path, sending `r` down
+  // the raw-resume branch instead — real subprocess spawn risk, not just a
+  // wrong assertion. Both are pinned explicitly instead: a fake adapter
+  // (named 'claude', so AGENTS['claude'].label still renders normally —
+  // that lookup is a separate, precomputed-at-import-time constant, see
+  // agents.js) with an empty listSessions(), and MYCELIUM_DEMO_MODE
+  // explicitly cleared for exactly this test's duration.
+  const prevDemoMode = process.env.MYCELIUM_DEMO_MODE;
+  delete process.env.MYCELIUM_DEMO_MODE;
+  const fakeClaudeAdapter = { name: 'claude', listSessions: () => [], parse: (ref) => emptyNeutral(ref.id, 'claude') };
+  try {
+    await withOnlyAdapters([fakeClaudeAdapter], async () => {
+      const { app, input, api } = await mountDemo();
+      try {
+        saveRaw({ ...emptyNeutral('e2e-expired-session-not-in-fake-claude-store', 'claude'), folder: 'expired-test-folder' });
+        api.state.folder = 'expired-test-folder';
+        api.reloadAll();
+        api.listBox.select(0);
+        api.listBox.focus();
+
+        const baseline = app.screen.children.length;
+        sendKey(input, 'r');
+        await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 1000 });
+        assert.equal(app.screen.children.length, baseline + 1, 'exactly the expired/handoff choice menu opened, not a resume attempt');
+
+        // Escape (not "try anyway") — actually resuming spawns a real child
+        // process (foreground(), launch.js), which this headless harness has
+        // no real terminal/binary to hand it off to.
+        sendKey(input, 'escape');
+        await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 1000 });
+      } finally {
+        cleanup(app);
+      }
+    });
+  } finally {
+    if (prevDemoMode === undefined) delete process.env.MYCELIUM_DEMO_MODE;
+    else process.env.MYCELIUM_DEMO_MODE = prevDemoMode;
   }
 });
 
