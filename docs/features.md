@@ -753,18 +753,7 @@ Navigation (Enter/→ drill in, Esc/← back), multi-select (`Space`, `*` select
   written, mirroring `n`'s own directory picker (`launch.js`'s
   `resolveDir()`). [tested] (`test/e2e/demo-e2e.test.js`'s "a folder
   spanning 2+ real directories asks which ones to inject into")
-- **`applyKnowledgeApprovals()` restores focus to `listBox` after the
-  review picker closes.** Found while re-rendering `demo/tapes/*-full.tape`
-  for the retention step (#103) — the real 20-step tutorial presses `k`
-  immediately before Merge, a sequence no existing test covered (the e2e
-  "full lifecycle" walkthrough uses `c`/Escape there instead), which
-  silently broke `Space`/`Shift+M` (both `listBox.key()` bindings) right
-  after approving a knowledge review: focus was left nowhere in particular
-  once `multiSelectList` destroyed itself. Confirmed via `git show` on the
-  Phase 2 extraction (#101) that this was already missing in the original,
-  pre-extraction `sessions.js` code — a genuinely pre-existing gap, not a
-  regression from that split. [tested] (`test/e2e/demo-e2e.test.js`'s "k:
-  listBox regains focus after apply")
+- **`applyKnowledgeApprovals()` restores focus to `listBox` after the review picker closes.** Found while re-rendering `demo/tapes/*-full.tape` for the retention step (#103) — the real 20-step tutorial presses `k` immediately before Merge, a sequence no existing test covered (the e2e "full lifecycle" walkthrough uses `c`/Escape there instead), which silently broke `Space`/`Shift+M` (both `listBox.key()` bindings) right after approving a knowledge review: focus was left nowhere in particular once `multiSelectList` destroyed itself. Confirmed via `git show` on the Phase 2 extraction (#101) that this was already missing in the original, pre-extraction `sessions.js` code — a genuinely pre-existing gap, not a regression from that split. [tested] (`test/e2e/demo-e2e.test.js`'s "k: listBox regains focus after apply")
 - **`multiSelectList`'s optional `previewText`, and `p` inside the
   knowledge review, the actual `confirmText()` checkpoint the review
   checklist was missing.** The checklist's own item label truncates to
