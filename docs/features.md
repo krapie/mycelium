@@ -362,6 +362,21 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
 - **Resolve the right binary/args to resume a session.**
   `binFor(source)`/`resumeArgsFor(source, id)`. Falls back to
   `claude`/`['--resume', id]` for an unrecognized source. [untested]
+- **Check whether the source agent still has this session before resuming
+  it.** `sourceSessionExists(source, id)` (`src/scanner.js`, despite living
+  next to the resume helpers conceptually — reuses each adapter's own
+  `listSessions()` rather than a new per-adapter method). `r` / detail-Enter
+  → "Open here" (`resume-handoff.js`'s `doResume()`) call this first: if the
+  source agent has pruned its own copy (Claude Code's default retention
+  window, etc. — see `docs/handoff.md`), resuming would otherwise shell out
+  and fail with the real CLI's own error. Offers a choice instead —
+  continue via Handoff (which never depended on that file, see `h` below)
+  or try resuming anyway (the check is a listing, not a guarantee).
+  Defaults to `true` (assume it exists) for an unregistered source or a
+  `listSessions()` failure, and skips the real check entirely under
+  `MYCELIUM_DEMO_MODE` (same guard `scan()` uses — a mock session's id was
+  never really captured by any real adapter, so unguarded it would always
+  read as "expired"). [tested]
 - **Resolve the correct working directory to resume in.**
   `workDirFor(session)`. Prefers `projectDir` over `cwd`; `null` if
   neither path still exists on disk. [untested]
@@ -664,7 +679,7 @@ Live preview on navigate; `a` new subfolder; `e` rename (blocked on Root/New); `
 
 ## TUI: Sessions panel (`src/tui/views/sessions.js`, `sessions-actions.js`)
 
-Navigation (Enter/→ drill in, Esc/← back), multi-select (`Space`, `*` select-scoped-all), `Shift+O` cycle sort, `Shift+T` pick sort directly (see below), `Shift+M` merge (2+ selected, git-like), `Shift+S` LLM split-review (multi-select, all ranges pre-checked, same default as `o`'s multi-select), `/` search, `v` toggle Calendar tab (co-hosted screen, `activeTab`-guarded key scoping, the largest architectural coordination point in the file), `s` scan, `o` smart-organize (largest/most stateful handler: cached-vs-fresh branch, two sequential LLM phases, toast-dismiss race, multi-select review, always-clear-queue-on-close), `?` help, `g` re-show onboarding, `m`/`t` move/tag, `x` delete (sweeps backlinks across all targets), `n` launch new agent (open-here-or-copy choice, see below), `r` resume (falls back to handoff for merge/split products), `h` handoff (post-launch folds a merge/split product into the new real session), detail-panel `Enter` resume-or-copy choice, `a` auto-tag (sequential batch with per-item progress and partial-failure tolerance), `e` rename title, `y` copy to clipboard, `d` digest reader (nested mini-screen, plain narrative summary, no knowledge coupling, see `k` below), `k` knowledge review (see below), `c` view context, `i` inject AGENTS.md (preview-then-confirm, sibling to `w`). [untested]
+Navigation (Enter/→ drill in, Esc/← back), multi-select (`Space`, `*` select-scoped-all), `Shift+O` cycle sort, `Shift+T` pick sort directly (see below), `Shift+M` merge (2+ selected, git-like), `Shift+S` LLM split-review (multi-select, all ranges pre-checked, same default as `o`'s multi-select), `/` search, `v` toggle Calendar tab (co-hosted screen, `activeTab`-guarded key scoping, the largest architectural coordination point in the file), `s` scan, `o` smart-organize (largest/most stateful handler: cached-vs-fresh branch, two sequential LLM phases, toast-dismiss race, multi-select review, always-clear-queue-on-close), `?` help, `g` re-show onboarding, `m`/`t` move/tag, `x` delete (sweeps backlinks across all targets), `n` launch new agent (open-here-or-copy choice, see below), `r` resume (falls back to a Handoff-or-try-anyway choice for a merge/split product, or a session whose source agent no longer has it — see `sourceSessionExists()` above), `h` handoff (post-launch folds a merge/split product into the new real session), detail-panel `Enter` resume-or-copy choice, `a` auto-tag (sequential batch with per-item progress and partial-failure tolerance), `e` rename title, `y` copy to clipboard, `d` digest reader (nested mini-screen, plain narrative summary, no knowledge coupling, see `k` below), `k` knowledge review (see below), `c` view context, `i` inject AGENTS.md (preview-then-confirm, sibling to `w`). [untested]
 
 **Action handlers split into `sessions-actions.js` (Phase 2, issue #88).** `doScan`/`doOrganize`/`doRefreshKnowledge`(`k`)/`doMerge`/`doSplit`/`doKnowledge`(`w`)/`doNewAgent` — each a substantial, mostly self-contained LLM- or mutation-driving flow — moved out of `mount()`'s closure into that sibling file as functions taking an explicit `ctx` (built once in `mount()`: `{app, state, foldersBox, listBox, detailBox, currentRow, reloadFolders, reloadList, asyncReviewFlowRunning}`), the same `ctx`-object pattern `tutorial-runner.js` established for `startTutorial()`. `sessions.js` keeps a thin same-named wrapper per handler (`const doScan = () => actions.doScan(ctx);`) at the exact spot the original inline definition lived, so every key binding (`screenKey`/`listBox.key`/`foldersBox.key`) and `openActionMenu()`'s item list reference the same names unchanged. `ctx.asyncReviewFlowRunning` is the one field these functions mutate (was a bare `let` closed over by all five async handlers; centralizing it into `ctx` is what makes moving them out of `mount()`'s closure possible at all). `doHandoff` (also named in the issue's plan) was already extracted earlier, into `resume-handoff.js`, shared with the Calendar tab. Pure mechanical extraction, verified by the full e2e suite (`test/e2e/demo-e2e.test.js`, `test/e2e/sessions-sort-e2e.test.js`) with no test changes needed.
 

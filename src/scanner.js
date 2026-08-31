@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { writeFileSync, readFileSync, existsSync, readdirSync, rmSync } from 'node:fs';
 import { ensureDirs, RAW_DIR } from './paths.js';
-import { ADAPTERS } from './adapters/index.js';
+import { ADAPTERS, getAdapter } from './adapters/index.js';
 import { META_MARKER } from './llm.js';
 import { loadConfig } from './config.js';
 
@@ -268,4 +268,34 @@ export function findSession(idOrPrefix) {
     };
   }
   return { ok: true, session: matches[0] };
+}
+
+/**
+ * Does the source agent's own store still have this session? Used before
+ * resuming (r / detail-Enter → "Open here") — the agent shells out to its
+ * own `--resume <id>`, which only works if its own file/row still exists,
+ * unlike handoff (h), which is built entirely from Mycelium's own captured
+ * copy (see docs/handoff.md). Reuses each adapter's own listSessions() (the
+ * same {id, path, mtimeMs}[] shape scan() already trusts) rather than a new
+ * per-adapter method — a directory/db listing, not a full parse, so this is
+ * cheap enough for one check per resume attempt. Defaults to true (assume
+ * it exists) whenever we can't be sure — an unregistered source or a
+ * listSessions() failure should never manufacture a false "expired" claim;
+ * worst case is today's existing behavior, the real CLI's own error.
+ *
+ * Same MYCELIUM_DEMO_MODE guard as scan() above, for the same reason: a
+ * mock/demo session's source is a real adapter name but a made-up id, which
+ * would always read as "expired" against the real store — skip the real
+ * check entirely rather than surface that as a false claim, and preserve
+ * whatever doResume() already did before this check existed.
+ */
+export function sourceSessionExists(source, id) {
+  if (process.env.MYCELIUM_DEMO_MODE === '1') return true;
+  const adapter = getAdapter(source);
+  if (!adapter) return true;
+  try {
+    return adapter.listSessions().some((r) => r.id === id);
+  } catch {
+    return true;
+  }
 }

@@ -1,7 +1,8 @@
 import { launchAgent, resumeSession } from './launch.js';
-import { resumeCommandLine } from '../agents.js';
+import { resumeCommandLine, AGENTS } from '../agents.js';
 import { buildHandoff } from '../handoff.js';
 import { foldProductIntoSession } from '../organize.js';
+import { sourceSessionExists } from '../scanner.js';
 import * as data from './data.js';
 import { menu } from './widgets/pickers.js';
 import { copyToClipboard } from './clipboard.js';
@@ -76,11 +77,29 @@ export function createResumeHandoff(app, { getCurrentRow, afterResume, afterHand
   // real session that produces (see doHandoff above), so this only ever
   // happens once per product: after that it's gone, replaced by an ordinary
   // session that resumes normally.
+  //
+  // A session whose source agent has pruned its own copy (Claude Code's
+  // default retention window, etc. — see docs/handoff.md) has no such
+  // fallback today: --resume would just shell out and fail with the real
+  // CLI's own error. sourceSessionExists() (scanner.js) checks first and
+  // offers Handoff instead, which never depended on that file surviving.
+  // "Try anyway" is kept as an escape hatch since the check is a directory
+  // listing, not a guarantee — a false positive shouldn't have zero way out.
   const doResume = () => {
     const r = getCurrentRow();
     if (!r) return;
     const n = data.detail(r.id);
     if (n?.mergedFrom?.length || n?.splitFrom) return doHandoff({ fallback: true });
+    if (!sourceSessionExists(r.source, r.id)) {
+      const label = AGENTS[r.source]?.label || r.source;
+      return menu(app, t('resume.expiredTitle', label), [
+        { label: t('resume.expiredHandoff'), value: 'handoff' },
+        { label: t('resume.expiredTryAnyway'), value: 'anyway' },
+      ], (choice) => {
+        if (choice === 'handoff') return doHandoff({ fallback: true });
+        if (choice === 'anyway') doActualResume({ id: r.id, source: r.source, cwd: n?.cwd, projectDir: n?.projectDir });
+      });
+    }
     doActualResume({ id: r.id, source: r.source, cwd: n?.cwd, projectDir: n?.projectDir });
   };
 

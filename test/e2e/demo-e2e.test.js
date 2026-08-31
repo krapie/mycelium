@@ -546,6 +546,40 @@ test('n (tutorial): copyOnly skips the open-here/copy-command choice and writes 
   }
 });
 
+test('r: a session whose source has no real record left opens the expired/handoff choice, not a raw resume attempt', async () => {
+  // Deliberately real source ('claude'), not a stubbed adapter — this id
+  // was obviously never actually captured by the real Claude Code CLI on
+  // whatever machine runs this test, so sourceSessionExists() (scanner.js)
+  // reads real, false either way: on CI (no ~/.claude at all) or a real
+  // dev machine with genuine history (this id just isn't in it). Avoids
+  // swapping ADAPTERS (scanner.test.js's withOnlyAdapters() pattern) for a
+  // shared module-level array a test in this same file could be running
+  // concurrently against; a cheap real directory listing is an acceptable
+  // cost for one test (no file parsing, same order of cost `scan()` already
+  // pays for one adapter's slice).
+  const { app, input, api } = await mountDemo();
+  try {
+    saveRaw({ ...emptyNeutral('e2e-expired-session-not-in-real-claude-store', 'claude'), folder: 'expired-test-folder' });
+    api.state.folder = 'expired-test-folder';
+    api.reloadAll();
+    api.listBox.select(0);
+    api.listBox.focus();
+
+    const baseline = app.screen.children.length;
+    sendKey(input, 'r');
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 1000 });
+    assert.equal(app.screen.children.length, baseline + 1, 'exactly the expired/handoff choice menu opened, not a resume attempt');
+
+    // Escape (not "try anyway") — actually resuming spawns a real child
+    // process (foreground(), launch.js), which this headless harness has
+    // no real terminal/binary to hand it off to.
+    sendKey(input, 'escape');
+    await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 1000 });
+  } finally {
+    cleanup(app);
+  }
+});
+
 test('demo: q exits the tutorial immediately from any step, no confirm dialog', async () => {
   const { app, input } = await mountDemo();
   try {

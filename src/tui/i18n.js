@@ -324,6 +324,9 @@ const en = {
   'resume.copyCommand': 'Copy command (new tab)',
   'resume.copied': (line) => `Command copied to clipboard:\n${line}`,
   'resume.copyFailed': (line) => `Copy failed (no clipboard tool found) — command:\n${line}`,
+  'resume.expiredTitle': (label) => `${label} session no longer available — continue via Handoff?`,
+  'resume.expiredHandoff': 'Continue via Handoff',
+  'resume.expiredTryAnyway': 'Try resuming anyway',
 
   'merge.needsTwo': 'Select 2 or more sessions first (Space)',
   'merge.titlePrompt': 'Title for the merged session (optional)',
@@ -617,6 +620,9 @@ const ko = {
   'resume.copyCommand': '명령어 복사 (새 탭용)',
   'resume.copied': (line) => `명령어가 클립보드에 복사됨:\n${line}`,
   'resume.copyFailed': (line) => `복사 실패 (클립보드 도구 없음) — 명령어:\n${line}`,
+  'resume.expiredTitle': (label) => `${label} 세션을 더 이상 사용할 수 없음 — 핸드오프로 이어가시겠어요?`,
+  'resume.expiredHandoff': '핸드오프로 이어가기',
+  'resume.expiredTryAnyway': '그래도 이어열기 시도',
 
   'merge.needsTwo': '먼저 세션을 2개 이상 선택하세요 (Space)',
   'merge.titlePrompt': '병합된 세션의 제목 (선택 사항)',
