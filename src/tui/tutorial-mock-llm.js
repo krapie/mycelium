@@ -99,8 +99,10 @@ function delayed(value) {
 }
 
 // Low-level factory, independent of personas.js's persona/id lookup — takes
-// already-resolved (plain-value) storylines, pulled out so demo/
-// pitch-launch.js can reuse this dispatch logic against its own bundle.
+// already-resolved (plain-value) storylines, so any caller-built storyline
+// bundle (not just personas.js's own) can drive the same dispatch/parsing
+// logic instead of a second hand-rolled mock — see test/tutorial-mock-llm
+// .test.js's own direct coverage of this.
 export function createMockProvider(storylines, mergeStoryline, locale) {
   return function mockProvider(prompt) {
     if (prompt.includes('"placements"')) return delayed(mockPlacements(storylines, prompt, locale));

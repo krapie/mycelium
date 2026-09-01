@@ -5,14 +5,15 @@
 # Markers are anchored on each step's own stable subtitle (or, for the
 # handful of titleless "confirm/apply" steps, the real modal content that
 # opened right before them) rather than absolute step numbers — the
-# tutorial has grown once already (16 → 19 steps, PRs #73/#76) and will
-# probably grow again; this way only a genuinely new/reordered step needs
-# a new marker, not every tape's numbering. The 3 titleless steps with no
-# associated modal at all (intro, the panel-nav step, and the freeform-
-# explore step near the end) are the only numbered exceptions — there's no
-# stable text to anchor them on. Verified against real tutorial.js
-# behavior via a headless createTestApp()/sendKey() dry run before writing
-# this, not guessed — see demo/README.md.
+# tutorial has grown twice already (16 → 19 steps, PRs #73/#76; 19 → 20,
+# PR #103's retention-takeaway step) and will probably grow again; this way
+# only a genuinely new/reordered step needs a new marker, not every tape's
+# numbering. The 4 titleless steps with no associated modal at all (intro,
+# the panel-nav step, the retention takeaway right after Reuse, and the
+# freeform-explore step near the end) are the only numbered exceptions —
+# there's no stable text to anchor them on. Verified against real
+# tutorial.js behavior via a headless createTestApp()/sendKey() dry run
+# before writing this, not guessed — see demo/README.md.
 #
 # Safety: launches `node src/cli.js tui --tutorial` DIRECTLY, not via
 # `mycelium demo` — that wrapper re-execs into the REAL ~/.mycelium on a
@@ -47,13 +48,13 @@ Enter
 Wait+Screen@6s /Whose work should the tour follow/
 Enter
 
-# Step 1/19 — intro + panel-nav merged: Enter both advances the narrator
+# Step 1/20 — intro + panel-nav merged: Enter both advances the narrator
 # and performs the real "step into Sessions" action (see tutorial.js).
-Wait+Screen@6s /Step 1\/19/
+Wait+Screen@6s /Step 1\/20/
 Sleep 2s
 Enter
 
-# Step 2/19 — action palette intro: press `.`, confirm the real menu
+# Step 2/20 — action palette intro: press `.`, confirm the real menu
 # opened (its own content, not the narrator's own poll-lagged label), then
 # close it.
 Wait+Screen@6s /Step \d+\/\d+ — Menu/
@@ -63,14 +64,14 @@ Wait+Screen@6s /What do you want to do\?/
 Sleep 2s
 Escape
 
-# Step 4/19 — Capture: the Sessions view is genuinely empty until this
+# Step 4/20 — Capture: the Sessions view is genuinely empty until this
 # exact keypress (mock-session injection is deferred to here, see
 # tutorial.js) — arriving here also confirms the palette closed.
 Wait+Screen@6s /Step \d+\/\d+ — Capture/
 Sleep 1s
 Type "s"
 
-# Step 5/19 — Organize (scan's own completion is what this marker's
+# Step 5/20 — Organize (scan's own completion is what this marker's
 # appearance confirms — no separate "did scan finish" wait needed).
 Wait+Screen@6s /Step \d+\/\d+ — Organize/
 Sleep 1s
@@ -81,10 +82,10 @@ Wait+Screen@10s /Suggested placements/
 Sleep 2s
 Enter
 
-# Step 7/19 — back to Folders, then walk down into the now-organized folder
+# Step 7/20 — back to Folders, then walk down into the now-organized folder
 # (Root → New → retail-website → express-reorder, alphabetical — 4 downs).
 # No stable subtitle/modal to anchor this arrival on — numbered exception.
-Wait+Screen@6s /Step 7\/19/
+Wait+Screen@6s /Step 7\/20/
 Sleep 1s
 Left
 Sleep 500ms
@@ -98,7 +99,7 @@ Down
 Sleep 500ms
 Enter
 
-# Step 8/19 — Learn
+# Step 8/20 — Learn
 Wait+Screen@6s /Step \d+\/\d+ — Learn/
 Sleep 1s
 Type "w"
@@ -108,7 +109,7 @@ Wait+Screen@10s /KNOWLEDGE\.md preview/
 Sleep 2s
 Enter
 
-# Step 10/19 — Reuse: n → real agent picker → directory picker → auto-copy
+# Step 10/20 — Reuse: n → real agent picker → directory picker → auto-copy
 # (copyOnly:true during the tutorial — see sessions.js's doNewAgent() — so
 # this never risks foregrounding a real agent subprocess). Replaced the
 # old read-only `c` context preview with the real mechanism: a genuine
@@ -135,7 +136,18 @@ Enter
 Wait+Screen@6s /Command copied to clipboard/
 Sleep 3s
 
-# Step 12/19 — closing on a clean, settled list (not mid-modal) so the GIF
+# Step 12/20 — the retention takeaway (PR #103): why the snapshot n just
+# wrote actually matters (Claude Code prunes old sessions, Codex/Kiro
+# don't, n/h keep working regardless). Titleless, no modal of its own —
+# numbered exception, same as the panel-nav step above. Sized longer than
+# this tape's other titleless holds (1-2s elsewhere) since this is the
+# longest single-paragraph body in the whole tutorial — confirm against a
+# real rendered frame, not just this guess, before trusting it.
+Wait+Screen@6s /Step 12\/20/
+Sleep 4s
+Enter
+
+# Step 13/20 — closing on a clean, settled list (not mid-modal) so the GIF
 # loops smoothly. Highlight ends here — no merge/split/recap. Knowledge
 # Review's own subtitle is just a clean landing point, never interacted
 # with in this shortened cut.

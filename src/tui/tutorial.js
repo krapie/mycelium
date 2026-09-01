@@ -103,8 +103,7 @@ const STEPS = [
 ];
 
 /** A real, disposable directory every mock session's `projectDir` points at
- * — sibling to HOME (`${HOME}-tutorial-repo`), same naming shape as the
- * pitch video's `${MYCELIUM_HOME}-repos/<folder>` (demo/pitch-launch.js).
+ * — sibling to HOME (`${HOME}-tutorial-repo`).
  * Gives the `n` step's directory picker (dirsForFolder(), reuse.js) a real
  * suggestion to offer instead of falling through to a free-text prompt
  * pre-filled with wherever the user happened to launch mycelium from — and

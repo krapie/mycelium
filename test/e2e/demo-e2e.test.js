@@ -992,6 +992,66 @@ test('k (queued path): reuses an already-staged knowledge proposal instantly, wr
   }
 });
 
+// Regression test: found while re-rendering demo/tapes/*-full.tape for the
+// retention step (PR #103) — the real 20-step tutorial exercises k
+// (Knowledge Review) immediately before Merge, a sequence the "full
+// lifecycle" e2e test above never covers (it uses c/Escape there instead).
+// applyKnowledgeApprovals() (sessions-actions.js) never called listBox.focus()
+// after the review picker closed — confirmed via `git show` on the Phase 2
+// extraction (PR #101) that this was already missing in the original
+// pre-extraction sessions.js code, not a regression from that split. Without
+// it, Space/Shift+M (both listBox.key() bindings) silently do nothing right
+// after k's apply, since focus was left nowhere in particular once the
+// picker destroyed itself.
+test('k: listBox regains focus after apply, so Space/Shift+M work immediately afterward (regression)', async () => {
+  const { app, input, api } = await mountDemo();
+  try {
+    const realDir = mkdtempSync(join(tmpdir(), 'mycelium-review-focus-'));
+    saveRaw({ ...emptyNeutral('review-focus-sess-1', 'claude'), folder: 'review-focus-folder', projectDir: realDir });
+    saveRaw({ ...emptyNeutral('review-focus-sess-2', 'claude'), folder: 'review-focus-folder', projectDir: realDir });
+    writePendingKnowledgeText('review-focus-folder', '# review-focus-folder — Project Knowledge\n\nSome proposed knowledge text.\n');
+
+    // k (Knowledge Review) is folder-agnostic — it doesn't navigate the
+    // list, so whatever state.folder already was stays showing underneath
+    // it. Scope explicitly to the 2 sessions this test actually cares
+    // about, or Space/Down/Space below would select (and merge) whichever
+    // OTHER sessions mountDemo()'s persona seed happened to leave on
+    // screen instead — a real trap found empirically while writing this.
+    api.state.folder = 'review-focus-folder';
+    api.reloadAll();
+
+    const baseline = app.screen.children.length;
+    sendKey(input, 'k');
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 1000 });
+    sendKey(input, 'enter'); // defaultAll:true — applies the one pending folder shown
+    await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 1000 });
+
+    assert.equal(app.screen.focused, api.listBox, 'listBox regained focus once the review picker closed');
+
+    // The actual real-world symptom, not just the focus state that causes
+    // it: Space/Down/Space to select both sessions, then Shift+M — same
+    // sequence the *-full.tape's Merge step sends. Before the fix, this
+    // silently did nothing (listBox never saw the keys) and the merge
+    // title prompt never opened.
+    api.listBox.select(0);
+    sendKey(input, 'space');
+    sendKey(input, 'down');
+    sendKey(input, 'space');
+    sendKey(input, 'M');
+    await waitFor(() => app.screen.children.length > baseline, { timeoutMs: 1000 });
+    assert.ok(app.screen.children.length > baseline, 'Shift+M opened the merge title prompt — Space actually registered two selections');
+    // Same small settle beat the "full lifecycle" test above uses between
+    // a just-opened modal and its first keypress (textPrompt needs a tick
+    // to actually take focus) — without it, this Enter is a no-op: no
+    // error, no merge, nothing (found empirically while writing this).
+    await new Promise((r) => setTimeout(r, 30));
+    sendKey(input, 'enter'); // accept default title
+    await waitFor(() => allRaw().some((s) => s.folder === 'review-focus-folder' && s.mergedFrom?.length === 2), { timeoutMs: 2000 });
+  } finally {
+    cleanup(app);
+  }
+});
+
 test('k: p opens a full preview of the proposed knowledge before approving, not just the one-line label snippet', async () => {
   // Regression test: the checklist label truncates to ~60 chars, nowhere
   // near enough to actually review content bound for a real project's

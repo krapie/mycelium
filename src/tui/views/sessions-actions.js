@@ -263,7 +263,7 @@ async function runKnowledgeReview(ctx) {
 // "the project" from "somewhere incidental". 0-1 directory injects
 // straight through; 2+ shows a pre-checked checklist to catch a stray one.
 function applyKnowledgeApprovals(ctx, toPromote) {
-  const { app } = ctx;
+  const { app, listBox } = ctx;
   let applied = 0;
   const ambiguous = [];
   for (const p of toPromote) {
@@ -284,7 +284,8 @@ function applyKnowledgeApprovals(ctx, toPromote) {
     }
   }
   if (!ambiguous.length) {
-    return app.notify(applied ? t('knowledge.reviewApplied', applied) : t('knowledge.reviewSkipped'), 4);
+    app.notify(applied ? t('knowledge.reviewApplied', applied) : t('knowledge.reviewSkipped'), 4);
+    return listBox.focus();
   }
   const items = ambiguous.map((c) => ({
     label: `${c.folder}  {${C.faint}-fg}→ ${c.dir}{/}`,
@@ -299,6 +300,7 @@ function applyKnowledgeApprovals(ctx, toPromote) {
       }
     }
     app.notify(applied ? t('knowledge.reviewApplied', applied) : t('knowledge.reviewSkipped'), 4);
+    listBox.focus();
   }, { defaultAll: true });
 }
 
