@@ -336,3 +336,143 @@ test('proposeKnowledgeRefreshes() respects an explicit limit, bounding how many 
 
   assert.equal(res.proposed, 2);
 });
+
+// Issue #70 (prompt quality) below — new instructions actually reach the
+// prompt (both locales), the unbounded-material fix stays bounded, and
+// the tutorial-mock-llm.js coupling (the `"${folder}" workspace` phrase
+// mockKnowledge() parses) survives. Not testing model behavior — see
+// scripts/eval-prompts.js for that.
+
+test('buildKnowledgeText() prompt carries the heading structure, no-top-level-heading, and length-cap rules, both locales', async () => {
+  const { loadConfig, saveConfig } = await import('../src/config.js');
+  try {
+    seed('know-structure-en', { folder: 'kf-structure', extracted: { title: null, tags: [], summary: 'a summary', decisions: [], todos: [] } });
+    let seenPrompt;
+    __setTestProvider(async (prompt) => {
+      seenPrompt = prompt;
+      return 'compiled knowledge';
+    });
+    await buildKnowledgeText('kf-structure');
+    assert.match(seenPrompt, /## Conventions/, 'EN prompt names the heading structure');
+    assert.match(seenPrompt, /Do not emit a top-level "#" heading/, 'EN prompt bans a duplicate top-level heading');
+    assert.match(seenPrompt, /Under 400 words/, 'EN prompt states the output length cap');
+
+    saveConfig({ ...loadConfig(), locale: 'ko' });
+    seed('know-structure-ko', { folder: 'kf-structure-ko', extracted: { title: null, tags: [], summary: 'a summary', decisions: [], todos: [] } });
+    __setTestProvider(async (prompt) => {
+      seenPrompt = prompt;
+      return '지식';
+    });
+    await buildKnowledgeText('kf-structure-ko');
+    assert.match(seenPrompt, /## 컨벤션/, 'ko prompt names the heading structure');
+    assert.match(seenPrompt, /최상위 "#" 제목은 쓰지 마라/, 'ko prompt bans a duplicate top-level heading');
+    assert.match(seenPrompt, /400단어 이내/, 'ko prompt states the output length cap');
+  } finally {
+    saveConfig({ ...loadConfig(), locale: 'en' });
+  }
+});
+
+// Guards the tutorial-mock-llm.js coupling directly — mockKnowledge()
+// matches /"([^"]+)" workspace/ (en) / /"([^"]+)" 작업 공간/ (ko) to find
+// which folder a knowledge prompt is for. If a future wording change
+// drops or rephrases that exact phrase, mycelium demo's `w` step would
+// silently fall back to generic/no canned knowledge instead of the
+// persona's real content, with nothing else catching it.
+test('buildKnowledgeText() preserves the "<folder>" workspace phrase tutorial-mock-llm.js parses, both locales', async () => {
+  const { loadConfig, saveConfig } = await import('../src/config.js');
+  try {
+    seed('know-phrase-en', { folder: 'kf-phrase', extracted: { title: null, tags: [], summary: 'a summary', decisions: [], todos: [] } });
+    let seenPrompt;
+    __setTestProvider(async (prompt) => {
+      seenPrompt = prompt;
+      return 'compiled knowledge';
+    });
+    await buildKnowledgeText('kf-phrase');
+    assert.match(seenPrompt, /"([^"]+)" workspace/, 'EN prompt keeps the exact phrase the mock provider parses');
+
+    saveConfig({ ...loadConfig(), locale: 'ko' });
+    seed('know-phrase-ko', { folder: 'kf-phrase-ko', extracted: { title: null, tags: [], summary: 'a summary', decisions: [], todos: [] } });
+    __setTestProvider(async (prompt) => {
+      seenPrompt = prompt;
+      return '지식';
+    });
+    await buildKnowledgeText('kf-phrase-ko');
+    assert.match(seenPrompt, /"([^"]+)" 작업 공간/, 'ko prompt keeps the exact phrase the mock provider parses');
+  } finally {
+    saveConfig({ ...loadConfig(), locale: 'en' });
+  }
+});
+
+// Prompt-length-budget test for the unbounded-material fix — buildKnowledgeText()'s
+// material used to concatenate every non-superseded session's summary
+// with no cap at all, and this runs once PER ACTIVE FOLDER EVERY DAY.
+test('buildKnowledgeText() caps material instead of concatenating every session unbounded', async () => {
+  const longSummary = 'x'.repeat(500);
+  for (let i = 0; i < 40; i++) {
+    seed(`know-budget-${i}`, {
+      folder: 'kf-budget',
+      startedAt: `2026-01-${String((i % 28) + 1).padStart(2, '0')}T00:00:00.000Z`,
+      extracted: { title: null, tags: [], summary: longSummary, decisions: [], todos: [] },
+    });
+  }
+  let seenPrompt;
+  __setTestProvider(async (prompt) => {
+    seenPrompt = prompt;
+    return 'compiled knowledge';
+  });
+  await buildKnowledgeText('kf-budget');
+  // 40 sessions x 500+ chars each would be 20000+ chars unbounded; the
+  // cap keeps material well under that regardless of folder size.
+  assert.ok(seenPrompt.length < 15000, `prompt (${seenPrompt.length} chars) must stay bounded regardless of session count`);
+});
+
+test('generateDigest() prompt carries the forbidden-meta-commentary guard and the synthesize-don\'t-restate rule, both locales', async () => {
+  const { loadConfig, saveConfig } = await import('../src/config.js');
+  try {
+    seed('dig-wording-en', { startedAt: '2026-08-01T09:00:00.000Z', folder: 'dig-wording-folder', extracted: { title: null, tags: [], summary: 'did thing A', decisions: [], todos: [] } });
+    let seenPrompt;
+    __setTestProvider(async (prompt) => {
+      seenPrompt = prompt;
+      return 'a narrative';
+    });
+    await generateDigest({ period: 'day', date: '2026-08-01' });
+    assert.match(seenPrompt, /Forbidden: opening or closing with a meta phrase/, 'EN prompt has the forbidden-meta-commentary guard');
+    assert.match(seenPrompt, /Synthesize across the entries/, 'EN prompt has the synthesize rule');
+    assert.match(seenPrompt, /## dig-wording-folder/, 'EN prompt uses a real folder heading, not a flattened prefix');
+
+    saveConfig({ ...loadConfig(), locale: 'ko' });
+    seed('dig-wording-ko', { startedAt: '2026-08-02T09:00:00.000Z', folder: 'dig-wording-folder-ko', extracted: { title: null, tags: [], summary: 'did thing A', decisions: [], todos: [] } });
+    __setTestProvider(async (prompt) => {
+      seenPrompt = prompt;
+      return '하루 요약';
+    });
+    await generateDigest({ period: 'day', date: '2026-08-02' });
+    assert.match(seenPrompt, /금지: "다이제스트입니다"/, 'ko prompt has the forbidden-meta-commentary guard');
+    assert.match(seenPrompt, /항목들을 가로질러 종합해라/, 'ko prompt has the synthesize rule');
+    assert.match(seenPrompt, /## dig-wording-folder-ko/, 'ko prompt uses a real folder heading, not a flattened prefix');
+  } finally {
+    saveConfig({ ...loadConfig(), locale: 'en' });
+  }
+});
+
+// Prompt-length-budget test for the unbounded-material fix in
+// generateDigest() — every session in the period used to be included
+// with no per-folder cap, so a busy `period: 'week'` digest was unbounded.
+test('generateDigest() caps sessions per folder instead of including every session in the period unbounded', async () => {
+  for (let i = 0; i < 40; i++) {
+    seed(`dig-budget-${i}`, {
+      startedAt: '2026-08-10T09:00:00.000Z',
+      folder: 'dig-budget-folder',
+      extracted: { title: null, tags: [], summary: `session ${i} summary text here`, decisions: [], todos: [] },
+    });
+  }
+  let seenPrompt;
+  __setTestProvider(async (prompt) => {
+    seenPrompt = prompt;
+    return 'a narrative';
+  });
+  const res = await generateDigest({ period: 'day', date: '2026-08-10' });
+  assert.equal(res.ok, true);
+  assert.equal(res.count, 40, 'the written digest file still records every real session');
+  assert.match(seenPrompt, /more sessions? omitted/, 'the prompt notes the omitted count once the per-folder cap is hit');
+});

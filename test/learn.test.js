@@ -274,3 +274,73 @@ test('tagAll() stops after consecutive failures instead of burning through the w
   assert.equal(res.stoppedEarly, true);
   assert.equal(calls, 3); // never attempted the remaining 6, let alone anything else in the store
 });
+
+// Issue #70 (prompt quality) — the new instructions actually reach the
+// prompt, in both locales. Not testing model behavior (that needs a real
+// LLM — see scripts/eval-prompts.js), just that the wording is present.
+test('buildPrompt() carries the new tag near-duplicate/no-generic-activity guard, both locales', async () => {
+  seed('learn-tag-guard-en', { turns: [{ role: 'user', text: 'fix the login flow' }] });
+  let seenPrompt;
+  __setTestProvider(async (prompt) => {
+    seenPrompt = prompt;
+    return mockReply();
+  });
+  await autoTagSession('learn-tag-guard-en');
+  assert.match(seenPrompt, /near-synonym/, 'EN prompt names the near-duplicate-tag guard');
+  assert.match(seenPrompt, /tool name/, 'EN prompt bans tool-name tags');
+
+  saveConfig({ ...loadConfig(), locale: 'ko' });
+  seed('learn-tag-guard-ko', { turns: [{ role: 'user', text: 'fix the login flow' }] });
+  __setTestProvider(async (prompt) => {
+    seenPrompt = prompt;
+    return mockReply();
+  });
+  await autoTagSession('learn-tag-guard-ko');
+  assert.match(seenPrompt, /뜻이 비슷한 다른 표현/, 'ko prompt names the near-duplicate-tag guard');
+  assert.match(seenPrompt, /도구 이름/, 'ko prompt bans tool-name tags');
+});
+
+test('buildPrompt() carries the thin-content fallback rule and the single-JSON-object output rule, both locales', async () => {
+  seed('learn-thin-en', { turns: [{ role: 'user', text: 'hi' }] });
+  let seenPrompt;
+  __setTestProvider(async (prompt) => {
+    seenPrompt = prompt;
+    return mockReply();
+  });
+  await autoTagSession('learn-thin-en');
+  assert.match(seenPrompt, /Thin sessions/, 'EN prompt has the thin-content rule');
+  assert.match(seenPrompt, /exactly one JSON object/, 'EN prompt states the single-JSON-object output rule');
+
+  saveConfig({ ...loadConfig(), locale: 'ko' });
+  seed('learn-thin-ko', { turns: [{ role: 'user', text: '안녕' }] });
+  __setTestProvider(async (prompt) => {
+    seenPrompt = prompt;
+    return mockReply();
+  });
+  await autoTagSession('learn-thin-ko');
+  assert.match(seenPrompt, /내용이 얇은 세션/, 'ko prompt has the thin-content rule');
+  assert.match(seenPrompt, /JSON 객체 하나뿐/, 'ko prompt states the single-JSON-object output rule');
+});
+
+// Guards against the exact class of bug commit 2 was designed to avoid —
+// see llm.js's own comment on why a wording change already broke
+// something once. tutorial-mock-llm.js's mockAutotag() finds the FIRST
+// line starting with "user:" in the prompt and treats it as the real
+// transcript; any future few-shot example containing a literal
+// "user:"/"assistant:" line would silently feed it fake content instead,
+// with every session in mycelium demo getting an identical canned title.
+test('buildPrompt() never contains a literal transcript-line shape outside the real session excerpt', () => {
+  seed('learn-collision-guard', { turns: [{ role: 'user', text: 'a real user turn' }] });
+  let seenPrompt;
+  __setTestProvider(async (prompt) => {
+    seenPrompt = prompt;
+    return mockReply();
+  });
+  return autoTagSession('learn-collision-guard').then(() => {
+    // Exactly one "user:" line is expected — the real excerpt itself
+    // (sessionExcerpt() renders turns as "role: text"). More than one
+    // means an example snippet leaked a second one in.
+    const userLines = (seenPrompt.match(/^user:/gm) || []).length;
+    assert.equal(userLines, 1, 'exactly one real "user:" transcript line, no leaked example');
+  });
+});
