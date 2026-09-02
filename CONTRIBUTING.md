@@ -37,6 +37,17 @@ npm test            # node:test — runs test/*.test.js
 
 Tests that touch Mycelium's data layer (`src/paths.js` and anything that imports it, transitively) isolate themselves into a temporary `MYCELIUM_HOME` — see `test/helpers.js`'s `useTempHome()` and its doc comment for why those specific test files use dynamic `import()` instead of a normal top-level `import`. Tests must never touch your real `~/.mycelium` store.
 
+### Evaluating prompt changes
+
+If you're changing one of the LLM prompts (`learn.js`'s auto-tag/summarize, `organize/classify.js`'s folder placement, `insight/knowledge.js` or `insight/digest.js`'s knowledge/digest text, `split.js`'s boundary suggestions), `npm test` only verifies the wording actually reaches the prompt (locale routing, instruction presence) — it can't judge whether the change makes a real model's output better, since that needs a real model.
+
+```sh
+npm run eval:prompts -- --yes                              # all 5 call sites, both locales, 1 run each
+npm run eval:prompts -- --call learn,split --locale ko --runs 5 --yes
+```
+
+`scripts/eval-prompts.js` runs a small curated fixture set (`scripts/eval-fixtures/`) through the real `claude`/`codex` CLI — **this makes real, billed LLM calls**, which is exactly why it's a separate opt-in script rather than part of `npm test`/CI. Without `--yes` it just prints how many calls it would make and exits. It checks each real reply with the same parser the production code uses, plus structural checks (field presence, length bands, banned-generic detection), and prints a pass-rate table across `--runs` repeats before the raw output — read the raw output too, a pass rate alone doesn't judge whether a summary is actually *good*. See `node scripts/eval-prompts.js --help` for the full flag list.
+
 ## Conventions
 
 ### Commit Messages

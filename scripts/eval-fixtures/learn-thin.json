@@ -1,0 +1,11 @@
+{
+  "description": "learn.js: a thin/early session — one command, no real exchange yet. Should trigger the thin-content fallback rule, not an invented summary.",
+  "call": "learn",
+  "sessions": [
+    {
+      "id": "eval-learn-thin",
+      "startedAt": "2026-01-05T09:00:00.000Z",
+      "turns": [{ "role": "user", "text": "help me fix this" }]
+    }
+  ]
+}

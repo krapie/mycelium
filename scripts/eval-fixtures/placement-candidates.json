@@ -1,0 +1,38 @@
+{
+  "description": "organize/classify.js: two existing organized folders (one with a KNOWLEDGE.md profile, one with recent-summaries fallback) and three unfiled candidates — one a clean match for each existing folder, one that fits neither (should come back folder:null, not a stretch).",
+  "call": "placement",
+  "knowledgeFiles": {
+    "billing/invoicing": "## Conventions\n- Invoices are generated as immutable PDF snapshots; a correction issues a new invoice, never edits an old one.\n\n## Terminology\n- \"Dunning\" refers to the retry sequence for a failed card charge.\n"
+  },
+  "anchorSessions": [
+    {
+      "id": "eval-placement-anchor-auth-1",
+      "folder": "backend/auth",
+      "startedAt": "2026-01-01T09:00:00.000Z",
+      "extracted": { "summary": "Rotated the JWT signing key and added a grace-period accepting both old and new keys during rollout." }
+    },
+    {
+      "id": "eval-placement-anchor-auth-2",
+      "folder": "backend/auth",
+      "startedAt": "2026-01-02T09:00:00.000Z",
+      "extracted": { "summary": "Added rate limiting to the login endpoint after a credential-stuffing attempt, 5 attempts per IP per minute." }
+    }
+  ],
+  "sessions": [
+    {
+      "id": "eval-placement-match-auth",
+      "startedAt": "2026-01-08T09:00:00.000Z",
+      "extracted": { "summary": "Fixed a bug where an expired refresh token silently logged the user out instead of showing a re-login prompt." }
+    },
+    {
+      "id": "eval-placement-match-billing",
+      "startedAt": "2026-01-08T09:30:00.000Z",
+      "extracted": { "summary": "Investigated why a customer's invoice PDF showed the wrong tax rate — the dunning retry had used a stale tax-rate snapshot from the original failed charge." }
+    },
+    {
+      "id": "eval-placement-nomatch",
+      "startedAt": "2026-01-08T10:00:00.000Z",
+      "extracted": { "summary": "Discussed whether to migrate the marketing site from Gatsby to Astro, no decision made yet." }
+    }
+  ]
+}

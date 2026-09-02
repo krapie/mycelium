@@ -1,0 +1,22 @@
+{
+  "description": "learn.js: a pure Q&A/discussion session with a real conclusion — the case the summary rule's 'key answer/conclusion/reasoning' requirement is aimed at, and the forbidden-meta-commentary guard is meant to prevent ('user asked, assistant answered').",
+  "call": "learn",
+  "sessions": [
+    {
+      "id": "eval-learn-qa",
+      "startedAt": "2026-01-06T09:00:00.000Z",
+      "turns": [
+        { "role": "user", "text": "Should we use Postgres row-level security or enforce tenant isolation entirely in the application layer for our multi-tenant SaaS?" },
+        {
+          "role": "assistant",
+          "text": "Row-level security is the safer default here: it means a bug in application code can't leak another tenant's rows, since Postgres itself refuses the query. The main cost is that every query planner path has to account for the RLS policy, which can hurt performance on large tables unless the tenant_id column is indexed and included in the policy predicate. Given your tenant count (thousands, not millions) and table sizes, I'd recommend RLS with a btree index on (tenant_id, id) on every multi-tenant table, and keep the application-layer checks as defense in depth rather than the only line of defense."
+        },
+        { "role": "user", "text": "That makes sense, let's go with RLS + the composite index. Can you also flag anything else that commonly gets missed?" },
+        {
+          "role": "assistant",
+          "text": "Two common gaps: first, background jobs and migrations often run as a superuser role that bypasses RLS entirely, so any job that touches tenant data needs to explicitly SET ROLE to a restricted role first. Second, connection pooling (e.g. PgBouncer in transaction mode) means SET LOCAL for the tenant context must happen inside the same transaction as the query, not before the connection is checked out from the pool."
+        }
+      ]
+    }
+  ]
+}
