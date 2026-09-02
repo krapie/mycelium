@@ -93,9 +93,23 @@ export async function generateDigest({ period = 'day', date } = {}) {
     const omittedLine = omitted
       ? `\n${locale === 'ko' ? `…(${omitted}개 세션 생략)…` : `…(${omitted} more session${omitted === 1 ? '' : 's'} omitted)…`}`
       : '';
-    const block = `## ${folder}\n${items}${omittedLine}`;
-    if (blocks.length && totalUsed + block.length > DIGEST_TOTAL_CHAR_CAP) {
-      foldersOmitted++;
+    let block = `## ${folder}\n${items}${omittedLine}`;
+    if (totalUsed + block.length > DIGEST_TOTAL_CHAR_CAP) {
+      // The `blocks.length` guard used to skip this check entirely for
+      // the first folder, so a single folder whose own block alone
+      // exceeded the cap still got included in full (found via
+      // CodeRabbit review — the same class of bug just fixed in
+      // knowledge.js's material budget, now caught here too). Truncate
+      // that one block instead of either including it whole or skipping
+      // it outright and ending up with zero folders shown when there IS
+      // real content.
+      if (blocks.length === 0) {
+        block = block.slice(0, DIGEST_TOTAL_CHAR_CAP);
+        blocks.push(block);
+        totalUsed += block.length + 2;
+      } else {
+        foldersOmitted++;
+      }
       continue;
     }
     blocks.push(block);

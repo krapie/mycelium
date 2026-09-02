@@ -528,3 +528,38 @@ test('generateDigest() caps total prompt size across many folders, not just per-
   assert.ok(seenPrompt.length < 15000, `prompt (${seenPrompt.length} chars) must stay bounded regardless of folder count`);
   assert.match(seenPrompt, /more folders? not shown/, 'the prompt notes the omitted-folder count once the total budget is hit');
 });
+
+// Regression test for a real gap CodeRabbit found in the total-budget fix
+// itself: the `blocks.length` guard skipped the size check entirely for
+// the FIRST folder, so one folder whose own block alone exceeded
+// DIGEST_TOTAL_CHAR_CAP was still included in full (same class of bug
+// as knowledge.js's oversized-first-item case above, now caught here
+// too). A single folder with 20 sessions (the per-folder cap) at 1000+
+// chars each is ~20000+ chars on its own — well over the 12000 total
+// budget before any second folder is even considered. (An earlier draft
+// of this test used a 700-char summary and a <15000 bound; that stayed
+// under 15000 chars even WITHOUT the fix, so it never actually caught
+// the bug it was written for — verified by re-running it against the
+// pre-fix source. 1000 chars plus a tight bound closes that gap.)
+test('generateDigest() truncates a single oversized folder instead of including its block whole', async () => {
+  const longSummary = 'z'.repeat(1000);
+  for (let i = 0; i < 20; i++) {
+    seed(`dig-oversized-folder-${i}`, {
+      startedAt: '2026-08-12T09:00:00.000Z',
+      folder: 'dig-oversized-folder',
+      extracted: { title: null, tags: [], summary: longSummary, decisions: [], todos: [] },
+    });
+  }
+  let seenPrompt;
+  __setTestProvider(async (prompt) => {
+    seenPrompt = prompt;
+    return 'a narrative';
+  });
+  const res = await generateDigest({ period: 'day', date: '2026-08-12' });
+  assert.equal(res.ok, true);
+  // Unbounded, this single folder's block alone would be ~20000+ chars;
+  // the total cap is 12000, so the whole prompt (cap + template prose)
+  // must stay well clear of the unbounded size.
+  assert.ok(seenPrompt.length < 13500, `prompt (${seenPrompt.length} chars) must truncate even a single oversized folder`);
+  assert.match(seenPrompt, /## dig-oversized-folder/, 'the one real folder is still shown (truncated), not omitted entirely');
+});
