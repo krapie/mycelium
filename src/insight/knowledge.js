@@ -40,9 +40,23 @@ function knowledgeMaterial(sessions, locale, decisionLabel, noSummary) {
   for (const s of ordered) {
     const parts = [`- ${s.extracted.summary || noSummary}`];
     for (const d of s.extracted.decisions || []) parts.push(`  · ${decisionLabel}: ${d}`);
-    const block = parts.join('\n');
-    if (kept.length && used + block.length > KNOWLEDGE_MATERIAL_BUDGET) {
-      omitted++;
+    let block = parts.join('\n');
+    if (used + block.length > KNOWLEDGE_MATERIAL_BUDGET) {
+      // The `kept.length === 0` guard used to skip this check entirely
+      // for the first/most-recent item, so a single session with an
+      // unusually long summary+decisions list could still blow the
+      // budget on its own (found via CodeRabbit review) — truncate that
+      // one block instead, rather than either including it whole or
+      // ending up with zero material for a folder that does have real
+      // content. Every later item still gets omitted normally once the
+      // budget is spent.
+      if (kept.length === 0) {
+        block = block.slice(0, KNOWLEDGE_MATERIAL_BUDGET);
+        kept.push(block);
+        used += block.length + 1;
+      } else {
+        omitted++;
+      }
       continue;
     }
     kept.push(block);
@@ -77,8 +91,8 @@ export async function buildKnowledgeText(folder) {
 
   const material = knowledgeMaterial(sessions, locale, decisionLabel, noSummary);
 
-  // Korean branch is the original prompt, unchanged — see contentLocale()
-  // (config.js).
+  // Two natively-worded branches, not a translation of one into the
+  // other — see contentLocale() (config.js).
   const prompt =
     locale === 'ko'
       ? `아래는 "${folder}" 작업 공간에서 있었던 세션 요약과 결정들이다. 이 공간에서 새 작업을 시작하는 AI가 미리 알아야 할 "프로젝트 지식"을 정리해라. 반복되는 컨벤션, 확정된 결정, 자주 나오는 용어, 주의할 점 위주로. 개별 세션 나열이 아니라 정제된 지식으로.

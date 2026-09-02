@@ -16,11 +16,11 @@ function sessionExcerpt(neutral, locale, budget = 6000) {
   return `${head}\n${marker}\n${tail}`;
 }
 
-// Korean prompt below is the original, unchanged — see contentLocale()
-// (config.js) for why this branches instead of always using one language:
-// generated content (title/tags/summary/decisions/todos) should follow
-// config.json's locale the same way TUI chrome already does, not be
-// hardcoded regardless of it.
+// Two natively-worded branches, not a translation of one into the other
+// — see contentLocale() (config.js) for why this branches instead of
+// always using one language: generated content (title/tags/summary/
+// decisions/todos) should follow config.json's locale the same way TUI
+// chrome already does, not be hardcoded regardless of it.
 function buildPrompt(neutral, existingTags, locale) {
   if (locale === 'ko') {
     const vocab = existingTags.length ? existingTags.join(', ') : '(아직 없음)';

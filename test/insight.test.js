@@ -426,6 +426,28 @@ test('buildKnowledgeText() caps material instead of concatenating every session 
   assert.ok(seenPrompt.length < 15000, `prompt (${seenPrompt.length} chars) must stay bounded regardless of session count`);
 });
 
+// Regression test for a real gap found via CodeRabbit review on issue
+// #70's PR: the original budget check only guarded items AFTER the
+// first, so a single (most-recent) session whose own summary+decisions
+// text alone exceeds the budget was still included in full, unbounded.
+test('buildKnowledgeText() truncates a single oversized newest session instead of including it whole', async () => {
+  seed('know-oversized-newest', {
+    folder: 'kf-oversized',
+    startedAt: '2026-01-10T00:00:00.000Z',
+    extracted: { title: null, tags: [], summary: 'x'.repeat(9000), decisions: [], todos: [] },
+  });
+  let seenPrompt;
+  __setTestProvider(async (prompt) => {
+    seenPrompt = prompt;
+    return 'compiled knowledge';
+  });
+  await buildKnowledgeText('kf-oversized');
+  // The one session's summary alone is 9000 chars — well over the
+  // budget on its own; the prompt must still stay bounded rather than
+  // including it whole.
+  assert.ok(seenPrompt.length < 9000, `prompt (${seenPrompt.length} chars) must truncate even a single oversized session`);
+});
+
 test('generateDigest() prompt carries the forbidden-meta-commentary guard and the synthesize-don\'t-restate rule, both locales', async () => {
   const { loadConfig, saveConfig } = await import('../src/config.js');
   try {
@@ -475,4 +497,34 @@ test('generateDigest() caps sessions per folder instead of including every sessi
   assert.equal(res.ok, true);
   assert.equal(res.count, 40, 'the written digest file still records every real session');
   assert.match(seenPrompt, /more sessions? omitted/, 'the prompt notes the omitted count once the per-folder cap is hit');
+});
+
+// Regression test for a real gap found via CodeRabbit review on issue
+// #70's PR: the per-folder item cap alone still left the TOTAL unbounded
+// when many folders are active the same day, since each folder's own
+// (capped) block still adds up. Each folder below has just 1 session —
+// well under the per-folder cap — so this specifically exercises the
+// total-budget cap, not the per-folder one.
+test('generateDigest() caps total prompt size across many folders, not just per-folder', async () => {
+  const longSummary = 'y'.repeat(600);
+  for (let i = 0; i < 40; i++) {
+    seed(`dig-many-folders-${i}`, {
+      startedAt: '2026-08-11T09:00:00.000Z',
+      folder: `dig-many-folder-${i}`,
+      extracted: { title: null, tags: [], summary: longSummary, decisions: [], todos: [] },
+    });
+  }
+  let seenPrompt;
+  __setTestProvider(async (prompt) => {
+    seenPrompt = prompt;
+    return 'a narrative';
+  });
+  const res = await generateDigest({ period: 'day', date: '2026-08-11' });
+  assert.equal(res.ok, true);
+  assert.equal(res.count, 40, 'the written digest file still records every real session across every folder');
+  // 40 folders x 600+ chars each would be 24000+ chars unbounded even
+  // with the per-folder cap never triggering (1 session each); the total
+  // cap must still keep the prompt bounded.
+  assert.ok(seenPrompt.length < 15000, `prompt (${seenPrompt.length} chars) must stay bounded regardless of folder count`);
+  assert.match(seenPrompt, /more folders? not shown/, 'the prompt notes the omitted-folder count once the total budget is hit');
 });

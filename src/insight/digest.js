@@ -11,6 +11,11 @@ import { contentLocale } from '../config.js';
 // had no ceiling at all. Most-recent first within the folder.
 const DIGEST_FOLDER_ITEM_CAP = 20;
 
+// Caps the TOTAL prompt material across every folder combined — the
+// per-folder cap above still leaves a day/week with many active folders
+// unbounded, since each one's (capped) block still adds up.
+const DIGEST_TOTAL_CHAR_CAP = 12000;
+
 function dayOf(iso) {
   return iso ? iso.slice(0, 10) : null;
 }
@@ -72,8 +77,14 @@ export async function generateDigest({ period = 'day', date } = {}) {
   // with bracketed text, no actual grouping. Also caps how many sessions
   // one folder can contribute (most-recent first) — unbounded before
   // this, so a busy folder over a `period: 'week'` digest had no ceiling.
+  // Per-folder capping alone still leaves the TOTAL unbounded when many
+  // folders are active on the same period (found via CodeRabbit review
+  // on this PR) — DIGEST_TOTAL_CHAR_CAP bounds the sum across every
+  // folder block too, stopping once it's hit rather than after the fact.
   const byFolder = groupByFolder(sessions);
   const blocks = [];
+  let totalUsed = 0;
+  let foldersOmitted = 0;
   for (const [folder, ss] of byFolder) {
     const ordered = [...ss].sort((a, b) => (b.startedAt || '').localeCompare(a.startedAt || ''));
     const shown = ordered.slice(0, DIGEST_FOLDER_ITEM_CAP);
@@ -82,11 +93,24 @@ export async function generateDigest({ period = 'day', date } = {}) {
     const omittedLine = omitted
       ? `\n${locale === 'ko' ? `…(${omitted}개 세션 생략)…` : `…(${omitted} more session${omitted === 1 ? '' : 's'} omitted)…`}`
       : '';
-    blocks.push(`## ${folder}\n${items}${omittedLine}`);
+    const block = `## ${folder}\n${items}${omittedLine}`;
+    if (blocks.length && totalUsed + block.length > DIGEST_TOTAL_CHAR_CAP) {
+      foldersOmitted++;
+      continue;
+    }
+    blocks.push(block);
+    totalUsed += block.length + 2;
+  }
+  if (foldersOmitted) {
+    blocks.push(
+      locale === 'ko'
+        ? `…(폴더 ${foldersOmitted}개 더 있음, 표시 생략)…`
+        : `…(${foldersOmitted} more folder${foldersOmitted === 1 ? '' : 's'} not shown)…`,
+    );
   }
 
-  // Korean branch is the original prompt, unchanged in substance — see
-  // contentLocale() (config.js).
+  // Two natively-worded branches, not a translation of one into the
+  // other — see contentLocale() (config.js).
   const prompt =
     locale === 'ko'
       ? `아래는 ${keyed} 기간 동안의 AI 작업 세션 요약이다(폴더별). 사람이 아침에 읽는 인수인계 메모처럼 서사형으로 정리해라.

@@ -31,8 +31,8 @@ export async function suggestSplitBoundaries(sessionId) {
     return { ok: false, error: locale === 'ko' ? '분할하기엔 세션이 너무 짧습니다' : 'Session is too short to split' };
   }
 
-  // Korean branch is the original prompt, unchanged in substance — see
-  // contentLocale() (config.js).
+  // Two natively-worded branches, not a translation of one into the
+  // other — see contentLocale() (config.js).
   const prompt =
     locale === 'ko'
       ? `아래는 하나의 AI 작업 세션의 전체 대화 기록이다. 턴 번호가 매겨져 있다(1부터 시작, user/assistant 메시지 하나가 턴 하나).

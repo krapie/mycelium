@@ -235,10 +235,11 @@ function folderProfiles(sessions) {
  * burning through every remaining chunk one at a time; chunks already in
  * flight still finish and get stamped/collected.
  */
-// Korean branch is the original prompt, unchanged — see contentLocale()
-// (config.js). `folderBlock`/`sessionBlock` are already fully built by the
-// caller in the target language (see foldersBlockText()/sessionsBlockText()
-// below), so this only needs to localize its own instructional text.
+// Two natively-worded branches, not a translation of one into the other
+// — see contentLocale() (config.js). `folderBlock`/`sessionBlock` are
+// already fully built by the caller in the target language (see
+// foldersBlockText()/sessionsBlockText() below), so this only needs to
+// localize its own instructional text.
 function placementPrompt(folderBlock, sessionBlock, locale) {
   if (locale === 'ko') {
     return `아래는 이미 사람이 정리해 둔 폴더들과 그 안 세션 요약이다.
