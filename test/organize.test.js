@@ -512,6 +512,118 @@ test('suggestPlacements() returns partial success: a chunk failure no longer dis
   assert.equal(ok.folder, 'sp-partial-target');
 });
 
+// Issue #70 (prompt quality) — the concrete-subject matching criterion and
+// the "one entry per id" instruction actually reach the prompt, both
+// locales. Not testing model behavior — see scripts/eval-prompts.js.
+test('placementPrompt() carries the concrete-subject matching criterion and the one-entry-per-id rule, both locales', async () => {
+  const { loadConfig, saveConfig } = await import('../src/config.js');
+  try {
+    seed('sp-wording-en', { folder: null, organizedBy: 'auto', extracted: { title: 'x', tags: [], summary: 'about backend auth work', decisions: [], todos: [] } });
+    let seenPrompt;
+    __setTestProvider(async (prompt) => {
+      seenPrompt = prompt;
+      return JSON.stringify({ placements: [{ id: 'sp-wording-en', folder: null, reason: 'no fit' }] });
+    });
+    await suggestPlacements({ folder: null });
+    assert.match(seenPrompt, /shared concrete subject/, 'EN prompt states the concrete-subject matching criterion');
+    assert.match(seenPrompt, /one entry for every id/, 'EN prompt requires one entry per submitted id');
+
+    saveConfig({ ...loadConfig(), locale: 'ko' });
+    seed('sp-wording-ko', { folder: null, organizedBy: 'auto', extracted: { title: 'x', tags: [], summary: 'about backend auth work', decisions: [], todos: [] } });
+    __setTestProvider(async (prompt) => {
+      seenPrompt = prompt;
+      return JSON.stringify({ placements: [{ id: 'sp-wording-ko', folder: null, reason: 'no fit' }] });
+    });
+    await suggestPlacements({ folder: null });
+    assert.match(seenPrompt, /같은 구체적 대상/, 'ko prompt states the concrete-subject matching criterion');
+    assert.match(seenPrompt, /모든 id에 대해/, 'ko prompt requires one entry per submitted id');
+  } finally {
+    saveConfig({ ...loadConfig(), locale: 'en' });
+  }
+});
+
+// Regression test for a real bug found while re-evaluating the prompts
+// (issue #70): the old output-format skeleton, {"folder":"..."|null}, is
+// not valid JSON — a malformed example shown to a model while asking for
+// well-formed output. Every {...} example literal embedded in the prompt
+// must itself parse.
+test('placementPrompt()\'s embedded output-format example is valid, parseable JSON, both locales', async () => {
+  const { loadConfig, saveConfig } = await import('../src/config.js');
+  try {
+    seed('sp-json-example-en', { folder: null, organizedBy: 'auto', extracted: { title: 'x', tags: [], summary: 'about backend auth work', decisions: [], todos: [] } });
+    let seenPrompt;
+    __setTestProvider(async (prompt) => {
+      seenPrompt = prompt;
+      return JSON.stringify({ placements: [{ id: 'sp-json-example-en', folder: null, reason: 'no fit' }] });
+    });
+    await suggestPlacements({ folder: null });
+    const match = seenPrompt.match(/\{"placements":.*\}/);
+    assert.ok(match, 'prompt contains an embedded {"placements": ...} example');
+    const parsed = JSON.parse(match[0]);
+    assert.ok(Array.isArray(parsed.placements) && parsed.placements.length >= 2, 'example shows at least a placed and a null case');
+
+    saveConfig({ ...loadConfig(), locale: 'ko' });
+    seed('sp-json-example-ko', { folder: null, organizedBy: 'auto', extracted: { title: 'x', tags: [], summary: 'about backend auth work', decisions: [], todos: [] } });
+    __setTestProvider(async (prompt) => {
+      seenPrompt = prompt;
+      return JSON.stringify({ placements: [{ id: 'sp-json-example-ko', folder: null, reason: 'no fit' }] });
+    });
+    await suggestPlacements({ folder: null });
+    const matchKo = seenPrompt.match(/\{"placements":.*\}/);
+    assert.ok(matchKo, 'ko prompt contains an embedded {"placements": ...} example');
+    JSON.parse(matchKo[0]); // throws (failing the test) if invalid
+  } finally {
+    saveConfig({ ...loadConfig(), locale: 'en' });
+  }
+});
+
+// Guards the tutorial-mock-llm.js coupling (mockAutotag()'s "user:" line
+// scan doesn't apply here, but the mock dispatch keys on the literal
+// substring "placements" — see createMockProvider() — and the per-
+// session line shape "- id:X current folder:Y summary:Z" that a real
+// demo session's summary flows through unmodified).
+test('placementPrompt() preserves the dispatch key and the per-session line shape the mock provider parses', async () => {
+  // folder:null scopes classificationCandidates() to genuinely-unfiled
+  // sessions only — this candidate needs an existing folder to exercise
+  // the "current folder:" hint line, so scope to that folder's own
+  // subtree instead (also isolates this test from whatever leftover
+  // unfiled sessions other tests in this shared-store file left behind).
+  seed('sp-collision-guard', { folder: 'sp-collision-folder', organizedBy: 'auto', extracted: { title: 'x', tags: [], summary: 'a distinctive summary text', decisions: [], todos: [] } });
+  let seenPrompt;
+  __setTestProvider(async (prompt) => {
+    seenPrompt = prompt;
+    return JSON.stringify({ placements: [{ id: 'sp-collision-guard', folder: null, reason: 'no fit' }] });
+  });
+  await suggestPlacements({ folder: 'sp-collision-folder' });
+  assert.match(seenPrompt, /"placements"/, 'the mock dispatch key is present');
+  assert.match(seenPrompt, /- id:sp-collision-guard current folder:sp-collision-folder summary:a distinctive summary text/, 'the real per-session line shape is intact');
+});
+
+// Prompt-length-budget test for the unbounded-material fix (issue #70) —
+// folderProfiles()/folderBlock used to concatenate every folder's entire
+// KNOWLEDGE.md with no cap, across however many folders exist.
+test('suggestPlacements() caps total folderBlock size instead of concatenating every folder unbounded', async () => {
+  const { writeKnowledgeText } = await import('../src/insight/knowledge.js');
+  seed('sp-budget-candidate', { folder: null, organizedBy: 'auto', extracted: { title: 'x', tags: [], summary: 'a candidate session summary', decisions: [], todos: [] } });
+  // 20 folders, each with an oversized KNOWLEDGE.md — comfortably enough
+  // to blow past any reasonable single-folder or total-block budget if
+  // uncapped.
+  const bigText = 'x'.repeat(3000);
+  for (let i = 0; i < 20; i++) {
+    seed(`sp-budget-anchor-${i}`, { folder: `sp-budget-folder-${i}`, organizedBy: 'human', extracted: { title: 'x', tags: [], summary: 'anchor', decisions: [], todos: [] } });
+    writeKnowledgeText(`sp-budget-folder-${i}`, bigText);
+  }
+  let seenPrompt;
+  __setTestProvider(async (prompt) => {
+    seenPrompt = prompt;
+    return JSON.stringify({ placements: [{ id: 'sp-budget-candidate', folder: null, reason: 'no fit' }] });
+  });
+  await suggestPlacements({ folder: null });
+  // 20 folders x 3000+ chars each would be 60000+ chars unbounded; the
+  // cap keeps the whole prompt well under that regardless of folder count.
+  assert.ok(seenPrompt.length < 40000, `prompt (${seenPrompt.length} chars) must stay bounded regardless of folder count`);
+});
+
 test('summarizeCandidates() limit bounds how many candidates are processed in one call, oldest first', async () => {
   seed('sc-limit-old', { folder: 'sc-limit-scope', organizedBy: 'auto', startedAt: '2020-01-01T00:00:00.000Z', turns: [{ role: 'user', text: 'oldest one' }] });
   seed('sc-limit-new', { folder: 'sc-limit-scope', organizedBy: 'auto', startedAt: '2024-01-01T00:00:00.000Z', turns: [{ role: 'user', text: 'newest one' }] });

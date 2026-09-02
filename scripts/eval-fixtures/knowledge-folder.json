@@ -1,0 +1,47 @@
+{
+  "description": "insight/knowledge.js: one folder with several sessions carrying recurring conventions, a couple of settled decisions, and one session-specific detail that should NOT survive into the compiled knowledge (checks the 'drop anything that applied to one session only' rule).",
+  "call": "knowledge",
+  "folder": "eval/knowledge-target",
+  "sessions": [
+    {
+      "id": "eval-knowledge-1",
+      "startedAt": "2026-01-01T09:00:00.000Z",
+      "extracted": {
+        "summary": "Added the /health endpoint, returns 200 with {status:'ok'} and checks the DB connection pool.",
+        "decisions": ["Health checks live under /health, not /api/health — kept outside the versioned API namespace so the load balancer config never needs to change on an API version bump."]
+      }
+    },
+    {
+      "id": "eval-knowledge-2",
+      "startedAt": "2026-01-03T09:00:00.000Z",
+      "extracted": {
+        "summary": "New service endpoints follow the same /health convention — added it to the notifications service too.",
+        "decisions": []
+      }
+    },
+    {
+      "id": "eval-knowledge-3",
+      "startedAt": "2026-01-05T09:00:00.000Z",
+      "extracted": {
+        "summary": "Decided all internal services authenticate to each other via mTLS with certs issued by the internal CA, rotated every 90 days.",
+        "decisions": ["Service-to-service auth is mTLS with 90-day cert rotation via the internal CA, not shared API keys."]
+      }
+    },
+    {
+      "id": "eval-knowledge-4",
+      "startedAt": "2026-01-06T09:00:00.000Z",
+      "extracted": {
+        "summary": "One-off: fixed a typo in the README that said 'servize' instead of 'service'. No other changes.",
+        "decisions": []
+      }
+    },
+    {
+      "id": "eval-knowledge-5",
+      "startedAt": "2026-01-07T09:00:00.000Z",
+      "extracted": {
+        "summary": "The notifications service's mTLS cert expired over the weekend because the rotation cron job silently failed; added alerting on cert expiry under 14 days.",
+        "decisions": []
+      }
+    }
+  ]
+}
