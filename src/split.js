@@ -31,13 +31,18 @@ export async function suggestSplitBoundaries(sessionId) {
     return { ok: false, error: locale === 'ko' ? '분할하기엔 세션이 너무 짧습니다' : 'Session is too short to split' };
   }
 
-  // Korean branch is the original prompt, unchanged — see contentLocale()
-  // (config.js).
+  // Korean branch is the original prompt, unchanged in substance — see
+  // contentLocale() (config.js).
   const prompt =
     locale === 'ko'
       ? `아래는 하나의 AI 작업 세션의 전체 대화 기록이다. 턴 번호가 매겨져 있다(1부터 시작, user/assistant 메시지 하나가 턴 하나).
 
-이 세션이 다루는 주제들을 파악해서, 각 주제가 시작~끝나는 턴 범위로 나눠라(주제가 하나뿐이면 구간도 하나만). 모든 턴을 빠짐없이, 겹치지 않게 순서대로 커버해야 한다. label은 12~30자 명사구로 그 구간이 무엇에 관한 것인지 나타내라.
+이 세션이 다루는 주제들을 파악해서, 각 주제가 시작~끝나는 턴 범위로 나눠라. 모든 턴을 빠짐없이, 겹치지 않게 순서대로 커버해야 한다.
+
+- 주제가 실제로 바뀌는 지점에서만 잘라라. 후속 질문, 부연 설명, 같은 작업의 재시도, 다시 원래 주제로 돌아오는 곁가지는 경계가 아니다. 대부분의 세션은 주제가 하나나 둘이고, 넷을 넘으면 거의 항상 과하게 쪼갠 것이다.
+- 2턴보다 짧은 구간은 만들지 마라.
+- 세션 전체가 한 주제면 1번 턴부터 마지막 턴까지를 덮는 구간 하나만 반환해라. 그건 정상적이고 기대되는 답이지, 못 찾은 게 아니다.
+- label: 그 구간이 무엇에 관한 것인지 나타내는 구체적인 명사구(12자~30자, 마침표 없이).
 
 ${numberedTurns(n.turns, locale)}
 
@@ -45,7 +50,12 @@ ${numberedTurns(n.turns, locale)}
 {"ranges":[{"from":1,"to":8,"label":"짧은 주제 설명"}]}`
       : `Below is the full transcript of one AI work session. Turns are numbered (starting at 1, one turn per user/assistant message).
 
-Identify the topics this session covers, and split it into turn ranges where each topic starts and ends (if there's only one topic, use a single range). Every turn must be covered, in order, with no gaps or overlaps. label is a 12-30 character noun phrase naming what that range is about.
+Identify the topics this session covers and split it into turn ranges where each topic starts and ends. Every turn must be covered, in order, with no gaps or overlaps.
+
+- Split only where the subject genuinely changes. A follow-up question, a clarification, a retry of the same thing, or a tangent that returns to the same subject is NOT a boundary. Most sessions have one or two topics; more than four is almost always over-splitting.
+- No range shorter than 2 turns.
+- If the whole session is one topic, return exactly one range covering turn 1 through the last turn. That is a normal, expected answer — not a failure to find something.
+- label: a specific noun phrase naming that range's subject, 3-8 words, no trailing period.
 
 ${numberedTurns(n.turns, locale)}
 

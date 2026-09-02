@@ -27,14 +27,15 @@ function buildPrompt(neutral, existingTags, locale) {
     return `아래 세션 기록을 읽고, 이 세션의 **실질 내용(알맹이)**을 아래 JSON으로만 출력해라. 설명 금지.
 
 핵심 규칙:
-- title: 이 세션이 무엇에 관한 것인지 한 줄로 나타내는 짧은 제목(명사구, 12자~30자). 예: "KT Cloud vs AWS 선택 이유", "JWT 인증 미들웨어 리팩토링".
+- title: 이 세션이 무엇에 관한 것인지 나타내는 구체적인 명사구(12자~30자, 마침표 없이). 활동이 아니라 대상을 적어라. 좋은 예: "KT Cloud vs AWS 선택 이유", "JWT 인증 미들웨어 리팩토링". 나쁜 예: "디버깅 세션", "코드 리뷰", "개발 작업".
 - summary: 이 세션에서 **실제로 오간 내용의 알맹이**를 2~3문장으로 담아라. 무엇을 묻거나 하려 했고, 그 **핵심 답변·결론·결과·근거**가 무엇인지가 반드시 들어가야 한다.
     · 질문/논의/조사 세션: 질문의 요지 + 핵심 답과 근거를 담아라. 예: "AWS 대신 KT Cloud 등 국내 클라우드를 쓰는 이유를 논의. 데이터 주권·규제 준수(컴플라이언스)와 국내 리전 요구가 주된 이유로 정리됨."
     · 코딩/작업 세션: 무엇을 만들거나 고쳤고 그 결과가 무엇인지.
     · **금지**: "코드 변경 없음", "정보 제공만 있었음", "사용자가 묻고 어시스턴트가 답함" 같은 메타 서술. 실제 내용(답/결론/지식) 자체를 요약해라. 코드 변경 여부가 아니라 대화의 알맹이가 중요하다.
-- tags: 주제 태그 2~4개. 아래 "기존 태그"에 맞는 게 있으면 반드시 재사용, 없을 때만 새로. 짧은 한국어 명사구.
-- decisions: 내려진 결정/결론 (없으면 []).
-- todos: 남은 할 일 (없으면 []).
+    · 내용이 얇은 세션(명령어 하나, 인사 한 줄, 아직 답이 없는 질문 하나뿐)이면 없는 내용을 지어내지 마라 — 요청받은 것 그대로를 title로 쓰고, summary는 그 요청이 무엇이었고 아직 답이나 작업이 이어지지 않았다는 한 문장으로만 써라. decisions/todos는 빈 배열.
+- tags: 주제 태그 2~4개, 짧은 한국어 명사구(1~2단어). 아래 "기존 태그"에 맞는 게 있으면 표기까지 그대로 재사용해라 — 뜻이 비슷한 다른 표현을 새로 만들지 마라("인증"이 이미 있으면 "인증 처리"를 새로 만들지 말고 "인증"을 써라). 맞는 게 하나도 없을 때만 새로 만들어라. 도구 이름("claude", "cursor")이나 일반 활동어("디버깅", "리팩토링", "논의")는 태그로 쓰지 마라.
+- decisions: 실제로 확정된 것만 — 논의만 되고 결론나지 않은 선택지는 제외. 각 항목은 결정 내용 자체를 짧은 한 문장으로 써라("운영 리전은 KT Cloud로 간다"), "사용자가 ~하기로 했다" 같은 서술체 말고. 없으면 [].
+- todos: 명시적으로 남겨진 할 일만, 각 항목은 짧은 명령형 한 문장으로("웹훅 핸들러에 재시도 추가"). 없으면 []. 언급되지 않은 후속 작업을 지어내지 마라.
 
 기존 태그: ${vocab}
 
@@ -44,21 +45,23 @@ ${sessionExcerpt(neutral, locale)}
 """
 
 출력 형식:
-{"title": "", "tags": [], "summary": "", "decisions": [], "todos": []}`;
+{"title": "", "tags": [], "summary": "", "decisions": [], "todos": []}
+출력은 JSON 객체 하나뿐. 앞뒤에 다른 텍스트를 붙이지 마라. 모든 필드를 반드시 포함하고, 값이 없으면 필드를 빼지 말고 ""나 []로 채워라.`;
   }
 
   const vocab = existingTags.length ? existingTags.join(', ') : '(none yet)';
   return `Read the session record below and output ONLY the following JSON describing the **actual substance** of this session. No explanation.
 
 Key rules:
-- title: a short title (noun phrase, 12-30 chars) in one line, naming what this session is actually about. e.g. "Why KT Cloud over AWS", "Refactor JWT auth middleware".
+- title: one line, a specific noun phrase naming what this session is actually about — 3-8 words, no trailing period. Name the concrete subject, not the activity. Good: "Why KT Cloud over AWS", "JWT auth middleware refactor". Bad: "Debugging session", "Code review", "Development work".
 - summary: capture the **actual substance of what was discussed** in 2-3 sentences. Must include what was asked or attempted AND the **key answer, conclusion, result, or reasoning**.
     · Q&A/discussion/research sessions: the gist of the question + the key answer and its reasoning. e.g. "Discussed using a domestic cloud provider instead of AWS. Data sovereignty and regional compliance requirements were the main reasons."
     · Coding/work sessions: what was built or fixed and what the result was.
     · **Forbidden**: meta-descriptions like "no code changes", "just provided information", "user asked and assistant answered". Summarize the actual content (the answer/conclusion/knowledge) itself — what matters is the substance of the conversation, not whether code changed.
-- tags: 2-4 topic tags. Reuse one from "existing tags" below if it fits; only invent a new one if none do. Short noun phrases.
-- decisions: decisions/conclusions reached (empty array if none).
-- todos: remaining action items (empty array if none).
+    · Thin sessions (a single command, a bare greeting, one unanswered question) — if there's no real exchange yet, don't invent substance. Title it after the literal thing that was asked, make summary one sentence naming that request and stating that no answer or work followed, and leave decisions/todos empty.
+- tags: 2-4 topic tags. Lowercase, 1-2 words, hyphen for multi-word ("auth", "ci-cd"). Reuse an entry from "Existing tags" below exactly as written whenever one fits — including when yours is only a near-synonym of it (use "auth" if that exists, never "authentication"). Invent a tag only when nothing in that list fits. Never tag with a tool name ("claude", "cursor") or a generic activity ("debugging", "refactoring", "discussion").
+- decisions: settled conclusions only — something actually chosen, not an option merely discussed. One short sentence each, phrased as the decision itself ("Use KT Cloud for the production region"), not as narration ("The user decided to..."). Empty array if nothing was settled.
+- todos: work explicitly left for later, one short imperative each ("Add a retry to the webhook handler"). Empty array if none. Never invent a follow-up that was not mentioned.
 
 Existing tags: ${vocab}
 
@@ -68,7 +71,8 @@ ${sessionExcerpt(neutral, locale)}
 """
 
 Output format:
-{"title": "", "tags": [], "summary": "", "decisions": [], "todos": []}`;
+{"title": "", "tags": [], "summary": "", "decisions": [], "todos": []}
+Output exactly one JSON object, with nothing before or after it. Every field must be present — use "" or [] rather than omitting one.`;
 }
 
 /**

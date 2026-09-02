@@ -128,6 +128,27 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   `classificationCandidates`/`queueSuggestions`/`pendingSuggestions`/
   `clearSuggestions`/`applyPlacements`, the non-LLM plumbing, are also
   covered)
+- **Prompt quality (issue #70).** `placementPrompt()` matches on shared
+  *concrete subject* (feature/system/incident/document), explicitly not
+  shared technology or activity — a wrong placement costs a human finding
+  and undoing it, an unplaced session costs nothing, so the prompt says so
+  directly rather than leaving "when in doubt" unmotivated. A new folder
+  proposal now requires 2+ of the batch's own sessions to share the
+  sub-topic, not just one. The output-format skeleton used to be
+  `{"folder":"..."|null}` — type-union notation, not valid JSON, shown to
+  the model as its own example — replaced with two real filled-in entries
+  (one placed, one null), which doubles as a few-shot at zero extra token
+  cost. `reason` capped at ~10 words. The prompt now also requires exactly
+  one output entry per submitted candidate id — previously a chunk
+  returning fewer entries than it was given silently stamped
+  `lastClassifiedAt` on candidates the model never actually judged,
+  cooldown-suppressing them for a day. `folderProfiles()`'s per-folder
+  text and the total `folderBlock` across every organized folder were both
+  unbounded before this; both are now capped (`FOLDER_PROFILE_CHAR_CAP`,
+  `FOLDER_BLOCK_CHAR_CAP`), `known` (which folders the model may validly
+  place into) now derives from what was actually shown, not from every
+  profile computed. [tested] (`test/organize.test.js`'s prompt-wording,
+  JSON-example-parses, mock-collision-guard, and folderBlock-budget cases)
 
 ## Organize: Lineage (continuation / merge / split)
 
@@ -152,7 +173,25 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   no LLM call. Title overwritten **only if `!titleLocked`**. Tags capped
   at 5. `summarizedTurnCount` recorded every run (growth-detection
   baseline). Prompt excerpt is 60% head / 40% tail of a 6000-char cap,
-  not a plain truncate. [untested]
+  not a plain truncate. **Prompt quality (issue #70)**: title rule
+  reframed from a (mistranslated-from-Korean) character count to a 3-8
+  word/concrete-subject framing with a good/bad contrast pair — the old
+  "12-30 chars" band made English titles uselessly terse next to Korean's
+  actual 2x-denser character count. Tags require exact-vocabulary reuse
+  including near-synonyms ("auth", never a fresh "authentication" when
+  "auth" already exists) and ban tool-name/generic-activity tags.
+  Decisions/todos tightened to settled-only / explicitly-stated-only,
+  phrased as the thing itself rather than narration. New thin-content
+  rule (a session with no real exchange yet must not have invented
+  substance — the exact failure mode this function's own early-capture
+  comment above already named). Output rule is "exactly one JSON object,
+  every field present" rather than "no code fences" (the latter is
+  already handled by `parseJsonReply()`; the real risk is the model
+  echoing two objects, which that parser's `indexOf`/`lastIndexOf` span
+  can't recover from). No transcript few-shot — would collide with
+  `tutorial-mock-llm.js`'s `mockAutotag()`, which finds the first
+  `user:`-prefixed line in the prompt. [tested] (`test/learn.test.js`'s
+  prompt-wording and mock-collision-guard cases, both locales)
 - **Retroactive bulk (re-)tagging.**
   `tagAll({force, onProgress, limit, concurrency, stopAfterConsecutiveFailures})`.
   Skip condition is "has summary and hasn't grown since"; a session that
@@ -169,14 +208,43 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
 - **Generate a daily/weekly narrative digest.** `generateDigest({period, date})`.
   ISO week computation (Monday-based, UTC); no sessions for the period
   errors before any LLM call; overwrites any existing digest for that
-  key. [untested]
+  key. **Prompt quality (issue #70)**: sessions are now grouped under real
+  `## folder` headings in the prompt — the "(by folder)" framing used to
+  be aspirational, every session actually arrived as a flattened
+  `- [folder] summary` line with no real grouping. Each folder's
+  contribution is now capped (`DIGEST_FOLDER_ITEM_CAP`, most-recent
+  first) — previously every session in the period was included with no
+  limit at all, so a busy `period: 'week'` digest was unbounded. Added
+  the same forbidden-meta-commentary guard `learn.js`/`knowledge.js`
+  already had (this was the one of the four prompts missing it
+  entirely), a target-register example sentence, and a
+  synthesize-don't-restate rule against the lazy failure mode of just
+  paraphrasing each bullet in turn. [tested] (`test/insight.test.js`'s
+  prompt-wording and folder-cap cases, both locales)
 - **Extract, preview, then save folder knowledge.** `buildKnowledgeText(folder)`
   (generate only, no write, split out for the TUI's human-confirm step),
   `writeKnowledgeText(folder, text)`, `extractKnowledge(folder)`
   (generate and write, non-interactive CLI path). Excludes superseded
   sessions from the LLM material. Prompt explicitly forbids meta-report
   phrasing since the output is injected verbatim into AGENTS.md later.
-  [untested]
+  **Prompt quality (issue #70)**: `material` (every non-superseded
+  session's summary+decisions in the subtree) was unbounded — and this
+  runs once per active folder *every day* via
+  `proposeKnowledgeRefreshes()` below — now capped
+  (`KNOWLEDGE_MATERIAL_BUDGET`, most-recent first, matching
+  `learn.js`'s `sessionExcerpt()` budget shape). Output now asks for an
+  explicit heading structure (`## Conventions`/`## Decisions`/
+  `## Terminology`/`## Watch out for`, only the ones with real content),
+  bans a duplicate top-level `#` heading (the wrapper below already adds
+  one — nothing previously stopped the model from emitting its own), and
+  caps length at ~400 words, framed as a real cost since this text is
+  loaded into every future session's context in that workspace, not just
+  a style preference. The `"${folder}" workspace` / `"${folder}" 작업
+  공간` opening phrase is preserved byte-for-byte — parsed by
+  `tui/tutorial-mock-llm.js`'s `mockKnowledge()` to route `mycelium
+  demo`'s `w` step to the right canned content. [tested]
+  (`test/insight.test.js`'s prompt-wording, mock-collision-guard, and
+  material-budget cases, both locales)
 - **List which folders have sessions.** `foldersWithSessions()`. [untested]
 - **Knowledge-refresh proposals, staged for review, a separate feature
   from Digest above despite living in the same file.**
@@ -294,9 +362,22 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   in-bounds) before trusting. Pieces inherit `cwd`/`projectDir`/dates/
   `folder` from the original and are marked `organizedBy: 'human'`;
   **original is never hidden** (`splitInto` is informational only,
-  unlike merge's hiding via `supersededBy`). [partial] (`applySplit`'s
-  slicing/range-validation/piece-metadata is tested; `suggestSplitBoundaries`
-  itself calls `complete()` and still needs mocked-LLM tests)
+  unlike merge's hiding via `supersededBy`). **Prompt quality (issue
+  #70)**: added an explicit over-fragmentation guard (a follow-up,
+  clarification, retry, or a tangent that returns to the same subject is
+  NOT a boundary; more than 4 ranges is almost always over-splitting), a
+  minimum range size (no range under 2 turns), and normalized the
+  single-topic case as a normal expected answer rather than a failure to
+  find something. Fixed the same EN/KO length-constraint mistranslation
+  as `learn.js`'s title (`label` was "12-30 chars", inherited from
+  Korean's denser character count) — now a 3-8 word framing. [tested]
+  (`applySplit`'s slicing/range-validation/piece-metadata,
+  `suggestSplitBoundaries`'s mocked-LLM behavior including its own
+  prompt-wording and mock-collision-guard cases, both locales — this
+  entry previously read `[partial]`/"still needs mocked-LLM tests," which
+  was already stale by the time this issue-#70 pass started;
+  `test/split.test.js` had real `__setTestProvider()`-backed coverage of
+  `suggestSplitBoundaries()` well before it)
 - **Undo a split.** `unsplit(originalId)`. Only removes pieces whose
   `splitFrom === originalId` (defensive check). [tested]
 

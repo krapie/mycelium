@@ -139,6 +139,16 @@ export async function summarizeCandidates({ onProgress, concurrency = 3, folder,
   return { done, failed, total: targets.length, stoppedEarly };
 }
 
+// Caps one folder's profile text within folderProfiles() below. The
+// recent-summaries fallback was already capped at 15 items, but the
+// KNOWLEDGE.md branch wasn't — a hand-written or pre-dating-the-length-
+// cap KNOWLEDGE.md can be arbitrarily long, and every folder's profile
+// goes into every single classification prompt.
+const FOLDER_PROFILE_CHAR_CAP = 2000;
+function capProfileText(text) {
+  return text.length <= FOLDER_PROFILE_CHAR_CAP ? text : `${text.slice(0, FOLDER_PROFILE_CHAR_CAP)}\n…`;
+}
+
 /**
  * folder -> profile text a candidate session gets compared against. Prefers
  * an existing KNOWLEDGE.md (already a human-reviewed, LLM-compressed digest
@@ -164,14 +174,14 @@ function folderProfiles(sessions) {
   for (const [folder, sessions] of byFolder) {
     const kPath = join(TREE_DIR, ...folder.split('/'), 'KNOWLEDGE.md');
     if (existsSync(kPath)) {
-      profiles.set(folder, readFileSync(kPath, 'utf8').trim());
+      profiles.set(folder, capProfileText(readFileSync(kPath, 'utf8').trim()));
     } else {
       const recent = sessions
         .sort((a, b) => (b.startedAt || '').localeCompare(a.startedAt || ''))
         .slice(0, 15)
         .map((n) => `- ${n.extracted.summary}`)
         .join('\n');
-      profiles.set(folder, recent);
+      profiles.set(folder, capProfileText(recent));
     }
   }
   return profiles;
@@ -236,28 +246,32 @@ function placementPrompt(folderBlock, sessionBlock, locale) {
 ${folderBlock}
 
 ---
-다음은 재분류가 필요한 세션들이다. 각 세션이 위 폴더 중 어디와 주제/성격이 가장 비슷한지 판단해라.
-- 잘 맞는 기존 폴더가 있으면 그 폴더 경로를 그대로 써라.
-- 기존 폴더 중 맞는 게 없지만 현재폴더의 뚜렷이 구분되는 하위 주제라면 새 폴더 경로를 제안해도 된다(예: 현재폴더가 "회사/서버"이고 이 세션이 "로깅"에 관한 것이면 "회사/서버/로깅"처럼 하위에 새로 만들 폴더명을 제안).
-- 그래도 애매하면 folder를 null로 해라.
+다음은 재분류가 필요한 세션들이다. 각 세션이 위 폴더 중 어디와 가장 비슷한지 판단해라.
+- 판단 기준은 "같은 구체적 대상"이다 — 같은 기능, 같은 시스템, 같은 장애, 같은 문서. 기술 스택이 같다거나 활동 종류가 같다는 것("둘 다 디버깅", "둘 다 파이썬")은 근거가 되지 않는다.
+- 맞는 기존 폴더가 있으면 위에 적힌 경로를 글자 그대로 복사해라.
+- 새 폴더는, 그 세션이 지금 속한 폴더의 뚜렷이 구분되는 하위 주제이면서 아래 목록의 세션 중 최소 2개가 같은 하위 주제일 때만 제안해라. 현재폴더보다 정확히 한 단계만 깊게, 위 기존 폴더 이름들과 같은 표기 방식으로(예: 현재폴더가 "회사/서버"이고 이 세션이 로깅에 관한 것이면 "회사/서버/로깅").
+- 조금이라도 애매하면 folder는 null. 분류되지 않은 세션은 손해가 없지만, 잘못 옮긴 세션은 사람이 직접 찾아서 되돌려야 한다. 억지로 맞추지 마라.
+- reason: 10단어 이내의 짧은 구로, 공통된 대상이 무엇인지만. 판단 과정을 문장으로 쓰지 마라.
 ${sessionBlock}
 
-출력 형식(JSON만, 다른 설명 없이):
-{"placements":[{"id":"...", "folder":"..."|null, "reason":"짧은 이유"}]}`;
+출력 형식 — 위에 나열된 모든 id에 대해 같은 순서로 정확히 한 항목씩. JSON만, 앞뒤에 다른 텍스트 금지:
+{"placements":[{"id":"a1b2","folder":"회사/서버/로깅","reason":"이 폴더의 로그 파이프라인 작업과 동일 주제"},{"id":"c3d4","folder":null,"reason":"해당하는 폴더 없음"}]}`;
   }
   return `Below are the folders a human has already organized, and the session summaries inside each.
 
 ${folderBlock}
 
 ---
-Below are sessions that need (re)classifying. For each one, judge which of the above folders is the closest match by topic/nature.
-- If an existing folder fits well, use that exact folder path.
-- If no existing folder fits but the session is a clearly distinct sub-topic of its current folder, you may propose a new folder path (e.g. if the current folder is "company/server" and this session is about "logging", propose "company/server/logging" as a new subfolder name).
-- If it's still ambiguous, set folder to null.
+Below are sessions that need (re)classifying. For each one, judge which of the above folders is the closest match.
+- Match on shared concrete subject — the same feature, system, incident, or document. A shared technology or a shared kind of activity ("both are debugging", "both use Python") is not a match.
+- If an existing folder matches, copy that folder path exactly as written above.
+- Propose a NEW folder only when the session is a clearly distinct sub-topic of the folder it is already in AND at least two of the sessions listed below share that sub-topic. Exactly one level deeper than the current folder, named in the same style as the existing folder names above (e.g. current folder "company/server", session about logging -> "company/server/logging").
+- When in doubt, folder is null. An unplaced session costs nothing; a wrong placement has to be found and undone by hand. Do not stretch for a match.
+- reason: one short phrase under 10 words naming the shared subject. Not a sentence about your reasoning.
 ${sessionBlock}
 
-Output format (JSON only, no other explanation):
-{"placements":[{"id":"...", "folder":"..."|null, "reason":"short reason"}]}`;
+Output format — exactly one entry for every id listed above, in the same order. JSON only, nothing before or after:
+{"placements":[{"id":"a1b2","folder":"company/server/logging","reason":"log pipeline work, same as this folder"},{"id":"c3d4","folder":null,"reason":"no folder covers this subject"}]}`;
 }
 
 export async function suggestPlacements({
@@ -278,13 +292,34 @@ export async function suggestPlacements({
   if (limit) candidates = candidates.slice(0, limit);
   if (!candidates.length) return { ok: true, placements: [] };
 
+  // Total folderBlock size was unbounded before this — every folder's
+  // (now per-folder-capped, see capProfileText()) profile got
+  // concatenated regardless of how many folders exist, so a store with
+  // dozens of organized folders could dwarf the actual candidate list
+  // this prompt exists to classify. Included in encounter order until
+  // the budget is hit; `known` is derived from what actually made it in,
+  // not from every profile computed — a folder the model was never shown
+  // isn't a folder it can validly place a session into.
   const folderLabel = locale === 'ko' ? '폴더' : 'Folder';
-  const folderBlock = profiles.size
-    ? [...profiles.entries()].map(([folder, text]) => `${folderLabel}: ${folder}\n${text}`).join('\n\n')
+  const FOLDER_BLOCK_CHAR_CAP = 12000;
+  const includedFolders = [];
+  let folderBlockUsed = 0;
+  for (const [folder, text] of profiles) {
+    const block = `${folderLabel}: ${folder}\n${text}`;
+    if (includedFolders.length && folderBlockUsed + block.length > FOLDER_BLOCK_CHAR_CAP) continue;
+    includedFolders.push({ folder, block });
+    folderBlockUsed += block.length + 2;
+  }
+  const omittedFolders = profiles.size - includedFolders.length;
+  const omittedFoldersLine = omittedFolders
+    ? `\n\n${locale === 'ko' ? `…(폴더 ${omittedFolders}개 더 있음, 표시 생략)…` : `…(${omittedFolders} more folder${omittedFolders === 1 ? '' : 's'} not shown)…`}`
+    : '';
+  const folderBlock = includedFolders.length
+    ? includedFolders.map((f) => f.block).join('\n\n') + omittedFoldersLine
     : locale === 'ko'
       ? '(아직 정리된 폴더 없음)'
       : '(no folders organized yet)';
-  const known = new Set(profiles.keys());
+  const known = new Set(includedFolders.map((f) => f.folder));
   const existingDirs = new Set(listTreeDirs());
   const placements = [];
   const chunks = [];

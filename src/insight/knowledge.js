@@ -22,6 +22,39 @@ export function foldersActiveOn(date) {
   return [...new Set(sessions.map((s) => s.folder))];
 }
 
+// Caps how much material one knowledge-extraction prompt can carry.
+// Unbounded before this — every non-superseded session's summary +
+// decisions in the whole subtree got concatenated with no limit at all,
+// and this runs once per ACTIVE FOLDER EVERY DAY (proposeKnowledgeRefreshes()),
+// so a long-lived folder's prompt only ever grows. Most-recent-first
+// (what a folder's knowledge should weight toward), whole-item budget
+// rather than a mid-line truncation like learn.js's sessionExcerpt() —
+// that's fine for one continuous transcript, but chopping a bullet list
+// mid-item would hand the model a broken line.
+const KNOWLEDGE_MATERIAL_BUDGET = 7000;
+function knowledgeMaterial(sessions, locale, decisionLabel, noSummary) {
+  const ordered = [...sessions].sort((a, b) => (b.startedAt || '').localeCompare(a.startedAt || ''));
+  const kept = [];
+  let used = 0;
+  let omitted = 0;
+  for (const s of ordered) {
+    const parts = [`- ${s.extracted.summary || noSummary}`];
+    for (const d of s.extracted.decisions || []) parts.push(`  · ${decisionLabel}: ${d}`);
+    const block = parts.join('\n');
+    if (kept.length && used + block.length > KNOWLEDGE_MATERIAL_BUDGET) {
+      omitted++;
+      continue;
+    }
+    kept.push(block);
+    used += block.length + 1;
+  }
+  const material = kept.join('\n');
+  if (!omitted) return material;
+  const marker =
+    locale === 'ko' ? `…(오래된 세션 ${omitted}개는 분량 제한으로 생략)…` : `…(${omitted} older session${omitted === 1 ? '' : 's'} omitted to fit)…`;
+  return `${material}\n${marker}`;
+}
+
 /**
  * Generate durable Project Knowledge for a folder from its sessions' summaries
  * and decisions — an LLM call, but does NOT write anything to disk. Split from
@@ -42,19 +75,17 @@ export async function buildKnowledgeText(folder) {
   });
   if (sessions.length === 0) return { ok: false, error: `no sessions in ${folder}` };
 
-  const material = sessions
-    .map((s) => {
-      const parts = [`- ${s.extracted.summary || noSummary}`];
-      for (const d of s.extracted.decisions || []) parts.push(`  · ${decisionLabel}: ${d}`);
-      return parts.join('\n');
-    })
-    .join('\n');
+  const material = knowledgeMaterial(sessions, locale, decisionLabel, noSummary);
 
   // Korean branch is the original prompt, unchanged — see contentLocale()
   // (config.js).
   const prompt =
     locale === 'ko'
       ? `아래는 "${folder}" 작업 공간에서 있었던 세션 요약과 결정들이다. 이 공간에서 새 작업을 시작하는 AI가 미리 알아야 할 "프로젝트 지식"을 정리해라. 반복되는 컨벤션, 확정된 결정, 자주 나오는 용어, 주의할 점 위주로. 개별 세션 나열이 아니라 정제된 지식으로.
+
+구조: 찾은 내용을 다음 "##" 제목 아래에, 이 순서로 정리해라 — 실제로 쓸 내용이 있는 제목만 넣어라: ## 컨벤션, ## 결정, ## 용어, ## 주의할 점. 하나만 내용이 있으면 그 하나만 출력해라. 제목만 쓰고 내용을 비우거나 "없음" 같은 채움말을 넣지 마라. 최상위 "#" 제목은 쓰지 마라 — 네 출력 위에 이미 하나 붙는다.
+각 줄은 이 세션들을 읽지 않은 사람도 바로 이해하고 적용할 수 있어야 한다. 여러 세션에 반복해서 나오는 내용은 한 줄로 합치고, 한 세션에만 해당하고 다시 나오지 않을 내용은 빼라.
+전체 400단어 이내. 이 글은 이 작업 공간의 모든 다음 세션 컨텍스트에 그대로 실리므로, 길이 자체가 비용이다.
 
 금지: "완료했습니다", "정리하여 저장했습니다", "다음 작업 시 참고됩니다" 같은
 작업 보고/메타 서술로 시작하거나 끝내지 마라. 이 출력은 다음 세션의
@@ -64,6 +95,10 @@ AGENTS.md에 그대로 주입될 지식 본문이지, 방금 한 일에 대한 �
 
 ${material}`
       : `Below are the session summaries and decisions from the "${folder}" workspace. Distill the "project knowledge" an AI starting new work in this space should already know — recurring conventions, settled decisions, frequently-used terms, and things to watch out for. Not a list of individual sessions — refined knowledge instead.
+
+Structure: organize what you find under these "##" headings, in this order, and include a heading only when you actually have something real for it: ## Conventions, ## Decisions, ## Terminology, ## Watch out for. If only one has content, output only that one. Never write a heading followed by nothing, or by filler like "none". Do not emit a top-level "#" heading — one is already added above your output.
+Every line must stand on its own for someone who never read these sessions. Merge anything that recurs across sessions into a single line; drop anything that applied to one session only and will not come up again.
+Under 400 words total. This text is loaded into the context of every future session in this workspace, so length is a real cost to the reader.
 
 Forbidden: don't open or close with a status-report/meta phrase like "Done", "Organized and saved", "This will be referenced in future work". This output is knowledge that gets injected verbatim into the next session's AGENTS.md, not a report on what you just did. Start from the very first line with the actual knowledge (conventions/decisions/terms) itself.
 Output markdown body only.
