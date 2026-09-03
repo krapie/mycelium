@@ -25,6 +25,23 @@ test('every adapter implements the full contract documented in adapters/base.js'
   }
 });
 
+// The non-interactive invocation each newly-headless adapter uses was verified
+// empirically against a real install (issue #86): kiro-cli 2.14.1 emits its
+// reply and exits with `chat <prompt> --no-interactive`; opencode 1.18.20 with
+// `run --format json <message>`. Pin the flags so a later edit that breaks the
+// verified invocation fails here instead of silently returning garbage at runtime.
+test('kiro headlessArgs uses the verified `chat --no-interactive` one-shot flags', () => {
+  const args = getAdapter('kiro').headlessArgs('PROMPT');
+  assert.equal(args[0], 'chat');
+  assert.ok(args.includes('PROMPT'));
+  assert.ok(args.includes('--no-interactive'), 'must be non-interactive so it exits on its own');
+  assert.ok(args.includes('--trust-tools='), 'trust no tools — an unattended meta-call must not run commands');
+});
+
+test('opencode headlessArgs uses the verified `run --format json` one-shot flags', () => {
+  assert.deepEqual(getAdapter('opencode').headlessArgs('PROMPT'), ['run', '--format', 'json', 'PROMPT']);
+});
+
 test('getAdapter() finds an adapter by name and returns undefined for an unknown source', () => {
   assert.equal(getAdapter('claude').label, 'Claude Code');
   assert.equal(getAdapter('codex').label, 'Codex');

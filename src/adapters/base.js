@@ -12,6 +12,21 @@
  *   listSessions(): SessionRef[]        — { id, path, mtimeMs } for every session on disk
  *   parse(ref): Neutral                 — parse ONE session file into the neutral schema
  *
+ * Plus one OPTIONAL member:
+ *
+ *   headlessArgs(prompt): string[]      — args for a one-shot, non-interactive
+ *                                          completion that prints to stdout and
+ *                                          exits. Defining it is what makes an
+ *                                          agent eligible to back llm.js's
+ *                                          complete() (auto-tag, smart organize,
+ *                                          knowledge, digests, split) — see
+ *                                          resolveProvider() there.
+ *
+ * Omit headlessArgs when the CLI has no verified non-interactive mode. That's
+ * the honest state for kiro-cli and opencode today: guessing a flag would make
+ * complete() spawn an interactive session that hangs or returns garbage, so
+ * they're capture/resume-only until someone verifies a real one (issue #86).
+ *
  * Adapters only ever READ the CLI's own session files — never write them,
  * never touch auth tokens. A parse failure must throw so the scanner can skip
  * that one session (CLI formats drift across versions — see authsec-bridge's
