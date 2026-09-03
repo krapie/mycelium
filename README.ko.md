@@ -78,6 +78,7 @@ Mycelium은 모든 데이터를 사용자 머신(`~/.mycelium/`)에만 저장하
 - [**CLI 레퍼런스**](./docs/cli.md) — 스크립팅용 서브커맨드 전체
 - [**Architecture**](./docs/architecture.md) — 데이터 위치, 설계 원칙, 상태
 - [**Feature catalog**](./docs/features.md) — 모든 기능, 테스트 커버리지 상태 포함
+- [**Roadmap**](./ROADMAP.md) — 프로젝트의 방향과 명시적 비목표(non-goals)
 
 ## 정리 (실험 단계)
 

@@ -96,6 +96,7 @@ Full guide in [`docs/`](./docs):
 - [**CLI reference**](./docs/cli.md) — every subcommand, for scripting
 - [**Architecture**](./docs/architecture.md) — data location, design principles, status
 - [**Feature catalog**](./docs/features.md) — every capability, with test-coverage status
+- [**Roadmap**](./ROADMAP.md) — where the project is headed, and its non-goals
 
 ## Cleanup (experimental stage)
 
