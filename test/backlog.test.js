@@ -143,6 +143,10 @@ test('a backlog item is listed and searchable by title, and drops out once a rea
   const after = listSessions({ folder: 'Later' });
   assert.deepEqual(after.map((r) => r.id), ['child-1']);
   assert.equal(isBacklogReplaced(loadRaw(id)), true);
+  // The child is an ordinary session in the list, not a handoff — sessions.js
+  // reads this flag to decide the row carries no "continued from" badge.
+  assert.equal(after[0].from_backlog, true);
+  assert.equal(search({ query: 'working on it' })[0].from_backlog, true);
 });
 
 // scan() reads the REAL agent stores by design (adapters/index.js), so a test

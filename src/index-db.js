@@ -199,6 +199,17 @@ function isReplacedBacklog(row) {
   return row.kind === 'backlog' && jsonArrayLength(row.continued_to) > 0;
 }
 
+// Mark the rows whose continuation parent is a backlog item. A session started
+// from a note isn't a handoff — the list shows it as an ordinary session (see
+// sessions.js), and only its detail panel names where it came from. Computed
+// over the rows already fetched rather than per-row lookups, and BEFORE any
+// filtering, since the parent note is usually hidden by then.
+function markBacklogChildren(rows) {
+  const backlogIds = new Set(rows.filter((r) => r.kind === 'backlog').map((r) => r.id));
+  for (const r of rows) r.from_backlog = !!(r.continuation_of && backlogIds.has(r.continuation_of));
+  return rows;
+}
+
 /**
  * Non-search list feed: sessions ordered by started_at DESC.
  * folder === null → only unfiled (Root); folder string → that subtree; undefined → everything.
@@ -207,7 +218,7 @@ function isReplacedBacklog(row) {
  */
 export function listSessions({ folder, date, includeSuperseded = false } = {}) {
   const d = openDb();
-  let rows = d.prepare('SELECT * FROM sessions ORDER BY started_at DESC').all();
+  let rows = markBacklogChildren(d.prepare('SELECT * FROM sessions ORDER BY started_at DESC').all());
   // Matches sessionCountsByDay()'s grouping — a day's session list should be
   // "sessions active that day", same basis as what the calendar grid counted.
   if (date) rows = rows.filter((r) => (r.ended_at || r.started_at || '').slice(0, 10) === date);
@@ -265,7 +276,7 @@ export function search({ query, tags = [], folder, date, includeSuperseded = fal
     ids = ids === null ? tagIds : new Set([...ids].filter((x) => tagIds.has(x)));
   }
 
-  let sessions = d.prepare('SELECT * FROM sessions ORDER BY started_at DESC').all();
+  let sessions = markBacklogChildren(d.prepare('SELECT * FROM sessions ORDER BY started_at DESC').all());
   if (ids !== null) sessions = sessions.filter((s) => ids.has(s.id));
   // Same ended_at-first basis as listSessions()/sessionCountsByDay() — the
   // calendar's date filter goes through here too when combined with a search.

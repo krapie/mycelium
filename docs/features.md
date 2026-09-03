@@ -321,6 +321,15 @@ As a user, I can **write down something to work on later, before any agent has r
   days later. `scan()` returns `adoptedParents` so the callers that reindex
   precisely (`launch.js`) refresh the item's row too, not just the imported
   session's. [tested] (`test/backlog.test.js`)
+- **A session started from a note is an ordinary session, not a handoff.**
+  The list row carries no "continued from" badge for it (`[이어받음]` claims
+  a previous agent session was picked up, and there wasn't one) — the origin
+  lives in the detail panel instead, worded as its own thing and labelled
+  with the note's title: `Started from backlog: <title>` / the item's own
+  side reads `Started as: <session>`. `index-db.js`'s `markBacklogChildren()`
+  flags those rows in one pass over the rows already fetched, before
+  filtering, since the parent note is usually hidden by then. [tested]
+  (`test/backlog.test.js`, `test/render.test.js`)
 - **A source-less record never renders as "null".** A backlog item has no
   `source`, which `theme.js`'s `sourceLabel()` used to hand straight back:
   the detail panel printed `이어받음: null #1234abcd` for a session started

@@ -118,19 +118,29 @@ test('formatSessionDetail() renders merge/split lineage links using "?" when the
 
 // Regression: the continuation links printed the parent's raw `source`, so a
 // session started from a backlog item (which has none) rendered as
-// "이어받음: null #1234abcd". Every lineage reference goes through the same
-// refLabel() now.
-test('formatSessionDetail() names a backlog parent as a backlog, never as "null"', () => {
+// "이어받음: null #1234abcd". Backlog provenance now has its own wording —
+// it isn't a handoff, and the note's title says more than any id.
+test('formatSessionDetail() names where a session came from when its parent is a backlog item', () => {
   const item = createBacklog({ title: 'queued work', description: 'notes' }).session;
   const child = { ...emptyNeutral('render-child', 'claude'), continuationOf: item.id };
   saveRaw(child);
 
   const text = formatSessionDetail(child).join('\n');
-  assert.match(text, new RegExp(`backlog #${item.id.slice(0, 8)}`));
+  assert.match(text, /Started from backlog: queued work/);
+  assert.doesNotMatch(text, /Continues:/, "a note isn't a session that was handed off");
   assert.doesNotMatch(text, /null/);
 
   // ...and the other direction, on the item's own detail.
   const parentText = formatSessionDetail({ ...item, continuedTo: ['render-child'] }).join('\n');
-  assert.match(parentText, /claude #render-c/);
+  assert.match(parentText, /Started as: claude #render-c/);
   assert.doesNotMatch(parentText, /null/);
+});
+
+// A source-less record still must never render as a literal "null" anywhere —
+// the item's own detail header is the other place it would show up.
+test('formatSessionDetail() headers a backlog item with the backlog label, not "null"', () => {
+  const item = createBacklog({ title: 'header check' }).session;
+  const text = formatSessionDetail(item).join('\n');
+  assert.match(text, /backlog/);
+  assert.doesNotMatch(text, /null/);
 });
