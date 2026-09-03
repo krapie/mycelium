@@ -1,17 +1,59 @@
 import { spawn } from 'node:child_process';
+import { which } from './agents.js';
+import { ADAPTERS, getAdapter } from './adapters/index.js';
 
 /**
  * Minimal LLM call via a headless coding-CLI subprocess. We reuse whatever
- * subscription the user already has (Claude Code / Codex) rather than asking
- * for a separate API key, and stay inside "ordinary scripted use" of the
- * official CLI — never touching auth tokens directly.
+ * subscription the user already has (Claude Code / Codex / Kiro / OpenCode)
+ * rather than asking for a separate API key, and stay inside "ordinary
+ * scripted use" of the official CLI — never touching auth tokens directly.
  *
- * Default provider is Claude Code with a cheap model, matching ai-memory's
- * choice of a small model for consolidation-style work.
+ * Provider selection: MYCELIUM_LLM wins when set (honored verbatim). With it
+ * unset we auto-detect — the first CLI in ADAPTERS' canonical order that is
+ * both installed and one complete() actually knows how to drive headless,
+ * falling back to 'claude' so nothing is ever worse than the old hardcoded
+ * default (issue #86: a codex/kiro/opencode-only user had every LLM feature
+ * fail with an inscrutable `spawn claude ENOENT`).
  */
-const PROVIDER = process.env.MYCELIUM_LLM || 'claude';
-const CLAUDE_MODEL = process.env.MYCELIUM_CLAUDE_MODEL || 'haiku';
-const CODEX_MODEL = process.env.MYCELIUM_CODEX_MODEL || 'gpt-5.5';
+// An adapter is eligible to back complete() exactly when it defines
+// headlessArgs() — see adapters/base.js. Deriving eligibility from the
+// contract rather than a name list here is what keeps "adding an agent CLI
+// touches two files" true. All four current adapters define it; an adapter
+// for a CLI with no verified non-interactive mode would simply omit it and
+// stay capture/resume-only.
+const invocable = (a) => typeof a?.headlessArgs === 'function';
+
+// Both surfaced through each caller's `LLM failed: ${err.message}`. spawn's own
+// `spawn claude ENOENT` reads as "this tool is broken" and names no fix.
+export const NO_AGENT_CLI_MESSAGE =
+  'no LLM agent CLI found — install claude, codex, kiro-cli, or opencode, set MYCELIUM_LLM to the one you have, or run `mycelium demo` (needs no agent CLI)';
+export const unusableProviderMessage = (provider) =>
+  `MYCELIUM_LLM="${provider}" can't run headless — set it to ${ADAPTERS.filter(invocable)
+    .map((a) => a.name)
+    .join(' or ')}, or unset it to auto-detect`;
+
+// Only the PATH scan is memoized; MYCELIUM_LLM is re-read every call so it's
+// honored the instant it changes. __resetProviderCacheForTest() clears this.
+let _autoProvider = null;
+function resolveProvider() {
+  const forced = process.env.MYCELIUM_LLM;
+  if (forced) return forced;
+  if (_autoProvider) return _autoProvider;
+  for (const a of ADAPTERS) {
+    if (invocable(a) && which(a.bin)) return (_autoProvider = a.name);
+  }
+  return (_autoProvider = 'claude');
+}
+
+// Test-only, same convention as __setTestProvider() below: let a test drive
+// resolveProvider() against a temp PATH without spawning, and reset the memo
+// between PATH states.
+export function __resolveProviderForTest() {
+  return resolveProvider();
+}
+export function __resetProviderCacheForTest() {
+  _autoProvider = null;
+}
 
 // Every complete() call is Mycelium's own internal LLM call (tagging/digest/
 // knowledge), never a user request. The agent CLI stores the call itself as
@@ -69,16 +111,15 @@ export function killInFlight() {
 export function complete(prompt, { timeoutMs = 240000 } = {}) {
   if (_testProvider) return Promise.resolve(_testProvider(prompt, { timeoutMs }));
   const fullPrompt = `${META_MARKER}\n${prompt}`;
+  const provider = resolveProvider();
+  const agent = getAdapter(provider);
+  // Only reachable via an explicit MYCELIUM_LLM — resolveProvider()'s own
+  // fallback is always invocable. Erroring beats silently running a different
+  // agent than the one the user named.
+  if (!invocable(agent)) return Promise.reject(new Error(unusableProviderMessage(provider)));
+  const cmd = agent.bin;
+  const args = agent.headlessArgs(fullPrompt);
   return new Promise((resolve, reject) => {
-    let cmd, args;
-    if (PROVIDER === 'codex') {
-      cmd = 'codex';
-      args = ['exec', fullPrompt, '--sandbox', 'read-only', '--skip-git-repo-check', '-c', 'approval_policy=never', '-m', CODEX_MODEL];
-    } else {
-      cmd = 'claude';
-      args = ['-p', fullPrompt, '--model', CLAUDE_MODEL, '--output-format', 'json'];
-    }
-
     // windowsHide: on Windows, spawn() opens a real visible console window
     // for a console-subsystem child by default (Node's own windowsHide
     // default is false) — with dozens of these calls firing in the
@@ -99,7 +140,7 @@ export function complete(prompt, { timeoutMs = 240000 } = {}) {
     child.on('error', (e) => {
       clearTimeout(timer);
       untrack();
-      reject(e);
+      reject(e.code === 'ENOENT' ? new Error(NO_AGENT_CLI_MESSAGE) : e);
     });
     child.on('close', (code) => {
       clearTimeout(timer);
@@ -110,6 +151,11 @@ export function complete(prompt, { timeoutMs = 240000 } = {}) {
   });
 }
 
+// ESC (0x1b) can't appear as a literal in a regex here — eslint:recommended's
+// no-control-regex forbids it — so the ANSI matcher is built from a string.
+const ESC = String.fromCharCode(27);
+const ANSI_SGR = new RegExp(ESC + '\\[[0-9;]*m', 'g');
+
 export function extractText(stdout) {
   // Claude Code --output-format json wraps the reply in { result: "..." }.
   try {
@@ -118,19 +164,34 @@ export function extractText(stdout) {
   } catch {
     /* not claude json — fall through */
   }
-  // Codex --json emits JSONL events; pull the last agent_message text.
+  // Codex --json and opencode `run --format json` both emit JSONL events.
+  // Codex: the last agent_message. Opencode: every { type: "text" } part
+  // (its `part.text`), in order — one for a plain reply, several when the
+  // model interleaves text with tool steps.
   let last = null;
+  const opencodeText = [];
   for (const line of stdout.split('\n')) {
     if (!line.trim()) continue;
     try {
       const e = JSON.parse(line);
       if (e?.msg?.type === 'agent_message' && e.msg.message) last = e.msg.message;
       else if (e?.payload?.type === 'agent_message' && e.payload.message) last = e.payload.message;
+      else if (e?.type === 'text' && typeof e.part?.text === 'string') opencodeText.push(e.part.text);
     } catch {
       /* plain text line */
     }
   }
-  return last ?? stdout.trim();
+  if (last != null) return last;
+  if (opencodeText.length) return opencodeText.join('\n');
+  // Kiro CLI's `chat --no-interactive` has no structured-output mode: it
+  // prints the reply as RENDERED terminal text — SGR colour codes around
+  // the answer, a leading "> " speaker marker, markdown fences rendered
+  // away. Any ESC byte means we're looking at that shape; strip the
+  // decoration so parseJsonReply() (every caller's next step) sees clean text.
+  if (stdout.includes(ESC)) {
+    return stdout.replace(ANSI_SGR, '').replace(/^\s*>\s?/, '').trim();
+  }
+  return stdout.trim();
 }
 
 /**

@@ -92,6 +92,7 @@ Background upkeep's intervals and limits are all environment variable tunable. T
 
 | Env var | Default | Meaning |
 |---|---|---|
+| `MYCELIUM_LLM` | auto-detect | Which agent CLI backs the LLM features: `claude`, `codex`, `opencode`, or `kiro`; unset picks the first one installed, in that order (`kiro` last — it's the only one with no structured headless output) |
 | `MYCELIUM_SCAN_MS` | 5 min | Scan (capture) interval |
 | `MYCELIUM_TAG_BATCH_LIMIT` | 20 | Max sessions auto-summarized/tagged per scan cycle (oldest first, rest next cycle) |
 | `MYCELIUM_SMART_ORGANIZE_MS` | 30 min | Smart-organize auto-compute interval |

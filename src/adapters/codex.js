@@ -9,6 +9,21 @@ export const bin = 'codex';
 export const newArgs = (seed) => (seed ? [seed] : []);
 export const resumeArgs = (sessionId) => ['resume', sessionId];
 
+// read-only sandbox + approval_policy=never: complete() is an unattended
+// background call, so it must never prompt for approval or touch the disk.
+const MODEL = process.env.MYCELIUM_CODEX_MODEL || 'gpt-5.5';
+export const headlessArgs = (prompt) => [
+  'exec',
+  prompt,
+  '--sandbox',
+  'read-only',
+  '--skip-git-repo-check',
+  '-c',
+  'approval_policy=never',
+  '-m',
+  MODEL,
+];
+
 // Codex stores rollouts under ~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl.
 // Verified against the real on-disk format (session_meta + event_msg lines).
 const ROOT = process.env.CODEX_SESSIONS_DIR || join(homedir(), '.codex', 'sessions');
