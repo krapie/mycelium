@@ -20,7 +20,7 @@ const { createApp } = await import('../../src/tui/app.js');
 const { sessionsView } = await import('../../src/tui/views/sessions.js');
 const { allRaw, loadRaw } = await import('../../src/scanner.js');
 const { mkdir } = await import('../../src/organize.js');
-const { createBacklog } = await import('../../src/backlog.js');
+const { createBacklog, markBacklogEntered } = await import('../../src/backlog.js');
 const { reindex } = await import('../../src/index-db.js');
 const { __setTestClipboard } = await import('../../src/tui/clipboard.js');
 
@@ -133,6 +133,42 @@ test('r on a backlog item launches an agent seeded with it and marks it done', a
     // session's first import).
     assert.match(copied, /paste me/, 'the copied command carries the item as the agent prompt');
     assert.match(copied, new RegExp(`mycelium:backlog:${item.id}`), 'and the marker that links the session back');
+  } finally {
+    cleanup(app);
+  }
+});
+
+// Regression: an already-started item (printed/copied once, never actually
+// captured — see the invariant test in backlog.test.js) could be re-opened
+// silently, seeding a second command for the same item with no warning that
+// only one of the two could ever actually consume it.
+test('r on an already-started backlog item confirms before opening it again, and Cancel launches nothing', async () => {
+  const item = createBacklog({ title: 'already started', folder: 'Redo' }).session;
+  markBacklogEntered(item.id);
+  const { app, input, foldersBox, listBox } = await mount('Redo');
+  try {
+    await drillInto(input, foldersBox, 'Redo');
+    await waitFor(() => listBox.items.some((it) => /already started/.test(it.content)));
+
+    sendKey(input, 'r');
+    await waitFor(() => app.screen.children.some((c) => c.type === 'list' && /again/i.test(c._label?.content || '')));
+    const confirm = app.screen.children.find((c) => c.type === 'list' && /again/i.test(c._label?.content || ''));
+    confirm.select(confirm.items.findIndex((it) => /cancel|취소/i.test(it.content)));
+    sendKey(input, 'enter');
+    await new Promise((r) => setTimeout(r, 80));
+    assert.equal(
+      app.screen.children.some((c) => c.type === 'list' && /agent/i.test(c._label?.content || '')),
+      false,
+      'Cancel never reaches the agent picker',
+    );
+
+    // Same key again, this time confirming, does reach it.
+    sendKey(input, 'r');
+    await waitFor(() => app.screen.children.some((c) => c.type === 'list' && /again/i.test(c._label?.content || '')));
+    const confirm2 = app.screen.children.find((c) => c.type === 'list' && /again/i.test(c._label?.content || ''));
+    confirm2.select(confirm2.items.findIndex((it) => /start again|다시 시작/i.test(it.content)));
+    sendKey(input, 'enter');
+    await waitFor(() => app.screen.children.some((c) => c.type === 'list' && /agent/i.test(c._label?.content || '')));
   } finally {
     cleanup(app);
   }

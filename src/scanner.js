@@ -48,7 +48,15 @@ function isMyceliumMeta(neutral) {
  * still being worked on gets re-parsed on later scans, and the item's own
  * existence is the real gate — once consumed, there's nothing left to match.
  *
- * Returns the consumed item's id (its row must leave the index) or null.
+ * Deliberately does NOT delete the parent itself — same ordering as
+ * organize/lineage.js's foldProductIntoSession() for the analogous merge/
+ * split-product case (saveRaw(target) before deleteSession(product)): the
+ * caller must persist `neutral` first and delete the parent only after that
+ * succeeds, or a crash between the two would delete the item's only record
+ * before the session that was meant to replace it ever hit disk.
+ *
+ * Returns the id of the item to delete once `neutral` is durably written, or
+ * null.
  */
 function consumeBacklogItem(neutral) {
   let parent = null;
@@ -76,7 +84,6 @@ function consumeBacklogItem(neutral) {
     neutral.extracted.title = parent.extracted.title;
     neutral.titleLocked = true;
   }
-  deleteRaw(parent.id);
   return parent.id;
 }
 
@@ -238,7 +245,6 @@ export function scan({ onImport } = {}) {
       // already sitting in New. Recency matches the calendar's own basis.
       // A session started from a backlog item replaces that item outright.
       const consumedId = consumeBacklogItem(neutral);
-      if (consumedId) consumedBacklog.add(consumedId);
       if (!existing && archiveDays > 0 && neutral.folder == null && neutral.organizedBy !== 'human') {
         const last = Date.parse(neutral.endedAt || neutral.startedAt || '');
         if (Number.isFinite(last) && last < archiveCutoff) neutral.folder = '_archive';
@@ -246,6 +252,12 @@ export function scan({ onImport } = {}) {
       neutral._mtimeMs = ref.mtimeMs;
 
       writeFileSync(rawPath(neutral.id), JSON.stringify(neutral, null, 2));
+      // Only delete the item's own record once the session that replaces it
+      // is durably on disk — see consumeBacklogItem()'s doc comment.
+      if (consumedId) {
+        deleteRaw(consumedId);
+        consumedBacklog.add(consumedId);
+      }
       imported++;
       if (onImport) onImport(neutral);
     }

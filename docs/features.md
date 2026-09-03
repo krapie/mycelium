@@ -266,6 +266,46 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   uses it for `n`'s directory picker) so `daemon/cycles.js`'s
   digest-review auto-inject can use it too, without core importing from
   `tui/**`. Filters to directories that still `existsSync()`. [tested]
+- **Infer which folder a bare working directory belongs to.**
+  `folderForDir(dir)` — the reverse of `dirsForFolder()`: given a
+  directory, returns the folder of whichever session most recently
+  (`startedAt`) had that `projectDir`/`cwd`, or `null` if none has.
+  Excludes `_archive`, same as `classificationCandidates()`/`tagAll()`
+  elsewhere. Exists for the Claude Code plugin's `SessionStart` hook (see
+  below), which has no TUI to ask "which folder?" the way the `i` key
+  does. [tested]
+
+## Claude Code Plugin (`.claude-plugin/`, `hooks/`, `skills/`, `src/cli/hook.js`)
+
+- **Auto-refresh `AGENTS.md` at Claude Code session start.**
+  `hooks/session-start.sh` (a Claude Code `SessionStart` hook, wired via
+  `hooks/hooks.json`) shells out to `mycelium hook session-start --dir
+  <cwd>` (`src/cli/hook.js`'s `hookCmd`), which calls `folderForDir(dir)`
+  then `injectAgentsMd(dir, folder)` if one was found — the same write the
+  TUI's `i`/`n`/`h` already trigger, just reached from Claude Code's own
+  lifecycle instead of a key press. No-ops silently (exit 0, no stdout) if
+  `mycelium` isn't on `PATH`, the directory has no known folder, or that
+  folder has no `KNOWLEDGE.md` yet — a `SessionStart` hook is meant to be
+  a silent best-effort convenience, never a source of session-start
+  errors. On success, prints `hookSpecificOutput.additionalContext`
+  (locale-aware per `contentLocale()`) so Claude sees a one-line note that
+  the refresh happened. Deliberately undocumented in `printHelp()` — like
+  `--tutorial`, invoked by tooling, not typed by a person. [tested] (CLI
+  dispatch test covers the inject-happens, no-folder-no-op, and
+  unknown-subcommand-no-op cases; the actual shell script itself is
+  exercised manually, not under `npm test` — see
+  `docs/claude-code-plugin.md`)
+- **Slash commands reaching into Mycelium from inside a conversation.**
+  `skills/mycelium-search`, `skills/mycelium-backlog`,
+  `skills/mycelium-context` — thin `SKILL.md` instructions telling Claude
+  to run the existing `mycelium search`/`backlog`/`inject` CLI commands
+  via `Bash` and present the results; no new runtime logic. `[untested]`
+  (skill *content* isn't exercised by `npm test` — Claude Code loads and
+  interprets `SKILL.md` itself, outside this repo's test surface; the CLI
+  commands they wrap are already covered under Find/Backlog/Reuse above).
+
+See [`docs/claude-code-plugin.md`](./claude-code-plugin.md) for install
+instructions and the full rationale.
 
 ## Handoff (`src/handoff.js`)
 
@@ -327,7 +367,20 @@ As a user, I can **write down something to work on later, before any agent has r
   `SYNTHETIC_TURN`), and on every import rather than only the first, since
   the item's own existence is the real gate. `scan()` returns
   `consumedBacklog` so callers that reindex precisely (`launch.js`) drop
-  those rows from the index. [tested] (`test/backlog.test.js`)
+  those rows from the index. The parent's own file is deleted only AFTER
+  `neutral`'s write succeeds (same ordering as `foldProductIntoSession()`'s
+  `saveRaw(target)` before `deleteSession(product)`) — deleting it first
+  would risk losing the item's only record to a crash between the two
+  writes, before the session meant to replace it ever reached disk.
+  [tested] (`test/backlog.test.js`)
+- **Reopening an already-started item asks first.** An item whose command
+  was printed/copied but never captured (see the invariant above) stays open
+  to retry on purpose — but `resume-handoff.js`'s `doOpenBacklog()` used to
+  let a second `r` fire silently, seeding a second command for the same
+  item when only whichever session gets captured first can actually consume
+  it. Now a `doneAt` item confirms before opening again rather than being
+  blocked outright, which would break the legitimate retry case (a lost
+  clipboard, a closed terminal). [tested] (`test/e2e/backlog-e2e.test.js`)
 - **A source-less record never renders as "null".** A backlog item has no
   `source`, which `theme.js`'s `sourceLabel()` used to hand straight back:
   the detail panel printed `이어받음: null #1234abcd` for a session started

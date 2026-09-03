@@ -34,9 +34,7 @@ export function createResumeHandoff(app, { getCurrentRow, afterResume, afterHand
   // (scanner.js consumes it on capture, whichever terminal it started in), so
   // nothing here links the two — doing it twice would leave a dangling
   // continuationOf pointing at a record that no longer exists.
-  const doOpenBacklog = () => {
-    const r = getCurrentRow();
-    if (!r) return;
+  const startBacklog = (r) => {
     const seed = buildBacklogSeed(r.id);
     if (!seed.ok) return app.notify(seed.error, 3);
     launchAgent(app, { folder: r.folder, seed: seed.prompt, title: t('launch.selectAgentBacklog') }, (mine) => {
@@ -52,6 +50,30 @@ export function createResumeHandoff(app, { getCurrentRow, afterResume, afterHand
       data.refreshOne(r.id);
       afterHandoff();
     });
+  };
+
+  const doOpenBacklog = () => {
+    const r = getCurrentRow();
+    if (!r) return;
+    // Already started once (doneAt set), but still here — its command was
+    // printed/copied but never actually produced a session, which is the
+    // whole reason the row stays visible instead of being consumed (see
+    // scanner.js's consumeBacklogItem()). Starting it again is a legitimate
+    // retry (a lost clipboard, a closed terminal), not blocked outright —
+    // just confirmed, since firing it twice seeds two commands for the same
+    // item and only the session captured first actually consumes it.
+    if (r.doneAt) {
+      return menu(
+        app,
+        t('backlog.reopenConfirmTitle'),
+        [
+          { label: t('backlog.reopenConfirmYes'), value: 'yes' },
+          { label: t('common.cancel'), value: 'no' },
+        ],
+        (choice) => (choice === 'yes' ? startBacklog(r) : afterHandoff()),
+      );
+    }
+    startBacklog(r);
   };
 
   const doActualResume = (session) => {
