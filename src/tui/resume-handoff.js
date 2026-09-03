@@ -1,6 +1,7 @@
 import { launchAgent, resumeSession } from './launch.js';
 import { resumeCommandLine, AGENTS } from '../agents.js';
 import { buildHandoff } from '../handoff.js';
+import { buildBacklogSeed, markBacklogEntered } from '../backlog.js';
 import { foldProductIntoSession } from '../organize.js';
 import { sourceSessionExists } from '../scanner.js';
 import * as data from './data.js';
@@ -27,6 +28,30 @@ import { t } from './i18n.js';
  * difference this extraction preserves rather than silently unifies.
  */
 export function createResumeHandoff(app, { getCurrentRow, afterResume, afterHandoff }) {
+  // A backlog item (backlog.js) is a note written before any agent ran:
+  // nothing to resume, nothing to hand off. Opening it launches an agent
+  // seeded with the note and parented to it, so launch.js's run() links the
+  // session that comes back as its continuation — which is also what finally
+  // takes the note out of the list, its child row standing in for it.
+  const doOpenBacklog = () => {
+    const r = getCurrentRow();
+    if (!r) return;
+    const seed = buildBacklogSeed(r.id);
+    if (!seed.ok) return app.notify(seed.error, 3);
+    launchAgent(app, { folder: r.folder, seed: seed.prompt, parentId: r.id, title: t('launch.selectAgentBacklog') }, (mine) => {
+      // launchAgent() calls back with no argument when the agent/directory
+      // picker was cancelled, and with an array (empty on the "copy command"
+      // path, which produces nothing in THIS process) once it actually
+      // launched or copied. Entering the item is what marks it done.
+      if (mine) markBacklogEntered(r.id);
+      // run()'s own reindex covers the sessions it captured, not this parent —
+      // whose continuedTo/doneAt just changed, and whose index row is what
+      // decides that the note now hides behind its session.
+      data.refreshOne(r.id);
+      afterHandoff();
+    });
+  };
+
   const doActualResume = (session) => {
     // resumeSession() (launch.js) already reindexes exactly what changed.
     resumeSession(app, session, afterResume);
@@ -42,6 +67,7 @@ export function createResumeHandoff(app, { getCurrentRow, afterResume, afterHand
   const doHandoff = ({ fallback = false } = {}) => {
     const r = getCurrentRow();
     if (!r) return;
+    if (r.kind === 'backlog') return doOpenBacklog();
     const hb = buildHandoff(r.id);
     if (!hb.ok) return app.notify(hb.error, 3);
     const isDerived = r.mergedFrom?.length || r.splitFrom;
@@ -88,6 +114,7 @@ export function createResumeHandoff(app, { getCurrentRow, afterResume, afterHand
   const doResume = () => {
     const r = getCurrentRow();
     if (!r) return;
+    if (r.kind === 'backlog') return doOpenBacklog();
     const n = data.detail(r.id);
     if (n?.mergedFrom?.length || n?.splitFrom) return doHandoff({ fallback: true });
     if (!sourceSessionExists(r.source, r.id)) {
@@ -110,6 +137,7 @@ export function createResumeHandoff(app, { getCurrentRow, afterResume, afterHand
   const onDetailEnter = () => {
     const r = getCurrentRow();
     if (!r) return;
+    if (r.kind === 'backlog') return doOpenBacklog();
     // "Copy command" pastes into a brand-new terminal outside the TUI —
     // there's no way to auto-absorb through that path, and a merge/split
     // product's id isn't a real agent-native session id to begin with, so
@@ -133,5 +161,5 @@ export function createResumeHandoff(app, { getCurrentRow, afterResume, afterHand
     });
   };
 
-  return { doResume, doHandoff, onDetailEnter };
+  return { doResume, doHandoff, onDetailEnter, doOpenBacklog };
 }

@@ -14,6 +14,11 @@ mycelium tag <session> +urgent -miscategorized
 mycelium unmerge <session>                     # undo a TUI Shift+M merge
 mycelium unsplit <session>                     # undo a TUI Shift+S split
 
+# Backlog (something to work on later, written before any agent has run)
+mycelium backlog add "Fix the flaky scan test" --desc "starts failing above ~200 sessions" --folder company/platform
+mycelium backlog list [--folder f] [--all]     # remaining items (--all also shows already-started ones)
+mycelium backlog open <session|prefix> [--agent a] [--dir D] [--copy]  # print the command that starts it, seeded with your notes
+
 # Learn
 mycelium autotag                               # retroactively summarize/tag past sessions in bulk
 mycelium digest [week] [--date YYYY-MM-DD]

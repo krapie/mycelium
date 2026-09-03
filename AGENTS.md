@@ -31,6 +31,7 @@ src/
   insight.js          digests + per-folder KNOWLEDGE.md generation
   reuse.js            KNOWLEDGE.md → AGENTS.md injection (ancestor-path inheritance)
   handoff.js          cross-agent handoff prompt composition
+  backlog.js          user-written intent notes (kind: 'backlog'), opened as a seeded handoff
   split.js            LLM-suggested session splitting
   index-db.js         sqlite (FTS5) index — derived, rebuildable from raw/
   config.js           config.json read/write (locale, excluded ids, etc.)
@@ -94,6 +95,7 @@ Full reference: [`docs/tui.md`](./docs/tui.md). Quick map, since a change to any
 | Organize | `m` move · `t` tag · `o` smart organize |
 | Learn | `a` auto-tag/summarize · `w` extract folder knowledge · `k` review + inject knowledge updates across every active folder at once (unrelated to Digest/`d`) |
 | Reuse | `n` new agent (asks: open here, or copy command for another tab) · `h` handoff · `r` resume · `i` inject AGENTS.md |
+| Backlog | `b` write an item to start later · `r`/detail-`Enter` start it (seeded handoff) · `e` edit its title + notes |
 | Navigation | `Enter`/`→` drill in · `Esc`/`←` back · `Space` multi-select · `/` search · `v` Calendar tab |
 | Other | `Shift+M` merge · `Shift+S` split · `Shift+O` cycle sort · `y` copy · `d` digests · `g` re-show onboarding · `l` switch language (confirm, then restarts) · `?` full shortcut list · `q` quit |
 

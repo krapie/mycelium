@@ -5,6 +5,7 @@ import { organizeCmd, mkdirCmd, mvCmd, tagCmd, unmergeCmd, unsplitCmd } from './
 import { autotagCmd, digestCmd, knowledgeCmd } from './cli/learn.js';
 import { contextCmd, injectCmd, handoffCmd, resumeCmd } from './cli/reuse.js';
 import { searchCmd, listCmd, tagsCmd } from './cli/find.js';
+import { backlogCmd } from './cli/backlog.js';
 import { cleanupCmd } from './cli/cleanup.js';
 import { daemonCmd, demoCmd, langCmd } from './cli/run.js';
 import { printHelp } from './cli/help.js';
@@ -23,6 +24,7 @@ const COMMANDS = {
   tag: tagCmd,
   unmerge: unmergeCmd,
   unsplit: unsplitCmd,
+  backlog: backlogCmd,
   autotag: autotagCmd,
   digest: digestCmd,
   knowledge: knowledgeCmd,

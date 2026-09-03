@@ -153,7 +153,7 @@ export function sessionsView(opts = {}) {
       // Agent name formatted as a hashtag, same visual language as tags —
       // and now trails the title instead of leading it, so the title (the
       // thing you're actually scanning for) reads first on the line.
-      const src = `{${sourceColor(r.source)}-fg}#${sourceLabel(r.source)}{/}`;
+      const src = r.kind === 'backlog' ? '' : `{${sourceColor(r.source)}-fg}#${sourceLabel(r.source)}{/}`;
       // No reserved gutter — the checkmark only takes space on rows you've
       // actually selected, so the title starts flush-left the rest of the
       // time instead of every row paying for a feature most rows don't use.
@@ -181,6 +181,14 @@ export function sessionsView(opts = {}) {
           : r.supersededBy?.length || r.splitInto?.length
             ? `{${C.faint}-fg}[${t('sessions.linkedBadge')}]{/} `
             : '';
+      // Backlog items (backlog.js) carry no agent yet — an agent hashtag on
+      // one would name whichever CLI happens to open it later, which is
+      // exactly what hasn't been decided. The badge takes its place, and dims
+      // once the item has been opened into a real session.
+      const backlog =
+        r.kind === 'backlog'
+          ? `{${r.doneAt ? C.faint : C.fox}-fg}[${t(r.doneAt ? 'sessions.backlogOpenedBadge' : 'sessions.backlogBadge')}]{/}`
+          : '';
       const isNew = !r.folder ? `{${C.spore}-fg}[${t('sessions.newBadge')}]{/}` : '';
       // Under active search, lead with the FTS snippet — the row's row-reason.
       // The default preview (first user message) hides matches deep in the
@@ -192,7 +200,8 @@ export function sessionsView(opts = {}) {
       // {|} is blessed's right-align pivot (same trick app.js uses for the
       // header) — pins the metadata cluster to the column's right edge
       // instead of trailing directly off the title text.
-      return `${mark}${text}{|}${lineage}${link}${src} ${isNew}`;
+      const meta = [lineage.trim(), link.trim(), backlog, src, isNew].filter(Boolean).join(' ');
+      return `${mark}${text}{|}${meta}`;
     });
     listBox.setItems(items.length ? items : [`{gray-fg}${t('sessions.empty')}{/}`]);
     if (items.length) {
@@ -306,6 +315,7 @@ export function sessionsView(opts = {}) {
       const doSplit = () => actions.doSplit(ctx);
       const doKnowledge = () => actions.doKnowledge(ctx);
       const doNewAgent = () => actions.doNewAgent(ctx);
+      const doNewBacklog = () => actions.doNewBacklog(ctx);
 
       // Each column's fraction is of the FULL width, not "whatever's left
       // after folders" — the old scheme capped folders at a fixed ~18-30
@@ -657,7 +667,13 @@ export function sessionsView(opts = {}) {
           const r = currentRow();
           const multi = state.selected.size > 1;
           const sessionItems = [];
-          if (r) {
+          if (r && r.kind === 'backlog') {
+            // Nothing to hand off or split on a note nobody has worked on
+            // yet — the one thing to do with it is start it (see
+            // resume-handoff.js's doOpenBacklog).
+            sessionItems.push({ label: `${t('actions.openBacklog')}${hint('r')}`, value: doOpenBacklog });
+            sessionItems.push({ label: `${t('actions.lineage')}${hint('Enter')}`, value: drillIntoDetail });
+          } else if (r) {
             sessionItems.push({ label: `${t('actions.handoff')}${hint('h')}`, value: () => doHandoff() });
             sessionItems.push({ label: `${t('actions.lineage')}${hint('Enter')}`, value: drillIntoDetail });
             sessionItems.push({ label: `${t('actions.split')}${hint('Shift+S')}`, value: doSplit });
@@ -678,6 +694,7 @@ export function sessionsView(opts = {}) {
         items.push({ label: `${t('actions.organize')}${hint('o')}`, value: doOrganize });
         items.push({ label: `${t('actions.knowledge')}${hint('w')}`, value: doKnowledge });
         items.push({ label: `${t('actions.newAgent')}${hint('n')}`, value: doNewAgent });
+        items.push({ label: `${t('actions.newBacklog')}${hint('b')}`, value: doNewBacklog });
         menu(app, t('actions.title'), items, (fn) => {
           if (typeof fn === 'function') fn();
           // fn===undefined = palette dismissed without a choice (Esc, or a
@@ -773,10 +790,17 @@ export function sessionsView(opts = {}) {
       listBox.key('n', doNewAgent);
       foldersBox.key('n', doNewAgent);
 
+      // b: write down something to work on later, in the folder you're
+      // browsing. Same both-boxes/per-box binding as `n` above and for the
+      // same reasons (folder-scoped, and its own prompt must not be
+      // re-enterable while it's open). See sessions-actions.js.
+      listBox.key('b', doNewBacklog);
+      foldersBox.key('b', doNewBacklog);
+
       // Resume/handoff/copy-command trio — shared with the Calendar tab's
       // day-list/detail (see resume-handoff.js). Only the "what's currently
       // selected" accessor and the post-action callbacks are view-specific.
-      const { doResume, doHandoff, onDetailEnter } = createResumeHandoff(app, {
+      const { doResume, doHandoff, onDetailEnter, doOpenBacklog } = createResumeHandoff(app, {
         getCurrentRow: currentRow,
         afterResume: () => {
           reloadFolders();
@@ -852,15 +876,24 @@ export function sessionsView(opts = {}) {
         const r = currentRow();
         if (!r) return;
         const n = data.detail(r.id);
-        textPrompt(app, t('editor.titlePrompt'), n?.extracted.title || '', (val) => {
-          if (val === null) return; // Esc — cancelled
-          const res = setContent(r.id, { title: val });
+        const save = (fields) => {
+          const res = setContent(r.id, fields);
           app.notify(res.ok ? t('editor.saved') : t('editor.saveFailed', res.error), res.ok ? 2 : 3);
           data.refreshOne(r.id);
           reloadFolders();
           reloadList();
           if (currentRow() && currentRow().id === r.id) showDetail(r.id);
           app.render();
+        };
+        textPrompt(app, t('editor.titlePrompt'), n?.extracted.title || '', (val) => {
+          if (val === null) return; // Esc — cancelled
+          // A backlog item's description is the user's own text too (it's what
+          // seeds the agent when the item is opened), so `e` edits both fields
+          // — unlike a captured session, whose summary stays AI-generated.
+          if (r.kind !== 'backlog') return save({ title: val });
+          textPrompt(app, t('editor.descPrompt'), n?.extracted.summary || '', (desc) => {
+            save(desc === null ? { title: val } : { title: val, summary: desc });
+          });
         });
       };
       listBox.key('e', doEditTitle);

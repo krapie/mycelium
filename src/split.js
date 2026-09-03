@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { complete, parseJsonReply } from './llm.js';
 import { loadRaw, saveRaw, deleteRaw } from './scanner.js';
-import { emptyNeutral } from './schema.js';
+import { emptyNeutral, isBacklog } from './schema.js';
 import { contentLocale } from './config.js';
 
 // Cap per-turn text sent to the LLM (not a head/tail slice like learn.js's
@@ -27,6 +27,9 @@ export async function suggestSplitBoundaries(sessionId) {
   const locale = contentLocale();
   const n = loadRaw(sessionId);
   if (!n) return { ok: false, error: `no session ${sessionId}` };
+  if (isBacklog(n)) {
+    return { ok: false, error: locale === 'ko' ? '백로그 항목은 분할할 수 없습니다' : 'A backlog item has nothing to split' };
+  }
   if (n.turns.length < 4) {
     return { ok: false, error: locale === 'ko' ? '분할하기엔 세션이 너무 짧습니다' : 'Session is too short to split' };
   }

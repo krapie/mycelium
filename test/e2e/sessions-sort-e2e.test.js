@@ -44,9 +44,9 @@ async function mountWithSortableSessions() {
   for (const s of SPECS) {
     const n = emptyNeutral(s.id, s.source);
     // "work" (not just each title's fruit name) so the search-active test
-    // below can query for it — searchableText() (schema.js) indexes turn
-    // text/summary, not the title field, so a query needs to be here to
-    // actually match via FTS.
+    // below can query for it — searchableText() (schema.js) indexes the title
+    // too now, but keeping the phrase in the turn text keeps this fixture
+    // independent of which fields FTS happens to cover.
     n.turns = [{ role: 'user', text: `some work happened, id ${s.id}` }];
     n.startedAt = s.startedAt;
     n.extracted.title = s.title;

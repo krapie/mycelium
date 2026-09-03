@@ -14,6 +14,7 @@
  *   toolActivity: [ "Edit src/auth.ts", "Ran tests (3 passed)" ],
  *   artifacts:    { filesChanged: [], diffSummary: null },
  *   extracted:    { title: null, tags: [], summary: null, decisions: [], todos: [] },
+ *   kind:         "session" | "backlog"  // backlog = user-written intent note, no transcript
  *   organizedBy:  "auto" | "human",   // sticky flag — see organize step
  *   folder:       "회사/플랫폼/인증"    // tree path (null = _inbox)
  *   suggestedFolder, suggestedReason  // queued smart-organize guess, cleared on review
@@ -23,6 +24,15 @@
  *   mergedFrom, splitFrom, supersededBy, splitInto  // split/merge lineage — see organize.js/split.js
  * }
  */
+
+/** A backlog item — a user-written intent note, not a captured agent session.
+ * Lives here rather than in backlog.js so the guards that need it (learn.js,
+ * insight/*, organize/*, split.js) can import it from the leaf module every
+ * one of them already depends on, with no import cycle back through
+ * backlog.js → scanner.js/organize.js. */
+export function isBacklog(n) {
+  return !!n && n.kind === 'backlog';
+}
 
 export function emptyNeutral(id, source) {
   return {
@@ -38,6 +48,8 @@ export function emptyNeutral(id, source) {
     extracted: { title: null, tags: [], summary: null, decisions: [], todos: [] },
     organizedBy: 'auto',
     folder: null,
+    kind: 'session', // 'backlog' = a user-written intent note, not a captured agent session (backlog.js)
+    doneAt: null, // backlog only: when it was opened into a real agent session
     continuationOf: null, // this session continues another (handoff parent id)
     continuedTo: [], // sessions that continued this one (handoff children)
     suggestedFolder: null, // smart-organize's queued-but-unreviewed placement guess
@@ -79,6 +91,10 @@ export function firstUserText(neutral) {
 /** Full searchable text blob for FTS indexing. */
 export function searchableText(neutral) {
   const parts = [];
+  // Title first: for a backlog item (isBacklog) it's the ONLY text there is
+  // besides the description, and for a captured session it's the phrase
+  // someone is most likely to search by.
+  if (neutral.extracted.title) parts.push(neutral.extracted.title);
   for (const turn of neutral.turns) if (turn.text) parts.push(turn.text);
   for (const a of neutral.toolActivity) parts.push(a);
   if (neutral.extracted.summary) parts.push(neutral.extracted.summary);

@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS sessions (
   title TEXT,
   summary TEXT,
   organized_by TEXT,
+  kind TEXT,
+  done_at TEXT,
   continuation_of TEXT,
   continued_to TEXT,
   tags TEXT
@@ -51,7 +53,7 @@ export function openDb() {
   } catch (err) {
     if (!String(err.message).includes('duplicate column')) throw err;
   }
-  for (const col of ['continuation_of TEXT', 'continued_to TEXT', 'tags TEXT', 'merged_from TEXT', 'split_from TEXT', 'superseded_by TEXT', 'split_into TEXT', 'ended_at TEXT']) {
+  for (const col of ['continuation_of TEXT', 'continued_to TEXT', 'tags TEXT', 'merged_from TEXT', 'split_from TEXT', 'superseded_by TEXT', 'split_into TEXT', 'ended_at TEXT', 'kind TEXT', 'done_at TEXT']) {
     try {
       db.exec(`ALTER TABLE sessions ADD COLUMN ${col}`);
     } catch (err) {
@@ -64,7 +66,7 @@ export function openDb() {
 function prepareWriters(d) {
   return {
     insSession: d.prepare(
-      'INSERT OR REPLACE INTO sessions (id, source, folder, started_at, ended_at, preview, title, summary, organized_by, continuation_of, continued_to, tags, merged_from, split_from, superseded_by, split_into) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT OR REPLACE INTO sessions (id, source, folder, started_at, ended_at, preview, title, summary, organized_by, kind, done_at, continuation_of, continued_to, tags, merged_from, split_from, superseded_by, split_into) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     ),
     insFts: d.prepare('INSERT INTO session_fts (id, body) VALUES (?, ?)'),
     upsertTag: d.prepare('INSERT OR IGNORE INTO tags (name) VALUES (?)'),
@@ -84,6 +86,8 @@ function writeSessionRow(w, n) {
     n.extracted.title ?? null,
     n.extracted.summary ?? null,
     n.organizedBy,
+    n.kind ?? 'session',
+    n.doneAt ?? null,
     n.continuationOf ?? null,
     JSON.stringify(n.continuedTo || []),
     JSON.stringify(n.extracted.tags || []),
@@ -172,13 +176,27 @@ export function sessionCountsByDay(yearMonth /* 'YYYY-MM' */) {
 // A sqlite row's superseded_by is a JSON array string (mirrors continued_to's
 // shape) — non-empty means this session was folded into a merge/split product.
 function hasSupersededBy(row) {
-  if (!row.superseded_by) return false;
+  return jsonArrayLength(row.superseded_by) > 0;
+}
+
+function jsonArrayLength(s) {
+  if (!s) return 0;
   try {
-    const arr = JSON.parse(row.superseded_by);
-    return Array.isArray(arr) && arr.length > 0;
+    const arr = JSON.parse(s);
+    return Array.isArray(arr) ? arr.length : 0;
   } catch {
-    return false;
+    return 0;
   }
+}
+
+// A backlog item stays listed after it's been opened (done) and only drops out
+// once a real session actually links back to it — that child row is what
+// represents it from then on, the same reasoning hasSupersededBy() encodes for
+// a merged-away original. Deliberately NOT keyed on done_at: the "copy
+// command" path marks an item done without producing anything in this
+// process, and hiding the note before its session exists would lose it.
+function isReplacedBacklog(row) {
+  return row.kind === 'backlog' && jsonArrayLength(row.continued_to) > 0;
 }
 
 /**
@@ -200,7 +218,7 @@ export function listSessions({ folder, date, includeSuperseded = false } = {}) {
   // their content now lives in that product, so they'd otherwise duplicate
   // rows in every list/search. loadRaw()/data.detail() (direct-by-id lookups,
   // not a list scan) are unaffected — this only guards list-shaped queries.
-  if (!includeSuperseded) rows = rows.filter((r) => !hasSupersededBy(r));
+  if (!includeSuperseded) rows = rows.filter((r) => !hasSupersededBy(r) && !isReplacedBacklog(r));
   if (folder === undefined) return rows;
   if (folder === null) return rows.filter((r) => !r.folder);
   return rows.filter((r) => isInSubtree(r.folder, folder));
@@ -257,7 +275,7 @@ export function search({ query, tags = [], folder, date, includeSuperseded = fal
   if (!isArchive(folder)) sessions = sessions.filter((s) => !isArchive(s.folder));
   // Same rule as listSessions() — merged/split-away originals stay out of
   // search results by default.
-  if (!includeSuperseded) sessions = sessions.filter((s) => !hasSupersededBy(s));
+  if (!includeSuperseded) sessions = sessions.filter((s) => !hasSupersededBy(s) && !isReplacedBacklog(s));
   // Same three-way folder meaning as listSessions(): undefined = no
   // restriction, null = only genuinely unfiled (searching from the New
   // pseudo-folder), a path = that subtree.

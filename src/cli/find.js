@@ -1,5 +1,5 @@
 import { allRaw } from '../scanner.js';
-import { firstUserText } from '../schema.js';
+import { firstUserText, isBacklog } from '../schema.js';
 import { search, listTags } from '../index-db.js';
 import { parseFlags } from './util.js';
 
@@ -10,8 +10,8 @@ export function searchCmd(args) {
   const results = search({ query, tags, folder: flags.folder });
   for (const s of results) {
     const folder = s.folder || '_inbox';
-    console.log(`${s.id.slice(0, 8)}  [${s.source}]  ${folder}`);
-    console.log(`          ${(s.preview || '').slice(0, 70)}`);
+    console.log(`${s.id.slice(0, 8)}  [${s.kind === 'backlog' ? 'backlog' : s.source}]  ${folder}`);
+    console.log(`          ${(s.title || s.preview || '').slice(0, 70)}`);
   }
   console.log(`\n${results.length} results`);
 }
@@ -29,8 +29,9 @@ export function listCmd(args) {
   for (const n of raws) {
     const folder = n.folder || '_inbox';
     const tags = n.extracted.tags.length ? ` #${n.extracted.tags.join(' #')}` : '';
-    console.log(`${n.id.slice(0, 8)}  [${n.source}]  ${folder}${tags}`);
-    console.log(`          ${firstUserText(n).slice(0, 70)}`);
+    console.log(`${n.id.slice(0, 8)}  [${isBacklog(n) ? 'backlog' : n.source}]  ${folder}${tags}`);
+    // A backlog item has no turns to preview — its title IS the line.
+    console.log(`          ${(isBacklog(n) ? n.extracted.title || '' : firstUserText(n)).slice(0, 70)}`);
   }
   console.log(`\n${raws.length} sessions`);
 }

@@ -65,6 +65,8 @@ function mapRow(r) {
     summary: r.summary,
     preview: r.preview,
     organizedBy: r.organized_by,
+    kind: r.kind || 'session',
+    doneAt: r.done_at,
     tags: parseJsonArray(r.tags),
     continuationOf: r.continuation_of,
     continuedTo: parseJsonArray(r.continued_to),

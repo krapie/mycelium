@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { loadRaw, saveRaw, allRaw, deleteRaw } from '../scanner.js';
 import { loadConfig, saveConfig } from '../config.js';
-import { emptyNeutral } from '../schema.js';
+import { emptyNeutral, isBacklog } from '../schema.js';
 import { mkdir } from './folders.js';
 
 /** Move a session to a folder MANUALLY — marks it human-owned (sticky). */
@@ -177,6 +177,9 @@ export function mergeSessions(ids, { title } = {}) {
   if (uniqueIds.length < 2) return { ok: false, error: '병합하려면 세션을 2개 이상 선택하세요' };
   const originals = uniqueIds.map(loadRaw).filter(Boolean);
   if (originals.length < 2) return { ok: false, error: '유효한 세션을 찾을 수 없습니다' };
+  // Merging folds transcripts together; a backlog item has none, and folding
+  // one away would silently drop a note that hasn't been worked on yet.
+  if (originals.some(isBacklog)) return { ok: false, error: '백로그 항목은 병합할 수 없습니다' };
   originals.sort((a, b) => (a.startedAt || '').localeCompare(b.startedAt || ''));
 
   const merged = emptyNeutral(randomUUID(), 'merged');
