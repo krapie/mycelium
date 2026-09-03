@@ -61,14 +61,10 @@ export function formatSessionDetail(n) {
   if (n.extracted.todos?.length) lines.push(`{${C.faint}-fg}${t('detail.todos')}{/}`, ...n.extracted.todos.map((td) => `- ${td}`), '');
   // Handoff continuation links (this is one flow across a model switch).
   if (n.continuationOf) {
-    const p = data.detail(n.continuationOf);
-    const label = p ? p.source + ' #' + n.continuationOf.slice(0, 8) : '#' + n.continuationOf.slice(0, 8);
-    lines.push('', `{${C.spore}-fg}${t('detail.continuationOf', label)}{/}`);
+    lines.push('', `{${C.spore}-fg}${t('detail.continuationOf', refLabel(n.continuationOf))}{/}`);
   }
   for (const cid of n.continuedTo || []) {
-    const c = data.detail(cid);
-    const label = c ? c.source + ' #' + cid.slice(0, 8) : '#' + cid.slice(0, 8);
-    lines.push(`{${C.spore}-fg}${t('detail.continuedTo', label)}{/}`);
+    lines.push(`{${C.spore}-fg}${t('detail.continuedTo', refLabel(cid))}{/}`);
   }
   // Split/merge lineage — same text-link style as the continuation links
   // above, no new interactive-jump precedent needed.

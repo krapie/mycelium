@@ -1,6 +1,7 @@
 import { launchAgent, resumeSession } from './launch.js';
 import { resumeCommandLine, AGENTS } from '../agents.js';
 import { buildHandoff } from '../handoff.js';
+import { buildBacklogSeed, markBacklogEntered } from '../backlog.js';
 import { foldProductIntoSession } from '../organize.js';
 import { sourceSessionExists } from '../scanner.js';
 import * as data from './data.js';
@@ -27,6 +28,54 @@ import { t } from './i18n.js';
  * difference this extraction preserves rather than silently unifies.
  */
 export function createResumeHandoff(app, { getCurrentRow, afterResume, afterHandoff }) {
+  // A backlog item (backlog.js) is a note written before any agent ran:
+  // nothing to resume, nothing to hand off. Opening it launches an agent
+  // seeded with the note; the session that comes back REPLACES the item
+  // (scanner.js consumes it on capture, whichever terminal it started in), so
+  // nothing here links the two — doing it twice would leave a dangling
+  // continuationOf pointing at a record that no longer exists.
+  const startBacklog = (r) => {
+    const seed = buildBacklogSeed(r.id);
+    if (!seed.ok) return app.notify(seed.error, 3);
+    launchAgent(app, { folder: r.folder, seed: seed.prompt, title: t('launch.selectAgentBacklog') }, (mine) => {
+      // launchAgent() calls back with no argument when the agent/directory
+      // picker was cancelled, and with an array (empty on the "copy command"
+      // path, which produces nothing in THIS process) once it actually
+      // launched or copied. Mark the item started either way — if a session
+      // does show up, the item is gone entirely and this mark with it; if it
+      // never does, the row says the command is already out there.
+      if (mine) markBacklogEntered(r.id);
+      // refreshOne() drops the row when the raw file is gone, which is exactly
+      // what happened if the launch produced a session that consumed it.
+      data.refreshOne(r.id);
+      afterHandoff();
+    });
+  };
+
+  const doOpenBacklog = () => {
+    const r = getCurrentRow();
+    if (!r) return;
+    // Already started once (doneAt set), but still here — its command was
+    // printed/copied but never actually produced a session, which is the
+    // whole reason the row stays visible instead of being consumed (see
+    // scanner.js's consumeBacklogItem()). Starting it again is a legitimate
+    // retry (a lost clipboard, a closed terminal), not blocked outright —
+    // just confirmed, since firing it twice seeds two commands for the same
+    // item and only the session captured first actually consumes it.
+    if (r.doneAt) {
+      return menu(
+        app,
+        t('backlog.reopenConfirmTitle'),
+        [
+          { label: t('backlog.reopenConfirmYes'), value: 'yes' },
+          { label: t('common.cancel'), value: 'no' },
+        ],
+        (choice) => (choice === 'yes' ? startBacklog(r) : afterHandoff()),
+      );
+    }
+    startBacklog(r);
+  };
+
   const doActualResume = (session) => {
     // resumeSession() (launch.js) already reindexes exactly what changed.
     resumeSession(app, session, afterResume);
@@ -42,6 +91,7 @@ export function createResumeHandoff(app, { getCurrentRow, afterResume, afterHand
   const doHandoff = ({ fallback = false } = {}) => {
     const r = getCurrentRow();
     if (!r) return;
+    if (r.kind === 'backlog') return doOpenBacklog();
     const hb = buildHandoff(r.id);
     if (!hb.ok) return app.notify(hb.error, 3);
     const isDerived = r.mergedFrom?.length || r.splitFrom;
@@ -88,6 +138,7 @@ export function createResumeHandoff(app, { getCurrentRow, afterResume, afterHand
   const doResume = () => {
     const r = getCurrentRow();
     if (!r) return;
+    if (r.kind === 'backlog') return doOpenBacklog();
     const n = data.detail(r.id);
     if (n?.mergedFrom?.length || n?.splitFrom) return doHandoff({ fallback: true });
     if (!sourceSessionExists(r.source, r.id)) {
@@ -110,6 +161,7 @@ export function createResumeHandoff(app, { getCurrentRow, afterResume, afterHand
   const onDetailEnter = () => {
     const r = getCurrentRow();
     if (!r) return;
+    if (r.kind === 'backlog') return doOpenBacklog();
     // "Copy command" pastes into a brand-new terminal outside the TUI —
     // there's no way to auto-absorb through that path, and a merge/split
     // product's id isn't a real agent-native session id to begin with, so
@@ -133,5 +185,5 @@ export function createResumeHandoff(app, { getCurrentRow, afterResume, afterHand
     });
   };
 
-  return { doResume, doHandoff, onDetailEnter };
+  return { doResume, doHandoff, onDetailEnter, doOpenBacklog };
 }

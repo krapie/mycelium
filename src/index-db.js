@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS sessions (
   title TEXT,
   summary TEXT,
   organized_by TEXT,
+  kind TEXT,
+  done_at TEXT,
   continuation_of TEXT,
   continued_to TEXT,
   tags TEXT
@@ -51,7 +53,7 @@ export function openDb() {
   } catch (err) {
     if (!String(err.message).includes('duplicate column')) throw err;
   }
-  for (const col of ['continuation_of TEXT', 'continued_to TEXT', 'tags TEXT', 'merged_from TEXT', 'split_from TEXT', 'superseded_by TEXT', 'split_into TEXT', 'ended_at TEXT']) {
+  for (const col of ['continuation_of TEXT', 'continued_to TEXT', 'tags TEXT', 'merged_from TEXT', 'split_from TEXT', 'superseded_by TEXT', 'split_into TEXT', 'ended_at TEXT', 'kind TEXT', 'done_at TEXT']) {
     try {
       db.exec(`ALTER TABLE sessions ADD COLUMN ${col}`);
     } catch (err) {
@@ -64,7 +66,7 @@ export function openDb() {
 function prepareWriters(d) {
   return {
     insSession: d.prepare(
-      'INSERT OR REPLACE INTO sessions (id, source, folder, started_at, ended_at, preview, title, summary, organized_by, continuation_of, continued_to, tags, merged_from, split_from, superseded_by, split_into) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT OR REPLACE INTO sessions (id, source, folder, started_at, ended_at, preview, title, summary, organized_by, kind, done_at, continuation_of, continued_to, tags, merged_from, split_from, superseded_by, split_into) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     ),
     insFts: d.prepare('INSERT INTO session_fts (id, body) VALUES (?, ?)'),
     upsertTag: d.prepare('INSERT OR IGNORE INTO tags (name) VALUES (?)'),
@@ -84,6 +86,8 @@ function writeSessionRow(w, n) {
     n.extracted.title ?? null,
     n.extracted.summary ?? null,
     n.organizedBy,
+    n.kind ?? 'session',
+    n.doneAt ?? null,
     n.continuationOf ?? null,
     JSON.stringify(n.continuedTo || []),
     JSON.stringify(n.extracted.tags || []),
@@ -172,14 +176,19 @@ export function sessionCountsByDay(yearMonth /* 'YYYY-MM' */) {
 // A sqlite row's superseded_by is a JSON array string (mirrors continued_to's
 // shape) — non-empty means this session was folded into a merge/split product.
 function hasSupersededBy(row) {
-  if (!row.superseded_by) return false;
+  return jsonArrayLength(row.superseded_by) > 0;
+}
+
+function jsonArrayLength(s) {
+  if (!s) return 0;
   try {
-    const arr = JSON.parse(row.superseded_by);
-    return Array.isArray(arr) && arr.length > 0;
+    const arr = JSON.parse(s);
+    return Array.isArray(arr) ? arr.length : 0;
   } catch {
-    return false;
+    return 0;
   }
 }
+
 
 /**
  * Non-search list feed: sessions ordered by started_at DESC.

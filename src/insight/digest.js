@@ -3,7 +3,7 @@ import { writeFileSync } from 'node:fs';
 import { complete } from '../llm.js';
 import { allRaw } from '../scanner.js';
 import { DIGEST_DIR, ensureDirs } from '../paths.js';
-import { firstUserTurn } from '../schema.js';
+import { firstUserTurn, isBacklog } from '../schema.js';
 import { contentLocale } from '../config.js';
 
 function dayOf(iso) {
@@ -37,6 +37,7 @@ function groupByFolder(sessions) {
 export function sessionsForPeriod(period, target) {
   const keyed = period === 'week' ? isoWeek(`${target}T00:00:00Z`) : target;
   return allRaw().filter((s) => {
+    if (isBacklog(s)) return false; // a queued intent isn't activity that happened in the period
     if (!s.startedAt) return false;
     return period === 'week' ? isoWeek(s.startedAt) === keyed : dayOf(s.startedAt) === target;
   });

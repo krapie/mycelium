@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { scan, allRaw, loadRaw } from '../scanner.js';
-import { reindexMany } from '../index-db.js';
+import { reindexMany, removeFromIndex } from '../index-db.js';
 import { move, linkContinuation } from '../organize.js';
 import { injectAgentsMd, dirsForFolder } from '../reuse.js';
 import { menu, textPrompt } from './widgets/pickers.js';
@@ -207,7 +207,11 @@ export function resumeSession(app, session, done) {
     // adds up fast for what's normally exactly one changed session.
     try {
       const touched = [];
-      scan({ onImport: (n) => touched.push(n) });
+      const res = scan({ onImport: (n) => touched.push(n) });
+      // A resumed session's terminal may also be where a backlog item's copied
+      // command was pasted — that item's record is gone now (scanner.js), so
+      // its row has to leave the index rather than be re-added.
+      for (const id of res.consumedBacklog) removeFromIndex(id);
       if (touched.length) reindexMany(touched); // nothing touched → index is already accurate
     } catch {
       /* ignore */
@@ -235,7 +239,7 @@ function run(app, { agentKey, dir, folder, seed, parentId }, done) {
   foreground(app, agent.bin, agent.newArgs(seed), dir, () => {
     // Back in the TUI: capture whatever the agent produced.
     try {
-      scan();
+      const scanRes = scan();
       const now = allRaw();
       const fresh = now.filter((n) => !before.has(n.id));
       // scan() captures ALL new sessions on the system — including anything
@@ -254,6 +258,7 @@ function run(app, { agentKey, dir, folder, seed, parentId }, done) {
       // store avoids a full raw/ rebuild on every single agent launch.
       // move()/linkContinuation() above already re-saved `mine`'s raw files,
       // so re-read before indexing to pick up those changes.
+      for (const id of scanRes.consumedBacklog) removeFromIndex(id);
       if (fresh.length) reindexMany(fresh.map((n) => loadRaw(n.id) || n));
       const note = parentId ? t('launch.continuedSession') : t('launch.newSession');
       app.notify(mine.length ? t('launch.captured', note, mine.length, folder || t('sessions.newBadge')) : t('launch.noNewSessions'), 3);

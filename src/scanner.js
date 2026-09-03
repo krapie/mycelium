@@ -3,6 +3,7 @@ import { writeFileSync, readFileSync, existsSync, readdirSync, rmSync } from 'no
 import { ensureDirs, RAW_DIR } from './paths.js';
 import { ADAPTERS, getAdapter } from './adapters/index.js';
 import { META_MARKER } from './llm.js';
+import { isBacklog, backlogSeedId } from './schema.js';
 import { loadConfig } from './config.js';
 
 function rawPath(id) {
@@ -26,6 +27,64 @@ const META_SIGNATURES = [
 function isMyceliumMeta(neutral) {
   const firstUser = neutral.turns.find((t) => t.role === 'user')?.text || '';
   return firstUser.includes(META_MARKER) || META_SIGNATURES.some((sig) => firstUser.includes(sig));
+}
+
+/**
+ * A backlog item only ever existed to start one session. Once that session is
+ * captured, the item IS that session: it takes over the item's folder and the
+ * title the human wrote, and the item's own record is dropped — one row, not a
+ * note plus a session shadowing each other. Same reasoning as organize.js's
+ * foldProductIntoSession() for a merge/split product, and nothing is lost:
+ * the note's full text is the session's own first prompt.
+ *
+ * Which session belongs to which item comes from the marker the seed carries
+ * (schema.js's backlogSeedMarker) — the only signal that survives a command
+ * copied into a terminal Mycelium never sees. Every user turn is searched, not
+ * just the first: agents prepend synthetic user-role turns of their own
+ * (slash-command echoes, system reminders — see schema.js's SYNTHETIC_TURN),
+ * so the seeded prompt is not reliably turn zero.
+ *
+ * Runs on every import, not only the first: a session captured while it was
+ * still being worked on gets re-parsed on later scans, and the item's own
+ * existence is the real gate — once consumed, there's nothing left to match.
+ *
+ * Deliberately does NOT delete the parent itself — same ordering as
+ * organize/lineage.js's foldProductIntoSession() for the analogous merge/
+ * split-product case (saveRaw(target) before deleteSession(product)): the
+ * caller must persist `neutral` first and delete the parent only after that
+ * succeeds, or a crash between the two would delete the item's only record
+ * before the session that was meant to replace it ever hit disk.
+ *
+ * Returns the id of the item to delete once `neutral` is durably written, or
+ * null.
+ */
+function consumeBacklogItem(neutral) {
+  let parent = null;
+  for (const turn of neutral.turns) {
+    if (turn.role !== 'user') continue;
+    const id = backlogSeedId(turn.text);
+    if (!id || id === neutral.id) continue;
+    const candidate = loadRaw(id);
+    if (isBacklog(candidate)) {
+      parent = candidate;
+      break;
+    }
+  }
+  if (!parent) return null;
+
+  // The folder a human filed the note into is a human placement, and carries
+  // over as one — smart-organize must not quietly re-file this session later.
+  if (parent.folder != null && neutral.organizedBy !== 'human') {
+    neutral.folder = parent.folder;
+    neutral.organizedBy = 'human';
+  }
+  // The human's own words outrank whatever auto-tagging would write later,
+  // exactly as they do on the item itself (createBacklog locks the title).
+  if (!neutral.extracted.title && parent.extracted.title) {
+    neutral.extracted.title = parent.extracted.title;
+    neutral.titleLocked = true;
+  }
+  return parent.id;
 }
 
 export function loadRaw(id) {
@@ -86,6 +145,10 @@ export function scan({ onImport } = {}) {
   let imported = 0;
   let skipped = 0;
   let failed = 0;
+  // Backlog items consumed by a session that was just captured — their rows
+  // are gone from raw/ and callers that reindex precisely (launch.js) have to
+  // drop them from the index too, not just add the imported sessions.
+  const consumedBacklog = new Set();
 
   // ADAPTERS read from each agent's real global store, unaffected by
   // MYCELIUM_HOME. Wrong for both tutorial-launch paths without a guard —
@@ -180,6 +243,8 @@ export function scan({ onImport } = {}) {
       // triage while still capturing it losslessly. Gated on `!existing`
       // (first import only) so this never retroactively archives a session
       // already sitting in New. Recency matches the calendar's own basis.
+      // A session started from a backlog item replaces that item outright.
+      const consumedId = consumeBacklogItem(neutral);
       if (!existing && archiveDays > 0 && neutral.folder == null && neutral.organizedBy !== 'human') {
         const last = Date.parse(neutral.endedAt || neutral.startedAt || '');
         if (Number.isFinite(last) && last < archiveCutoff) neutral.folder = '_archive';
@@ -187,12 +252,18 @@ export function scan({ onImport } = {}) {
       neutral._mtimeMs = ref.mtimeMs;
 
       writeFileSync(rawPath(neutral.id), JSON.stringify(neutral, null, 2));
+      // Only delete the item's own record once the session that replaces it
+      // is durably on disk — see consumeBacklogItem()'s doc comment.
+      if (consumedId) {
+        deleteRaw(consumedId);
+        consumedBacklog.add(consumedId);
+      }
       imported++;
       if (onImport) onImport(neutral);
     }
   }
 
-  return { scanned, imported, skipped, failed };
+  return { scanned, imported, skipped, failed, consumedBacklog: [...consumedBacklog] };
 }
 
 /**

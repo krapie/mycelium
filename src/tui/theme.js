@@ -25,6 +25,9 @@ export const C = {
 // still has to make for any new agent, and adapters (data layer) staying
 // free of any tui/ import is worth the one extra line per new source.
 export function sourceColor(source) {
+  // No source at all = a backlog item (backlog.js) — no agent has been chosen
+  // for it yet. Same accent its [Backlog] badge uses.
+  if (!source) return C.fox;
   return { codex: C.spore, kiro: C.kiro, opencode: C.opencode, merged: C.merged }[source] ?? C.claude;
 }
 
@@ -36,6 +39,11 @@ export function sourceColor(source) {
 // left to duplicate here beyond the 'merged' pseudo-source special case.
 export function sourceLabel(source) {
   if (source === 'merged') return 'merged';
+  // A backlog item has no source, and this must never hand back null: it goes
+  // straight into rendered labels (render.js printed a literal "null #1234abcd"
+  // for a session continuing a backlog item) and into sessions.js's
+  // sort-by-agent comparator, which called .localeCompare() on it.
+  if (!source) return 'backlog';
   return getAdapter(source)?.name ?? source;
 }
 

@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import { writeFileSync, readFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { complete, mapConcurrent } from '../llm.js';
 import { allRaw } from '../scanner.js';
+import { isBacklog } from '../schema.js';
 import { TREE_DIR, ensureDirs } from '../paths.js';
 import { isSuperseded, isInSubtree, listTreeDirs } from '../organize.js';
 import { contentLocale } from '../config.js';
@@ -36,6 +37,7 @@ export async function buildKnowledgeText(folder) {
   const noSummary = locale === 'ko' ? '(요약 없음)' : '(no summary)';
   const decisionLabel = locale === 'ko' ? '결정' : 'Decision';
   const sessions = allRaw().filter((s) => {
+    if (isBacklog(s)) return false; // intent someone wrote down, not knowledge the work produced
     if (isSuperseded(s)) return false; // its content now lives in the merge/split product instead
     const f = s.folder || '_inbox';
     return isInSubtree(f, folder);

@@ -28,6 +28,7 @@ import {
 } from '../../insight.js';
 import { injectAgentsMd, dirsForFolder } from '../../reuse.js';
 import { launchAgent } from '../launch.js';
+import { createBacklog } from '../../backlog.js';
 import { t } from '../i18n.js';
 
 // The Scan/Organize/Knowledge-review/Merge/Split/New-agent action handlers
@@ -557,4 +558,43 @@ export function doNewAgent(ctx) {
       app.render();
     },
   );
+}
+
+/**
+ * `b`: write down something to work on later — a backlog item (backlog.js),
+ * filed into the folder you're browsing. FOLDER-scoped like doNewAgent()
+ * above, and bound on both boxes for the same reason.
+ *
+ * Title then description, as two prompts, because blessed has no multi-field
+ * form widget and textPrompt() is what every other typed input here uses.
+ * Cancelling the title (Esc) abandons the whole thing; cancelling the
+ * description just leaves it empty, since it's optional.
+ */
+export function doNewBacklog(ctx) {
+  const { app, state, foldersBox, listBox, reloadFolders, reloadList } = ctx;
+  const refocus = () => (state.level === 'folders' ? foldersBox : listBox).focus();
+  textPrompt(app, t('backlog.titlePrompt'), '', (title) => {
+    if (title === null) return refocus(); // Esc
+    if (!title.trim()) {
+      app.notify(t('backlog.needsTitle'), 3);
+      return refocus();
+    }
+    textPrompt(app, t('backlog.descPrompt'), '', (description) => {
+      // state.folder's Root sentinel is `undefined` (everything), which isn't
+      // a place to file anything — a backlog item written from Root is
+      // unfiled, exactly like a freshly captured session.
+      const folder = state.folder ?? null;
+      const res = createBacklog({ title, description: description || '', folder });
+      if (!res.ok) {
+        app.notify(res.error, 3);
+        return refocus();
+      }
+      data.refreshOne(res.session.id);
+      reloadFolders();
+      reloadList();
+      app.notify(t('backlog.created', folder || t('sessions.newBadge')), 3);
+      refocus();
+      app.render();
+    });
+  });
 }

@@ -266,6 +266,46 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   uses it for `n`'s directory picker) so `daemon/cycles.js`'s
   digest-review auto-inject can use it too, without core importing from
   `tui/**`. Filters to directories that still `existsSync()`. [tested]
+- **Infer which folder a bare working directory belongs to.**
+  `folderForDir(dir)` — the reverse of `dirsForFolder()`: given a
+  directory, returns the folder of whichever session most recently
+  (`startedAt`) had that `projectDir`/`cwd`, or `null` if none has.
+  Excludes `_archive`, same as `classificationCandidates()`/`tagAll()`
+  elsewhere. Exists for the Claude Code plugin's `SessionStart` hook (see
+  below), which has no TUI to ask "which folder?" the way the `i` key
+  does. [tested]
+
+## Claude Code Plugin (`.claude-plugin/`, `hooks/`, `skills/`, `src/cli/hook.js`)
+
+- **Auto-refresh `AGENTS.md` at Claude Code session start.**
+  `hooks/session-start.sh` (a Claude Code `SessionStart` hook, wired via
+  `hooks/hooks.json`) shells out to `mycelium hook session-start --dir
+  <cwd>` (`src/cli/hook.js`'s `hookCmd`), which calls `folderForDir(dir)`
+  then `injectAgentsMd(dir, folder)` if one was found — the same write the
+  TUI's `i`/`n`/`h` already trigger, just reached from Claude Code's own
+  lifecycle instead of a key press. No-ops silently (exit 0, no stdout) if
+  `mycelium` isn't on `PATH`, the directory has no known folder, or that
+  folder has no `KNOWLEDGE.md` yet — a `SessionStart` hook is meant to be
+  a silent best-effort convenience, never a source of session-start
+  errors. On success, prints `hookSpecificOutput.additionalContext`
+  (locale-aware per `contentLocale()`) so Claude sees a one-line note that
+  the refresh happened. Deliberately undocumented in `printHelp()` — like
+  `--tutorial`, invoked by tooling, not typed by a person. [tested] (CLI
+  dispatch test covers the inject-happens, no-folder-no-op, and
+  unknown-subcommand-no-op cases; the actual shell script itself is
+  exercised manually, not under `npm test` — see
+  `docs/claude-code-plugin.md`)
+- **Slash commands reaching into Mycelium from inside a conversation.**
+  `skills/mycelium-search`, `skills/mycelium-backlog`,
+  `skills/mycelium-context` — thin `SKILL.md` instructions telling Claude
+  to run the existing `mycelium search`/`backlog`/`inject` CLI commands
+  via `Bash` and present the results; no new runtime logic. `[untested]`
+  (skill *content* isn't exercised by `npm test` — Claude Code loads and
+  interprets `SKILL.md` itself, outside this repo's test surface; the CLI
+  commands they wrap are already covered under Find/Backlog/Reuse above).
+
+See [`docs/claude-code-plugin.md`](./claude-code-plugin.md) for install
+instructions and the full rationale.
 
 ## Handoff (`src/handoff.js`)
 
@@ -283,6 +323,117 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   [`docs/handoff.md`](./handoff.md#outliving-the-source-agents-own-retention)).
   [tested] (inherited `assembleContext()`
   knowledge section itself covered separately under Reuse)
+
+## Backlog (`src/backlog.js`, `src/cli/backlog.js`)
+
+As a user, I can **write down something to work on later, before any agent has run**, file it in a folder like any session, and start it whenever I'm ready — the agent opens seeded with my own notes plus that folder's accumulated knowledge, and the session it produces takes the note's place outright — it inherits the note's folder and title, and the note itself is gone.
+
+- **Write a backlog item.** `createBacklog({title, description, folder})`.
+  Stored as an ordinary session record with `kind: 'backlog'` and an empty
+  `turns` array; title/description live in `extracted.title`/`.summary`,
+  the two fields the list row and `render.js`'s `formatSessionDetail()`
+  already display, so it renders like every other session with no
+  special-case. `organizedBy: 'human'` (a person filed it deliberately,
+  which also keeps `scanner.js`'s auto-archive sweep off it) and
+  `titleLocked: true` (the title is the user's own words). Title is
+  required, description optional. [tested] (`test/backlog.test.js`)
+- **Start it: a seeded launch, like handoff.**
+  `buildBacklogSeed(id)` composes the seed prompt from the *current*
+  title/description at open time (never stored alongside them, so editing
+  either can't leave a stale seed behind), locale-following per AGENTS.md's
+  "Human-facing text" convention, exactly like `handoff.js`'s
+  `buildHandoff()`. `resume-handoff.js`'s `doOpenBacklog()` passes it to
+  `launchAgent()` as the `seed`, and deliberately passes no `parentId`: the
+  session is matched to the item at capture time instead (next bullet), and
+  doing both would leave a `continuationOf` pointing at a record that no
+  longer exists. `markBacklogEntered(id)` stamps `doneAt` when the agent is
+  actually launched or its command copied, never when the picker is opened
+  and cancelled — so an item whose command is already out there, but which
+  hasn't produced a session yet, reads as started instead of untouched.
+  [tested] (`test/backlog.test.js`, `test/e2e/backlog-e2e.test.js`)
+- **The session REPLACES the item, on whichever scan captures it.**
+  `buildBacklogSeed()` stamps the item's id into the prompt itself
+  (`schema.js`'s `backlogSeedMarker()`, an HTML comment at the end of the
+  seed) — the only signal that survives a command copied into a terminal
+  Mycelium never sees — and `scanner.js`'s `consumeBacklogItem()` redeems it
+  at capture: the session takes over the item's folder (as a `'human'`
+  placement, since a person filed it there) and the title the human wrote
+  (`titleLocked`, so auto-tagging can't overwrite it), and the item's own
+  record is deleted. One row, not a note and a session shadowing each other
+  — same reasoning as `organize.js`'s `foldProductIntoSession()` for a
+  merge/split product, and nothing is lost: the note's full text IS that
+  session's first prompt. Every user turn is searched, not just the first
+  (agents prepend synthetic user-role turns of their own — see `schema.js`'s
+  `SYNTHETIC_TURN`), and on every import rather than only the first, since
+  the item's own existence is the real gate. `scan()` returns
+  `consumedBacklog` so callers that reindex precisely (`launch.js`) drop
+  those rows from the index. The parent's own file is deleted only AFTER
+  `neutral`'s write succeeds (same ordering as `foldProductIntoSession()`'s
+  `saveRaw(target)` before `deleteSession(product)`) — deleting it first
+  would risk losing the item's only record to a crash between the two
+  writes, before the session meant to replace it ever reached disk.
+  [tested] (`test/backlog.test.js`)
+- **Reopening an already-started item asks first.** An item whose command
+  was printed/copied but never captured (see the invariant above) stays open
+  to retry on purpose — but `resume-handoff.js`'s `doOpenBacklog()` used to
+  let a second `r` fire silently, seeding a second command for the same
+  item when only whichever session gets captured first can actually consume
+  it. Now a `doneAt` item confirms before opening again rather than being
+  blocked outright, which would break the legitimate retry case (a lost
+  clipboard, a closed terminal). [tested] (`test/e2e/backlog-e2e.test.js`)
+- **A source-less record never renders as "null".** A backlog item has no
+  `source`, which `theme.js`'s `sourceLabel()` used to hand straight back:
+  the detail panel printed `이어받음: null #1234abcd` for a session started
+  from an item, and the sessions list's sort-by-agent comparator threw on
+  `null.localeCompare()`. `sourceLabel(null)` is now `'backlog'` (same
+  not-localized treatment as the `merged` pseudo-source) with `C.fox` as its
+  accent, and `render.js`'s continuation links go through the same
+  `refLabel()` every other lineage reference already used. [tested]
+  (`test/theme.test.js`, `test/render.test.js`, `test/e2e/backlog-e2e.test.js`)
+- **Invariant: an item that is still listed is still waiting.**
+  Nothing filters backlog rows out of the sessions list, `listBacklog()`,
+  or `mycelium backlog list`: an item leaves only by being consumed by the
+  session it started. One marked started but never actually run stays put on
+  purpose — it is the only record of that intent, and "copy command" can
+  hand out a command nobody ever pastes. [tested] (`test/backlog.test.js`)
+- **Invariant: the LLM paths refuse a note instead of treating it as an
+  empty session.** The transcript-shaped ones (`learn.js`'s
+  `autoTagSession`, `split.js`) would overwrite the user's own words with
+  a guess; the summary-shaped ones (`insight/digest.js`,
+  `insight/knowledge.js`) would mistake queued intent for work that
+  happened. `organize/lineage.js`'s `mergeSessions()` refuses too (folding
+  away a note nobody has worked on would silently drop it). `tagAll()`
+  filters them out up front rather than spending a failure per item, which
+  could otherwise trip `stopAfterConsecutiveFailures` and kill the rest of
+  a daemon cycle. [tested] (`test/backlog.test.js`)
+- **Find it.** `schema.js`'s `searchableText()` now leads with
+  `extracted.title` — for a backlog item it's the only text there is
+  besides the description, and for a captured session it's the phrase
+  someone is most likely to search by. `cli/find.js`'s `list`/`search`
+  print `[backlog]` in place of the agent name and fall back to the title,
+  since there's no first user turn to preview. [tested]
+  (`test/backlog.test.js`)
+- **CLI.** `mycelium backlog add "<title>" [--desc D] [--folder F]`,
+  `backlog list [--folder f]`, `backlog open <id|prefix>
+  [--agent a] [--dir D] [--copy]`. `open` prints the `cd <dir> && <bin>
+  ...` line (the CLI's equivalent of the TUI's "copy command", since
+  there's no interactive picker here) and injects the folder's knowledge
+  into the target dir's AGENTS.md first, same as the TUI. The session it
+  starts replaces the item on the next scan, through the same seed marker
+  the TUI's "copy command" path relies on; until then the item stays listed
+  with its started mark, since a printed command nobody pasted must not make
+  the note vanish. [untested]
+- **TUI.** `b` on the Folders or Sessions panel writes an item into the
+  folder being browsed (title prompt, then optional description; Esc on
+  the title abandons, Esc on the description just leaves it empty) —
+  folder-scoped like `n`, and unfiled when written from `Root`. A
+  `[Backlog]` badge replaces the agent hashtag (no agent has been chosen
+  yet) and dims to `[Opened]` once started. `r`/detail-`Enter`/the action
+  palette all route to `doOpenBacklog()`; the palette drops handoff/split
+  for a note, since there's nothing to hand off or split. `e` edits title
+  *and* description for a backlog item (both are the user's own text and
+  both seed the agent), unlike a captured session whose summary stays
+  AI-generated. [tested] (`test/e2e/backlog-e2e.test.js`)
 
 ## Split (`src/split.js`)
 

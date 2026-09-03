@@ -9,6 +9,9 @@ Organize  organize [--apply] [--limit N] [--folder <경로>]   내용 기반 폴
           tag <session> +t -t           태그 수동 편집
           unmerge <session>              TUI Shift+M 병합 되돌리기 (원본 세션들 복원)
           unsplit <session>              TUI Shift+S 분할 되돌리기 (분할 조각 제거, 원본 복원)
+Backlog   backlog add "<제목>" [--desc D] [--folder F]   나중에 할 작업을 미리 적어두기 (TUI b와 동일)
+          backlog list [--folder f]                      아직 시작 안 한(또는 세션이 아직 안 잡힌) 백로그 목록
+          backlog open <id|prefix> [--agent a] [--dir D] [--copy]  백로그를 시작하는 명령어 출력(새 탭 붙여넣기용)
 Learn     autotag [<session>] [--force] 내용 기반 자동 태깅 (소급 일괄)
           digest [week] [--date D]      일일/주간 서사 다이제스트
           knowledge [<folder>]          폴더별 KNOWLEDGE.md 추출

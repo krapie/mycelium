@@ -10,6 +10,8 @@ import { useTempHome } from './helpers.js';
 useTempHome();
 const { splitSentences, formatSessionDetail } = await import('../src/tui/render.js');
 const { emptyNeutral } = await import('../src/schema.js');
+const { saveRaw } = await import('../src/scanner.js');
+const { createBacklog } = await import('../src/backlog.js');
 
 test('splitSentences() breaks a prose paragraph on sentence boundaries', () => {
   const text = 'First sentence. Second sentence! Third one? Fourth.';
@@ -112,4 +114,27 @@ test('formatSessionDetail() renders merge/split lineage links using "?" when the
   assert.match(lines, /\? #33333333/);
   assert.match(lines, /superseded by/i);
   assert.match(lines, /split into 1/i);
+});
+
+// Regression: lineage labels printed the referenced session's raw `source`, so
+// anything pointing at a source-less record (a backlog item) rendered as
+// "이어받음: null #1234abcd". Every reference goes through refLabel() now, and
+// sourceLabel() never hands back null.
+test('formatSessionDetail() never renders a source-less reference as "null"', () => {
+  const item = createBacklog({ title: 'queued work', description: 'notes' }).session;
+  const child = { ...emptyNeutral('render-child', 'claude'), continuationOf: item.id };
+  saveRaw(child);
+
+  const text = formatSessionDetail(child).join('\n');
+  assert.match(text, new RegExp(`backlog #${item.id.slice(0, 8)}`));
+  assert.doesNotMatch(text, /null/);
+});
+
+// A source-less record still must never render as a literal "null" anywhere —
+// the item's own detail header is the other place it would show up.
+test('formatSessionDetail() headers a backlog item with the backlog label, not "null"', () => {
+  const item = createBacklog({ title: 'header check' }).session;
+  const text = formatSessionDetail(item).join('\n');
+  assert.match(text, /backlog/);
+  assert.doesNotMatch(text, /null/);
 });

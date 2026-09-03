@@ -1,5 +1,6 @@
 import { complete, parseJsonReply, mapConcurrent } from './llm.js';
 import { loadRaw, saveRaw, allRaw } from './scanner.js';
+import { isBacklog } from './schema.js';
 import { listTags } from './index-db.js';
 import { isArchive } from './organize/folders.js';
 import { contentLocale } from './config.js';
@@ -90,6 +91,10 @@ Output format:
 export async function autoTagSession(sessionId, { existingTags } = {}) {
   const n = loadRaw(sessionId);
   if (!n) return { ok: false, error: `no session ${sessionId}` };
+  // A backlog item's title/description are the user's own words — there is no
+  // transcript to read, and overwriting them with an LLM guess is exactly what
+  // titleLocked exists to prevent (backlog.js).
+  if (isBacklog(n)) return { ok: false, error: 'backlog item — nothing to summarize' };
   if (n.turns.length === 0) return { ok: false, error: 'empty session' };
 
   const vocab = existingTags || listTags().map((t) => t.name);
@@ -164,6 +169,13 @@ export async function tagAll({ force = false, onProgress, limit, concurrency = 1
   let failed = 0;
 
   let targets = allRaw().filter((n) => {
+    // Backlog items have no transcript, so autoTagSession() refuses them —
+    // leaving them in `targets` would spend a failure per item and could trip
+    // stopAfterConsecutiveFailures, killing the rest of a daemon cycle.
+    if (isBacklog(n)) {
+      skipped++;
+      return false;
+    }
     // Skip _archive — capture's auto-archived old backlog (thousands of
     // historical sessions on a first scan) shouldn't get swept into automatic
     // summarization by the daemon's tagAll() cycle. Per-session summarize

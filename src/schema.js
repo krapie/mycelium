@@ -14,6 +14,7 @@
  *   toolActivity: [ "Edit src/auth.ts", "Ran tests (3 passed)" ],
  *   artifacts:    { filesChanged: [], diffSummary: null },
  *   extracted:    { title: null, tags: [], summary: null, decisions: [], todos: [] },
+ *   kind:         "session" | "backlog"  // backlog = user-written intent note, no transcript
  *   organizedBy:  "auto" | "human",   // sticky flag — see organize step
  *   folder:       "회사/플랫폼/인증"    // tree path (null = _inbox)
  *   suggestedFolder, suggestedReason  // queued smart-organize guess, cleared on review
@@ -23,6 +24,41 @@
  *   mergedFrom, splitFrom, supersededBy, splitInto  // split/merge lineage — see organize.js/split.js
  * }
  */
+
+/** A backlog item — a user-written intent note, not a captured agent session.
+ * Lives here rather than in backlog.js so the guards that need it (learn.js,
+ * insight/*, organize/*, split.js) can import it from the leaf module every
+ * one of them already depends on, with no import cycle back through
+ * backlog.js → scanner.js/organize.js. */
+export function isBacklog(n) {
+  return !!n && n.kind === 'backlog';
+}
+
+/**
+ * Backlog seed marker. A session started from a backlog item's COPIED command
+ * (the TUI's "copy command", `mycelium backlog open`) is created in a terminal
+ * Mycelium never sees, so nothing can link it to its item at launch time the
+ * way launch.js's run() does for an in-process launch. buildBacklogSeed()
+ * stamps the item's id into the prompt itself and scanner.js redeems it on the
+ * session's first import — the same trick llm.js's META_MARKER already uses to
+ * recognize Mycelium's own LLM calls at scan time.
+ *
+ * An HTML comment so it reads as a no-op in the markdown-ish prompt, and
+ * trailing (never leading) so it can't shadow the real first line of the seed.
+ */
+export function backlogSeedMarker(id) {
+  return `<!-- mycelium:backlog:${id} -->`;
+}
+
+export function backlogSeedId(text) {
+  // The LAST marker in the text, not the first: buildBacklogSeed() puts the
+  // user's own description above its marker, so a description that happens to
+  // quote another item's marker would otherwise win over the real one. Not
+  // anchored to end-of-text either — an agent that appends anything of its own
+  // to the first turn shouldn't break the link.
+  const all = [...(text || '').matchAll(/<!--\s*mycelium:backlog:([\w-]{8,64})\s*-->/g)];
+  return all.length ? all[all.length - 1][1] : null;
+}
 
 export function emptyNeutral(id, source) {
   return {
@@ -38,6 +74,8 @@ export function emptyNeutral(id, source) {
     extracted: { title: null, tags: [], summary: null, decisions: [], todos: [] },
     organizedBy: 'auto',
     folder: null,
+    kind: 'session', // 'backlog' = a user-written intent note, not a captured agent session (backlog.js)
+    doneAt: null, // backlog only: when it was opened into a real agent session
     continuationOf: null, // this session continues another (handoff parent id)
     continuedTo: [], // sessions that continued this one (handoff children)
     suggestedFolder: null, // smart-organize's queued-but-unreviewed placement guess
@@ -79,6 +117,10 @@ export function firstUserText(neutral) {
 /** Full searchable text blob for FTS indexing. */
 export function searchableText(neutral) {
   const parts = [];
+  // Title first: for a backlog item (isBacklog) it's the ONLY text there is
+  // besides the description, and for a captured session it's the phrase
+  // someone is most likely to search by.
+  if (neutral.extracted.title) parts.push(neutral.extracted.title);
   for (const turn of neutral.turns) if (turn.text) parts.push(turn.text);
   for (const a of neutral.toolActivity) parts.push(a);
   if (neutral.extracted.summary) parts.push(neutral.extracted.summary);

@@ -40,6 +40,8 @@ const en = {
   'sessions.linkedBadge': 'Linked',
   'sessions.resumedBadge': 'Resumed',
   'sessions.handoffBadge': 'Handoff',
+  'sessions.backlogBadge': 'Backlog',
+  'sessions.backlogOpenedBadge': 'Opened',
 
   // sessions.js — folders panel
   'folders.newPrompt': (parent) => `New folder name${parent ? ` (under ${parent})` : ' (root)'}`,
@@ -276,6 +278,13 @@ const en = {
 
   // title-edit modal (sessions.js doEditTitle)
   'editor.titlePrompt': 'Edit title',
+  'editor.descPrompt': 'Edit description',
+  'backlog.titlePrompt': 'Backlog title — what do you want to work on?',
+  'backlog.descPrompt': 'Notes for the agent (optional)',
+  'backlog.created': (folder) => `Backlog item added to ${folder}`,
+  'backlog.needsTitle': 'A backlog item needs a title',
+  'backlog.reopenConfirmTitle': 'Already started — open it again?',
+  'backlog.reopenConfirmYes': 'Start again',
   'editor.notFound': 'Session not found',
   'editor.saved': 'Title saved (Mycelium only — original log unchanged)',
   'editor.saveFailed': (err) => `Save failed: ${err}`,
@@ -292,6 +301,8 @@ const en = {
   'actions.knowledge': 'Generate folder insights',
   'actions.handoff': 'Continue on another agent',
   'actions.newAgent': 'New task with folder context',
+  'actions.newBacklog': 'Add a backlog item (start it later)',
+  'actions.openBacklog': 'Start this backlog item now',
   'actions.lineage': 'View details',
 
   // launch.js
@@ -299,6 +310,7 @@ const en = {
   'launch.selectAgent': 'Choose agent',
   'launch.selectAgentHandoff': 'Continue this task on another agent — choose agent',
   'launch.selectAgentNew': "New task with this folder's context — choose agent",
+  'launch.selectAgentBacklog': 'Start this backlog item — choose agent',
   'launch.chooseAction': 'Start session',
   'launch.selectAgentFallback': "Can't resume (merged/split session) — choose agent; this will be replaced by the new session",
   'launch.dirNotFound': "Directory doesn't exist",
@@ -385,6 +397,8 @@ const ko = {
   'sessions.linkedBadge': '연결됨',
   'sessions.resumedBadge': '이어받음',
   'sessions.handoffBadge': '이어감',
+  'sessions.backlogBadge': '백로그',
+  'sessions.backlogOpenedBadge': '시작함',
 
   'folders.newPrompt': (parent) => `새 폴더 이름${parent ? ` (${parent} 아래)` : ' (루트)'}`,
   'folders.created': (path) => `폴더 생성: ${path}`,
@@ -575,6 +589,13 @@ const ko = {
   'picker.tagEditPrompt': (shown) => `태그 편집 — 현재: ${shown}\n+추가 -삭제 (예: +긴급 -오분류)`,
 
   'editor.titlePrompt': '제목 수정',
+  'editor.descPrompt': '설명 수정',
+  'backlog.titlePrompt': '백로그 제목 — 무엇을 할 예정인가요?',
+  'backlog.descPrompt': '에이전트에게 남길 메모 (선택)',
+  'backlog.created': (folder) => `백로그 추가: ${folder}`,
+  'backlog.needsTitle': '백로그에는 제목이 필요합니다',
+  'backlog.reopenConfirmTitle': '이미 시작한 항목입니다 — 다시 열까요?',
+  'backlog.reopenConfirmYes': '다시 시작',
   'editor.notFound': '세션을 찾을 수 없습니다',
   'editor.saved': '제목 저장됨 (Mycelium 전용, 원본 로그는 변경 없음)',
   'editor.saveFailed': (err) => `저장 실패: ${err}`,
@@ -589,12 +610,15 @@ const ko = {
   'actions.knowledge': '폴더 안의 인사이트 생성',
   'actions.handoff': '다른 에이전트로 작업을 이어서',
   'actions.newAgent': '폴더 컨텍스트로 새 작업 시작',
+  'actions.newBacklog': '백로그 추가 (나중에 시작)',
+  'actions.openBacklog': '이 백로그 지금 시작',
   'actions.lineage': '상세 보기',
 
   'launch.noAgents': '설치된 에이전트(claude/codex/kiro-cli/opencode)가 없습니다',
   'launch.selectAgent': '에이전트 선택',
   'launch.selectAgentHandoff': '하던 작업을 다른 에이전트로 이어서 — 에이전트 선택',
   'launch.selectAgentNew': '이 폴더 컨텍스트로 새 작업 — 에이전트 선택',
+  'launch.selectAgentBacklog': '이 백로그를 시작 — 에이전트 선택',
   'launch.chooseAction': '세션 시작',
   'launch.selectAgentFallback': '이어열기 불가(병합/분할된 세션) — 에이전트 선택, 이 세션은 새 세션으로 대체됩니다',
   'launch.dirNotFound': '디렉토리가 존재하지 않습니다',
@@ -696,6 +720,7 @@ Day to day, it's a simple loop: {${fg}-fg}s{/} capture → {${fg}-fg}o{/} organi
   {${fg}-fg}y{/}       Copy the whole session to the clipboard. For a snippet, hold Shift (Option on iTerm2) while dragging to bypass mouse tracking, then Cmd+C / Ctrl+Shift+C
   {${fg}-fg}r{/}       Resume (reopen in the original agent, right here — merged/split sessions fall back to handoff instead, which replaces them with the real session it produces)
   {${fg}-fg}h{/}       Continue this task on another agent (handoff) — seeds the new session with where this one left off, plus the folder's context, and links it as a continuation
+  {${fg}-fg}b{/}       Add a backlog item — a title + notes for something to work on later, filed in this folder. Press {${fg}-fg}r{/} on it (or Enter in detail) whenever you're ready: an agent starts seeded with those notes, and the session that comes back takes the item's place in the list
   {${fg}-fg}n{/}       Start a NEW task with this folder's context (new agent) — no prior conversation carried over, just the folder's accumulated knowledge. After picking an agent/directory, asks "open here" or "copy command" (paste into a separate terminal tab to run several sessions in parallel)
   {${fg}-fg}m{/} / {${fg}-fg}t{/}   Move to folder / edit tags
   {${fg}-fg}x{/}       Delete session (Mycelium record only, original log kept)
@@ -774,6 +799,7 @@ ko['help.text'] = (fg, spore) => `{bold}Context Flywheel{/}
   {${fg}-fg}y{/}       세션 전체를 클립보드로 복사. 일부만 복사하려면 Shift(iTerm2는 Option)를 누른 채 드래그해서 마우스 추적을 우회한 뒤 Cmd+C / Ctrl+Shift+C
   {${fg}-fg}r{/}       이어열기 (원래 에이전트로, 바로 여기서 — 병합/분할 세션은 핸드오프로 대체되고, 그렇게 생긴 실제 세션이 원래 자리를 대신함)
   {${fg}-fg}h{/}       하던 작업을 다른 에이전트로 이어서 (핸드오프) — 이 세션의 진행상황 + 폴더 컨텍스트를 새 세션에 넣어주고, 후속 세션으로 연결
+  {${fg}-fg}b{/}       백로그 추가 — 나중에 할 일의 제목 + 메모를 이 폴더에 적어둡니다. 시작할 준비가 되면 그 항목에서 {${fg}-fg}r{/}(상세에서는 Enter)를 누르세요. 그 메모를 넘겨받은 에이전트가 시작되고, 돌아온 세션이 목록에서 그 자리를 대신합니다
   {${fg}-fg}n{/}       이 폴더 컨텍스트로 새 작업 시작 (새 에이전트) — 이전 대화는 안 넘어가고 폴더에 쌓인 지식만. 에이전트/디렉터리 선택 후 "여기서 열기" 또는 "명령어 복사" 선택 (복사하면 다른 터미널 탭에 붙여넣어 여러 세션을 동시에 실행 가능)
   {${fg}-fg}m{/} / {${fg}-fg}t{/}   폴더 이동 / 태그 편집
   {${fg}-fg}x{/}       세션 삭제 (Mycelium 저장소에서만, 원본 로그 유지)
