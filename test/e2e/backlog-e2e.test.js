@@ -21,6 +21,17 @@ const { sessionsView } = await import('../../src/tui/views/sessions.js');
 const { allRaw } = await import('../../src/scanner.js');
 const { mkdir } = await import('../../src/organize.js');
 const { reindex } = await import('../../src/index-db.js');
+const { __setTestClipboard } = await import('../../src/tui/clipboard.js');
+
+// The open-the-item flow below takes the "copy command" branch (the only one
+// that doesn't foreground a real agent), which really would write to the
+// clipboard of whoever runs the suite — capture it here instead, which also
+// lets the test assert what the pasted command would actually carry.
+let copied = null;
+__setTestClipboard((text) => {
+  copied = text;
+  return true;
+});
 
 function cleanup(app) {
   app.screen.destroy();
@@ -99,6 +110,11 @@ test('r on a backlog item launches an agent seeded with it and marks it done', a
 
     await waitFor(() => backlogItems()[0].doneAt !== null);
     assert.ok(backlogItems()[0].doneAt, 'entering the item is what marks it done');
+    // What actually reaches the other terminal is what associates the session
+    // started there back to this item (scanner.js redeems the marker on that
+    // session's first import).
+    assert.match(copied, /ship it/, 'the copied command carries the item as the agent prompt');
+    assert.match(copied, new RegExp(`mycelium:backlog:${backlogItems()[0].id}`), 'and the marker that links the session back');
   } finally {
     cleanup(app);
   }

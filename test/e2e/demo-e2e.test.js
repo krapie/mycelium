@@ -37,6 +37,12 @@ const { setLocale } = await import('../../src/tui/i18n.js');
 const { writeKnowledgeText, writePendingKnowledgeText, pendingKnowledgeReviews, dismissPendingKnowledge } = await import('../../src/insight.js');
 const { queueSuggestions } = await import('../../src/organize.js');
 const { __clearTestProvider } = await import('../../src/llm.js');
+const { __setTestClipboard } = await import('../../src/tui/clipboard.js');
+
+// The tutorial's `n` step copies a launch command for real (copyOnly, see
+// launch.js) — without this seam the suite would overwrite the clipboard of
+// whoever runs it.
+__setTestClipboard(() => true);
 
 // seedMockSessions()/createTutorialMockProvider() default their locale to
 // i18n.js's getLocale() — setLocale('ko') (used by exactly one test below)

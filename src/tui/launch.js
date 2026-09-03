@@ -207,7 +207,13 @@ export function resumeSession(app, session, done) {
     // adds up fast for what's normally exactly one changed session.
     try {
       const touched = [];
-      scan({ onImport: (n) => touched.push(n) });
+      const res = scan({ onImport: (n) => touched.push(n) });
+      // A resumed session's terminal may also be where a backlog item's copied
+      // command was pasted — that item's own row changed too (scanner.js).
+      for (const pid of res.adoptedParents) {
+        const p = loadRaw(pid);
+        if (p) touched.push(p);
+      }
       if (touched.length) reindexMany(touched); // nothing touched → index is already accurate
     } catch {
       /* ignore */
@@ -235,7 +241,7 @@ function run(app, { agentKey, dir, folder, seed, parentId }, done) {
   foreground(app, agent.bin, agent.newArgs(seed), dir, () => {
     // Back in the TUI: capture whatever the agent produced.
     try {
-      scan();
+      const scanRes = scan();
       const now = allRaw();
       const fresh = now.filter((n) => !before.has(n.id));
       // scan() captures ALL new sessions on the system — including anything
@@ -254,7 +260,8 @@ function run(app, { agentKey, dir, folder, seed, parentId }, done) {
       // store avoids a full raw/ rebuild on every single agent launch.
       // move()/linkContinuation() above already re-saved `mine`'s raw files,
       // so re-read before indexing to pick up those changes.
-      if (fresh.length) reindexMany(fresh.map((n) => loadRaw(n.id) || n));
+      const adopted = scanRes.adoptedParents.map((pid) => loadRaw(pid)).filter(Boolean);
+      if (fresh.length || adopted.length) reindexMany([...fresh.map((n) => loadRaw(n.id) || n), ...adopted]);
       const note = parentId ? t('launch.continuedSession') : t('launch.newSession');
       app.notify(mine.length ? t('launch.captured', note, mine.length, folder || t('sessions.newBadge')) : t('launch.noNewSessions'), 3);
       if (done) return done(mine);

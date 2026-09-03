@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { loadRaw, saveRaw, allRaw } from './scanner.js';
-import { emptyNeutral, isBacklog } from './schema.js';
+import { emptyNeutral, isBacklog, backlogSeedMarker } from './schema.js';
 import { isInSubtree } from './organize.js';
 import { contentLocale } from './config.js';
 
@@ -112,5 +112,10 @@ export function buildBacklogSeed(id, locale = contentLocale()) {
           'This was queued as a backlog item in Mycelium and is starting now. No work has been done on it yet — start from the notes below, in this working directory.',
         ];
   if (desc) lines.push('', locale === 'ko' ? '**메모:**' : '**Notes:**', desc);
+  // Trailing marker: this prompt is often COPIED into another terminal, where
+  // the session it starts is out of reach of launchAgent()'s own
+  // linkContinuation() — scanner.js redeems this on that session's first
+  // import instead. See schema.js's backlogSeedMarker().
+  lines.push('', backlogSeedMarker(n.id));
   return { ok: true, prompt: lines.join('\n'), session: n };
 }

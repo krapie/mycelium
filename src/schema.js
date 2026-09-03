@@ -34,6 +34,26 @@ export function isBacklog(n) {
   return !!n && n.kind === 'backlog';
 }
 
+/**
+ * Backlog seed marker. A session started from a backlog item's COPIED command
+ * (the TUI's "copy command", `mycelium backlog open`) is created in a terminal
+ * Mycelium never sees, so nothing can link it to its item at launch time the
+ * way launch.js's run() does for an in-process launch. buildBacklogSeed()
+ * stamps the item's id into the prompt itself and scanner.js redeems it on the
+ * session's first import — the same trick llm.js's META_MARKER already uses to
+ * recognize Mycelium's own LLM calls at scan time.
+ *
+ * An HTML comment so it reads as a no-op in the markdown-ish prompt, and
+ * trailing (never leading) so it can't shadow the real first line of the seed.
+ */
+export function backlogSeedMarker(id) {
+  return `<!-- mycelium:backlog:${id} -->`;
+}
+
+export function backlogSeedId(text) {
+  return (text || '').match(/<!--\s*mycelium:backlog:([\w-]{8,64})\s*-->/)?.[1] || null;
+}
+
 export function emptyNeutral(id, source) {
   return {
     id,

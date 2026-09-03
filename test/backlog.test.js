@@ -13,6 +13,8 @@ const { suggestSplitBoundaries } = await import('../src/split.js');
 const { mergeSessions, linkContinuation } = await import('../src/organize.js');
 const { sessionsForPeriod } = await import('../src/insight.js');
 const { reindex, listSessions, search } = await import('../src/index-db.js');
+const { scan } = await import('../src/scanner.js');
+const adaptersIndex = await import('../src/adapters/index.js');
 const { __setTestProvider, __clearTestProvider } = await import('../src/llm.js');
 
 test.afterEach(() => __clearTestProvider());
@@ -134,4 +136,55 @@ test('a backlog item is listed and searchable by title, and drops out once a rea
   const after = listSessions({ folder: 'Later' });
   assert.deepEqual(after.map((r) => r.id), ['child-1']);
   assert.equal(isBacklogReplaced(loadRaw(id)), true);
+});
+
+// scan() reads the REAL agent stores by design (adapters/index.js), so a test
+// that needs a deterministic import splices the registry down to a fake one,
+// same pattern as test/scanner.test.js's withOnlyAdapters().
+function withOnlyAdapters(fakeAdapters, fn) {
+  const real = adaptersIndex.ADAPTERS.splice(0, adaptersIndex.ADAPTERS.length, ...fakeAdapters);
+  try {
+    return fn();
+  } finally {
+    adaptersIndex.ADAPTERS.splice(0, adaptersIndex.ADAPTERS.length, ...real);
+  }
+}
+
+function fakeAdapterFor(id, text) {
+  return {
+    name: 'claude',
+    listSessions: () => [{ id, path: `/fake/${id}.jsonl`, mtimeMs: 1 }],
+    parse: () => {
+      const n = emptyNeutral(id, 'claude');
+      n.startedAt = new Date().toISOString();
+      n.endedAt = n.startedAt;
+      n.turns = [{ role: 'user', text }];
+      return n;
+    },
+  };
+}
+
+test('a session started from the COPIED command is adopted by its item on first import', () => {
+  const item = createBacklog({ title: 'pasted into another tab', description: 'notes', folder: 'Work/api' }).session;
+  const seed = buildBacklogSeed(item.id, 'en').prompt;
+  assert.match(seed, /mycelium:backlog:/, 'the seed carries the marker that makes this possible');
+
+  const res = withOnlyAdapters([fakeAdapterFor('pasted-1', seed)], () => scan());
+  assert.deepEqual(res.adoptedParents, [item.id], 'scan reports the item whose row it just changed');
+
+  const child = loadRaw('pasted-1');
+  assert.equal(child.continuationOf, item.id);
+  assert.equal(child.folder, 'Work/api', "an unfiled child of a filed note inherits the note's folder");
+
+  const parent = loadRaw(item.id);
+  assert.deepEqual(parent.continuedTo, ['pasted-1']);
+  assert.ok(parent.doneAt, 'a command pasted days later still marks the item started');
+  assert.equal(isBacklogReplaced(parent), true);
+});
+
+test('adoption ignores a marker that names something which is not a backlog item', () => {
+  saveRaw({ ...emptyNeutral('real-3', 'claude'), turns: [{ role: 'user', text: 'hi' }] });
+  const text = `do the thing\n\n<!-- mycelium:backlog:real-3 -->`;
+  withOnlyAdapters([fakeAdapterFor('pasted-2', text)], () => scan());
+  assert.equal(loadRaw('pasted-2').continuationOf, null);
 });

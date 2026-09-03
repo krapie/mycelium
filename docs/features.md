@@ -308,6 +308,19 @@ As a user, I can **write down something to work on later, before any agent has r
   `markBacklogEntered(id)` stamps `doneAt` when the agent is actually
   launched or its command copied, never when the picker is opened and
   cancelled. [tested] (`test/backlog.test.js`, `test/e2e/backlog-e2e.test.js`)
+- **A session started from the COPIED command finds its way back too.**
+  An in-process launch is linked by `launchAgent()`; a copied command runs
+  in a terminal Mycelium never sees, so `buildBacklogSeed()` stamps the
+  item's id into the prompt itself (`schema.js`'s `backlogSeedMarker()`, an
+  HTML comment at the end of the seed) and `scanner.js`'s
+  `adoptBacklogParent()` redeems it on that session's **first import** —
+  the same stamp-then-recognize trick `llm.js`'s `META_MARKER` already uses
+  to spot Mycelium's own LLM calls at scan time. The adopted session also
+  inherits the item's folder (an unfiled child of a filed note is a lost
+  child), and the item is marked started even if the command was pasted
+  days later. `scan()` returns `adoptedParents` so the callers that reindex
+  precisely (`launch.js`) refresh the item's row too, not just the imported
+  session's. [tested] (`test/backlog.test.js`)
 - **Invariant: a note stays visible until a real session replaces it.**
   `index-db.js`'s `isReplacedBacklog()` hides a backlog row from
   list/search only once `continued_to` is non-empty — deliberately **not**
@@ -337,11 +350,10 @@ As a user, I can **write down something to work on later, before any agent has r
   [--agent a] [--dir D] [--copy]`. `open` prints the `cd <dir> && <bin>
   ...` line (the CLI's equivalent of the TUI's "copy command", since
   there's no interactive picker here) and injects the folder's knowledge
-  into the target dir's AGENTS.md first, same as the TUI. Nothing here can
-  link the resulting session back to the item — it starts in whatever
-  terminal the line is pasted into, long after this process exits — so the
-  item stays listed with its "started" mark rather than disappearing
-  behind a child row. [untested]
+  into the target dir's AGENTS.md first, same as the TUI. The session it
+  starts is linked back to the item on the next scan, through the same seed
+  marker the TUI's "copy command" path relies on, so the item stops being
+  listed once that session exists. [untested]
 - **TUI.** `b` on the Folders or Sessions panel writes an item into the
   folder being browsed (title prompt, then optional description; Esc on
   the title abandons, Esc on the description just leaves it empty) —
