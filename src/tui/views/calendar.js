@@ -61,7 +61,10 @@ export function createCalendarTab(app, { onBack }) {
     lines.push(`{bold}{${C.fox}-fg}${MONTH_NAMES_EN[month - 1]} ${year}{/}`, '');
     lines.push(`{${C.dim}-fg}Su Mo Tu We Th Fr Sa{/}`);
 
-    let row = '  '.repeat(firstDow);
+    // 3 columns per day ("dd "), matching the Su/Mo/... header's own stride —
+    // this used to pad 2 per skipped weekday, which slid every day in the
+    // first week one column left of the weekday it actually falls on.
+    let row = '   '.repeat(firstDow);
     let col = firstDow;
     for (let d = 1; d <= dim; d++) {
       const n = counts.get(d) || 0;
@@ -159,6 +162,15 @@ export function createCalendarTab(app, { onBack }) {
       label: t('calendar.gridLabel'),
       tags: true,
       keys: true,
+      // Not `mouse: true`: on a non-scrollable box that only wires
+      // wheel-scrolling, which there's nothing here to scroll. `clickable`
+      // is what puts it in screen.clickable, so a click focuses this panel
+      // like it does the other two (issue #68). Clicking an individual DAY
+      // cell is deliberately NOT supported: the grid is hand-rendered text,
+      // so it would need pixel→day hit-testing against renderGrid()'s exact
+      // layout — a different kind of change from letting blessed's own list
+      // widgets handle clicks, and the arrow keys already reach every day.
+      clickable: true,
       padding: { left: 1, right: 1, top: 1 },
       border: { type: 'line' },
       style: { border: { fg: C.border }, fg: C.text, focus: { border: { fg: C.fox } } },
@@ -194,6 +206,14 @@ export function createCalendarTab(app, { onBack }) {
       border: { type: 'line' },
       style: { border: { fg: C.border }, fg: C.text, focus: { border: { fg: C.fox } } },
     });
+
+    // `level` is which of the three panels has focus (activate() refocuses
+    // by it after a tab switch), so derive it from the panels themselves
+    // rather than only from the drill/back helpers below — a click focuses
+    // whatever it lands on without going through any of them (issue #68).
+    gridBox.on('focus', () => (level = 'grid'));
+    dayListBox.on('focus', () => (level = 'dayList'));
+    calDetailBox.on('focus', () => (level = 'detail'));
 
     // Grid: arrows move the day cursor (live preview) — → is already taken
     // by "next day", so unlike Sessions' panels, only Enter drills right.
@@ -245,7 +265,19 @@ export function createCalendarTab(app, { onBack }) {
       level = 'detail';
       app.render();
     };
-    dayListBox.key(['enter', 'right'], drillIntoCalDetail);
+    // Mouse: same rule as the Sessions panel's own lists (see sessions.js) —
+    // click/wheel move the cursor, a click on the row already under it
+    // activates, and `select` (not key('enter')) is what Enter and
+    // click-to-activate share so they can't drift.
+    const previewCalRow = () => {
+      showCalDetail();
+      app.render();
+    };
+    for (const ev of ['element click', 'element wheeldown', 'element wheelup']) {
+      dayListBox.on(ev, previewCalRow);
+    }
+    dayListBox.on('select', drillIntoCalDetail);
+    dayListBox.key(['right'], drillIntoCalDetail);
     dayListBox.key(['escape', 'left'], backToGrid);
 
     // Resume/handoff/copy-command trio — shared with the Sessions panel's

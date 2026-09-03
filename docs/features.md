@@ -654,6 +654,65 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   [tested] (`test/render.test.js` asserts the full id string, not a
   sliced prefix)
 
+## TUI: Mouse input (`src/tui/views/sessions.js`, `views/calendar.js`, `widgets/pickers.js`)
+
+As a user, I can **click a row to put the cursor on it, click that same row again to do whatever `Enter` does there, and turn the wheel to move the cursor** — in every list in the TUI, with the same meaning each time. Mouse never reaches an action the keyboard can't; there is no click-exclusive gesture anywhere.
+
+- **The rule is blessed's own list semantics, opted into rather than
+  reimplemented.** `neo-blessed`'s per-item click handler
+  (`node_modules/neo-blessed/lib/widgets/list.js`) already calls
+  `select()` when a click lands elsewhere, emits `select` when it lands
+  on the row already under the cursor, and moves the cursor on
+  `wheeldown`/`wheelup`. So the fix for issue
+  [#68](https://github.com/krapie/mycelium/issues/68) was `mouse: true`
+  on the two panels that never had it (`sessions.js:249` folders,
+  `sessions.js:264` sessions — before this, a click on the main session
+  list did *nothing*, even though mouse tracking was already globally on
+  because the Detail panel opts in) plus wiring the two things blessed
+  can't know about: the live preview a mouse-moved cursor needs
+  (`sessions.js:414`, `sessions.js:551`, `calendar.js:276` — the same
+  `previewFolder()`/`showDetail()`/`showCalDetail()` the arrow-key
+  handlers already call), and `state.level`. [tested]
+  (`test/e2e/mouse-e2e.test.js`)
+- **`select` replaced `key('enter')` on every list, so Enter and
+  click-to-activate are one code path.** `foldersBox`
+  (`sessions.js:431`), `listBox` (`sessions.js:554`), calendar's
+  `dayListBox` (`calendar.js:279`), and `multiSelectList()`
+  (`pickers.js:231`) previously bound `key('enter')` *and* would have
+  emitted `select` — keeping both would fire the action twice per Enter
+  press, since blessed's `keys: true` list already calls
+  `enterSelected()` itself. `pickFolder()`/`menu()`
+  (`pickers.js:47`/`154`) were already on `select`, which is why modal
+  pickers were the one surface that answered a click correctly before
+  this change. Invariant: **a list must not bind both.** [tested]
+  (`test/e2e/mouse-e2e.test.js` asserts Enter still drills/applies
+  exactly once, by call count for `multiSelectList()`)
+- **`state.level` is now derived from panel focus, not only from the
+  drill/back helpers** (`sessions.js:370-372`, `calendar.js:214-216`).
+  It means "which panel has the cursor" and drives `applyLayout()`,
+  `openActionMenu()`'s scoping, and `doKnowledge()`/`doInject()`'s
+  `refocus()`. blessed autofocuses whatever a click lands on
+  (`screen.js`'s `element click` handler) without going through those
+  helpers, so before this the layout and the `.` palette could describe
+  a panel that no longer had the cursor. Also closes a pre-existing
+  keyboard-only version of the same drift: `k` is a `screenKey()` and
+  ends on `listBox.focus()` even when pressed from the Folders panel.
+  [tested] (`test/e2e/mouse-e2e.test.js`)
+- **Deliberately still keyboard-only**, because a click has no
+  unambiguous meaning for them and inventing one would add an
+  interaction the keyboard doesn't have: every action key, `Space`
+  multi-select, `*`, `p` (checklist preview), `Esc` (clicking outside a
+  modal does not dismiss it), and `app.js`'s `q`/`l` two-press confirms.
+  The Calendar's month grid is hand-rendered text rather than a widget,
+  so it takes `clickable: true` to accept focus (`calendar.js:173`) but
+  clicking an individual *day* is not supported — that would need
+  pixel→day hit-testing against `renderGrid()`'s exact layout. [n/a]
+- **Enabling mouse tracking suppresses the terminal's own drag-to-select.**
+  Unavoidable and pre-existing (any `mouse: true` element calls
+  `screen._listenMouse()` → `program.enableMouse()` once, process-wide),
+  documented as `Shift`+drag (`Option` on iTerm2) in both `docs/tui.md`
+  and the in-app `?` help. [n/a]
+
 ## TUI: Folders panel (`src/tui/views/sessions.js`)
 
 Live preview on navigate; `a` new subfolder; `e` rename (blocked on Root/New); `m` move/re-nest; `x` delete (sessions reassigned to New, not deleted); `w` extract KNOWLEDGE.md (shared with Sessions panel: async LLM generate, dismiss toast, `confirmText` preview, conditional write, the canonical preview-then-confirm pattern reused by `i` too). [untested]
@@ -846,6 +905,22 @@ The directory picker (`resolveDir()`) **creates the chosen directory** (`mkdir -
 ## TUI: Calendar tab (`src/tui/views/calendar.js`)
 
 Month grid, day list, and detail, same drill-down language as Sessions. Grid left/right move the day cursor by 1 day and up/down by 1 week; both roll into the adjacent month at the edges (moveDay uses Date arithmetic and reloads that month's counts when the boundary is crossed). PgUp/PgDn jump a whole month, keeping the same day-of-month. **`r`/`h`/detail-Enter are about 40 lines independently duplicated from Sessions**, a deliberate, self-acknowledged choice by the original author (resume and handoff churned enough that sharing felt riskier at the time), the clearest extraction candidate in the codebase. Tab activate/deactivate preserves the calendar's own cursor position across switches (lazy created once, cheap to reactivate). [untested]
+
+- **The first week of every month lined up one weekday early.**
+  `renderGrid()` padded the leading blank cells at 2 columns per skipped
+  weekday (`'  '.repeat(firstDow)`) while every day cell and the
+  `Su Mo Tu ...` header itself are 3 columns wide, so e.g. a month
+  starting on Wednesday drew `01` under `Tu`. Only the first row was
+  affected; every later row starts at column 0 and was always correct,
+  which is why it read as a rendering quirk rather than a bug. Fixed to
+  `'   '.repeat(firstDow)` (`calendar.js:67`). Found while auditing the
+  grid for mouse hit-testing (issue #68) — and it is a prerequisite for
+  ever adding click-a-day, since any coordinate→day mapping has to agree
+  with what is actually drawn. [tested]
+  (`test/e2e/mouse-e2e.test.js` asserts the 1st sits at the same
+  3-column stride the `Su Mo Tu ...` header uses — the first automated
+  coverage this tab has had at all; its day-list/Detail mouse wiring is
+  covered there too, but the grid's own key handling still isn't)
 
 ## TUI: Tutorial / `mycelium demo` (`src/tui/tutorial.js`, `tutorial-runner.js`, `tutorial-data.js`, `tutorial-mock-llm.js`, `personas.js`)
 

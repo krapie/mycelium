@@ -59,6 +59,41 @@ export function sendKey(input, name) {
   input.write(SEQUENCES[name] ?? name);
 }
 
+// Mouse works through the same real-bytes seam as keys, and for the same
+// reason: neo-blessed parses mouse out of the input stream itself
+// (program.js's bindMouse() subscribes to the program's own 'data' event,
+// which _listenInput() re-emits from `this.input.on('data')`), so an SGR
+// sequence written to the PassThrough reaches screen._listenMouse()'s
+// hit-testing exactly like a real terminal's would. Nothing here needs a
+// TTY or a real mouse. The one gotcha: blessed's `zero` option defaults on,
+// so it decrements the coordinates it parses — these helpers take 0-based
+// screen coordinates (what `element.lpos.xi`/`.yi` report) and send the
+// 1-based ones a terminal would.
+//
+// Mouse events only arrive at all once something has enabled tracking —
+// screen._listenMouse() calls program.enableMouse() the first time any
+// element opts in (`mouse: true`/`clickable: true`/a mouse listener). The
+// real TUI always has such an element on screen, so this is never a
+// precondition a test has to arrange.
+function sgrMouse(button, x, y, press) {
+  return `\x1b[<${button};${x + 1};${y + 1}${press ? 'M' : 'm'}`;
+}
+
+/**
+ * One left click at 0-based screen coordinates. blessed only emits `click`
+ * on the mouseup (screen.js's `(self.mouseDown || el).emit('click', data)`),
+ * so both halves have to go out — a lone press is a mousedown, not a click.
+ */
+export function sendClick(input, x, y) {
+  input.write(sgrMouse(0, x, y, true));
+  input.write(sgrMouse(0, x, y, false));
+}
+
+/** One wheel notch at 0-based screen coordinates. `dir` is 'up' or 'down'. */
+export function sendWheel(input, dir, x, y) {
+  input.write(sgrMouse(dir === 'up' ? 64 : 65, x, y, true));
+}
+
 export async function sendKeys(input, names, delayMs = 20) {
   for (const name of names) {
     sendKey(input, name);

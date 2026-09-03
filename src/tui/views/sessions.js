@@ -246,6 +246,7 @@ export function sessionsView(opts = {}) {
         label: t('sessions.foldersPanelLabel'),
         tags: true,
         keys: true,
+        mouse: true,
         padding: { left: 1, right: 1 },
         scrollbar: { ch: ' ', style: { bg: C.border } },
         border: { type: 'line' },
@@ -260,6 +261,7 @@ export function sessionsView(opts = {}) {
         label: t('sessions.sessionsPanelLabel'),
         tags: true,
         keys: true,
+        mouse: true,
         padding: { left: 1, right: 1 },
         scrollbar: { ch: ' ', style: { bg: C.border } },
         border: { type: 'line' },
@@ -357,6 +359,17 @@ export function sessionsView(opts = {}) {
         applyLayout(lvl);
         updateStatusBar();
       };
+      // state.level IS "which of the three panels has focus" — it drives
+      // applyLayout(), openActionMenu()'s scoping, and doInject()/
+      // doKnowledge()'s refocus(). Deriving it from the panels' own focus
+      // event keeps the two from drifting no matter what moved focus:
+      // before issue #68 only the explicit drill/back helpers set it, so a
+      // mouse click (blessed autofocuses whatever was clicked — see
+      // screen.js's `element click` handler) left the layout and the action
+      // palette describing a panel that no longer had the cursor.
+      foldersBox.on('focus', () => setLevel('folders'));
+      listBox.on('focus', () => setLevel('sessions'));
+      detailBox.on('focus', () => setLevel('detail'));
 
       // Back from the Calendar tab: re-show Sessions' own panels and restore
       // whatever header/status/focus they had before `v` switched away —
@@ -389,6 +402,18 @@ export function sessionsView(opts = {}) {
           setImmediate(previewFolder);
         }
       });
+      // Mouse, same rule in every list in this TUI (issue #68): a click puts
+      // the cursor on the row it landed on, a click on the row already under
+      // the cursor activates it, the wheel moves the cursor. All three are
+      // blessed's own list behavior (node_modules/neo-blessed/lib/widgets/
+      // list.js — select() on a click elsewhere, an emitted `select` on a
+      // click on the current row, select(±2) on a wheel), so the only thing
+      // missing was the live preview the arrow keys get just above: without
+      // it a mouse-moved cursor sat on one folder while the panels to the
+      // right still showed the previous one.
+      for (const ev of ['element click', 'element wheeldown', 'element wheelup']) {
+        foldersBox.on(ev, previewFolder);
+      }
       // Enter a folder → drill into its sessions. Right arrow mirrors Enter
       // so the three columns can be walked with just the arrow keys.
       const drillIntoSessions = () => {
@@ -398,7 +423,12 @@ export function sessionsView(opts = {}) {
         setLevel('sessions');
         app.render();
       };
-      foldersBox.key('enter', drillIntoSessions);
+      // `select`, not key('enter'): with keys:true blessed's list already
+      // emits it for Enter (enterSelected()), so binding both would run this
+      // twice per press — and it's the very same event a click on the
+      // already-selected row fires, which is what makes Enter and
+      // click-to-activate one code path instead of two that can drift.
+      foldersBox.on('select', drillIntoSessions);
       foldersBox.key('right', drillIntoSessions);
 
       // ── Folder management (only when the folders pane is focused) ──
@@ -512,7 +542,16 @@ export function sessionsView(opts = {}) {
         setLevel('sessions');
         app.render();
       };
-      listBox.key('enter', drillIntoDetail);
+      // See foldersBox's own mouse wiring above — same rule, same reason for
+      // `select` over key('enter').
+      const previewCurrentRow = () => {
+        const r = currentRow();
+        if (r) showDetail(r.id);
+      };
+      for (const ev of ['element click', 'element wheeldown', 'element wheelup']) {
+        listBox.on(ev, previewCurrentRow);
+      }
+      listBox.on('select', drillIntoDetail);
       listBox.key('right', drillIntoDetail);
       listBox.key('escape', backToFolders);
       listBox.key('left', backToFolders);
