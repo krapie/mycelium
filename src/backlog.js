@@ -25,14 +25,6 @@ import { contentLocale } from './config.js';
 
 export { isBacklog };
 
-/** A backlog item that has been opened is done (see markBacklogEntered) — but
- * it stays in the list until a real session actually links back to it, so the
- * "copy command" path (which produces nothing in this process) can't make the
- * note disappear before the session that replaces it exists. */
-export function isBacklogReplaced(n) {
-  return isBacklog(n) && !!(n.continuedTo && n.continuedTo.length);
-}
-
 /**
  * Create a backlog item in `folder` (null = unfiled/New). `title` is required
  * — it's the row's whole identity in the list; `description` is optional.
@@ -73,15 +65,13 @@ export function markBacklogEntered(id) {
  * index-db.js's listSessions() does: undefined = everywhere, null = only
  * unfiled, a path = that subtree.
  *
- * Hidden by default: items a real session has replaced — the SAME rule
- * index-db.js's isReplacedBacklog() applies to the TUI list, and deliberately
- * not `doneAt`. An item whose command was printed/copied but never actually
- * pasted is still the only record of that intent; dropping it from the default
- * listing would quietly lose work someone wrote down. */
-export function listBacklog({ folder, includeReplaced = false } = {}) {
+ * Nothing is filtered out: an item stops existing the moment the session it
+ * started is captured (scanner.js consumes it), so whatever is still here is
+ * still waiting — including one whose command was handed out but never
+ * actually run, which is exactly the thing a user needs to see again. */
+export function listBacklog({ folder } = {}) {
   return allRaw()
     .filter((n) => isBacklog(n))
-    .filter((n) => includeReplaced || !isBacklogReplaced(n))
     .filter((n) => {
       if (folder === undefined) return true;
       if (folder === null) return !n.folder;

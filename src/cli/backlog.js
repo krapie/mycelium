@@ -8,7 +8,7 @@ import { copyToClipboard } from '../tui/clipboard.js';
 import { fail, parseFlags } from './util.js';
 
 const USAGE =
-  'Usage: mycelium backlog add "<title>" [--desc "..."] [--folder f] | list [--folder f] [--all] | open <id|prefix> [--agent a] [--dir D] [--copy]';
+  'Usage: mycelium backlog add "<title>" [--desc "..."] [--folder f] | list [--folder f] | open <id|prefix> [--agent a] [--dir D] [--copy]';
 
 export function backlogCmd(args) {
   const [sub, ...rest] = args;
@@ -34,10 +34,7 @@ function addCmd(args) {
 
 function listBacklogCmd(args) {
   const { flags } = parseFlags(args);
-  const items = listBacklog({
-    folder: typeof flags.folder === 'string' ? flags.folder : undefined,
-    includeReplaced: !!flags.all,
-  });
+  const items = listBacklog({ folder: typeof flags.folder === 'string' ? flags.folder : undefined });
   if (!items.length) return console.log('백로그 없음');
   for (const n of items) {
     const mark = n.doneAt ? ' (시작함)' : '';
@@ -51,10 +48,9 @@ function listBacklogCmd(args) {
  * the CLI's equivalent of the TUI's "copy command" path, since there's no
  * picker here to choose an agent/directory interactively.
  *
- * Unlike the TUI, nothing here can link the session the agent produces back
- * to the item (it starts in whatever terminal the line is pasted into, long
- * after this process exits), so the item stays listed with its "started"
- * mark rather than disappearing behind a child row.
+ * The item stays listed, marked as started, until the session actually shows
+ * up: scanner.js recognizes it by the marker this seed carries and replaces
+ * the item with it on the next scan, whichever terminal it was run in.
  */
 function openCmd(args) {
   const { flags, positional } = parseFlags(args);

@@ -1,5 +1,4 @@
 import { C, sourceColor, sourceLabel } from './theme.js';
-import { isBacklog } from '../schema.js';
 import * as data from './data.js';
 import { t } from './i18n.js';
 
@@ -62,16 +61,10 @@ export function formatSessionDetail(n) {
   if (n.extracted.todos?.length) lines.push(`{${C.faint}-fg}${t('detail.todos')}{/}`, ...n.extracted.todos.map((td) => `- ${td}`), '');
   // Handoff continuation links (this is one flow across a model switch).
   if (n.continuationOf) {
-    // A backlog item isn't a session that was handed off — it's the note this
-    // session was started from, so it gets its own wording (and its title,
-    // which says more than an id ever could) rather than "Continues:".
-    const parent = data.detail(n.continuationOf);
-    const key = isBacklog(parent) ? 'detail.fromBacklog' : 'detail.continuationOf';
-    const label = isBacklog(parent) ? parent.extracted.title || refLabel(n.continuationOf) : refLabel(n.continuationOf);
-    lines.push('', `{${C.spore}-fg}${t(key, label)}{/}`);
+    lines.push('', `{${C.spore}-fg}${t('detail.continuationOf', refLabel(n.continuationOf))}{/}`);
   }
   for (const cid of n.continuedTo || []) {
-    lines.push(`{${C.spore}-fg}${t(isBacklog(n) ? 'detail.backlogStarted' : 'detail.continuedTo', refLabel(cid))}{/}`);
+    lines.push(`{${C.spore}-fg}${t('detail.continuedTo', refLabel(cid))}{/}`);
   }
   // Split/merge lineage — same text-link style as the continuation links
   // above, no new interactive-jump precedent needed.

@@ -16,8 +16,8 @@ mycelium unsplit <session>                     # undo a TUI Shift+S split
 
 # Backlog (something to work on later, written before any agent has run)
 mycelium backlog add "Fix the flaky scan test" --desc "starts failing above ~200 sessions" --folder company/platform
-mycelium backlog list [--folder f] [--all]     # open items, including ones you started but never ran (--all also shows those a session has replaced)
-mycelium backlog open <session|prefix> [--agent a] [--dir D] [--copy]  # print the command that starts it, seeded with your notes (the session it starts is linked back to the item on the next scan)
+mycelium backlog list [--folder f]             # items still waiting (an item disappears when the session it started is captured)
+mycelium backlog open <session|prefix> [--agent a] [--dir D] [--copy]  # print the command that starts it, seeded with your notes (that session replaces the item on the next scan)
 
 # Learn
 mycelium autotag                               # retroactively summarize/tag past sessions in bulk

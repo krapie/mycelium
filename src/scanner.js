@@ -30,31 +30,53 @@ function isMyceliumMeta(neutral) {
 }
 
 /**
- * Link a freshly captured session to the backlog item whose seed prompt
- * started it, and inherit that item's folder (an unfiled child of a filed
- * note is just a lost child). Deliberately writes the continuation link
- * inline instead of calling organize.js's linkContinuation(): organize/
- * lineage.js imports THIS module, and importing it back here would make the
- * two mutually dependent for six lines of field assignment.
+ * A backlog item only ever existed to start one session. Once that session is
+ * captured, the item IS that session: it takes over the item's folder and the
+ * title the human wrote, and the item's own record is dropped — one row, not a
+ * note plus a session shadowing each other. Same reasoning as organize.js's
+ * foldProductIntoSession() for a merge/split product, and nothing is lost:
+ * the note's full text is the session's own first prompt.
  *
- * Returns the item's id when one was adopted (its own stored row changed too),
- * else null.
+ * Which session belongs to which item comes from the marker the seed carries
+ * (schema.js's backlogSeedMarker) — the only signal that survives a command
+ * copied into a terminal Mycelium never sees. Every user turn is searched, not
+ * just the first: agents prepend synthetic user-role turns of their own
+ * (slash-command echoes, system reminders — see schema.js's SYNTHETIC_TURN),
+ * so the seeded prompt is not reliably turn zero.
+ *
+ * Runs on every import, not only the first: a session captured while it was
+ * still being worked on gets re-parsed on later scans, and the item's own
+ * existence is the real gate — once consumed, there's nothing left to match.
+ *
+ * Returns the consumed item's id (its row must leave the index) or null.
  */
-function adoptBacklogParent(neutral) {
-  const parentId = backlogSeedId(neutral.turns.find((t) => t.role === 'user')?.text);
-  if (!parentId || parentId === neutral.id) return null;
-  const parent = loadRaw(parentId);
-  if (!isBacklog(parent)) return null;
+function consumeBacklogItem(neutral) {
+  let parent = null;
+  for (const turn of neutral.turns) {
+    if (turn.role !== 'user') continue;
+    const id = backlogSeedId(turn.text);
+    if (!id || id === neutral.id) continue;
+    const candidate = loadRaw(id);
+    if (isBacklog(candidate)) {
+      parent = candidate;
+      break;
+    }
+  }
+  if (!parent) return null;
 
-  neutral.continuationOf = parent.id;
-  if (neutral.folder == null && neutral.organizedBy !== 'human') neutral.folder = parent.folder;
-
-  parent.continuedTo = parent.continuedTo || [];
-  if (!parent.continuedTo.includes(neutral.id)) parent.continuedTo.push(neutral.id);
-  // The copied command may have been pasted days later, or never through
-  // Mycelium at all — either way, the item is started now.
-  parent.doneAt = parent.doneAt || new Date().toISOString();
-  saveRaw(parent);
+  // The folder a human filed the note into is a human placement, and carries
+  // over as one — smart-organize must not quietly re-file this session later.
+  if (parent.folder != null && neutral.organizedBy !== 'human') {
+    neutral.folder = parent.folder;
+    neutral.organizedBy = 'human';
+  }
+  // The human's own words outrank whatever auto-tagging would write later,
+  // exactly as they do on the item itself (createBacklog locks the title).
+  if (!neutral.extracted.title && parent.extracted.title) {
+    neutral.extracted.title = parent.extracted.title;
+    neutral.titleLocked = true;
+  }
+  deleteRaw(parent.id);
   return parent.id;
 }
 
@@ -116,10 +138,10 @@ export function scan({ onImport } = {}) {
   let imported = 0;
   let skipped = 0;
   let failed = 0;
-  // Backlog items whose row changed because a session they seeded was just
-  // captured — callers that reindex precisely (launch.js) need them too, not
-  // just the imported sessions themselves.
-  const adoptedParents = new Set();
+  // Backlog items consumed by a session that was just captured — their rows
+  // are gone from raw/ and callers that reindex precisely (launch.js) have to
+  // drop them from the index too, not just add the imported sessions.
+  const consumedBacklog = new Set();
 
   // ADAPTERS read from each agent's real global store, unaffected by
   // MYCELIUM_HOME. Wrong for both tutorial-launch paths without a guard —
@@ -214,14 +236,9 @@ export function scan({ onImport } = {}) {
       // triage while still capturing it losslessly. Gated on `!existing`
       // (first import only) so this never retroactively archives a session
       // already sitting in New. Recency matches the calendar's own basis.
-      // A session started from a backlog item's copied command belongs to that
-      // item, but nothing in THIS process was there when it launched. Redeem
-      // the marker its own prompt carries (schema.js's backlogSeedMarker) —
-      // first import only, same gate as the auto-archive branch below.
-      if (!existing) {
-        const parentId = adoptBacklogParent(neutral);
-        if (parentId) adoptedParents.add(parentId);
-      }
+      // A session started from a backlog item replaces that item outright.
+      const consumedId = consumeBacklogItem(neutral);
+      if (consumedId) consumedBacklog.add(consumedId);
       if (!existing && archiveDays > 0 && neutral.folder == null && neutral.organizedBy !== 'human') {
         const last = Date.parse(neutral.endedAt || neutral.startedAt || '');
         if (Number.isFinite(last) && last < archiveCutoff) neutral.folder = '_archive';
@@ -234,7 +251,7 @@ export function scan({ onImport } = {}) {
     }
   }
 
-  return { scanned, imported, skipped, failed, adoptedParents: [...adoptedParents] };
+  return { scanned, imported, skipped, failed, consumedBacklog: [...consumedBacklog] };
 }
 
 /**

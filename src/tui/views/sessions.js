@@ -163,16 +163,11 @@ export function sessionsView(opts = {}) {
       // agent/id, not something that belongs competing for the left edge.
       // Bracketed text tags, same visual language as isNew's [New] below —
       // no emoji for state/relationship markers anywhere in this codebase.
-      // A session started from a backlog item is an ordinary session, not a
-      // handoff: nothing was picked up from a previous agent, the note was
-      // just its seed. Its origin lives in the detail panel (render.js), not
-      // as a badge that would read as "this continues an earlier session".
-      const link =
-        r.continuationOf && !r.fromBacklog
-          ? `{${C.spore}-fg}[${t('sessions.resumedBadge')}]{/} `
-          : r.continuedTo && r.continuedTo.length
-            ? `{${C.spore}-fg}[${t('sessions.handoffBadge')}]{/} `
-            : '';
+      const link = r.continuationOf
+        ? `{${C.spore}-fg}[${t('sessions.resumedBadge')}]{/} `
+        : r.continuedTo && r.continuedTo.length
+          ? `{${C.spore}-fg}[${t('sessions.handoffBadge')}]{/} `
+          : '';
       // Same marker language, different tag: merge product, split piece, or
       // a session with related derived content elsewhere — supersededBy
       // (merge original — hidden by default, so this case is mostly

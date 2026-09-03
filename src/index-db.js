@@ -189,26 +189,6 @@ function jsonArrayLength(s) {
   }
 }
 
-// A backlog item stays listed after it's been opened (done) and only drops out
-// once a real session actually links back to it — that child row is what
-// represents it from then on, the same reasoning hasSupersededBy() encodes for
-// a merged-away original. Deliberately NOT keyed on done_at: the "copy
-// command" path marks an item done without producing anything in this
-// process, and hiding the note before its session exists would lose it.
-function isReplacedBacklog(row) {
-  return row.kind === 'backlog' && jsonArrayLength(row.continued_to) > 0;
-}
-
-// Mark the rows whose continuation parent is a backlog item. A session started
-// from a note isn't a handoff — the list shows it as an ordinary session (see
-// sessions.js), and only its detail panel names where it came from. Computed
-// over the rows already fetched rather than per-row lookups, and BEFORE any
-// filtering, since the parent note is usually hidden by then.
-function markBacklogChildren(rows) {
-  const backlogIds = new Set(rows.filter((r) => r.kind === 'backlog').map((r) => r.id));
-  for (const r of rows) r.from_backlog = !!(r.continuation_of && backlogIds.has(r.continuation_of));
-  return rows;
-}
 
 /**
  * Non-search list feed: sessions ordered by started_at DESC.
@@ -218,7 +198,7 @@ function markBacklogChildren(rows) {
  */
 export function listSessions({ folder, date, includeSuperseded = false } = {}) {
   const d = openDb();
-  let rows = markBacklogChildren(d.prepare('SELECT * FROM sessions ORDER BY started_at DESC').all());
+  let rows = d.prepare('SELECT * FROM sessions ORDER BY started_at DESC').all();
   // Matches sessionCountsByDay()'s grouping — a day's session list should be
   // "sessions active that day", same basis as what the calendar grid counted.
   if (date) rows = rows.filter((r) => (r.ended_at || r.started_at || '').slice(0, 10) === date);
@@ -229,7 +209,7 @@ export function listSessions({ folder, date, includeSuperseded = false } = {}) {
   // their content now lives in that product, so they'd otherwise duplicate
   // rows in every list/search. loadRaw()/data.detail() (direct-by-id lookups,
   // not a list scan) are unaffected — this only guards list-shaped queries.
-  if (!includeSuperseded) rows = rows.filter((r) => !hasSupersededBy(r) && !isReplacedBacklog(r));
+  if (!includeSuperseded) rows = rows.filter((r) => !hasSupersededBy(r));
   if (folder === undefined) return rows;
   if (folder === null) return rows.filter((r) => !r.folder);
   return rows.filter((r) => isInSubtree(r.folder, folder));
@@ -276,7 +256,7 @@ export function search({ query, tags = [], folder, date, includeSuperseded = fal
     ids = ids === null ? tagIds : new Set([...ids].filter((x) => tagIds.has(x)));
   }
 
-  let sessions = markBacklogChildren(d.prepare('SELECT * FROM sessions ORDER BY started_at DESC').all());
+  let sessions = d.prepare('SELECT * FROM sessions ORDER BY started_at DESC').all();
   if (ids !== null) sessions = sessions.filter((s) => ids.has(s.id));
   // Same ended_at-first basis as listSessions()/sessionCountsByDay() — the
   // calendar's date filter goes through here too when combined with a search.
@@ -286,7 +266,7 @@ export function search({ query, tags = [], folder, date, includeSuperseded = fal
   if (!isArchive(folder)) sessions = sessions.filter((s) => !isArchive(s.folder));
   // Same rule as listSessions() — merged/split-away originals stay out of
   // search results by default.
-  if (!includeSuperseded) sessions = sessions.filter((s) => !hasSupersededBy(s) && !isReplacedBacklog(s));
+  if (!includeSuperseded) sessions = sessions.filter((s) => !hasSupersededBy(s));
   // Same three-way folder meaning as listSessions(): undefined = no
   // restriction, null = only genuinely unfiled (searching from the New
   // pseudo-folder), a path = that subtree.

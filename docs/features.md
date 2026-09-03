@@ -286,7 +286,7 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
 
 ## Backlog (`src/backlog.js`, `src/cli/backlog.js`)
 
-As a user, I can **write down something to work on later, before any agent has run**, file it in a folder like any session, and start it whenever I'm ready — the agent opens seeded with my own notes plus that folder's accumulated knowledge, and the session it produces takes the note's place in the list.
+As a user, I can **write down something to work on later, before any agent has run**, file it in a folder like any session, and start it whenever I'm ready — the agent opens seeded with my own notes plus that folder's accumulated knowledge, and the session it produces takes the note's place outright — it inherits the note's folder and title, and the note itself is gone.
 
 - **Write a backlog item.** `createBacklog({title, description, folder})`.
   Stored as an ordinary session record with `kind: 'backlog'` and an empty
@@ -297,39 +297,37 @@ As a user, I can **write down something to work on later, before any agent has r
   which also keeps `scanner.js`'s auto-archive sweep off it) and
   `titleLocked: true` (the title is the user's own words). Title is
   required, description optional. [tested] (`test/backlog.test.js`)
-- **Start it: the handoff flow with a note as the parent.**
+- **Start it: a seeded launch, like handoff.**
   `buildBacklogSeed(id)` composes the seed prompt from the *current*
   title/description at open time (never stored alongside them, so editing
   either can't leave a stale seed behind), locale-following per AGENTS.md's
   "Human-facing text" convention, exactly like `handoff.js`'s
   `buildHandoff()`. `resume-handoff.js`'s `doOpenBacklog()` passes it to
-  `launchAgent()` as the `seed` with the item's id as `parentId`, so the
-  session that comes back is `linkContinuation()`'d to the note.
-  `markBacklogEntered(id)` stamps `doneAt` when the agent is actually
-  launched or its command copied, never when the picker is opened and
-  cancelled. [tested] (`test/backlog.test.js`, `test/e2e/backlog-e2e.test.js`)
-- **A session started from the COPIED command finds its way back too.**
-  An in-process launch is linked by `launchAgent()`; a copied command runs
-  in a terminal Mycelium never sees, so `buildBacklogSeed()` stamps the
-  item's id into the prompt itself (`schema.js`'s `backlogSeedMarker()`, an
-  HTML comment at the end of the seed) and `scanner.js`'s
-  `adoptBacklogParent()` redeems it on that session's **first import** —
-  the same stamp-then-recognize trick `llm.js`'s `META_MARKER` already uses
-  to spot Mycelium's own LLM calls at scan time. The adopted session also
-  inherits the item's folder (an unfiled child of a filed note is a lost
-  child), and the item is marked started even if the command was pasted
-  days later. `scan()` returns `adoptedParents` so the callers that reindex
-  precisely (`launch.js`) refresh the item's row too, not just the imported
-  session's. [tested] (`test/backlog.test.js`)
-- **A session started from a note is an ordinary session, not a handoff.**
-  The list row carries no "continued from" badge for it (`[이어받음]` claims
-  a previous agent session was picked up, and there wasn't one) — the origin
-  lives in the detail panel instead, worded as its own thing and labelled
-  with the note's title: `Started from backlog: <title>` / the item's own
-  side reads `Started as: <session>`. `index-db.js`'s `markBacklogChildren()`
-  flags those rows in one pass over the rows already fetched, before
-  filtering, since the parent note is usually hidden by then. [tested]
-  (`test/backlog.test.js`, `test/render.test.js`)
+  `launchAgent()` as the `seed`, and deliberately passes no `parentId`: the
+  session is matched to the item at capture time instead (next bullet), and
+  doing both would leave a `continuationOf` pointing at a record that no
+  longer exists. `markBacklogEntered(id)` stamps `doneAt` when the agent is
+  actually launched or its command copied, never when the picker is opened
+  and cancelled — so an item whose command is already out there, but which
+  hasn't produced a session yet, reads as started instead of untouched.
+  [tested] (`test/backlog.test.js`, `test/e2e/backlog-e2e.test.js`)
+- **The session REPLACES the item, on whichever scan captures it.**
+  `buildBacklogSeed()` stamps the item's id into the prompt itself
+  (`schema.js`'s `backlogSeedMarker()`, an HTML comment at the end of the
+  seed) — the only signal that survives a command copied into a terminal
+  Mycelium never sees — and `scanner.js`'s `consumeBacklogItem()` redeems it
+  at capture: the session takes over the item's folder (as a `'human'`
+  placement, since a person filed it there) and the title the human wrote
+  (`titleLocked`, so auto-tagging can't overwrite it), and the item's own
+  record is deleted. One row, not a note and a session shadowing each other
+  — same reasoning as `organize.js`'s `foldProductIntoSession()` for a
+  merge/split product, and nothing is lost: the note's full text IS that
+  session's first prompt. Every user turn is searched, not just the first
+  (agents prepend synthetic user-role turns of their own — see `schema.js`'s
+  `SYNTHETIC_TURN`), and on every import rather than only the first, since
+  the item's own existence is the real gate. `scan()` returns
+  `consumedBacklog` so callers that reindex precisely (`launch.js`) drop
+  those rows from the index. [tested] (`test/backlog.test.js`)
 - **A source-less record never renders as "null".** A backlog item has no
   `source`, which `theme.js`'s `sourceLabel()` used to hand straight back:
   the detail panel printed `이어받음: null #1234abcd` for a session started
@@ -339,13 +337,12 @@ As a user, I can **write down something to work on later, before any agent has r
   accent, and `render.js`'s continuation links go through the same
   `refLabel()` every other lineage reference already used. [tested]
   (`test/theme.test.js`, `test/render.test.js`, `test/e2e/backlog-e2e.test.js`)
-- **Invariant: a note stays visible until a real session replaces it.**
-  `index-db.js`'s `isReplacedBacklog()` hides a backlog row from
-  list/search only once `continued_to` is non-empty — deliberately **not**
-  keyed on `done_at`, because the "copy command" path marks an item done
-  while producing nothing in this process, and hiding the note before its
-  session exists would lose it. Same reasoning `hasSupersededBy()` encodes
-  for a merged-away original. [tested] (`test/backlog.test.js`)
+- **Invariant: an item that is still listed is still waiting.**
+  Nothing filters backlog rows out of the sessions list, `listBacklog()`,
+  or `mycelium backlog list`: an item leaves only by being consumed by the
+  session it started. One marked started but never actually run stays put on
+  purpose — it is the only record of that intent, and "copy command" can
+  hand out a command nobody ever pastes. [tested] (`test/backlog.test.js`)
 - **Invariant: the LLM paths refuse a note instead of treating it as an
   empty session.** The transcript-shaped ones (`learn.js`'s
   `autoTagSession`, `split.js`) would overwrite the user's own words with
@@ -364,18 +361,15 @@ As a user, I can **write down something to work on later, before any agent has r
   since there's no first user turn to preview. [tested]
   (`test/backlog.test.js`)
 - **CLI.** `mycelium backlog add "<title>" [--desc D] [--folder F]`,
-  `backlog list [--folder f] [--all]`, `backlog open <id|prefix>
+  `backlog list [--folder f]`, `backlog open <id|prefix>
   [--agent a] [--dir D] [--copy]`. `open` prints the `cd <dir> && <bin>
   ...` line (the CLI's equivalent of the TUI's "copy command", since
   there's no interactive picker here) and injects the folder's knowledge
   into the target dir's AGENTS.md first, same as the TUI. The session it
-  starts is linked back to the item on the next scan, through the same seed
-  marker the TUI's "copy command" path relies on, so the item stops being
-  listed once that session exists. `backlog list` hides exactly those
-  replaced items (`isBacklogReplaced`, the same rule the TUI list applies)
-  and **not** merely started ones: a command that was printed but never
-  actually pasted leaves the item as the only record of that intent.
-  [untested]
+  starts replaces the item on the next scan, through the same seed marker
+  the TUI's "copy command" path relies on; until then the item stays listed
+  with its started mark, since a printed command nobody pasted must not make
+  the note vanish. [untested]
 - **TUI.** `b` on the Folders or Sessions panel writes an item into the
   folder being browsed (title prompt, then optional description; Esc on
   the title abandons, Esc on the description just leaves it empty) —

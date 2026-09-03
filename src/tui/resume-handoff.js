@@ -30,23 +30,25 @@ import { t } from './i18n.js';
 export function createResumeHandoff(app, { getCurrentRow, afterResume, afterHandoff }) {
   // A backlog item (backlog.js) is a note written before any agent ran:
   // nothing to resume, nothing to hand off. Opening it launches an agent
-  // seeded with the note and parented to it, so launch.js's run() links the
-  // session that comes back as its continuation — which is also what finally
-  // takes the note out of the list, its child row standing in for it.
+  // seeded with the note; the session that comes back REPLACES the item
+  // (scanner.js consumes it on capture, whichever terminal it started in), so
+  // nothing here links the two — doing it twice would leave a dangling
+  // continuationOf pointing at a record that no longer exists.
   const doOpenBacklog = () => {
     const r = getCurrentRow();
     if (!r) return;
     const seed = buildBacklogSeed(r.id);
     if (!seed.ok) return app.notify(seed.error, 3);
-    launchAgent(app, { folder: r.folder, seed: seed.prompt, parentId: r.id, title: t('launch.selectAgentBacklog') }, (mine) => {
+    launchAgent(app, { folder: r.folder, seed: seed.prompt, title: t('launch.selectAgentBacklog') }, (mine) => {
       // launchAgent() calls back with no argument when the agent/directory
       // picker was cancelled, and with an array (empty on the "copy command"
       // path, which produces nothing in THIS process) once it actually
-      // launched or copied. Entering the item is what marks it done.
+      // launched or copied. Mark the item started either way — if a session
+      // does show up, the item is gone entirely and this mark with it; if it
+      // never does, the row says the command is already out there.
       if (mine) markBacklogEntered(r.id);
-      // run()'s own reindex covers the sessions it captured, not this parent —
-      // whose continuedTo/doneAt just changed, and whose index row is what
-      // decides that the note now hides behind its session.
+      // refreshOne() drops the row when the raw file is gone, which is exactly
+      // what happened if the launch produced a session that consumed it.
       data.refreshOne(r.id);
       afterHandoff();
     });

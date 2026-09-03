@@ -4,13 +4,13 @@ import { useTempHome } from './helpers.js';
 
 useTempHome();
 
-const { createBacklog, listBacklog, markBacklogEntered, buildBacklogSeed, isBacklogReplaced } = await import('../src/backlog.js');
+const { createBacklog, listBacklog, markBacklogEntered, buildBacklogSeed } = await import('../src/backlog.js');
 const { isBacklog } = await import('../src/schema.js');
 const { loadRaw, saveRaw } = await import('../src/scanner.js');
 const { emptyNeutral } = await import('../src/schema.js');
 const { autoTagSession, tagAll } = await import('../src/learn.js');
 const { suggestSplitBoundaries } = await import('../src/split.js');
-const { mergeSessions, linkContinuation } = await import('../src/organize.js');
+const { mergeSessions } = await import('../src/organize.js');
 const { sessionsForPeriod } = await import('../src/insight.js');
 const { reindex, listSessions, search } = await import('../src/index-db.js');
 const { scan } = await import('../src/scanner.js');
@@ -40,7 +40,7 @@ test('createBacklog() refuses an empty title', () => {
   assert.equal(createBacklog({ title: '   ', description: 'x' }).ok, false);
 });
 
-test('listBacklog() scopes by folder the same three ways listSessions() does, and hides only replaced items', () => {
+test('listBacklog() scopes by folder the same three ways listSessions() does, and hides nothing', () => {
   const a = createBacklog({ title: 'filed', folder: 'Work/api' }).session;
   const b = createBacklog({ title: 'unfiled' }).session;
 
@@ -49,15 +49,11 @@ test('listBacklog() scopes by folder the same three ways listSessions() does, an
   assert.equal(listBacklog({ folder: undefined }).length >= 2, true);
 
   // Started but nothing came of it yet: still the only record of that intent,
-  // so it stays listed (its row just carries the "started" mark).
+  // so it stays listed (its row just carries the "started" mark). An item that
+  // DID produce a session isn't filtered here — it no longer exists at all
+  // (see the replacement test below).
   markBacklogEntered(a.id);
   assert.deepEqual(listBacklog({ folder: 'Work' }).map((n) => n.id), [a.id]);
-
-  // Replaced by a real session — that row stands in for it now.
-  saveRaw({ ...emptyNeutral('work-child', 'claude'), turns: [{ role: 'user', text: 'on it' }] });
-  linkContinuation('work-child', a.id);
-  assert.equal(listBacklog({ folder: 'Work' }).length, 0);
-  assert.deepEqual(listBacklog({ folder: 'Work', includeReplaced: true }).map((n) => n.id), [a.id]);
 });
 
 test('buildBacklogSeed() composes the prompt from the CURRENT title/description, in both locales', () => {
@@ -118,7 +114,7 @@ test('digests/knowledge treat a backlog item as intent, not as activity in the p
   assert.equal(sessionsForPeriod('day', day).some((s) => s.id === id), false);
 });
 
-test('a backlog item is listed and searchable by title, and drops out once a real session links back to it', () => {
+test('a backlog item is listed and searchable by title while it waits', () => {
   const { id } = createBacklog({ title: 'unique-backlog-phrase', description: 'notes here', folder: 'Later' }).session;
   reindex();
 
@@ -133,20 +129,7 @@ test('a backlog item is listed and searchable by title, and drops out once a rea
   markBacklogEntered(id);
   reindex();
   assert.equal(listSessions({ folder: 'Later' }).length, 1);
-  assert.equal(isBacklogReplaced(loadRaw(id)), false);
-
-  // A real session came back and was linked as its continuation: that row now
-  // stands in for the note, the same way a merge product hides its originals.
-  saveRaw({ ...emptyNeutral('child-1', 'claude'), folder: 'Later', turns: [{ role: 'user', text: 'working on it' }] });
-  linkContinuation('child-1', id);
-  reindex();
-  const after = listSessions({ folder: 'Later' });
-  assert.deepEqual(after.map((r) => r.id), ['child-1']);
-  assert.equal(isBacklogReplaced(loadRaw(id)), true);
-  // The child is an ordinary session in the list, not a handoff — sessions.js
-  // reads this flag to decide the row carries no "continued from" badge.
-  assert.equal(after[0].from_backlog, true);
-  assert.equal(search({ query: 'working on it' })[0].from_backlog, true);
+  assert.ok(loadRaw(id));
 });
 
 // scan() reads the REAL agent stores by design (adapters/index.js), so a test
@@ -175,22 +158,43 @@ function fakeAdapterFor(id, text) {
   };
 }
 
-test('a session started from the COPIED command is adopted by its item on first import', () => {
+test('the session started from a copied command REPLACES its item on capture', () => {
   const item = createBacklog({ title: 'pasted into another tab', description: 'notes', folder: 'Work/api' }).session;
   const seed = buildBacklogSeed(item.id, 'en').prompt;
   assert.match(seed, /mycelium:backlog:/, 'the seed carries the marker that makes this possible');
+  reindex();
 
   const res = withOnlyAdapters([fakeAdapterFor('pasted-1', seed)], () => scan());
-  assert.deepEqual(res.adoptedParents, [item.id], 'scan reports the item whose row it just changed');
+  assert.deepEqual(res.consumedBacklog, [item.id], 'scan reports the item it consumed, so its row can leave the index');
 
   const child = loadRaw('pasted-1');
-  assert.equal(child.continuationOf, item.id);
-  assert.equal(child.folder, 'Work/api', "an unfiled child of a filed note inherits the note's folder");
+  assert.equal(child.folder, 'Work/api', "the session takes over the item's folder");
+  assert.equal(child.organizedBy, 'human', 'which was a human placement, and stays one');
+  assert.equal(child.extracted.title, 'pasted into another tab', "and the title the human wrote");
+  assert.equal(child.titleLocked, true);
 
-  const parent = loadRaw(item.id);
-  assert.deepEqual(parent.continuedTo, ['pasted-1']);
-  assert.ok(parent.doneAt, 'a command pasted days later still marks the item started');
-  assert.equal(isBacklogReplaced(parent), true);
+  assert.equal(loadRaw(item.id), null, 'the item itself is gone — one row, not two');
+  assert.equal(listBacklog().some((n) => n.id === item.id), false);
+});
+
+test('the seeded prompt is found even when it is not the first user turn', () => {
+  // Agents prepend synthetic user-role turns of their own (slash-command
+  // echoes, system reminders) — the marker search must not stop at turn zero.
+  const item = createBacklog({ title: 'buried marker', folder: 'Work/api' }).session;
+  const seed = buildBacklogSeed(item.id, 'en').prompt;
+  const adapter = {
+    name: 'claude',
+    listSessions: () => [{ id: 'pasted-3', path: '/fake/pasted-3.jsonl', mtimeMs: 1 }],
+    parse: () => {
+      const n = emptyNeutral('pasted-3', 'claude');
+      n.startedAt = new Date().toISOString();
+      n.turns = [{ role: 'user', text: '<command-name>/clear</command-name>' }, { role: 'user', text: seed }];
+      return n;
+    },
+  };
+  withOnlyAdapters([adapter], () => scan());
+  assert.equal(loadRaw(item.id), null);
+  assert.equal(loadRaw('pasted-3').folder, 'Work/api');
 });
 
 test('adoption ignores a marker that names something which is not a backlog item', () => {
@@ -199,5 +203,6 @@ test('adoption ignores a marker that names something which is not a backlog item
   saveRaw({ ...emptyNeutral('real-333', 'claude'), turns: [{ role: 'user', text: 'hi' }] });
   const text = `do the thing\n\n<!-- mycelium:backlog:real-333 -->`;
   withOnlyAdapters([fakeAdapterFor('pasted-2', text)], () => scan());
-  assert.equal(loadRaw('pasted-2').continuationOf, null);
+  assert.ok(loadRaw('real-333'), 'an ordinary session is never deleted by a marker naming it');
+  assert.equal(loadRaw('pasted-2').folder, null);
 });
