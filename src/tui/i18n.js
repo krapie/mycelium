@@ -716,6 +716,14 @@ Day to day, it's a simple loop: {${fg}-fg}s{/} capture → {${fg}-fg}o{/} organi
   {${fg}-fg}Esc / ←{/}     Back to sessions
   {${fg}-fg}a / e / y / x{/}  Same as sessions panel
 
+{bold}Mouse{/}
+
+  {${fg}-fg}Click{/}       Put the cursor on that row and focus its panel
+  {${fg}-fg}Click again{/} Whatever Enter does on that row (drill in, pick, apply)
+  {${fg}-fg}Wheel{/}       Move the cursor in whichever panel the pointer is over
+
+  Everything else above is keyboard-only — a click never reaches an action a key doesn't. Esc closes a modal; clicking outside it doesn't. In the Calendar, clicking the grid focuses it, but days are arrow keys only.
+
 Sessions linked by handoff show {${spore}-fg}↩{/}/{${spore}-fg}→{/} markers in the list and continuation links in detail.`;
 
 en['welcome.body'] = (fg) => `Mycelium keeps AI coding-agent sessions from getting lost —
@@ -793,6 +801,14 @@ ko['help.text'] = (fg, spore) => `{bold}Context Flywheel{/}
   {${fg}-fg}Enter{/}   이어열기 — "여기서 열기" 또는 "명령어 복사" 선택 (세션 패널의 r은 항상 바로 열기)
   {${fg}-fg}Esc / ←{/}     세션 패널로
   {${fg}-fg}a / e / y / x{/}  세션 패널과 동일
+
+{bold}마우스{/}
+
+  {${fg}-fg}클릭{/}         그 행으로 커서를 옮기고 해당 패널에 포커스
+  {${fg}-fg}한 번 더 클릭{/} 그 행에서 Enter와 동일 (들어가기 / 선택 / 적용)
+  {${fg}-fg}휠{/}           포인터가 올라가 있는 패널의 커서 이동
+
+  그 외 위의 모든 동작은 키보드 전용입니다 — 마우스로만 되는 동작은 없습니다. 모달은 Esc로 닫고, 바깥을 클릭해도 닫히지 않습니다. 캘린더에서는 그리드를 클릭하면 포커스만 이동하고, 날짜 선택은 방향키만 가능합니다.
 
 핸드오프로 이어진 세션은 목록에 {${spore}-fg}↩{/}/{${spore}-fg}→{/} 마커, 상세에 이어받음/이어감 링크로 표시됩니다.`;
 

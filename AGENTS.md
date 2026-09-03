@@ -99,6 +99,8 @@ Full reference: [`docs/tui.md`](./docs/tui.md). Quick map, since a change to any
 
 `src/tui/resume-handoff.js`'s `createResumeHandoff()` is the shared implementation behind `r`/`h`/detail-`Enter` in **both** the Sessions panel and the Calendar tab — if you're changing resume/handoff behavior, change it there once, not in both views.
 
+**Mouse is one rule, everywhere** (issue #68): a click moves the cursor and focuses that panel, a second click on the row already under the cursor does whatever `Enter` does, the wheel moves the cursor. Nothing is click-exclusive. Two invariants a new list must keep: bind the Enter action to blessed's `select` event and **never** also to `key('enter')` (with `keys: true` the list emits `select` itself, so binding both fires twice per press), and give a mouse-moved cursor the same live preview the arrow keys already trigger. `state.level` is derived from each panel's own `focus` event, not only from the drill/back helpers, because blessed autofocuses whatever a click lands on.
+
 ## Contributing
 
 See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for the full workflow (fork → branch → change → lint/test → PR → CLA → review) and [`CLA.md`](./CLA.md) (draft, unreviewed by a lawyer — flag this if a contribution needs one). The one workflow worth knowing up front:

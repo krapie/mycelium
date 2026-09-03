@@ -222,7 +222,13 @@ export function multiSelectList(app, label, items, cb, { defaultAll = false, pre
     app.render();
     cb(null);
   });
-  box.key(['enter'], () => {
+  // `select`, not key('enter') — with keys:true blessed's list already emits
+  // it for Enter, and it's the same event a click on the row already under
+  // the cursor fires, which is how the other lists in this TUI reach their
+  // Enter action with the mouse (issue #68). Space/`*`/`p` stay key-only:
+  // they're modifiers on the highlighted row, and blessed has exactly one
+  // click gesture to spend, which the rule spends on Enter everywhere.
+  box.on('select', () => {
     box.destroy();
     app.render();
     cb(items.filter((_, i) => selected.has(i)).map((it) => it.value));
