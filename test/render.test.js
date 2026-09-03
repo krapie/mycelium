@@ -10,6 +10,8 @@ import { useTempHome } from './helpers.js';
 useTempHome();
 const { splitSentences, formatSessionDetail } = await import('../src/tui/render.js');
 const { emptyNeutral } = await import('../src/schema.js');
+const { saveRaw } = await import('../src/scanner.js');
+const { createBacklog } = await import('../src/backlog.js');
 
 test('splitSentences() breaks a prose paragraph on sentence boundaries', () => {
   const text = 'First sentence. Second sentence! Third one? Fourth.';
@@ -112,4 +114,23 @@ test('formatSessionDetail() renders merge/split lineage links using "?" when the
   assert.match(lines, /\? #33333333/);
   assert.match(lines, /superseded by/i);
   assert.match(lines, /split into 1/i);
+});
+
+// Regression: the continuation links printed the parent's raw `source`, so a
+// session started from a backlog item (which has none) rendered as
+// "이어받음: null #1234abcd". Every lineage reference goes through the same
+// refLabel() now.
+test('formatSessionDetail() names a backlog parent as a backlog, never as "null"', () => {
+  const item = createBacklog({ title: 'queued work', description: 'notes' }).session;
+  const child = { ...emptyNeutral('render-child', 'claude'), continuationOf: item.id };
+  saveRaw(child);
+
+  const text = formatSessionDetail(child).join('\n');
+  assert.match(text, new RegExp(`backlog #${item.id.slice(0, 8)}`));
+  assert.doesNotMatch(text, /null/);
+
+  // ...and the other direction, on the item's own detail.
+  const parentText = formatSessionDetail({ ...item, continuedTo: ['render-child'] }).join('\n');
+  assert.match(parentText, /claude #render-c/);
+  assert.doesNotMatch(parentText, /null/);
 });

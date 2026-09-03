@@ -88,6 +88,11 @@ test('b writes a titled+described backlog item into the folder being browsed, an
     const row = listBox.items.find((it) => /ship it/.test(it.content)).content;
     assert.match(row, /Backlog/, 'the row is badged as a backlog item');
     assert.doesNotMatch(row, /#claude/, 'no agent hashtag — no agent has been chosen yet');
+
+    // Regression: sort-by-agent compares sourceLabel()s, and a backlog item
+    // has no source — that comparator used to throw on the null it got back.
+    await sendKeys(input, ['O', 'O', 'O'], 60); // Shift+O cycles recent → title → agent
+    assert.ok(listBox.items.some((it) => /ship it/.test(it.content)), 'the list still renders sorted by agent');
   } finally {
     cleanup(app);
   }

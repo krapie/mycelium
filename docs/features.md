@@ -321,6 +321,15 @@ As a user, I can **write down something to work on later, before any agent has r
   days later. `scan()` returns `adoptedParents` so the callers that reindex
   precisely (`launch.js`) refresh the item's row too, not just the imported
   session's. [tested] (`test/backlog.test.js`)
+- **A source-less record never renders as "null".** A backlog item has no
+  `source`, which `theme.js`'s `sourceLabel()` used to hand straight back:
+  the detail panel printed `이어받음: null #1234abcd` for a session started
+  from an item, and the sessions list's sort-by-agent comparator threw on
+  `null.localeCompare()`. `sourceLabel(null)` is now `'backlog'` (same
+  not-localized treatment as the `merged` pseudo-source) with `C.fox` as its
+  accent, and `render.js`'s continuation links go through the same
+  `refLabel()` every other lineage reference already used. [tested]
+  (`test/theme.test.js`, `test/render.test.js`, `test/e2e/backlog-e2e.test.js`)
 - **Invariant: a note stays visible until a real session replaces it.**
   `index-db.js`'s `isReplacedBacklog()` hides a backlog row from
   list/search only once `continued_to` is non-empty — deliberately **not**
