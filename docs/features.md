@@ -353,7 +353,11 @@ As a user, I can **write down something to work on later, before any agent has r
   into the target dir's AGENTS.md first, same as the TUI. The session it
   starts is linked back to the item on the next scan, through the same seed
   marker the TUI's "copy command" path relies on, so the item stops being
-  listed once that session exists. [untested]
+  listed once that session exists. `backlog list` hides exactly those
+  replaced items (`isBacklogReplaced`, the same rule the TUI list applies)
+  and **not** merely started ones: a command that was printed but never
+  actually pasted leaves the item as the only record of that intent.
+  [untested]
 - **TUI.** `b` on the Folders or Sessions panel writes an item into the
   folder being browsed (title prompt, then optional description; Esc on
   the title abandons, Esc on the description just leaves it empty) —

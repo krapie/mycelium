@@ -36,7 +36,7 @@ function listBacklogCmd(args) {
   const { flags } = parseFlags(args);
   const items = listBacklog({
     folder: typeof flags.folder === 'string' ? flags.folder : undefined,
-    includeDone: !!flags.all,
+    includeReplaced: !!flags.all,
   });
   if (!items.length) return console.log('백로그 없음');
   for (const n of items) {

@@ -71,11 +71,17 @@ export function markBacklogEntered(id) {
 
 /** Backlog items, newest first. `folder` scopes the same three ways
  * index-db.js's listSessions() does: undefined = everywhere, null = only
- * unfiled, a path = that subtree. Done items are excluded by default. */
-export function listBacklog({ folder, includeDone = false } = {}) {
+ * unfiled, a path = that subtree.
+ *
+ * Hidden by default: items a real session has replaced — the SAME rule
+ * index-db.js's isReplacedBacklog() applies to the TUI list, and deliberately
+ * not `doneAt`. An item whose command was printed/copied but never actually
+ * pasted is still the only record of that intent; dropping it from the default
+ * listing would quietly lose work someone wrote down. */
+export function listBacklog({ folder, includeReplaced = false } = {}) {
   return allRaw()
     .filter((n) => isBacklog(n))
-    .filter((n) => includeDone || !n.doneAt)
+    .filter((n) => includeReplaced || !isBacklogReplaced(n))
     .filter((n) => {
       if (folder === undefined) return true;
       if (folder === null) return !n.folder;

@@ -18,8 +18,9 @@ useTempHome();
 
 const { createApp } = await import('../../src/tui/app.js');
 const { sessionsView } = await import('../../src/tui/views/sessions.js');
-const { allRaw } = await import('../../src/scanner.js');
+const { allRaw, loadRaw } = await import('../../src/scanner.js');
 const { mkdir } = await import('../../src/organize.js');
+const { createBacklog } = await import('../../src/backlog.js');
 const { reindex } = await import('../../src/index-db.js');
 const { __setTestClipboard } = await import('../../src/tui/clipboard.js');
 
@@ -37,26 +38,35 @@ function cleanup(app) {
   app.screen.destroy();
 }
 
-async function mount() {
-  mkdir('Later');
+async function mount(folder = 'Later') {
+  mkdir(folder);
   reindex();
   const { input, output } = createTestApp();
   const app = createApp({ input, output });
   await app.show(sessionsView({}));
   await new Promise((r) => setTimeout(r, 50));
+  const foldersBox = app.body.children.find((c) => c.type === 'list' && /Folders|폴더/.test(c._label?.content || ''));
   const listBox = app.body.children.find((c) => c._label && /Sessions/.test(c._label.content) && c.type === 'list');
-  return { app, input, listBox };
+  return { app, input, foldersBox, listBox };
+}
+
+/** Drill into `folder` from the folders panel. Counted from the panel's own
+ * row keys rather than a fixed number of downs, so a test doesn't silently
+ * depend on how many folders the tests before it happened to create. */
+async function drillInto(input, foldersBox, folder) {
+  const idx = foldersBox._keys.indexOf(folder);
+  assert.ok(idx > 0, `${folder} is in the folders panel`);
+  await sendKeys(input, Array(idx).fill('down'), 40);
+  sendKey(input, 'enter');
+  await new Promise((r) => setTimeout(r, 60));
 }
 
 const backlogItems = () => allRaw().filter((n) => n.kind === 'backlog');
 
 test('b writes a titled+described backlog item into the folder being browsed, and it shows up as a row', async () => {
-  const { app, input, listBox } = await mount();
+  const { app, input, foldersBox, listBox } = await mount('Later');
   try {
-    // Folders panel rows are Root, New, then the real folders — two downs
-    // lands on "Later"; Enter drills into it and moves to the sessions list.
-    await sendKeys(input, ['down', 'down', 'enter'], 60);
-    await new Promise((r) => setTimeout(r, 60));
+    await drillInto(input, foldersBox, 'Later');
 
     sendKey(input, 'b');
     await new Promise((r) => setTimeout(r, 80));
@@ -84,10 +94,13 @@ test('b writes a titled+described backlog item into the folder being browsed, an
 });
 
 test('r on a backlog item launches an agent seeded with it and marks it done', async () => {
-  const { app, input, listBox } = await mount();
+  // Its own fixture, in its own folder — this test must pass on a filtered run
+  // that never executes the one above.
+  const item = createBacklog({ title: 'paste me', description: 'notes', folder: 'Queue' }).session;
+  const { app, input, foldersBox, listBox } = await mount('Queue');
   try {
-    await sendKeys(input, ['down', 'down', 'enter'], 60);
-    await waitFor(() => listBox.items.some((it) => /ship it/.test(it.content)));
+    await drillInto(input, foldersBox, 'Queue');
+    await waitFor(() => listBox.items.some((it) => /paste me/.test(it.content)));
 
     sendKey(input, 'r');
     // Agent picker → "copy command" (never "open here": that would foreground
@@ -108,13 +121,13 @@ test('r on a backlog item launches an agent seeded with it and marks it done', a
     chooser.select(chooser.items.findIndex((it) => /copy/i.test(it.content)));
     sendKey(input, 'enter');
 
-    await waitFor(() => backlogItems()[0].doneAt !== null);
-    assert.ok(backlogItems()[0].doneAt, 'entering the item is what marks it done');
+    await waitFor(() => loadRaw(item.id).doneAt !== null);
+    assert.ok(loadRaw(item.id).doneAt, 'entering the item is what marks it done');
     // What actually reaches the other terminal is what associates the session
     // started there back to this item (scanner.js redeems the marker on that
     // session's first import).
-    assert.match(copied, /ship it/, 'the copied command carries the item as the agent prompt');
-    assert.match(copied, new RegExp(`mycelium:backlog:${backlogItems()[0].id}`), 'and the marker that links the session back');
+    assert.match(copied, /paste me/, 'the copied command carries the item as the agent prompt');
+    assert.match(copied, new RegExp(`mycelium:backlog:${item.id}`), 'and the marker that links the session back');
   } finally {
     cleanup(app);
   }

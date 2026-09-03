@@ -51,7 +51,13 @@ export function backlogSeedMarker(id) {
 }
 
 export function backlogSeedId(text) {
-  return (text || '').match(/<!--\s*mycelium:backlog:([\w-]{8,64})\s*-->/)?.[1] || null;
+  // The LAST marker in the text, not the first: buildBacklogSeed() puts the
+  // user's own description above its marker, so a description that happens to
+  // quote another item's marker would otherwise win over the real one. Not
+  // anchored to end-of-text either — an agent that appends anything of its own
+  // to the first turn shouldn't break the link.
+  const all = [...(text || '').matchAll(/<!--\s*mycelium:backlog:([\w-]{8,64})\s*-->/g)];
+  return all.length ? all[all.length - 1][1] : null;
 }
 
 export function emptyNeutral(id, source) {

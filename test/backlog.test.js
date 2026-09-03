@@ -40,7 +40,7 @@ test('createBacklog() refuses an empty title', () => {
   assert.equal(createBacklog({ title: '   ', description: 'x' }).ok, false);
 });
 
-test('listBacklog() scopes by folder the same three ways listSessions() does, and hides entered items', () => {
+test('listBacklog() scopes by folder the same three ways listSessions() does, and hides only replaced items', () => {
   const a = createBacklog({ title: 'filed', folder: 'Work/api' }).session;
   const b = createBacklog({ title: 'unfiled' }).session;
 
@@ -48,9 +48,16 @@ test('listBacklog() scopes by folder the same three ways listSessions() does, an
   assert.deepEqual(listBacklog({ folder: null }).map((n) => n.id), [b.id]);
   assert.equal(listBacklog({ folder: undefined }).length >= 2, true);
 
+  // Started but nothing came of it yet: still the only record of that intent,
+  // so it stays listed (its row just carries the "started" mark).
   markBacklogEntered(a.id);
+  assert.deepEqual(listBacklog({ folder: 'Work' }).map((n) => n.id), [a.id]);
+
+  // Replaced by a real session — that row stands in for it now.
+  saveRaw({ ...emptyNeutral('work-child', 'claude'), turns: [{ role: 'user', text: 'on it' }] });
+  linkContinuation('work-child', a.id);
   assert.equal(listBacklog({ folder: 'Work' }).length, 0);
-  assert.deepEqual(listBacklog({ folder: 'Work', includeDone: true }).map((n) => n.id), [a.id]);
+  assert.deepEqual(listBacklog({ folder: 'Work', includeReplaced: true }).map((n) => n.id), [a.id]);
 });
 
 test('buildBacklogSeed() composes the prompt from the CURRENT title/description, in both locales', () => {
@@ -183,8 +190,10 @@ test('a session started from the COPIED command is adopted by its item on first 
 });
 
 test('adoption ignores a marker that names something which is not a backlog item', () => {
-  saveRaw({ ...emptyNeutral('real-3', 'claude'), turns: [{ role: 'user', text: 'hi' }] });
-  const text = `do the thing\n\n<!-- mycelium:backlog:real-3 -->`;
+  // 8+ chars, or backlogSeedId() wouldn't even parse the marker and this would
+  // pass without ever reaching the isBacklog() check it exists to cover.
+  saveRaw({ ...emptyNeutral('real-333', 'claude'), turns: [{ role: 'user', text: 'hi' }] });
+  const text = `do the thing\n\n<!-- mycelium:backlog:real-333 -->`;
   withOnlyAdapters([fakeAdapterFor('pasted-2', text)], () => scan());
   assert.equal(loadRaw('pasted-2').continuationOf, null);
 });
