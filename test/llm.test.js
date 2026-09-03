@@ -341,16 +341,18 @@ test('resolveProvider() auto-detects the first installed invocable CLI in ADAPTE
 });
 
 test('resolveProvider() auto-selects kiro / opencode now that they have verified headless modes (issue #86)', async () => {
-  // kiro-cli before opencode = registry order among the installed CLIs.
-  await withFakeBins(['kiro-cli', 'opencode'], () => assert.equal(__resolveProviderForTest(), 'kiro'));
-  await withFakeBins(['opencode'], () => assert.equal(__resolveProviderForTest(), 'opencode'));
+  // opencode wins over kiro-cli when both are installed: kiro is deliberately
+  // last in the registry, being the only one whose reply has to be recovered
+  // from rendered terminal output (see adapters/index.js).
+  await withFakeBins(['kiro-cli', 'opencode'], () => assert.equal(__resolveProviderForTest(), 'opencode'));
+  await withFakeBins(['kiro-cli'], () => assert.equal(__resolveProviderForTest(), 'kiro'));
 });
 
 // Eligibility comes from the adapter contract (headlessArgs), not a name list
 // in llm.js — so a new agent CLI still only touches its adapter + the registry.
 test('exactly the adapters defining headlessArgs() are eligible to back complete()', () => {
   const eligible = ADAPTERS.filter((a) => typeof a.headlessArgs === 'function').map((a) => a.name);
-  assert.deepEqual(eligible, ['claude', 'codex', 'kiro', 'opencode']);
+  assert.deepEqual(eligible, ['claude', 'codex', 'opencode', 'kiro']);
   for (const a of ADAPTERS.filter((a) => typeof a.headlessArgs === 'function')) {
     const args = a.headlessArgs('PROMPT');
     assert.ok(Array.isArray(args) && args.length, `${a.name} headlessArgs returned no args`);
@@ -365,7 +367,7 @@ test('complete() rejects when MYCELIUM_LLM names an agent Mycelium has no adapte
       () => complete('hi', { timeoutMs: 5000 }),
       (err) => {
         assert.match(err.message, /MYCELIUM_LLM="gemini" can't run headless/);
-        assert.match(err.message, /claude or codex or kiro or opencode/);
+        assert.match(err.message, /claude or codex or opencode or kiro/);
         return true;
       },
     );

@@ -384,7 +384,13 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   Checks the binary is installed, shell-quotes safely. [untested]
 - **Adapter contract** (`src/adapters/base.js`, registry in `index.js`):
   every adapter exports `name` (== session `source`), `label`, `bin`,
-  `newArgs`, `resumeArgs`, `listSessions()`, `parse(ref)`. [tested]
+  `newArgs`, `resumeArgs`, `listSessions()`, `parse(ref)`, plus the
+  optional `headlessArgs(prompt)` — defining it is what makes an agent
+  eligible to back `llm.js`'s `complete()`. All four current adapters
+  define it (kiro/opencode added in issue #86 after their non-interactive
+  modes were verified against real installs — `kiro-cli 2.14.1`,
+  `opencode 1.18.20`); an adapter for a CLI with no verified one-shot mode
+  would omit it and stay capture/resume-only. [tested]
 - **Claude Code adapter.** Parses `~/.claude/projects/*/*.jsonl`,
   recovers `projectDir` from the encoded folder name, tool activity as
   prose-only summaries (never raw payloads). [partial] (parse tested,
@@ -393,17 +399,25 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   [partial] (parse tested; `session_meta` id-override case not tested)
 - **Kiro adapter.** Unions 3 on-disk formats (SQLite v1/v2, JSONL
   sidecar); v2 opened `readOnly: true` (never mutates the user's real
-  DB). [partial] (only the JSONL fallback is tested; the SQLite v1/v2
-  paths, which the module's own doc says are what's actually live, are
-  untested)
+  DB). Also backs `complete()` via `headlessArgs` — `kiro-cli chat
+  <prompt> --no-interactive --trust-tools=` (trust no tools, same
+  lock-down codex gets from its read-only sandbox); output is rendered
+  terminal text, de-decorated by `llm.js`'s `extractText()`. [partial]
+  (only the JSONL fallback is tested; the SQLite v1/v2 paths, which the
+  module's own doc says are what's actually live, are untested;
+  `headlessArgs` flags pinned in `adapters.test.js`)
 - **OpenCode adapter.** Reads `~/.local/share/opencode/opencode.db`
   (SQLite, `XDG_DATA_HOME`-aware, `OPENCODE_SQLITE_DB` override), opened
   `readOnly: true` (never mutates the user's real DB); joins
   `session`/`message`/`part` tables, tool activity as prose-only
-  summaries (never raw tool output or payloads). [partial] (`parse()`
-  tested against a constructed SQLite fixture; `listSessions()`'s live
+  summaries (never raw tool output or payloads). Also backs `complete()`
+  via `headlessArgs` — `opencode run --format json <message>` (a genuine
+  one-shot; `--model` only when `MYCELIUM_OPENCODE_MODEL` is set, since
+  opencode has no hardcodable model default). [partial] (`parse()` tested
+  against a constructed SQLite fixture; `listSessions()`'s live
   default-DB-path resolution is untested, matching the same gap already
-  noted for Kiro's SQLite paths)
+  noted for Kiro's SQLite paths; `headlessArgs` flags pinned in
+  `adapters.test.js`)
 
 ## Config & Paths (`src/config.js`, `src/paths.js`)
 
@@ -437,16 +451,33 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
 
 - **Run prompts through the user's own CLI subscription** (no separate
   API key). `complete(prompt, {timeoutMs})`. Prepends `META_MARKER` (the
-  signal `scanner.js` filters back out); provider selectable via
-  `MYCELIUM_LLM`; `windowsHide: true` (issue #3); default 4-minute
-  timeout, SIGTERM on expiry. [partial] (the `__setTestProvider()`
-  injection seam itself is tested; the real `claude`/`codex` spawn path
-  is not, by design)
-- **Normalize Claude/Codex's different stdout shapes.** `extractText(stdout)`.
-  Tries Claude's `{result}` JSON, falls back to scanning Codex JSONL for
-  the last `agent_message` (both the `msg.type` and `payload.type` event
-  shapes), falls back to raw trimmed text. Pure function, zero mocking
-  needed. [tested]
+  signal `scanner.js` filters back out); `windowsHide: true` (issue #3);
+  default 4-minute timeout, SIGTERM on expiry. Provider resolves lazily
+  per call (`resolveProvider()`): `MYCELIUM_LLM` wins verbatim when set,
+  else the first installed CLI in `ADAPTERS` order that defines the
+  contract's optional `headlessArgs(prompt)` — all four adapters
+  (`claude`, `codex`, `opencode`, `kiro`, in that order — `kiro` last, its
+  reply being recovered from rendered terminal text rather than a
+  structured mode) qualify as of issue #86 — with
+  `claude` as the final fallback (the PATH scan is memoized, not
+  `MYCELIUM_LLM`). **Invariant:** eligibility and the spawn args both
+  come from the adapter, so adding an agent CLI still touches only its
+  adapter + the registry. A spawn `ENOENT` rejects with
+  `NO_AGENT_CLI_MESSAGE`, and a `MYCELIUM_LLM` naming an agent Mycelium
+  has no headless-capable adapter for rejects with
+  `unusableProviderMessage()` rather than silently running a different
+  agent — both name the fix instead of surfacing a raw `spawn claude
+  ENOENT`. [partial] (`resolveProvider()`'s env/PATH/fallback branches,
+  contract-derived eligibility, and both error messages are tested via a
+  temp-PATH seam; the successful real spawn path is not, by design)
+- **Normalize each provider's different stdout shape.** `extractText(stdout)`.
+  Tries Claude's `{result}` JSON; else scans JSONL for the last Codex
+  `agent_message` (both `msg.type` and `payload.type` shapes) or, for
+  opencode `run --format json`, every `{type:"text"}` part's `part.text`
+  joined in order; else, if the output carries ANSI escapes (kiro-cli's
+  rendered terminal text), strips the SGR codes and leading `> ` speaker
+  marker; else raw trimmed text. Pure function, zero mocking needed.
+  [tested] (fixture cases use the real captured stdout of each CLI)
 - **Parse a JSON reply out of prose/code-fences.** `parseJsonReply(text)`.
   Extracts a ```` ```json ``` ```` fence if present, else finds first
   `{`/last `}`; returns `null` (never throws) on failure. **Known edge

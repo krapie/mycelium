@@ -34,7 +34,7 @@ src/
   split.js            LLM-suggested session splitting
   index-db.js         sqlite (FTS5) index — derived, rebuildable from raw/
   config.js           config.json read/write (locale, excluded ids, etc.)
-  llm.js              headless LLM calls via the user's own claude/codex CLI subscription
+  llm.js              headless LLM calls via the user's own agent CLI subscription (provider auto-detected)
   agents.js           derives binFor/resumeArgsFor from the adapter registry
   adapters/           one file per agent CLI (claude-code.js, codex.js, kiro.js) + index.js registry
   tui/                the neo-blessed interface — app.js (shell), views/ (sessions.js, calendar.js),
