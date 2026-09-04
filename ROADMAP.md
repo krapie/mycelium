@@ -1,5 +1,3 @@
-**[← Back to README](./README.md)**
-
 # Roadmap
 
 Where Mycelium is headed, and what it is deliberately not going to become. Every item traces to an open GitHub issue or a recorded in-flight decision (`AGENTS.md`'s "진행 중인 작업 및 결정사항" section); the source is named in each entry. Horizons are relative — **Now / Next / Later** — not dated. Mycelium has not committed to release quarters or version numbers for anything below.
