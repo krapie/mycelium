@@ -5,8 +5,13 @@ import { emptyNeutral } from '../schema.js';
 
 // Claude Code stores sessions under ~/.claude/projects/<encoded-project-dir>/,
 // where the folder name is the launch directory with every '/' turned into '-'.
-// `claude --resume <id>` resolves against THAT project dir, not the cwd recorded
-// inside individual messages — so we recover it from the folder name.
+// The encoding is lossy: any literal '-' in the launch path (e.g.
+// `/home/me/my-project`) is indistinguishable from the '/' → '-' substitution,
+// so decoding the folder name back to a path guesses wrong the moment a real
+// dash exists. Prefer `evt.cwd` from the first transcript message when it's
+// present (Claude re-encodes launch cwd back to the same folder on resume, so
+// the two agree in the normal case and cwd is authoritative when they differ);
+// fall back to the folder decode only for sessions with zero messages.
 function decodeProjectDir(sessionFilePath) {
   const folder = basename(dirname(sessionFilePath));
   const decoded = folder.replace(/-/g, '/').replace(/\/+/g, '/');
@@ -78,7 +83,6 @@ function toolActivityFromContent(content, sink) {
 
 export function parse(ref) {
   const neutral = emptyNeutral(ref.id, name);
-  neutral.projectDir = decodeProjectDir(ref.path);
   const raw = readFileSync(ref.path, 'utf8');
   const lines = raw.split('\n');
 
@@ -106,6 +110,13 @@ export function parse(ref) {
       toolActivityFromContent(evt.message.content, neutral.toolActivity);
     }
   }
+
+  // projectDir: cwd from the transcript wins when present — Claude records
+  // the actual launch directory verbatim there, so it's exact even when the
+  // folder-name encoding would be ambiguous (a real dash in the path is
+  // indistinguishable from '/' → '-' after encoding). Only fall back to
+  // decoding the folder name for zero-message sessions.
+  neutral.projectDir = neutral.cwd || decodeProjectDir(ref.path);
 
   // Best-effort filesChanged from tool activity referencing paths.
   const files = new Set();

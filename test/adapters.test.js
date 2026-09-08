@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { DatabaseSync } from 'node:sqlite';
 import { ADAPTERS, getAdapter } from '../src/adapters/index.js';
@@ -43,11 +43,35 @@ test('claude adapter parses turns, cwd, and tool activity out of a real-shaped t
   const neutral = claude.parse({ id: 'test-claude', path: join(FIXTURES, 'claude-sample.jsonl'), mtimeMs: 0 });
   assert.equal(neutral.source, 'claude');
   assert.equal(neutral.cwd, '/tmp/proj');
+  // projectDir comes from the transcript's cwd, not the ambiguous folder-name
+  // decode — the sample lives under fixtures/ but its cwd says /tmp/proj.
+  assert.equal(neutral.projectDir, '/tmp/proj');
   assert.equal(neutral.turns.length, 2);
   assert.equal(neutral.turns[0].role, 'user');
   assert.match(neutral.turns[0].text, /login bug/);
   assert.equal(neutral.turns[1].role, 'assistant');
   assert.deepEqual(neutral.artifacts.filesChanged, ['src/auth.ts']);
+});
+
+test('claude adapter falls back to the folder-name decode only when the transcript has no cwd', (t) => {
+  // The folder-name encoding is '/' → '-', which is lossy: a real dash in the
+  // path (e.g. /home/me/my-project) is indistinguishable from the substitution
+  // once encoded. When cwd IS present, that's authoritative; only zero-cwd
+  // sessions (no messages at all) fall back to decoding.
+  const dir = mkdtempSync(join(tmpdir(), 'mycelium-claude-nocwd-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const projectDirEncoded = join(dir, '-home-me-my-project');
+  mkdirSync(projectDirEncoded);
+  const path = join(projectDirEncoded, 'empty.jsonl');
+  writeFileSync(path, ''); // zero messages -> no cwd captured
+
+  const claude = getAdapter('claude');
+  const neutral = claude.parse({ id: 'empty', path, mtimeMs: 0 });
+  assert.equal(neutral.cwd, null, 'no cwd came out of the empty transcript');
+  // Folder decode is lossy but it's the only signal we have here — better than
+  // an empty projectDir. Consumers that need exact paths should skip empty
+  // sessions anyway.
+  assert.equal(neutral.projectDir, '/home/me/my/project');
 });
 
 test('codex adapter parses session_meta + event_msg lines into turns', () => {
