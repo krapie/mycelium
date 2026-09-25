@@ -22,6 +22,11 @@ export const bin = 'claude';
 export const newArgs = (seed) => (seed ? [seed] : []);
 export const resumeArgs = (sessionId) => ['--resume', sessionId];
 
+// A cheap model: complete()'s callers are consolidation-style work (tagging,
+// summarizing, classification), not the user's own reasoning.
+const MODEL = process.env.MYCELIUM_CLAUDE_MODEL || 'haiku';
+export const headlessArgs = (prompt) => ['-p', prompt, '--model', MODEL, '--output-format', 'json'];
+
 // Claude Code stores one dir per encoded cwd under ~/.claude/projects/, each
 // containing <sessionId>.jsonl transcripts. Verified against the real layout.
 const ROOT = process.env.CLAUDE_PROJECTS_DIR || join(homedir(), '.claude', 'projects');

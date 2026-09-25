@@ -10,6 +10,27 @@ export const bin = 'kiro-cli';
 export const newArgs = (seed) => ['chat', ...(seed ? [seed] : [])];
 export const resumeArgs = (sessionId) => ['chat', '--resume-id', sessionId];
 
+// `kiro-cli chat "<prompt>" --no-interactive` runs one prompt to completion
+// and exits, printing the reply to stdout (verified against kiro-cli 2.14.1
+// on this machine — issue #86). `--trust-tools=` (trust nothing) stops an
+// unattended meta-call from executing any tool — the same lock-down
+// codex.js gets from its read-only sandbox. `--wrap never` keeps a long
+// JSON reply from being hard-wrapped mid-token (a pipe auto-detects to this
+// anyway, but be explicit). Kiro has no structured-output mode for chat: it
+// prints RENDERED terminal text (ANSI colour codes, a leading "> " speaker
+// marker), which llm.js's extractText() strips.
+const MODEL = process.env.MYCELIUM_KIRO_MODEL || 'claude-haiku-4.5';
+export const headlessArgs = (prompt) => [
+  'chat',
+  prompt,
+  '--no-interactive',
+  '--wrap',
+  'never',
+  '--trust-tools=',
+  '--model',
+  MODEL,
+];
+
 // Kiro CLI has three on-disk formats, verified against a real installed
 // kiro-cli (v2.13.0):
 //   v2 (current, live): SQLite conversations_v2(key, conversation_id, value,

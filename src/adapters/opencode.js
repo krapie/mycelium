@@ -10,6 +10,22 @@ export const bin = 'opencode';
 export const newArgs = (seed) => (seed ? ['--prompt', seed] : []);
 export const resumeArgs = (sessionId) => ['--session', sessionId];
 
+// `opencode run <message>` is a genuine one-shot: it sends the message,
+// prints the reply, and exits (verified against opencode 1.18.20 on this
+// machine — issue #86). `--format json` emits JSONL events that llm.js's
+// extractText() reassembles. opencode has no built-in model namespace
+// (models are `provider/model` and depend on the user's own configured
+// providers), so there's no safe default to hardcode here — pass --model
+// only when MYCELIUM_OPENCODE_MODEL is set, else let opencode use its own.
+const MODEL = process.env.MYCELIUM_OPENCODE_MODEL;
+export const headlessArgs = (prompt) => [
+  'run',
+  '--format',
+  'json',
+  ...(MODEL ? ['--model', MODEL] : []),
+  prompt,
+];
+
 // OpenCode stores everything in one SQLite DB (not per-session files like the
 // other adapters) — verified against a real installed opencode (v1.18.20) on
 // this machine: session/project/message/part tables, WAL journaling. It uses
