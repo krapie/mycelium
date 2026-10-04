@@ -39,6 +39,7 @@ Engineer by picking a different persona when it asks.
 
 - Node.js ≥ 22.16, git
 - AI agents: `claude` / `codex` / `kiro-cli` / `opencode`
+- Windows: run Mycelium in VS Code's integrated terminal. A standalone cmd/PowerShell window may render the TUI incorrectly (duplicated or misaligned panels).
 
 ## Install
 

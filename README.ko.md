@@ -35,6 +35,7 @@ Local-first, 모델 중립, 사람이 통제.
 
 - Node.js ≥ 22.16, git
 - AI 에이전트: `claude` / `codex` / `kiro-cli` / `opencode`
+- Windows: VS Code 통합 터미널에서 실행하세요. 별도의 cmd/PowerShell 창에서는 TUI가 올바르게 표시되지 않을 수 있습니다 (패널 중복·어긋남).
 
 ## 설치
 
