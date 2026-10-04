@@ -37,9 +37,10 @@ Engineer by picking a different persona when it asks.
 > automatically in the background while mycelium is open. Disable with
 > `MYCELIUM_NO_AUTOSTART=1`, or tune it in [`docs/cli.md`](./docs/cli.md).
 
+> **On Windows, run Mycelium in VS Code's integrated terminal.** A standalone cmd/PowerShell window may render the TUI incorrectly (duplicated or misaligned panels).
+
 - Node.js ≥ 22.16, git
 - AI agents: `claude` / `codex` / `kiro-cli` / `opencode`
-- Windows: run Mycelium in VS Code's integrated terminal. A standalone cmd/PowerShell window may render the TUI incorrectly (duplicated or misaligned panels).
 
 ## Install
 
