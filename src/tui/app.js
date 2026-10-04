@@ -55,6 +55,30 @@ export function defaultTerminal(platform = process.platform, env = process.env) 
   return undefined;
 }
 
+// Windows conhost wraps the cursor as soon as the last column is written
+// (Node doesn't set DISABLE_NEWLINE_AUTO_RETURN), so writing the bottom-right
+// cell scrolls the whole screen up one row. blessed doesn't know that
+// happened, so every later diff-only redraw lands one row off from the first
+// frame (doubled panel labels, a missing header border). Make blessed believe
+// that cell is already up to date so draw() never writes it. The cell is
+// always status-bar padding, so nothing visible is lost.
+export function guardBottomRightCell(screen) {
+  const draw = screen.draw;
+  screen.draw = function (start, end) {
+    const y = this.rows - 1;
+    const x = this.cols - 1;
+    const line = this.lines[y];
+    const o = this.olines[y];
+    if (line && o && line[x] && o[x]) {
+      // A double-width char just before the last column would spill into it too.
+      if (line[x - 1] && blessed.unicode.charWidth(line[x - 1][1]) === 2) line[x - 1][1] = ' ';
+      line[x][0] = o[x][0];
+      line[x][1] = o[x][1];
+    }
+    return draw.call(this, start, end);
+  };
+}
+
 export function createApp({ input, output } = {}) {
   const screen = blessed.screen({
     terminal: defaultTerminal(),
@@ -77,6 +101,8 @@ export function createApp({ input, output } = {}) {
   } catch {
     /* ignore */
   }
+
+  if (process.platform === 'win32') guardBottomRightCell(screen);
 
   const header = blessed.box({
     parent: screen,
