@@ -43,8 +43,21 @@ import { VERSION } from '../version.js';
 // other change to this function. Every production call site calls
 // createApp() with no args, so this defaults to blessed's own normal
 // process.stdin/stdout behavior.
+// Windows consoles don't set TERM, and blessed then falls back to its bundled
+// `windows-ansi` terminfo: 8 colors, no alternate screen buffer, no cursor
+// save/restore. The TUI ends up drawing into the scrollback buffer, so stale
+// frames survive redraws at shifted rows (mixed old/new labels, scattered
+// CJK glyphs, missing borders) and the palette collapses to blue/red.
+// Windows Terminal and Win10+ conhost both speak xterm VT sequences, so use
+// xterm-256color there. An explicit TERM (Git Bash, WSL, ssh) still wins.
+export function defaultTerminal(platform = process.platform, env = process.env) {
+  if (platform === 'win32' && !env.TERM) return 'xterm-256color';
+  return undefined;
+}
+
 export function createApp({ input, output } = {}) {
   const screen = blessed.screen({
+    terminal: defaultTerminal(),
     smartCSR: true,
     title: 'Mycelium',
     fullUnicode: true,

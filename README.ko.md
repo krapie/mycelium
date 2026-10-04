@@ -38,10 +38,14 @@ Local-first, 모델 중립, 사람이 통제.
 
 ## 설치
 
+npm으로:
 ```sh
-npm install -g @kevinprk/mycelium   # npm
-# 또는
-brew install krapie/tap/mycelium    # Homebrew
+npm install -g @kevinprk/mycelium
+```
+
+또는 Homebrew로:
+```sh
+brew install krapie/tap/mycelium
 ```
 
 직접 코드를 만지려면 clone:

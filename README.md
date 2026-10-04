@@ -42,10 +42,14 @@ Engineer by picking a different persona when it asks.
 
 ## Install
 
+Via npm:
 ```sh
-npm install -g @kevinprk/mycelium   # via npm
-# or
-brew install krapie/tap/mycelium    # via Homebrew
+npm install -g @kevinprk/mycelium
+```
+
+Or via Homebrew:
+```sh
+brew install krapie/tap/mycelium
 ```
 
 To hack on it, clone instead:
