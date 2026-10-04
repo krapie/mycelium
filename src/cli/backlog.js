@@ -3,12 +3,12 @@ import { isBacklog } from '../schema.js';
 import { findSession } from '../scanner.js';
 import { reindexOne } from '../index-db.js';
 import { AGENTS, which, newCommandLine } from '../agents.js';
-import { dirsForFolder, injectAgentsMd } from '../reuse.js';
+import { dirsForFolder, injectAgentsMd, folderForDir } from '../reuse.js';
 import { copyToClipboard } from '../tui/clipboard.js';
 import { fail, parseFlags } from './util.js';
 
 const USAGE =
-  'Usage: mycelium backlog add "<title>" [--desc "..."] [--folder f] | list [--folder f] | open <id|prefix> [--agent a] [--dir D] [--copy]';
+  'Usage: mycelium backlog add "<title>" [--desc "..."] [--folder f | --here] | list [--folder f | --here] | open <id|prefix> [--agent a] [--dir D] [--copy]';
 
 export function backlogCmd(args) {
   const [sub, ...rest] = args;
@@ -18,6 +18,15 @@ export function backlogCmd(args) {
   return fail(USAGE);
 }
 
+// --here: the folder the current directory belongs to (folderForDir()) —
+// what the Claude Code plugin's /mycelium:backlog passes, since a skill
+// running inside a project has a cwd but no idea which Mycelium folder it is.
+function folderFlag(flags) {
+  if (typeof flags.folder === 'string') return flags.folder;
+  if (flags.here) return folderForDir(process.cwd()) ?? undefined;
+  return undefined;
+}
+
 function addCmd(args) {
   const { flags, positional } = parseFlags(args);
   const title = positional.join(' ').trim();
@@ -25,7 +34,7 @@ function addCmd(args) {
   const res = createBacklog({
     title,
     description: typeof flags.desc === 'string' ? flags.desc : '',
-    folder: typeof flags.folder === 'string' ? flags.folder : null,
+    folder: folderFlag(flags) ?? null,
   });
   if (!res.ok) return fail(res.error);
   reindexOne(res.session);
@@ -34,7 +43,7 @@ function addCmd(args) {
 
 function listBacklogCmd(args) {
   const { flags } = parseFlags(args);
-  const items = listBacklog({ folder: typeof flags.folder === 'string' ? flags.folder : undefined });
+  const items = listBacklog({ folder: folderFlag(flags) });
   if (!items.length) return console.log('백로그 없음');
   for (const n of items) {
     const mark = n.doneAt ? ' (시작함)' : '';

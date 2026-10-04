@@ -22,6 +22,17 @@ const CODEX_MODEL = process.env.MYCELIUM_CODEX_MODEL || 'gpt-5.5';
 // marker on every call is the part that can't drift.
 export const META_MARKER = '​[mycelium:meta-call]​';
 
+// META_MARKER only lets scan() drop a meta-call *after* it ran. A user with
+// the Claude Code plugin installed also has its SessionStart/SessionEnd hooks
+// fire inside every `claude -p` complete() spawns — and a SessionEnd capture
+// feeding the next auto-tag cycle is the same self-feeding LLM pile-up as
+// issue #3. Marking the child's env lets `mycelium hook` bail before doing
+// anything (src/cli/hook.js).
+export const INTERNAL_ENV = 'MYCELIUM_INTERNAL';
+export function childEnv(base = process.env) {
+  return { ...base, [INTERNAL_ENV]: '1' };
+}
+
 // Injection point — every LLM-dependent module calls complete() rather than
 // spawning directly, so overriding it here is the one seam needed to
 // unit-test all of them. The one non-test caller is tui/tutorial.js's
@@ -84,7 +95,7 @@ export function complete(prompt, { timeoutMs = 240000 } = {}) {
     // default is false) — with dozens of these calls firing in the
     // background, that's what looked like "Claude DOS windows keep
     // appearing" in practice (issue #3). No-op on macOS/Linux.
-    const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+    const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, env: childEnv() });
     inFlight.add(child);
     const untrack = () => inFlight.delete(child);
     let out = '';

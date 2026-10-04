@@ -128,6 +128,107 @@ export function purgeMeta() {
   return removed;
 }
 
+// Per-scan settings importRef() needs — read once per scan(), not per ref.
+function captureContext() {
+  const cfg = loadConfig();
+  const archiveDays = Number(cfg.archiveOlderThanDays) || 0;
+  return {
+    excluded: new Set(cfg.excludedSessionIds || []),
+    archiveDays,
+    archiveCutoff: Date.now() - archiveDays * 86400000,
+  };
+}
+
+/**
+ * Capture one adapter ref into raw/ — the body of scan()'s loop, split out so
+ * captureOne() (the Claude Code plugin's SessionEnd hook) takes exactly the
+ * same path as a full scan instead of a second copy of the carry-forward
+ * rules below. Returns { status: 'imported'|'skipped'|'failed', neutral?,
+ * consumedId? }.
+ */
+function importRef(adapter, ref, ctx) {
+  // A session the user explicitly deleted (organize.deleteSession) stays
+  // deleted even though its source log is still on disk — otherwise the
+  // very next scan would just re-import it.
+  if (ctx.excluded.has(ref.id)) return { status: 'skipped' };
+  const existing = loadRaw(ref.id);
+  // One-time migration: the claude-code adapter's `name` (and every
+  // session's `source`) used to be 'claude-code', renamed to 'claude' to
+  // match what AGENTS/binFor/sourceColor always keyed on. Sessions
+  // captured before that rename would otherwise keep the stale value
+  // forever — the skip-if-unchanged check right below means their
+  // underlying transcript never gets re-parsed. Cheap field rewrite, not
+  // a re-parse, and a no-op after the first pass on a given session.
+  if (existing?.source === 'claude-code') {
+    existing.source = 'claude';
+    writeFileSync(rawPath(existing.id), JSON.stringify(existing, null, 2));
+  }
+  // Skip if we already captured this session and the file hasn't changed.
+  if (existing && existing._mtimeMs === ref.mtimeMs) return { status: 'skipped' };
+
+  let neutral;
+  try {
+    neutral = adapter.parse(ref);
+  } catch (err) {
+    console.error(`[${adapter.name}] parse failed for ${ref.id}: ${err.message}`);
+    return { status: 'failed', error: err.message };
+  }
+
+  if (neutral.turns.length === 0 || isMyceliumMeta(neutral)) {
+    return { status: 'skipped' }; // empty session, or Mycelium's own LLM call — not real work
+  }
+
+  // Carry forward downstream-owned fields on re-import. mergedFrom/
+  // splitFrom/supersededBy are split.js/organize.js's lineage flags —
+  // missing them here was a real bug: a session that's still actively
+  // growing (its own agent log keeps changing) gets rescanned on every
+  // scan cycle, and without this, each rescan silently reset supersededBy
+  // back to [], un-hiding an already-split/merged-away original.
+  if (existing) {
+    neutral.extracted = existing.extracted || neutral.extracted;
+    neutral.folder = existing.folder ?? neutral.folder;
+    neutral.organizedBy = existing.organizedBy || neutral.organizedBy;
+    neutral.continuationOf = existing.continuationOf ?? neutral.continuationOf;
+    neutral.continuedTo = existing.continuedTo ?? neutral.continuedTo;
+    neutral.mergedFrom = existing.mergedFrom?.length ? existing.mergedFrom : neutral.mergedFrom;
+    neutral.splitFrom = existing.splitFrom ?? neutral.splitFrom;
+    neutral.supersededBy = existing.supersededBy?.length ? existing.supersededBy : neutral.supersededBy;
+    neutral.splitInto = existing.splitInto?.length ? existing.splitInto : neutral.splitInto;
+    // Also queued-suggestion + classification bookkeeping — without this,
+    // an actively-growing session (its own agent log keeps changing, so
+    // it gets reparsed on every scan cycle) would silently lose a
+    // not-yet-reviewed smart-organize suggestion, or forget it was
+    // already classified and get re-sent to the LLM every cycle.
+    neutral.suggestedFolder = existing.suggestedFolder ?? neutral.suggestedFolder;
+    neutral.suggestedReason = existing.suggestedReason ?? neutral.suggestedReason;
+    neutral.lastClassifiedAt = existing.lastClassifiedAt ?? neutral.lastClassifiedAt;
+    // Same reasoning — a title a human deliberately set (setContent())
+    // must survive re-scans, and losing summarizedTurnCount would make
+    // tagAll() treat an already-tracked session as never-tracked again
+    // (harmless — see tagAll()'s doc comment — but still wrong state).
+    neutral.titleLocked = existing.titleLocked ?? neutral.titleLocked;
+    neutral.summarizedTurnCount = existing.summarizedTurnCount ?? neutral.summarizedTurnCount;
+  }
+  // First-time capture of an already-old session: file it straight into
+  // _archive instead of New, keeping a large historical backlog out of
+  // triage while still capturing it losslessly. Gated on `!existing`
+  // (first import only) so this never retroactively archives a session
+  // already sitting in New. Recency matches the calendar's own basis.
+  // A session started from a backlog item replaces that item outright.
+  const consumedId = consumeBacklogItem(neutral);
+  if (!existing && ctx.archiveDays > 0 && neutral.folder == null && neutral.organizedBy !== 'human') {
+    const last = Date.parse(neutral.endedAt || neutral.startedAt || '');
+    if (Number.isFinite(last) && last < ctx.archiveCutoff) neutral.folder = '_archive';
+  }
+  neutral._mtimeMs = ref.mtimeMs;
+
+  writeFileSync(rawPath(neutral.id), JSON.stringify(neutral, null, 2));
+  // Only delete the item's own record once the session that replaces it
+  // is durably on disk — see consumeBacklogItem()'s doc comment.
+  if (consumedId) deleteRaw(consumedId);
+  return { status: 'imported', neutral, consumedId };
+}
+
 /**
  * Scan every adapter's session store, parse new/changed sessions into the
  * neutral schema, and write them to raw/. Preserves any `extracted`/`folder`/
@@ -137,10 +238,7 @@ export function purgeMeta() {
 export function scan({ onImport } = {}) {
   ensureDirs();
   purgeMeta();
-  const cfg = loadConfig();
-  const excluded = new Set(cfg.excludedSessionIds || []);
-  const archiveDays = Number(cfg.archiveOlderThanDays) || 0;
-  const archiveCutoff = Date.now() - archiveDays * 86400000;
+  const ctx = captureContext();
   let scanned = 0;
   let imported = 0;
   let skipped = 0;
@@ -168,102 +266,44 @@ export function scan({ onImport } = {}) {
 
     for (const ref of refs) {
       scanned++;
-      // A session the user explicitly deleted (organize.deleteSession) stays
-      // deleted even though its source log is still on disk — otherwise the
-      // very next scan would just re-import it.
-      if (excluded.has(ref.id)) {
-        skipped++;
-        continue;
+      const r = importRef(adapter, ref, ctx);
+      if (r.status === 'skipped') skipped++;
+      else if (r.status === 'failed') failed++;
+      else {
+        if (r.consumedId) consumedBacklog.add(r.consumedId);
+        imported++;
+        if (onImport) onImport(r.neutral);
       }
-      const existing = loadRaw(ref.id);
-      // One-time migration: the claude-code adapter's `name` (and every
-      // session's `source`) used to be 'claude-code', renamed to 'claude' to
-      // match what AGENTS/binFor/sourceColor always keyed on. Sessions
-      // captured before that rename would otherwise keep the stale value
-      // forever — the skip-if-unchanged check right below means their
-      // underlying transcript never gets re-parsed. Cheap field rewrite, not
-      // a re-parse, and a no-op after the first pass on a given session.
-      if (existing?.source === 'claude-code') {
-        existing.source = 'claude';
-        writeFileSync(rawPath(existing.id), JSON.stringify(existing, null, 2));
-      }
-      // Skip if we already captured this session and the file hasn't changed.
-      if (existing && existing._mtimeMs === ref.mtimeMs) {
-        skipped++;
-        continue;
-      }
-
-      let neutral;
-      try {
-        neutral = adapter.parse(ref);
-      } catch (err) {
-        failed++;
-        console.error(`[${adapter.name}] parse failed for ${ref.id}: ${err.message}`);
-        continue;
-      }
-
-      if (neutral.turns.length === 0 || isMyceliumMeta(neutral)) {
-        skipped++; // empty session, or Mycelium's own LLM call — not real work
-        continue;
-      }
-
-      // Carry forward downstream-owned fields on re-import. mergedFrom/
-      // splitFrom/supersededBy are split.js/organize.js's lineage flags —
-      // missing them here was a real bug: a session that's still actively
-      // growing (its own agent log keeps changing) gets rescanned on every
-      // scan cycle, and without this, each rescan silently reset supersededBy
-      // back to [], un-hiding an already-split/merged-away original.
-      if (existing) {
-        neutral.extracted = existing.extracted || neutral.extracted;
-        neutral.folder = existing.folder ?? neutral.folder;
-        neutral.organizedBy = existing.organizedBy || neutral.organizedBy;
-        neutral.continuationOf = existing.continuationOf ?? neutral.continuationOf;
-        neutral.continuedTo = existing.continuedTo ?? neutral.continuedTo;
-        neutral.mergedFrom = existing.mergedFrom?.length ? existing.mergedFrom : neutral.mergedFrom;
-        neutral.splitFrom = existing.splitFrom ?? neutral.splitFrom;
-        neutral.supersededBy = existing.supersededBy?.length ? existing.supersededBy : neutral.supersededBy;
-        neutral.splitInto = existing.splitInto?.length ? existing.splitInto : neutral.splitInto;
-        // Also queued-suggestion + classification bookkeeping — without this,
-        // an actively-growing session (its own agent log keeps changing, so
-        // it gets reparsed on every scan cycle) would silently lose a
-        // not-yet-reviewed smart-organize suggestion, or forget it was
-        // already classified and get re-sent to the LLM every cycle.
-        neutral.suggestedFolder = existing.suggestedFolder ?? neutral.suggestedFolder;
-        neutral.suggestedReason = existing.suggestedReason ?? neutral.suggestedReason;
-        neutral.lastClassifiedAt = existing.lastClassifiedAt ?? neutral.lastClassifiedAt;
-        // Same reasoning — a title a human deliberately set (setContent())
-        // must survive re-scans, and losing summarizedTurnCount would make
-        // tagAll() treat an already-tracked session as never-tracked again
-        // (harmless — see tagAll()'s doc comment — but still wrong state).
-        neutral.titleLocked = existing.titleLocked ?? neutral.titleLocked;
-        neutral.summarizedTurnCount = existing.summarizedTurnCount ?? neutral.summarizedTurnCount;
-      }
-      // First-time capture of an already-old session: file it straight into
-      // _archive instead of New, keeping a large historical backlog out of
-      // triage while still capturing it losslessly. Gated on `!existing`
-      // (first import only) so this never retroactively archives a session
-      // already sitting in New. Recency matches the calendar's own basis.
-      // A session started from a backlog item replaces that item outright.
-      const consumedId = consumeBacklogItem(neutral);
-      if (!existing && archiveDays > 0 && neutral.folder == null && neutral.organizedBy !== 'human') {
-        const last = Date.parse(neutral.endedAt || neutral.startedAt || '');
-        if (Number.isFinite(last) && last < archiveCutoff) neutral.folder = '_archive';
-      }
-      neutral._mtimeMs = ref.mtimeMs;
-
-      writeFileSync(rawPath(neutral.id), JSON.stringify(neutral, null, 2));
-      // Only delete the item's own record once the session that replaces it
-      // is durably on disk — see consumeBacklogItem()'s doc comment.
-      if (consumedId) {
-        deleteRaw(consumedId);
-        consumedBacklog.add(consumedId);
-      }
-      imported++;
-      if (onImport) onImport(neutral);
     }
   }
 
   return { scanned, imported, skipped, failed, consumedBacklog: [...consumedBacklog] };
+}
+
+/**
+ * Capture a single session by source + id, without walking every adapter —
+ * for the Claude Code plugin's SessionEnd hook, which already knows exactly
+ * which session just ended and must stay fast. Still lists that one
+ * adapter's refs (a directory listing, not a parse) to get the same
+ * {id, path, mtimeMs} shape scan() trusts. Caller reindexes, like scan().
+ */
+export function captureOne(source, id, { path } = {}) {
+  if (process.env.MYCELIUM_DEMO_MODE === '1') return { status: 'skipped' };
+  const adapter = getAdapter(source);
+  if (!adapter) return { status: 'failed', error: `unknown source ${source}` };
+  ensureDirs();
+  let ref;
+  try {
+    // `path` (the hook's transcript_path) disambiguates when two transcripts
+    // share an id, e.g. a nested `claude -p` that inherited its parent's
+    // CLAUDE_CODE_SESSION_ID — matching by id alone captured the wrong one.
+    const refs = adapter.listSessions().filter((r) => r.id === id);
+    ref = refs.find((r) => r.path === path) || refs[0];
+  } catch (err) {
+    return { status: 'failed', error: err.message };
+  }
+  if (!ref) return { status: 'failed', error: `no ${source} session ${id}` };
+  return importRef(adapter, ref, captureContext());
 }
 
 /**

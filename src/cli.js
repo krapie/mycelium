@@ -8,6 +8,7 @@ import { searchCmd, listCmd, tagsCmd } from './cli/find.js';
 import { backlogCmd } from './cli/backlog.js';
 import { cleanupCmd } from './cli/cleanup.js';
 import { daemonCmd, demoCmd, langCmd } from './cli/run.js';
+import { hookCmd, linkCmd } from './cli/hook.js';
 import { printHelp } from './cli/help.js';
 
 // Dispatch table — barrel-adjacent to organize.js/daemon.js's own
@@ -30,6 +31,7 @@ const COMMANDS = {
   knowledge: knowledgeCmd,
   context: contextCmd,
   inject: injectCmd,
+  link: linkCmd,
   handoff: handoffCmd,
   resume: resumeCmd,
   search: searchCmd,
@@ -39,6 +41,7 @@ const COMMANDS = {
   daemon: daemonCmd,
   demo: demoCmd,
   lang: langCmd,
+  hook: hookCmd,
 };
 
 async function main() {

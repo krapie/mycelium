@@ -267,45 +267,18 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   digest-review auto-inject can use it too, without core importing from
   `tui/**`. Filters to directories that still `existsSync()`. [tested]
 - **Infer which folder a bare working directory belongs to.**
-  `folderForDir(dir)` — the reverse of `dirsForFolder()`: given a
-  directory, returns the folder of whichever session most recently
-  (`startedAt`) had that `projectDir`/`cwd`, or `null` if none has.
-  Excludes `_archive`, same as `classificationCandidates()`/`tagAll()`
-  elsewhere. Exists for the Claude Code plugin's `SessionStart` hook (see
-  below), which has no TUI to ask "which folder?" the way the `i` key
-  does. [tested]
+  `folderForDir(dir)`, the reverse of `dirsForFolder()`: a folder pinned with `mycelium link` (`config.json`'s `dirFolders`) wins; otherwise the folder of the most recent (`startedAt`) filed, non-`_archive` session whose `cwd`/`projectDir` is that directory. Walks up through parent directories (`ownerDirs()`), stopping before `$HOME` and `/` so a session that once ran in `~` can't claim every project. Reads the index (`index-db.js`'s `sessionsInDir()`), not `raw/`, because the Claude Code plugin calls it on every launch. [tested] (`test/hook.test.js`)
 
-## Claude Code Plugin (`.claude-plugin/`, `hooks/`, `skills/`, `src/cli/hook.js`)
+## Claude Code Plugin (`.claude-plugin/`, `plugin/`, `src/hook.js`, `src/cli/hook.js`)
 
-- **Auto-refresh `AGENTS.md` at Claude Code session start.**
-  `hooks/session-start.sh` (a Claude Code `SessionStart` hook, wired via
-  `hooks/hooks.json`) shells out to `mycelium hook session-start --dir
-  <cwd>` (`src/cli/hook.js`'s `hookCmd`), which calls `folderForDir(dir)`
-  then `injectAgentsMd(dir, folder)` if one was found — the same write the
-  TUI's `i`/`n`/`h` already trigger, just reached from Claude Code's own
-  lifecycle instead of a key press. No-ops silently (exit 0, no stdout) if
-  `mycelium` isn't on `PATH`, the directory has no known folder, or that
-  folder has no `KNOWLEDGE.md` yet — a `SessionStart` hook is meant to be
-  a silent best-effort convenience, never a source of session-start
-  errors. On success, prints `hookSpecificOutput.additionalContext`
-  (locale-aware per `contentLocale()`) so Claude sees a one-line note that
-  the refresh happened. Deliberately undocumented in `printHelp()` — like
-  `--tutorial`, invoked by tooling, not typed by a person. [tested] (CLI
-  dispatch test covers the inject-happens, no-folder-no-op, and
-  unknown-subcommand-no-op cases; the actual shell script itself is
-  exercised manually, not under `npm test` — see
-  `docs/claude-code-plugin.md`)
-- **Slash commands reaching into Mycelium from inside a conversation.**
-  `skills/mycelium-search`, `skills/mycelium-backlog`,
-  `skills/mycelium-context` — thin `SKILL.md` instructions telling Claude
-  to run the existing `mycelium search`/`backlog`/`inject` CLI commands
-  via `Bash` and present the results; no new runtime logic. `[untested]`
-  (skill *content* isn't exercised by `npm test` — Claude Code loads and
-  interprets `SKILL.md` itself, outside this repo's test surface; the CLI
-  commands they wrap are already covered under Find/Backlog/Reuse above).
+- **Brief each new Claude Code session from its directory.** `sessionStartContext({cwd, sessionId, source})`, run by the plugin's `SessionStart` hook through `mycelium hook session-start` (stdin: the hook's JSON; stdout: `hookSpecificOutput.additionalContext` plus a one-line `systemMessage`). Includes the folder's `assembleContext()` (capped at 6000 chars), the last non-archived session in the directory or nearest parent (summary and todos, never the starting session itself), and the folder's waiting backlog. Writes no file, unlike `injectAgentsMd()`. Returns null (no output) for an unknown directory and on `resume`; runs on `compact`. Text follows `contentLocale()`. [tested]
+- **Capture a session the moment it ends.** `captureEndedSession({sessionId, transcriptPath})` calls `scanner.js`'s `captureOne(source, id, {path})` and then `reindexOne()`. `captureOne()` goes through the same `importRef()` as `scan()`'s loop (exclusions, carry-forward, backlog consumption, first-import archiving) but lists only one adapter. It prefers the hook's `transcript_path` when two transcripts share an id (a nested `claude -p` that inherited its parent's session id). Never summarizes, because hooks must not spawn LLMs. [tested]
+- **No recursion through Mycelium's own LLM calls.** `llm.js`'s `childEnv()` sets `MYCELIUM_INTERNAL=1` on every `complete()` subprocess; `mycelium hook` returns before reading stdin when it's set. [tested]
+- **Hooks never fail a session.** Shell guard `command -v mycelium … || true`; `hookCmd` swallows its own errors and exits 0; bad stdin JSON is treated as `{}`. `mycelium hook` is invoked by tooling, so it's left out of `printHelp()`. [tested] (spawned-CLI tests for output, the internal guard, unknown directory, unknown event, and bad input)
+- **Pin a directory's folder.** `mycelium link [<folder>] [--dir D] [--unset]` (also `/mycelium:link`). Rejects unsafe paths (`isSafeFolderPath()`). [tested]
+- **Slash commands.** `plugin/skills/`: `recall` (model-invocable; runs `mycelium search`/`handoff`), `handoff` (`!` pre-executes `mycelium handoff ${CLAUDE_SESSION_ID} --capture claude`; the session is still running, so `--capture` refreshes it first), `backlog` (`mycelium backlog add|list --here`, where `--here` resolves the folder with `folderForDir(cwd)`), and `link`. [untested] (Claude Code interprets `SKILL.md` itself; verified manually with `claude --plugin-dir ./plugin -p …`, and the CLI commands they wrap are tested)
 
-See [`docs/claude-code-plugin.md`](./claude-code-plugin.md) for install
-instructions and the full rationale.
+See [`docs/claude-code-plugin.md`](./claude-code-plugin.md).
 
 ## Handoff (`src/handoff.js`)
 
@@ -583,6 +556,7 @@ As a user, I can **write down something to work on later, before any agent has r
   Both exclude superseded sessions; day grouping uses the same
   last-activity basis as `listSessions`'s date filter. [tested]
 - **List all tags with usage counts.** `listTags()`. [tested]
+- **Sessions by directory.** `sessionsInDir(dir)`, newest first, matching the indexed `cwd` or `project_dir` columns (added for the Claude Code plugin; NULL on rows indexed before them until the next `reindex()`). [tested] (`test/hook.test.js`)
 
 ## LLM Provider (`src/llm.js`)
 

@@ -9,7 +9,7 @@ Organize  organize [--apply] [--limit N] [--folder <경로>]   내용 기반 폴
           tag <session> +t -t           태그 수동 편집
           unmerge <session>              TUI Shift+M 병합 되돌리기 (원본 세션들 복원)
           unsplit <session>              TUI Shift+S 분할 되돌리기 (분할 조각 제거, 원본 복원)
-Backlog   backlog add "<제목>" [--desc D] [--folder F]   나중에 할 작업을 미리 적어두기 (TUI b와 동일)
+Backlog   backlog add "<제목>" [--desc D] [--folder F | --here]   나중에 할 작업을 미리 적어두기 (TUI b와 동일)
           backlog list [--folder f]                      아직 시작 안 한(또는 세션이 아직 안 잡힌) 백로그 목록
           backlog open <id|prefix> [--agent a] [--dir D] [--copy]  백로그를 시작하는 명령어 출력(새 탭 붙여넣기용)
 Learn     autotag [<session>] [--force] 내용 기반 자동 태깅 (소급 일괄)
@@ -17,7 +17,8 @@ Learn     autotag [<session>] [--force] 내용 기반 자동 태깅 (소급 일�
           knowledge [<folder>]          폴더별 KNOWLEDGE.md 추출
 Reuse     context <session>|--folder    조상 경로 컨텍스트 출력
           inject [--dir D] --folder F   AGENTS.md에 지식 주입
-          handoff <session>            다른 에이전트용 인수인계 프롬프트
+          handoff <session> [--capture]  다른 에이전트용 인수인계 프롬프트 (--capture: 진행 중인 세션을 먼저 다시 캡처)
+          link [<folder>] [--dir D] [--unset]  디렉토리 → 폴더 연결 확인/고정 (Claude Code 플러그인이 사용)
           resume <session|prefix> [--copy|--exec]  이어열기 명령어 출력(새 탭 붙여넣기용) / 클립보드 복사 / 즉시 실행
 Find      search <q> [--tag t] [--folder f]
           list [--folder f] / tags     (_archive는 기본 숨김 — list --folder _archive)

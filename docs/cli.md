@@ -16,7 +16,7 @@ mycelium unsplit <session>                     # undo a TUI Shift+S split
 
 # Backlog (something to work on later, written before any agent has run)
 mycelium backlog add "Fix the flaky scan test" --desc "starts failing above ~200 sessions" --folder company/platform
-mycelium backlog list [--folder f]             # items still waiting (an item disappears when the session it started is captured)
+mycelium backlog list [--folder f | --here]    # items still waiting (--here: this directory's folder) (an item disappears when the session it started is captured)
 mycelium backlog open <session|prefix> [--agent a] [--dir D] [--copy]  # print the command that starts it, seeded with your notes (that session replaces the item on the next scan)
 
 # Learn
@@ -27,7 +27,8 @@ mycelium knowledge company/platform/auth
 # Reuse / Find
 mycelium context <session>
 mycelium inject --dir <project> --folder <folder> # inject knowledge into AGENTS.md (+ a CLAUDE.md bridge, since Claude Code doesn't read AGENTS.md on its own)
-mycelium handoff <session>                     # print a handoff prompt
+mycelium handoff <session> [--capture [source]] # print a handoff prompt (--capture: re-capture a still-running session first)
+mycelium link [<folder>] [--dir D] [--unset]   # show/pin which folder a directory belongs to (used by the Claude Code plugin)
 mycelium resume <session|prefix> [--copy|--exec] # print/copy/immediately run the resume command
 mycelium search "query" --tag infra --folder company
 mycelium list / tags / reindex

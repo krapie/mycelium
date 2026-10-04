@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
-import { scan, findSession } from '../scanner.js';
+import { scan, findSession, captureOne } from '../scanner.js';
 import { firstUserText } from '../schema.js';
-import { reindex } from '../index-db.js';
+import { reindex, reindexOne } from '../index-db.js';
 import { assembleContext, injectAgentsMd, contextForSession } from '../reuse.js';
 import { buildHandoff } from '../handoff.js';
 import { resumeCommandLine } from '../agents.js';
@@ -30,8 +30,16 @@ export function injectCmd(args) {
 }
 
 export function handoffCmd(args) {
-  const [sessionId] = args;
-  if (!sessionId) return fail('Usage: mycelium handoff <sessionId>');
+  const { flags, positional } = parseFlags(args);
+  const [sessionId] = positional;
+  if (!sessionId) return fail('Usage: mycelium handoff <sessionId> [--capture [source]]');
+  // --capture: the session is still running (the Claude Code plugin's
+  // /mycelium:handoff hands off the very session it runs in), so the stored
+  // copy is missing or stale — refresh just this one before composing.
+  if (flags.capture) {
+    const res = captureOne(typeof flags.capture === 'string' ? flags.capture : 'claude', sessionId);
+    if (res.status === 'imported') reindexOne(res.neutral);
+  }
   const res = buildHandoff(sessionId);
   if (!res.ok) return fail(res.error);
   console.log(res.prompt);

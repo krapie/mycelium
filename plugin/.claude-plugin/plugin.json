@@ -1,0 +1,10 @@
+{
+  "name": "mycelium",
+  "version": "0.1.0",
+  "description": "Brief each session with its folder's knowledge, capture it when it ends, and search or hand off past sessions from any agent",
+  "author": {
+    "name": "krapie"
+  },
+  "homepage": "https://github.com/krapie/mycelium",
+  "license": "MIT"
+}

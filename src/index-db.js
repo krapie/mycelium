@@ -53,7 +53,7 @@ export function openDb() {
   } catch (err) {
     if (!String(err.message).includes('duplicate column')) throw err;
   }
-  for (const col of ['continuation_of TEXT', 'continued_to TEXT', 'tags TEXT', 'merged_from TEXT', 'split_from TEXT', 'superseded_by TEXT', 'split_into TEXT', 'ended_at TEXT', 'kind TEXT', 'done_at TEXT']) {
+  for (const col of ['continuation_of TEXT', 'continued_to TEXT', 'tags TEXT', 'merged_from TEXT', 'split_from TEXT', 'superseded_by TEXT', 'split_into TEXT', 'ended_at TEXT', 'kind TEXT', 'done_at TEXT', 'cwd TEXT', 'project_dir TEXT']) {
     try {
       db.exec(`ALTER TABLE sessions ADD COLUMN ${col}`);
     } catch (err) {
@@ -66,7 +66,7 @@ export function openDb() {
 function prepareWriters(d) {
   return {
     insSession: d.prepare(
-      'INSERT OR REPLACE INTO sessions (id, source, folder, started_at, ended_at, preview, title, summary, organized_by, kind, done_at, continuation_of, continued_to, tags, merged_from, split_from, superseded_by, split_into) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT OR REPLACE INTO sessions (id, source, folder, started_at, ended_at, preview, title, summary, organized_by, kind, done_at, continuation_of, continued_to, tags, merged_from, split_from, superseded_by, split_into, cwd, project_dir) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     ),
     insFts: d.prepare('INSERT INTO session_fts (id, body) VALUES (?, ?)'),
     upsertTag: d.prepare('INSERT OR IGNORE INTO tags (name) VALUES (?)'),
@@ -95,6 +95,8 @@ function writeSessionRow(w, n) {
     n.splitFrom ?? null,
     JSON.stringify(n.supersededBy || []),
     JSON.stringify(n.splitInto || []),
+    n.cwd ?? null,
+    n.projectDir ?? null,
   );
   w.insFts.run(n.id, searchableText(n));
   for (const tag of n.extracted.tags || []) {
@@ -141,6 +143,19 @@ export function removeFromIndex(id) {
   d.prepare('DELETE FROM sessions WHERE id = ?').run(id);
   d.prepare('DELETE FROM session_fts WHERE id = ?').run(id);
   d.prepare('DELETE FROM session_tags WHERE session_id = ?').run(id);
+}
+
+/**
+ * Most recent sessions that ran in exactly `dir` (by `cwd` or `projectDir`),
+ * newest first — the index-backed lookup behind reuse.js's folderForDir() and
+ * the Claude Code plugin's SessionStart context, which run on every Claude
+ * Code launch and can't afford allRaw()'s full raw/ read. Rows indexed before
+ * these columns existed have them NULL until the next reindex().
+ */
+export function sessionsInDir(dir, { limit = 20 } = {}) {
+  return openDb()
+    .prepare("SELECT * FROM sessions WHERE (cwd = ? OR project_dir = ?) AND kind = 'session' ORDER BY started_at DESC LIMIT ?")
+    .all(dir, dir, limit);
 }
 
 /** Session counts grouped by folder — for the TUI folder tree, without reading raw/. */

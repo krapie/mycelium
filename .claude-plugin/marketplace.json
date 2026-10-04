@@ -1,0 +1,14 @@
+{
+  "name": "mycelium",
+  "description": "Mycelium for Claude Code: carry what earlier AI sessions learned into the next one",
+  "owner": {
+    "name": "krapie"
+  },
+  "plugins": [
+    {
+      "name": "mycelium",
+      "source": "./plugin",
+      "description": "Brief each session with its folder's knowledge, capture it when it ends, and search or hand off past sessions from any agent"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "description": "Mycelium: inject folder knowledge at session start, capture the session at session end. No-ops when the mycelium CLI isn't installed.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v mycelium >/dev/null 2>&1 && mycelium hook session-start 2>/dev/null || true",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v mycelium >/dev/null 2>&1 && mycelium hook session-end 2>/dev/null || true",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}

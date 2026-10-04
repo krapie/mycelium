@@ -1,9 +1,11 @@
-import { join } from 'node:path';
+import { join, resolve, dirname } from 'node:path';
+import { homedir } from 'node:os';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { TREE_DIR, isSafeFolderPath } from './paths.js';
 import { loadRaw, allRaw } from './scanner.js';
-import { isInSubtree } from './organize.js';
-import { contentLocale } from './config.js';
+import { isInSubtree, isArchive } from './organize.js';
+import { contentLocale, loadConfig } from './config.js';
+import { sessionsInDir } from './index-db.js';
 
 // Pre-fix (issue #90) marker — one unscoped block per file, so a directory
 // that received injects for two different folders (e.g. a monorepo root
@@ -44,6 +46,36 @@ export function dirsForFolder(folder) {
     if (d && existsSync(d)) set.add(d);
   }
   return [...set];
+}
+
+/** `dir` and its parents, stopping before $HOME and the filesystem root — see
+ * folderForDir() for why those two are never treated as a project. */
+export function ownerDirs(dir) {
+  const out = [];
+  const home = homedir();
+  for (let d = resolve(dir); d !== home && d !== dirname(d); d = dirname(d)) out.push(d);
+  return out;
+}
+
+/**
+ * The reverse of dirsForFolder(): which folder a bare working directory
+ * belongs to — for the Claude Code plugin's SessionStart hook, which has no
+ * TUI to ask "which folder?" the way the `i` key does. A folder the user
+ * pinned with `mycelium link` wins; otherwise the folder of the most recent
+ * filed (non-_archive) session that ran there. Walks up to parent
+ * directories so launching from a repo's subdirectory still resolves, but
+ * stops before $HOME and the filesystem root — every project sits under
+ * those, so a session that once ran in ~ must not claim them all.
+ */
+export function folderForDir(dir) {
+  if (!dir) return null;
+  const pinned = loadConfig().dirFolders || {};
+  for (const d of ownerDirs(dir)) {
+    if (pinned[d]) return pinned[d];
+    const hit = sessionsInDir(d).find((r) => r.folder && !isArchive(r.folder));
+    if (hit) return hit.folder;
+  }
+  return null;
 }
 
 /**
