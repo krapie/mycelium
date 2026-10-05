@@ -358,6 +358,15 @@ test('tags lists tag counts from the index', () => {
   assert.match(stdout, /cli-unique-tag/);
 });
 
+test('list hides the originals of a merge, like the TUI (#144)', () => {
+  seed('lstmrg-orig', { folder: 'cli-test/merge', supersededBy: ['lstmrg-prod'] });
+  seed('lstmrg-prod', { folder: 'cli-test/merge', mergedFrom: ['lstmrg-orig'] });
+  const { stdout, status } = runCli(['list', '--folder', 'cli-test/merge']);
+  assert.equal(status, 0);
+  assert.match(stdout, /lstmrg-p/);
+  assert.doesNotMatch(stdout, /lstmrg-o/);
+});
+
 test('list hides _archive by default but shows it with --folder _archive', () => {
   seed('lstarch1', { folder: '_archive' });
   const withoutArchive = runCli(['list']);
