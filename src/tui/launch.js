@@ -211,7 +211,7 @@ export function resumeSession(app, session, done) {
       // A resumed session's terminal may also be where a backlog item's copied
       // command was pasted — that item's record is gone now (scanner.js), so
       // its row has to leave the index rather than be re-added.
-      for (const id of res.consumedBacklog) removeFromIndex(id);
+      for (const id of [...res.consumedBacklog, ...res.removed]) removeFromIndex(id);
       if (touched.length) reindexMany(touched); // nothing touched → index is already accurate
     } catch {
       /* ignore */
@@ -258,7 +258,7 @@ function run(app, { agentKey, dir, folder, seed, parentId }, done) {
       // store avoids a full raw/ rebuild on every single agent launch.
       // move()/linkContinuation() above already re-saved `mine`'s raw files,
       // so re-read before indexing to pick up those changes.
-      for (const id of scanRes.consumedBacklog) removeFromIndex(id);
+      for (const id of [...scanRes.consumedBacklog, ...scanRes.removed]) removeFromIndex(id);
       if (fresh.length) reindexMany(fresh.map((n) => loadRaw(n.id) || n));
       const note = parentId ? t('launch.continuedSession') : t('launch.newSession');
       app.notify(mine.length ? t('launch.captured', note, mine.length, folder || t('sessions.newBadge')) : t('launch.noNewSessions'), 3);

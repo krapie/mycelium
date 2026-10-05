@@ -68,6 +68,16 @@ function textFromMessageContent(content) {
   return parts.join('\n');
 }
 
+// Claude Code writes its own bookkeeping into the transcript as user
+// messages: a <local-command-caveat> preamble (flagged isMeta) plus
+// <command-name>/<local-command-stdout> wrappers around slash commands like
+// /clear or /model. None of it is something the user said — imported as a
+// turn, a freshly launched session shows up titled "<local-command-caveat>".
+const COMMAND_NOISE = /<(local-command-caveat|command-name|command-message|command-args|local-command-stdout|local-command-stderr)>[\s\S]*?<\/\1>/g;
+export function isCommandNoise(text) {
+  return !text.replace(COMMAND_NOISE, '').trim();
+}
+
 function toolActivityFromContent(content, sink) {
   if (!Array.isArray(content)) return;
   for (const block of content) {
@@ -101,9 +111,9 @@ export function parse(ref) {
       neutral.endedAt = evt.timestamp;
     }
 
-    if (evt.type === 'user' && evt.message) {
+    if (evt.type === 'user' && evt.message && !evt.isMeta) {
       const text = textFromMessageContent(evt.message.content);
-      if (text.trim()) neutral.turns.push({ role: 'user', text });
+      if (text.trim() && !isCommandNoise(text)) neutral.turns.push({ role: 'user', text });
     } else if (evt.type === 'assistant' && evt.message) {
       const text = textFromMessageContent(evt.message.content);
       if (text.trim()) neutral.turns.push({ role: 'assistant', text });
