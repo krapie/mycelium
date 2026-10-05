@@ -25,6 +25,10 @@ export async function organizeCmd(args) {
   // daemon.js) instead of recomputing — instant when the daemon's been
   // doing the work in the background.
   let placements = pendingSuggestions({ folder: flags.folder || undefined });
+  // --limit bounds the reused queue too, not just a fresh computation —
+  // otherwise `organize --limit 5` after the TUI's background cycle queued
+  // everything shows (and --apply applies) the whole queue (#135).
+  if (flags.limit) placements = placements.slice(0, Number(flags.limit));
   if (!placements.length) {
     // cooldownMs: 0 bypasses the daemon's "don't re-ask too soon"
     // throttle, since a human explicitly asked for this right now. Same

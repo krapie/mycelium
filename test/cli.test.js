@@ -202,6 +202,19 @@ test('organize --apply actually applies the pre-queued suggestion', () => {
   assert.equal(loadRaw('orgid002').folder, 'cli-test/applied');
 });
 
+test('organize --limit bounds a reused queue too (#135)', () => {
+  seed('orgid003', { folder: null });
+  seed('orgid004', { folder: null });
+  queueSuggestions([
+    { id: 'orgid003', folder: 'cli-test/limit', reason: 'r' },
+    { id: 'orgid004', folder: 'cli-test/limit', reason: 'r' },
+  ]);
+  const { stdout, status } = runCli(['organize', '--limit', '1']);
+  assert.equal(status, 0);
+  assert.match(stdout, /1 suggested — re-run with --apply/);
+  clearSuggestions(['orgid003', 'orgid004']);
+});
+
 // --- Learn: autotag/digest/knowledge — only the LLM-free paths ----------
 
 test('autotag with no sessionId and nothing to tag reports zeros without calling the LLM', () => {

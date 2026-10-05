@@ -11,6 +11,11 @@ export function move(sessionId, folderPath) {
   if (folderPath) mkdir(folderPath);
   n.folder = folderPath || null;
   n.organizedBy = 'human';
+  // A suggestion queued before this move is now stale — the human already
+  // decided where this goes, and leaving it queued is how `o` / `organize
+  // --apply` used to move the session right back out (#135).
+  n.suggestedFolder = null;
+  n.suggestedReason = null;
   saveRaw(n);
   return { ok: true, session: n };
 }

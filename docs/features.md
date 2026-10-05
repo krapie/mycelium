@@ -70,8 +70,9 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
 ## Organize: Manual session mutation (human-owned)
 
 - **Move a session to a folder.** `move(sessionId, folderPath)`. Sets
-  `organizedBy: 'human'`, the sticky flag automation always respects.
-  [tested]
+  `organizedBy: 'human'`, the sticky flag automation always respects,
+  and clears any queued `suggestedFolder` so a suggestion computed before
+  the move can't move it back (#135). [tested]
 - **Edit tags manually.** `tag(sessionId, add, remove)`. Also marks
   human-owned. [tested]
 - **Edit title/summary manually.** `setContent(sessionId, { title, summary })`.
@@ -89,7 +90,11 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
 - **Get, review, and apply LLM folder placement suggestions.**
   `classificationCandidates`, `summarizeCandidates`, `suggestPlacements`,
   `queueSuggestions`, `pendingSuggestions`, `clearSuggestions`,
-  `applyPlacements`. Candidacy is `organizedBy !== 'human'` only.
+  `applyPlacements`. Candidacy is `organizedBy !== 'human'` only, and
+  the same check applies to the queue: `pendingSuggestions()` hides a
+  human-owned session's stale suggestion and `applyPlacements()` re-checks
+  at apply time (#135). `mycelium organize --limit N` bounds a reused
+  queue as well as a fresh run.
   Cooldown (`0` for explicit runs, 24h for the daemon) avoids re-asking
   the LLM about an unresolved session every cycle. `summarizeCandidates`
   batches by `concurrency` (default 3, deliberately low, see issue #3
