@@ -6,7 +6,7 @@
 [![coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/krapie/511d91209145406ab7f7ed1e9fbcd49c/raw/mycelium-coverage.json)](https://github.com/krapie/mycelium/actions/workflows/coverage.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D22.16-brightgreen)](https://nodejs.org)
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/krapie/mycelium)
+[![Ask DeepWiki](https://img.shields.io/badge/Ask-DeepWiki-blue)](https://deepwiki.com/krapie/mycelium)
 
 *[English guide](./README.md)*
 
@@ -57,6 +57,8 @@ cd mycelium && npm install && npm link
 ```
 
 ## 시작하기
+
+> **한글 키 바인딩은 지원하지 않습니다.** 단축키는 영문 키 바인딩으로 사용하세요.
 
 ```sh
 mycelium        # TUI 실행 — 처음 실행 시 안내 투어 제공
