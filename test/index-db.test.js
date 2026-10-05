@@ -104,6 +104,18 @@ test('search() query tokens survive punctuation and are safely quoted for FTS5',
   assert.doesNotThrow(() => search({ query: 'C++ config.json' }));
 });
 
+test('search() matches a Korean word with its particle attached, and English prefixes (#143)', () => {
+  seed('ko-prefix-1', { turns: [{ role: 'user', text: '결제 대시보드의 다크모드 지원을 위해 idempotency 키를 쓴다' }] });
+  reindex();
+  for (const q of ['지원', '대시보드', 'idempot', '지원을']) {
+    assert.ok(
+      search({ query: q }).some((r) => r.id === 'ko-prefix-1'),
+      `expected "${q}" to match`,
+    );
+  }
+  assert.doesNotThrow(() => search({ query: '" "' }));
+});
+
 test('search() folder scope matches listSessions() semantics', () => {
   seed('sf-1', { folder: null });
   seed('sf-2', { folder: 'proj' });
