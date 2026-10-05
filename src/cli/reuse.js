@@ -6,17 +6,17 @@ import { assembleContext, injectAgentsMd, contextForSession } from '../reuse.js'
 import { buildHandoff } from '../handoff.js';
 import { resumeCommandLine } from '../agents.js';
 import { copyToClipboard } from '../tui/clipboard.js';
-import { fail, parseFlags } from './util.js';
+import { fail, parseFlags, resolveSessionId } from './util.js';
 
 export function contextCmd(args) {
   const { flags, positional } = parseFlags(args);
   if (positional[0]) {
-    const res = contextForSession(positional[0]);
+    const res = contextForSession(resolveSessionId(positional[0]));
     if (!res.ok) return fail(res.error);
     console.log(res.context || '(상속할 컨텍스트 없음)');
   } else if (flags.folder) {
     console.log(assembleContext(flags.folder) || '(상속할 컨텍스트 없음)');
-  } else fail('Usage: mycelium context <sessionId> | --folder <path>');
+  } else fail('Usage: mycelium context <sessionId|prefix> | --folder <path>');
 }
 
 export function injectCmd(args) {
@@ -30,9 +30,9 @@ export function injectCmd(args) {
 }
 
 export function handoffCmd(args) {
-  const [sessionId] = args;
-  if (!sessionId) return fail('Usage: mycelium handoff <sessionId>');
-  const res = buildHandoff(sessionId);
+  const [idOrPrefix] = args;
+  if (!idOrPrefix) return fail('Usage: mycelium handoff <sessionId|prefix>');
+  const res = buildHandoff(resolveSessionId(idOrPrefix));
   if (!res.ok) return fail(res.error);
   console.log(res.prompt);
 }

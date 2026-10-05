@@ -2,7 +2,7 @@
 
 # CLI (for scripting)
 
-Everything works as individual commands without the TUI:
+Everything works as individual commands without the TUI. Wherever a command takes `<session>`, the 8-character id `mycelium list` prints (or any unique prefix) works as well as the full id:
 
 ```sh
 # Capture / Organize
