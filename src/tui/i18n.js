@@ -128,7 +128,9 @@ const en = {
   'knowledge.reviewNone': 'No knowledge updates to review right now',
   'knowledge.reviewTitle': 'Review knowledge updates',
   'knowledge.injectDirsTitle': 'Inject into which directories?',
-  'knowledge.reviewApplied': (n) => `Updated KNOWLEDGE.md and injected AGENTS.md for ${n} folder(s)`,
+  'knowledge.reviewApplied': (n, m) => `Updated KNOWLEDGE.md for ${n} folder(s) and injected it into AGENTS.md in ${m} director${m === 1 ? 'y' : 'ies'}`,
+  'knowledge.reviewAppliedNoInject': (n) =>
+    `Updated KNOWLEDGE.md for ${n} folder(s); no project directory found for AGENTS.md (inject with i or mycelium inject --dir)`,
   'knowledge.reviewSkipped': 'No changes applied',
   'knowledge.pendingOnOpen': (n) => `${n} folder(s) have knowledge ready to review — press k`,
   'context.title': (folder) => `Context · ${folder}`,
@@ -471,7 +473,9 @@ const ko = {
   'knowledge.reviewNone': '지금 검토할 지식 업데이트가 없습니다',
   'knowledge.reviewTitle': '지식 업데이트 검토',
   'knowledge.injectDirsTitle': '어느 디렉터리에 주입할까요?',
-  'knowledge.reviewApplied': (n) => `${n}개 폴더의 KNOWLEDGE.md를 갱신하고 AGENTS.md에 주입했습니다`,
+  'knowledge.reviewApplied': (n, m) => `${n}개 폴더의 KNOWLEDGE.md를 갱신하고 디렉토리 ${m}곳의 AGENTS.md에 주입했습니다`,
+  'knowledge.reviewAppliedNoInject': (n) =>
+    `${n}개 폴더의 KNOWLEDGE.md를 갱신했습니다. AGENTS.md를 주입할 프로젝트 디렉토리를 찾지 못했습니다 (i 또는 mycelium inject --dir 로 주입)`,
   'knowledge.reviewSkipped': '적용된 변경 사항 없음',
   'knowledge.pendingOnOpen': (n) => `${n}개 폴더에 지식 업데이트가 준비됐어요 — k로 검토`,
   'context.title': (folder) => `컨텍스트 · ${folder}`,
