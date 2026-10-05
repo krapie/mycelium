@@ -8,7 +8,7 @@ import { useTempHome } from './helpers.js';
 // a dynamic import, same as every other filesystem-touching test here, even
 // though no file actually gets written in these particular cases.
 useTempHome();
-const { splitSentences, formatSessionDetail } = await import('../src/tui/render.js');
+const { splitSentences, formatSessionDetail, truncateCells } = await import('../src/tui/render.js');
 const { emptyNeutral } = await import('../src/schema.js');
 const { saveRaw } = await import('../src/scanner.js');
 const { createBacklog } = await import('../src/backlog.js');
@@ -137,4 +137,13 @@ test('formatSessionDetail() headers a backlog item with the backlog label, not "
   const text = formatSessionDetail(item).join('\n');
   assert.match(text, /backlog/);
   assert.doesNotMatch(text, /null/);
+});
+
+test('truncateCells() counts Hangul as two cells (#137)', () => {
+  assert.equal(truncateCells('abcdef', 4), 'abcd');
+  assert.equal(truncateCells('결제 대시보드', 7), '결제 대');
+  assert.equal(truncateCells('결제 대시보드', 6), '결제 ');
+  // A wide character that would straddle the limit is dropped, not split.
+  assert.equal(truncateCells('a결제', 2), 'a');
+  assert.equal(truncateCells('짧음', 58), '짧음');
 });

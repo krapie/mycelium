@@ -1,3 +1,4 @@
+import pkg from 'neo-blessed';
 import { C, sourceColor, sourceLabel } from './theme.js';
 import * as data from './data.js';
 import { t } from './i18n.js';
@@ -6,6 +7,24 @@ import { t } from './i18n.js';
 // pane. summary is stored as prose (learn.js asks the LLM for 2-3 sentences),
 // but a dense paragraph is harder to scan than the bullet list decisions/todos
 // already use — this is a display-only split, the stored string is untouched.
+/**
+ * Cut `text` to at most `maxCells` terminal cells. Hangul and other wide
+ * characters take two cells each, so a `.slice()` by characters let a Korean
+ * title run twice as wide as an English one, past the row and over its
+ * badges (#137).
+ */
+export function truncateCells(text, maxCells) {
+  let out = '';
+  let used = 0;
+  for (const ch of text) {
+    const w = pkg.unicode.strWidth(ch);
+    if (used + w > maxCells) break;
+    out += ch;
+    used += w;
+  }
+  return out;
+}
+
 export function splitSentences(text) {
   return text
     .split(/(?<=[.!?])\s+/)

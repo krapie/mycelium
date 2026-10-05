@@ -13,7 +13,7 @@ import {
 } from '../../organize.js';
 import { pickFolder, editTags, menu } from '../widgets/pickers.js';
 import { createCalendarTab } from './calendar.js';
-import { formatSessionDetail } from '../render.js';
+import { formatSessionDetail, truncateCells } from '../render.js';
 import { basename } from 'node:path';
 import { autoTagSession } from '../../learn.js';
 import { mapConcurrent } from '../../llm.js';
@@ -149,6 +149,22 @@ export function sessionsView(opts = {}) {
     const wantId = rows[listBox.selected]?.id;
     const prevIndex = listBox.selected;
     rows = sortRows(data.sessions({ folder: state.folder, query: state.query, tags: state.tags }));
+    renderRows();
+    if (rows.length) {
+      const idx = wantId ? rows.findIndex((r) => r.id === wantId) : -1;
+      listBox.select(idx >= 0 ? idx : Math.min(prevIndex, rows.length - 1));
+    }
+    updateHeader();
+  }
+
+  // Builds the row strings from the already-loaded `rows`, sized to the
+  // Sessions column's CURRENT width — applyLayout() re-runs this when the
+  // column widens or narrows, without re-querying the data (#137).
+  function renderRows() {
+    const selected = listBox.selected;
+    // blessed's list items sit one column in from the right when the list
+    // has a scrollbar (list.js createItem: `right: scrollbar ? 1 : 0`).
+    const inner = Math.max(0, listBox.width - listBox.iwidth - (listBox.scrollbar ? 1 : 0));
     const items = rows.map((r) => {
       // Agent name formatted as a hashtag, same visual language as tags —
       // and now trails the title instead of leading it, so the title (the
@@ -196,19 +212,20 @@ export function sessionsView(opts = {}) {
       const base = r.snippet
         ? `${r.title ? r.title + ' — ' : ''}${r.snippet}`
         : r.title || r.summary || r.preview || t('common.noContent');
-      const text = base.replace(/\s+/g, ' ').slice(0, 58);
+      // Built before the title so the title gets what's left of the row:
+      // a title that overflows pushes the badges off the right edge.
+      const meta = [lineage.trim(), link.trim(), backlog, src, isNew].filter(Boolean).join(' ');
+      // +3: two cells of gap, plus one for blessed's {|} pivot, which pads
+      // a row of wide characters one cell further than strWidth predicts.
+      const reserved = pkg.unicode.strWidth(pkg.helpers.stripTags(`${mark}${meta}`)) + 3;
+      const text = truncateCells(base.replace(/\s+/g, ' '), Math.max(8, Math.min(58, inner - reserved)));
       // {|} is blessed's right-align pivot (same trick app.js uses for the
       // header) — pins the metadata cluster to the column's right edge
       // instead of trailing directly off the title text.
-      const meta = [lineage.trim(), link.trim(), backlog, src, isNew].filter(Boolean).join(' ');
       return `${mark}${text}{|}${meta}`;
     });
     listBox.setItems(items.length ? items : [`{gray-fg}${t('sessions.empty')}{/}`]);
-    if (items.length) {
-      const idx = wantId ? rows.findIndex((r) => r.id === wantId) : -1;
-      listBox.select(idx >= 0 ? idx : Math.min(prevIndex, items.length - 1));
-    }
-    updateHeader();
+    if (items.length && selected != null) listBox.select(Math.min(selected, items.length - 1));
   }
 
   function updateHeader() {
@@ -339,6 +356,7 @@ export function sessionsView(opts = {}) {
         listBox.width = sessionsW;
         detailBox.left = foldersW + sessionsW;
         detailBox.width = null; // right:0 lets detail fill the remainder
+        renderRows();
       };
       app.screen.on('resize', () => {
         applyLayout(state.level || 'folders');
