@@ -298,9 +298,12 @@ function ftsQuery(q) {
 
 export function listTags() {
   const d = openDb();
+  // Tag rows are never deleted when their last session drops them, so only
+  // list tags something still carries — a removed tag used to linger as
+  // "0  temp" and keep being offered to auto-tag as existing vocabulary (#145).
   return d
     .prepare(
-      'SELECT t.name, COUNT(st.session_id) AS n FROM tags t LEFT JOIN session_tags st ON st.tag_id = t.id GROUP BY t.id ORDER BY n DESC',
+      'SELECT t.name, COUNT(st.session_id) AS n FROM tags t LEFT JOIN session_tags st ON st.tag_id = t.id GROUP BY t.id HAVING n > 0 ORDER BY n DESC',
     )
     .all();
 }
