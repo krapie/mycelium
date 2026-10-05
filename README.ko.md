@@ -33,15 +33,21 @@ Local-first, 모델 중립, 사람이 통제.
 
 > **Mycelium은 사용자의 LLM 사용량을 소진합니다.** `organize`, `autotag`, `knowledge`, split 제안은 사용자의 `claude`/`codex` CLI를 호출합니다 — mycelium이 열려 있는 동안 백그라운드에서 자동으로도 호출됩니다. `MYCELIUM_NO_AUTOSTART=1`로 비활성화하거나, [`docs/cli.md`](./docs/cli.md)에서 조정하세요.
 
+> **Windows에서는 VS Code 통합 터미널에서 실행하세요.** 별도의 cmd/PowerShell 창에서는 TUI가 올바르게 표시되지 않을 수 있습니다 (패널 중복·어긋남).
+
 - Node.js ≥ 22.16, git
 - AI 에이전트: `claude` / `codex` / `kiro-cli` / `opencode`
 
 ## 설치
 
+npm으로:
 ```sh
-npm install -g @kevinprk/mycelium   # npm
-# 또는
-brew install krapie/tap/mycelium    # Homebrew
+npm install -g @kevinprk/mycelium
+```
+
+또는 Homebrew로:
+```sh
+brew install krapie/tap/mycelium
 ```
 
 직접 코드를 만지려면 clone:
