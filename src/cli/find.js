@@ -1,6 +1,7 @@
 import { allRaw } from '../scanner.js';
 import { firstUserText, isBacklog } from '../schema.js';
 import { search, listTags } from '../index-db.js';
+import { isSuperseded } from '../organize.js';
 import { parseFlags } from './util.js';
 
 export function searchCmd(args) {
@@ -26,6 +27,10 @@ export function listCmd(args) {
   } else {
     raws = raws.filter((n) => n.folder !== '_archive' && !(n.folder && n.folder.startsWith('_archive/')));
   }
+  // A merge's originals are hidden until `mycelium unmerge`, same as the TUI
+  // (index-db's superseded_by filter) — listing them beside the merge
+  // product showed the same work twice (#144).
+  raws = raws.filter((n) => !isSuperseded(n));
   for (const n of raws) {
     const folder = n.folder || '_inbox';
     const tags = n.extracted.tags.length ? ` #${n.extracted.tags.join(' #')}` : '';
