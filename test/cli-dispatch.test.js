@@ -44,6 +44,16 @@ test('--help prints help and exits 0 (#147)', () => {
   assert.match(out, /mycelium/i);
 });
 
+test('help follows the configured locale (English by default)', () => {
+  assert.match(runCli(['--help']), /context lifecycle for AI collaboration/);
+  runCli(['lang', 'ko']);
+  try {
+    assert.match(runCli(['--help']), /AI 협업 컨텍스트 라이프사이클/);
+  } finally {
+    runCli(['lang', 'en']); // reset — this file's store is shared across its own tests
+  }
+});
+
 test('unknown command prints help and exits 1', () => {
   const { status, stdout } = runCliExpectFail(['bogus']);
   assert.equal(status, 1);

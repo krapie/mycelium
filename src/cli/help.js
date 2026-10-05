@@ -1,5 +1,40 @@
-export function printHelp(cmd) {
-  console.log(`Mycelium — AI 협업 컨텍스트 라이프사이클
+import { contentLocale } from '../config.js';
+
+const HELP = {
+  en: `Mycelium — context lifecycle for AI collaboration
+
+Capture   scan                          Scan agent session stores → neutral schema (old sessions go to _archive on first capture, the rest start unsorted)
+          archive reeval [--days N]     Re-evaluate auto-archive against the current/given threshold (moves New↔_archive). --days also updates the default
+Organize  organize [--apply] [--limit N] [--folder <path>]   Suggest folders by content (fills summaries first) — --folder narrows to one folder (and its subfolders), preview only until --apply
+          organize --set-limit N        How many sessions one organize run (incl. TUI o) processes (default 30; --limit applies to this run only)
+          mkdir <folder>                Create a folder
+          mv <session> <folder>         Move a session manually
+          tag <session> +t -t           Edit tags manually
+          unmerge <session>             Undo a TUI Shift+M merge (restores the original sessions)
+          unsplit <session>             Undo a TUI Shift+S split (removes the pieces, restores the original)
+Backlog   backlog add "<title>" [--desc D] [--folder F]   Write down work to start later (same as TUI b)
+          backlog list [--folder f]                       Backlog items not started yet (or not yet linked to a session)
+          backlog open <id|prefix> [--agent a] [--dir D] [--copy]  Print the command that starts a backlog item (to paste in a new tab)
+Learn     autotag [<session>] [--force] Content-based auto-tagging (retroactive, in bulk)
+          digest [week] [--date D]      Daily/weekly narrative digest
+          knowledge [<folder>]          Extract per-folder KNOWLEDGE.md
+Reuse     context <session>|--folder    Print ancestor-path context
+          inject [--dir D] --folder F   Inject knowledge into AGENTS.md
+          handoff <session>             Handoff prompt for another agent
+          resume <session|prefix> [--copy|--exec] [--force]  Print the resume command (to paste in a new tab) / copy to clipboard / run now (suggests handoff if the original is gone)
+Find      search <q> [--tag t] [--folder f]
+          list [--folder f] / tags      (_archive hidden by default — list --folder _archive)
+Run       (no args) or tui              Interactive TUI (cockpit) — runs scan/organize/digest on its own while open
+          daemon                        (optional) Background upkeep without the TUI (runs in the foreground)
+          daemon --detach / --stop      (optional) Keep it running while the TUI is closed — detach / stop (same as scripts/run.sh·stop.sh)
+          demo                          Interactive tutorial with fake sessions (separate store, never touches real data) — 3-minute demo
+          lang [en|ko]                  Set/show the display language (default en)
+Clean     cleanup [tidy]                Remove meta-sessions + empty folders, rebuild the index
+          cleanup folders|archive|index Partial cleanup
+          cleanup reset --yes           Wipe all data (~/.mycelium)
+Other     --version / -v / -V           Print the installed version
+`,
+  ko: `Mycelium — AI 협업 컨텍스트 라이프사이클
 
 Capture   scan                          세션 저장소 스캔 → 중립 스키마 (오래된 세션은 첫 캡처 시 _archive로, 나머지는 미분류로 시작)
           archive reeval [--days N]     현재/지정 임계값으로 auto-archive 재평가 (New↔_archive 복구/이동). --days는 기본값도 갱신
@@ -26,12 +61,16 @@ Run       (인자 없음) 또는 tui          인터랙티브 TUI (콕핏) — �
           daemon                        (선택) TUI 없이 백그라운드 업킵만 필요할 때 (포그라운드로 실행)
           daemon --detach / --stop      (선택) TUI가 꺼져 있을 때도 계속 돌리고 싶으면 — 분리 실행 / 정지 (scripts/run.sh·stop.sh와 동일)
           demo                          가짜 세션으로 인터랙티브 튜토리얼 실행(별도 스토어, 실제 데이터 안 건드림) — 3분 데모용
-          lang [en|ko]                  TUI 표시 언어 설정/확인 (기본 en)
+          lang [en|ko]                  표시 언어 설정/확인 (기본 en)
 Clean     cleanup [tidy]                메타세션 제거 + 빈 폴더 정리 + 인덱스 재생성
           cleanup folders|archive|index 부분 정리
           cleanup reset --yes           전체 데이터(~/.mycelium) 초기화
 Other     --version / -v / -V           설치된 버전 출력
-`);
+`,
+};
+
+export function printHelp(cmd) {
+  console.log(HELP[contentLocale()]);
   // Asking for help is a success; an unknown command is not.
   process.exit(!cmd || ['--help', '-h', 'help'].includes(cmd) ? 0 : 1);
 }
