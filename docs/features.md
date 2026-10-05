@@ -109,9 +109,12 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   `config.json`'s `organizeLimit`, set with `mycelium organize --set-limit
   N`, else `MYCELIUM_SUMMARIZE_BATCH_LIMIT`, else 30) caps the sessions
   summarized, the sessions classified and the queued suggestions shown,
-  and `--limit N` overrides it for one CLI run (#167). Pressing `o` (or
-  running `organize` again) picks up where it left off, since
-  already-summarized candidates are excluded. [tested] `suggestPlacements` prefers a folder's `KNOWLEDGE.md` over
+  and `--limit N` overrides it for one CLI run (#167). `organizeBatch()`
+  picks that batch once so both phases share it (never more than the limit
+  in distinct sessions), never-classified sessions first, then the least
+  recently classified, so pressing `o` (or running `organize` again) moves
+  on to the next batch instead of re-asking about sessions that found no
+  match. A capped run says how many sessions remain. [tested] `suggestPlacements` prefers a folder's `KNOWLEDGE.md` over
   raw summaries, chunks by `batchSize` (25), validates every returned
   folder path (`isSafeFolderPath`), flags `isNew` for folders that don't
   exist yet, and stamps `lastClassifiedAt` on every candidate seen

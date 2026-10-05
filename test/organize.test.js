@@ -25,6 +25,7 @@ const {
   isArchive,
   isSuperseded,
   classificationCandidates,
+  organizeBatch,
   summarizeCandidates,
   suggestPlacements,
   queueSuggestions,
@@ -526,6 +527,34 @@ test('summarizeCandidates() limit bounds how many candidates are processed in on
   assert.equal(res.total, 1);
   assert.deepEqual(seenIds, ['sc-limit-old']);
   assert.equal(loadRaw('sc-limit-new').extracted.summary, null); // untouched, left for a later call
+});
+
+test('organizeBatch() picks one shared batch, never-classified first, so a limited run rotates through the backlog (#167)', async () => {
+  const summary = (text) => ({ title: 'x', tags: [], summary: text, decisions: [], todos: [] });
+  // Oldest, but already looked at (and left unplaced) — must not hog a slot.
+  seed('ob-stale', { folder: 'ob-scope', organizedBy: 'auto', startedAt: '2020-01-01T00:00:00.000Z', lastClassifiedAt: '2020-06-01T00:00:00.000Z', extracted: summary('stale one') });
+  seed('ob-summarized', { folder: 'ob-scope', organizedBy: 'auto', startedAt: '2021-01-01T00:00:00.000Z', extracted: summary('summarized one') });
+  seed('ob-fresh', { folder: 'ob-scope', organizedBy: 'auto', startedAt: '2023-01-01T00:00:00.000Z', turns: [{ role: 'user', text: 'fresh one' }] });
+
+  const batch = organizeBatch({ folder: 'ob-scope', limit: 2 });
+  assert.deepEqual(batch.ids, ['ob-summarized', 'ob-fresh']);
+  assert.equal(batch.total, 3);
+  assert.equal(batch.unsummarized, 1);
+
+  const classified = [];
+  __setTestProvider(async (prompt) => {
+    if (!prompt.includes('- id:')) return JSON.stringify(summary('generated'));
+    for (const m of prompt.matchAll(/- id:(\S+)/g)) classified.push(m[1]);
+    return JSON.stringify({ placements: [] });
+  });
+  await summarizeCandidates({ folder: 'ob-scope', ids: batch.ids });
+  await suggestPlacements({ folder: 'ob-scope', ids: batch.ids });
+
+  // Both phases stayed inside the same 2 sessions.
+  assert.deepEqual(classified.sort(), ['ob-fresh', 'ob-summarized']);
+  assert.equal(loadRaw('ob-stale').lastClassifiedAt, '2020-06-01T00:00:00.000Z');
+  // The next run starts with the one this run skipped.
+  assert.equal(organizeBatch({ folder: 'ob-scope', limit: 1 }).ids[0], 'ob-stale');
 });
 
 test('summarizeCandidates() stops after consecutive failures instead of burning through the whole backlog', async () => {

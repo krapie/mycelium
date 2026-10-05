@@ -65,6 +65,26 @@ export function classificationCandidates({ cooldownMs = 0, folder, sessions } = 
 }
 
 /**
+ * The sessions one limited organize run (CLI `organize`, TUI `o`) works on,
+ * picked once so summarizing and classifying share the same set — otherwise
+ * each phase sliced its own candidate list and one run could touch up to
+ * twice `limit` sessions (#167). Never-classified sessions come first, then
+ * the least recently classified: every examined session gets
+ * lastClassifiedAt stamped, so a session the LLM couldn't place moves to the
+ * back instead of taking the same slot in every later run, and the order
+ * wraps around once everything has been looked at.
+ */
+export function organizeBatch({ folder, limit } = {}) {
+  const all = classificationCandidates({ folder }).sort(
+    (a, b) =>
+      (a.lastClassifiedAt || '').localeCompare(b.lastClassifiedAt || '') ||
+      (a.startedAt || '').localeCompare(b.startedAt || ''),
+  );
+  const batch = limit ? all.slice(0, limit) : all;
+  return { ids: batch.map((n) => n.id), unsummarized: batch.filter((n) => !n.extracted.summary).length, total: all.length };
+}
+
+/**
  * Summarize only the unorganized candidates that lack one — deliberately
  * narrower than learn.js's tagAll(), which would also touch already-foldered
  * sessions across the whole store. A folder whose existing sessions haven't
@@ -101,8 +121,10 @@ export function classificationCandidates({ cooldownMs = 0, folder, sessions } = 
  * `!n.extracted.summary` filter above already skips everything already
  * done).
  */
-export async function summarizeCandidates({ onProgress, concurrency = 3, folder, limit, stopAfterConsecutiveFailures = 3 } = {}) {
+export async function summarizeCandidates({ onProgress, concurrency = 3, folder, limit, ids, stopAfterConsecutiveFailures = 3 } = {}) {
+  const only = ids && new Set(ids);
   let targets = classificationCandidates({ folder })
+    .filter((n) => !only || only.has(n.id))
     .filter((n) => !n.extracted.summary)
     .sort((a, b) => (a.startedAt || '').localeCompare(b.startedAt || ''));
   if (limit) targets = targets.slice(0, limit);
@@ -264,6 +286,7 @@ export async function suggestPlacements({
   onProgress,
   batchSize = 25,
   limit,
+  ids,
   cooldownMs = 0,
   folder,
   concurrency = 3,
@@ -272,7 +295,9 @@ export async function suggestPlacements({
   const locale = contentLocale();
   const allSessions = allRaw();
   const profiles = folderProfiles(allSessions);
+  const only = ids && new Set(ids);
   let candidates = classificationCandidates({ cooldownMs, folder, sessions: allSessions })
+    .filter((n) => !only || only.has(n.id))
     .filter((n) => n.extracted.summary)
     .sort((a, b) => (a.startedAt || '').localeCompare(b.startedAt || ''));
   if (limit) candidates = candidates.slice(0, limit);

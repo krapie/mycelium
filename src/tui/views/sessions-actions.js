@@ -9,8 +9,8 @@ import {
   pendingSuggestions,
   queueSuggestions,
   clearSuggestions,
-  classificationCandidates,
   listTreeDirs,
+  organizeBatch,
 } from '../../organize.js';
 import { suggestSplitBoundaries, applySplit, unsplit } from '../../split.js';
 import { scan } from '../../scanner.js';
@@ -126,14 +126,17 @@ async function runSmartOrganize(ctx) {
   // large backlog can't exhaust a tight usage quota in one go; pressing `o`
   // again continues with the next batch (#167).
   const limit = organizeLimit();
-  let matches = pendingSuggestions().slice(0, limit);
+  const queued = pendingSuggestions();
+  let matches = queued.slice(0, limit);
+  // Shown in the review title when this press doesn't cover everything, so
+  // a capped batch doesn't look like the whole backlog got organized.
+  let outOf = queued.length > limit ? queued.length : 0;
   if (!matches.length) {
-    // Only summarizes sessions actually being classified, not the
-    // whole backlog.
-    const pending = Math.min(
-      limit,
-      classificationCandidates({ cooldownMs: 0, folder: state.folder }).filter((n) => !n.extracted.summary).length,
-    );
+    // Summarizing and classifying share one batch of at most `limit`
+    // sessions — only those get summarized, not the whole backlog.
+    const batch = organizeBatch({ folder: state.folder, limit });
+    outOf = batch.total > limit ? batch.total : 0;
+    const pending = batch.unsummarized;
     // Real progress bars, not the animated-but-fake spinner — both
     // phases know a true total up front.
     const summarizeSpin = pending ? app.startProgressBar(t('sessions.summarizingLabel')) : null;
@@ -141,9 +144,7 @@ async function runSmartOrganize(ctx) {
     let summarizedDone = 0;
     const summarizeRes = await summarizeCandidates({
       folder: state.folder,
-      // Pressing `o` again continues where this left off
-      // (already-summarized candidates are excluded up front).
-      limit,
+      ids: batch.ids,
       onProgress: (s) => {
         if (s) summarized.push(s.id);
         summarizeSpin?.update(++summarizedDone, pending);
@@ -164,7 +165,7 @@ async function runSmartOrganize(ctx) {
     const res = await suggestPlacements({
       cooldownMs: 0,
       folder: state.folder,
-      limit,
+      ids: batch.ids,
       onProgress: (batch, total) => placeSpin.update(batch, total),
     });
     placeSpin.stop();
@@ -174,7 +175,7 @@ async function runSmartOrganize(ctx) {
     // exhaustion) still has real placements worth reviewing — surface
     // both: whatever's usable below, plus why the rest is missing.
     if (res.error) app.notify(t('smart.placementsStoppedEarly', res.error), 6);
-    if (!matches.length) return app.notify(t('smart.noMatches'), 3);
+    if (!matches.length) return app.notify(outOf ? t('smart.noMatchesMore', limit, outOf) : t('smart.noMatches'), outOf ? 5 : 3);
     queueSuggestions(matches);
   }
   // Cherry-pick which suggestions to actually apply — every suggestion
@@ -188,7 +189,7 @@ async function runSmartOrganize(ctx) {
     }${p.reason ? `  {${C.faint}-fg}(${p.reason}){/}` : ''}`,
     value: p,
   }));
-  multiSelectList(app, t('smart.previewTitle'), items, (chosen) => {
+  multiSelectList(app, outOf ? t('smart.previewTitleMore', limit, outOf) : t('smart.previewTitle'), items, (chosen) => {
     // Esc means what its own "esc cancel" label says — dismiss this
     // batch. Reviewed (Esc or Enter, applied or passed on) either way,
     // so it's cleared from the queue and won't keep reappearing next

@@ -10,7 +10,7 @@ import {
   pendingSuggestions,
   queueSuggestions,
   clearSuggestions,
-  classificationCandidates,
+  organizeBatch,
   listTreeDirs,
   unmerge,
 } from '../organize.js';
@@ -53,14 +53,14 @@ export async function organizeCmd(args) {
     // default. There's no CLI equivalent of the TUI's "Root" yet — pass
     // a real folder to narrow.
     const folder = flags.folder || undefined;
-    const pending = classificationCandidates({ cooldownMs: 0, folder }).filter((n) => !n.extracted.summary).length;
-    // Summarizing is the expensive step (one LLM call per session) and used
-    // to ignore --limit entirely, so a large backlog spent its whole quota here.
-    if (pending > limit) console.log(`summarizing ${limit} of ${pending} session(s) first (limit ${limit}; run again for the next batch)…`);
-    else if (pending) console.log(`summarizing ${pending} session(s) first…`);
+    const batch = organizeBatch({ folder, limit });
+    if (batch.total > limit) console.log(`organizing ${limit} of ${batch.total} session(s) this run (limit ${limit}; run again for the next batch)`);
+    // Summarizing is the expensive step (one LLM call per session), so it
+    // only covers this run's batch, not the whole backlog.
+    if (batch.unsummarized) console.log(`summarizing ${batch.unsummarized} session(s) first…`);
     await summarizeCandidates({
       folder,
-      limit,
+      ids: batch.ids,
       onProgress: (s, err) => {
         if (err) console.log(`  ! ${err.message}`);
         else console.log(`  + ${s.id.slice(0, 8)}`);
@@ -71,8 +71,8 @@ export async function organizeCmd(args) {
     const res = await suggestPlacements({
       cooldownMs: 0,
       folder,
-      limit,
-      onProgress: (batch, total) => total > 1 && console.log(`  batch ${batch}/${total}`),
+      ids: batch.ids,
+      onProgress: (done, total) => total > 1 && console.log(`  batch ${done}/${total}`),
     });
     if (!res.ok) return fail(res.error);
     if (!res.placements.length) {
