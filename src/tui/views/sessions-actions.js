@@ -263,9 +263,26 @@ async function runKnowledgeReview(ctx) {
 // directories a session merely ran in, and dirsForFolder() can't tell
 // "the project" from "somewhere incidental". 0-1 directory injects
 // straight through; 2+ shows a pre-checked checklist to catch a stray one.
+// The toast reports what was actually written: a folder whose sessions all
+// point at directories that no longer exist (or never did, see #138) gets
+// its KNOWLEDGE.md updated but no AGENTS.md, and used to be reported as
+// injected anyway (#142).
+export function knowledgeReviewMessage(applied, injected) {
+  if (!applied) return t('knowledge.reviewSkipped');
+  return injected ? t('knowledge.reviewApplied', applied, injected) : t('knowledge.reviewAppliedNoInject', applied);
+}
+
 function applyKnowledgeApprovals(ctx, toPromote) {
   const { app, listBox } = ctx;
   let applied = 0;
+  let injected = 0;
+  const inject = (dir, folder) => {
+    try {
+      if (injectAgentsMd(dir, folder).ok) injected++;
+    } catch {
+      /* no reachable AGENTS.md target — fine, best-effort */
+    }
+  };
   const ambiguous = [];
   for (const p of toPromote) {
     const res = promoteKnowledge(p.folder);
@@ -273,19 +290,13 @@ function applyKnowledgeApprovals(ctx, toPromote) {
     applied++;
     const dirs = dirsForFolder(p.folder);
     if (dirs.length <= 1) {
-      for (const dir of dirs) {
-        try {
-          injectAgentsMd(dir, p.folder);
-        } catch {
-          /* no reachable AGENTS.md target — fine, best-effort */
-        }
-      }
+      for (const dir of dirs) inject(dir, p.folder);
     } else {
       for (const dir of dirs) ambiguous.push({ folder: p.folder, dir });
     }
   }
   if (!ambiguous.length) {
-    app.notify(applied ? t('knowledge.reviewApplied', applied) : t('knowledge.reviewSkipped'), 4);
+    app.notify(knowledgeReviewMessage(applied, injected), 4);
     return listBox.focus();
   }
   const items = ambiguous.map((c) => ({
@@ -293,14 +304,8 @@ function applyKnowledgeApprovals(ctx, toPromote) {
     value: c,
   }));
   multiSelectList(app, t('knowledge.injectDirsTitle'), items, (chosenDirs) => {
-    for (const c of chosenDirs || []) {
-      try {
-        injectAgentsMd(c.dir, c.folder);
-      } catch {
-        /* no reachable AGENTS.md target — fine, best-effort */
-      }
-    }
-    app.notify(applied ? t('knowledge.reviewApplied', applied) : t('knowledge.reviewSkipped'), 4);
+    for (const c of chosenDirs || []) inject(c.dir, c.folder);
+    app.notify(knowledgeReviewMessage(applied, injected), 4);
     listBox.focus();
   }, { defaultAll: true });
 }
