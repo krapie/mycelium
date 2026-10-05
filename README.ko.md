@@ -50,6 +50,14 @@ git clone https://github.com/krapie/mycelium.git
 cd mycelium && npm install && npm link
 ```
 
+> **Windows에서는 PowerShell보다 WSL2(Ubuntu)를 권장합니다** — 터미널 UI 특성상 WSL2에서 훨씬 안정적으로 렌더링되고, 위의 `npm install -g`가 그대로 동작합니다. PowerShell/Windows Terminal에서는 테두리가 깨지거나 열이 어긋나지 않도록 폰트를 따로 설정해야 합니다.
+>
+> <details><summary>그래도 PowerShell을 쓰려면</summary>
+>
+> 테두리와 한글은 [D2Coding](https://github.com/naver/d2codingfont/releases) 같은 고정폭 폰트에서만 제대로 정렬됩니다. 릴리스를 다운로드해 압축을 풀고, **관리자 권한** PowerShell에서 `Copy-Item "D2Coding*.ttf" "C:\Windows\Fonts\" -Force`로 설치한 뒤, Windows Terminal → 설정 → 해당 프로필 → 모양 → 글꼴 → **D2Coding**을 선택하고 재시작하세요.
+>
+> </details>
+
 ## 시작하기
 
 ```sh

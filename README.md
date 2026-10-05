@@ -54,6 +54,14 @@ git clone https://github.com/krapie/mycelium.git
 cd mycelium && npm install && npm link
 ```
 
+> **On Windows, use WSL2 (Ubuntu) rather than PowerShell** — as a terminal UI, Mycelium renders far more reliably there, and the `npm install -g` above just works. PowerShell/Windows Terminal needs extra font setup to avoid broken box-drawing and misaligned columns.
+>
+> <details><summary>Setting up PowerShell anyway</summary>
+>
+> Borders and Korean text only line up with a fixed-width font such as [D2Coding](https://github.com/naver/d2codingfont/releases): download and unzip it, install from an **admin** PowerShell with `Copy-Item "D2Coding*.ttf" "C:\Windows\Fonts\" -Force`, then set Windows Terminal → Settings → your profile → Appearance → Font face → **D2Coding** and restart it.
+>
+> </details>
+
 ## Getting Started
 
 ```sh
