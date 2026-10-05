@@ -593,3 +593,29 @@ test('applyPlacements() moves each placement with a folder (via move()) and skip
   assert.equal(loadRaw('ap-1').organizedBy, 'human');
   assert.equal(loadRaw('ap-2').folder, null);
 });
+
+test('a suggestion queued before a manual move is never offered or applied (#135)', () => {
+  seed('hp-1', { folder: null, organizedBy: 'auto' });
+  queueSuggestions([{ id: 'hp-1', folder: 'hp-llm-pick', reason: 'r' }]);
+
+  move('hp-1', 'hp-human-pick');
+
+  assert.equal(loadRaw('hp-1').suggestedFolder, null);
+  assert.equal(
+    pendingSuggestions().some((p) => p.id === 'hp-1'),
+    false,
+  );
+  // A placement captured before the move (e.g. a review list still open)
+  // must not override it at apply time either.
+  assert.equal(applyPlacements([{ id: 'hp-1', folder: 'hp-llm-pick' }]), 0);
+  assert.equal(loadRaw('hp-1').folder, 'hp-human-pick');
+});
+
+test('pendingSuggestions() hides a stale suggestion on a human-owned session (#135)', () => {
+  // Written straight to disk: a store from before move() cleared the queue.
+  seed('hp-2', { folder: 'hp-human', organizedBy: 'human', suggestedFolder: 'hp-llm', suggestedReason: 'r' });
+  assert.equal(
+    pendingSuggestions().some((p) => p.id === 'hp-2'),
+    false,
+  );
+});

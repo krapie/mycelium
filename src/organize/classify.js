@@ -367,6 +367,10 @@ export function queueSuggestions(placements) {
 export function pendingSuggestions({ folder } = {}) {
   return allRaw()
     .filter((n) => n.suggestedFolder)
+    // organizedBy:'human' is sticky (classificationCandidates() excludes it
+    // too): a suggestion queued before a manual `m`/`tag` must never come
+    // back up for review, even if it predates move()'s own clearing (#135).
+    .filter((n) => n.organizedBy !== 'human')
     .filter((n) => folder === undefined || (folder === null ? !n.folder : isInSubtree(n.folder, folder)))
     .map((n) => ({ id: n.id, folder: n.suggestedFolder, reason: n.suggestedReason || '' }));
 }
@@ -392,6 +396,9 @@ export function applyPlacements(placements) {
   let applied = 0;
   for (const p of placements) {
     if (!p.folder) continue;
+    // Re-checked at apply time, not just at review time: the human may have
+    // moved this session while the review list was open (#135).
+    if (loadRaw(p.id)?.organizedBy === 'human') continue;
     const res = move(p.id, p.folder);
     if (res.ok) applied++;
   }
