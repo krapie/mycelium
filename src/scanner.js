@@ -3,6 +3,7 @@ import { writeFileSync, readFileSync, existsSync, readdirSync, rmSync } from 'no
 import { ensureDirs, RAW_DIR } from './paths.js';
 import { ADAPTERS, getAdapter } from './adapters/index.js';
 import { META_MARKER } from './llm.js';
+import { isCommandNoise } from './adapters/claude-code.js';
 import { isBacklog, backlogSeedId } from './schema.js';
 import { loadConfig } from './config.js';
 
@@ -149,6 +150,8 @@ export function scan({ onImport } = {}) {
   // are gone from raw/ and callers that reindex precisely (launch.js) have to
   // drop them from the index too, not just add the imported sessions.
   const consumedBacklog = new Set();
+  // Same contract for stored records scan() itself deleted (see hasCommandNoise).
+  const removed = new Set();
 
   // ADAPTERS read from each agent's real global store, unaffected by
   // MYCELIUM_HOME. Wrong for both tutorial-launch paths without a guard —
@@ -196,8 +199,13 @@ export function scan({ onImport } = {}) {
         existing.projectDir = existing.cwd;
         writeFileSync(rawPath(existing.id), JSON.stringify(existing, null, 2));
       }
+      // Records captured before the claude adapter dropped its slash-command
+      // bookkeeping (<local-command-caveat> etc.) still carry it as turns —
+      // reparse them once even though the transcript hasn't changed.
+      const hasCommandNoise =
+        existing?.source === 'claude' && existing.turns?.some((t) => t.role === 'user' && isCommandNoise(t.text));
       // Skip if we already captured this session and the file hasn't changed.
-      if (existing && existing._mtimeMs === ref.mtimeMs) {
+      if (existing && existing._mtimeMs === ref.mtimeMs && !hasCommandNoise) {
         skipped++;
         continue;
       }
@@ -212,6 +220,12 @@ export function scan({ onImport } = {}) {
       }
 
       if (neutral.turns.length === 0 || isMyceliumMeta(neutral)) {
+        // A stored record that was nothing but command noise is an empty
+        // session that only got captured by mistake — drop it.
+        if (hasCommandNoise && neutral.turns.length === 0) {
+          deleteRaw(existing.id);
+          removed.add(existing.id);
+        }
         skipped++; // empty session, or Mycelium's own LLM call — not real work
         continue;
       }
@@ -274,7 +288,7 @@ export function scan({ onImport } = {}) {
     }
   }
 
-  return { scanned, imported, skipped, failed, consumedBacklog: [...consumedBacklog] };
+  return { scanned, imported, skipped, failed, consumedBacklog: [...consumedBacklog], removed: [...removed] };
 }
 
 /**

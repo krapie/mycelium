@@ -551,7 +551,12 @@ As a user, I can **write down something to work on later, before any agent has r
   `newArgs`, `resumeArgs`, `listSessions()`, `parse(ref)`. [tested]
 - **Claude Code adapter.** Parses `~/.claude/projects/*/*.jsonl`,
   recovers `projectDir` from the encoded folder name, tool activity as
-  prose-only summaries (never raw payloads). [partial] (parse tested,
+  prose-only summaries (never raw payloads). Drops Claude Code's own
+  slash-command bookkeeping (`isMeta` entries, `<local-command-caveat>`,
+  `<command-name>`, `<local-command-stdout>` wrappers) so a freshly
+  launched session isn't captured titled `<local-command-caveat>`;
+  `scan()` reparses stored records that still carry it once, deleting
+  noise-only ones (returned as `removed`). [partial] (parse tested,
   corrupt-line resilience and `filesChanged` regex not directly tested)
 - **Codex adapter.** Parses `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`.
   [partial] (parse tested; `session_meta` id-override case not tested)

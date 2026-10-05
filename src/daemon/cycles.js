@@ -54,6 +54,8 @@ export async function scanCycle(log, { onScanned } = {}) {
       // Just reindex + tag.
       reindex();
       log.log(`[scan] +${res.imported} (reindexed)`);
+    } else if (res.removed.length) {
+      reindex();
     }
     if (onScanned) onScanned();
     if (res.imported > 0) {
