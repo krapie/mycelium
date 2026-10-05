@@ -174,19 +174,24 @@ export function menu(app, label, choices, cb, { width = '40%', dismissOnBlur = f
 // external project's AGENTS.md (`k`'s knowledge review), the one-line label
 // isn't enough to review before approving. Optional since not every caller
 // has long-form content worth it (o's placement suggestions don't).
+// The key hint follows the UI locale like every other string — it was
+// hard-coded English, so the Korean UI's o / k / Shift+S checklists mixed
+// languages in one title (#148).
+export function multiSelectLabel(label, { defaultAll = false, preview = false } = {}) {
+  const hint = t(defaultAll ? 'picker.multiHintAllChecked' : 'picker.multiHintPick', preview);
+  return ` ${label} — ${hint} `;
+}
+
 export function multiSelectList(app, label, items, cb, { defaultAll = false, previewText } = {}) {
   const selected = new Set(defaultAll ? items.map((_, i) => i) : []);
   const render = (it, i) => `${selected.has(i) ? `{${C.fox}-fg}✓{/} ` : '  '}${it.label}`;
-  const hintTail = previewText ? 'p preview, enter apply, esc cancel' : 'enter apply, esc cancel';
   const box = blessed.list({
     parent: app.screen,
     top: 'center',
     left: 'center',
     width: '70%',
     height: Math.min(items.length + 4, 20),
-    label: defaultAll
-      ? ` ${label} — all checked, space to uncheck, ${hintTail} `
-      : ` ${label} — space select, * all, ${hintTail} `,
+    label: multiSelectLabel(label, { defaultAll, preview: !!previewText }),
     tags: true,
     keys: true,
     mouse: true,

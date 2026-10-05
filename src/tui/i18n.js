@@ -361,6 +361,8 @@ const en = {
   'smart.noMatch': '(no match)',
   'smart.newFolder': 'new folder',
   'smart.previewTitle': 'Suggested placements',
+  'picker.multiHintAllChecked': (preview) => `all checked, space to uncheck, ${preview ? 'p preview, ' : ''}enter apply, esc cancel`,
+  'picker.multiHintPick': (preview) => `space select, * all, ${preview ? 'p preview, ' : ''}enter apply, esc cancel`,
   'smart.pendingOnOpen': (n) => `${n} suggestion${n === 1 ? '' : 's'} waiting — press o to review`,
   'smart.summarizeStoppedEarly': (done, total) =>
     `Stopped after summarizing ${done}/${total} — looks like your Claude/Codex usage limit was hit. Your progress is saved; press o again later to continue.`,
@@ -672,6 +674,8 @@ const ko = {
   'smart.noMatch': '(매칭 없음)',
   'smart.newFolder': '신규 폴더',
   'smart.previewTitle': '제안된 폴더 배치',
+  'picker.multiHintAllChecked': (preview) => `모두 선택됨 · Space 해제 · ${preview ? 'p 미리보기 · ' : ''}Enter 적용 · Esc 취소`,
+  'picker.multiHintPick': (preview) => `Space 선택 · * 전체 · ${preview ? 'p 미리보기 · ' : ''}Enter 적용 · Esc 취소`,
   'smart.pendingOnOpen': (n) => `${n}개 정리 제안 대기 중 — o로 확인`,
   'smart.summarizeStoppedEarly': (done, total) =>
     `${done}/${total}개 요약 후 중단됨 — Claude/Codex 사용량 한도에 도달한 것 같습니다. 지금까지의 진행 상황은 저장되어 있으니, 나중에 다시 o를 눌러 이어서 진행하세요.`,
