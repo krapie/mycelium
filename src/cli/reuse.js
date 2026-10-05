@@ -1,10 +1,10 @@
 import { spawn } from 'node:child_process';
-import { scan, findSession } from '../scanner.js';
+import { scan, findSession, sourceSessionExists } from '../scanner.js';
 import { firstUserText } from '../schema.js';
 import { reindex } from '../index-db.js';
 import { assembleContext, injectAgentsMd, contextForSession } from '../reuse.js';
 import { buildHandoff } from '../handoff.js';
-import { resumeCommandLine } from '../agents.js';
+import { resumeCommandLine, AGENTS } from '../agents.js';
 import { copyToClipboard } from '../tui/clipboard.js';
 import { fail, parseFlags, resolveSessionId } from './util.js';
 
@@ -40,7 +40,7 @@ export function handoffCmd(args) {
 export function resumeCmd(args) {
   const { flags, positional } = parseFlags(args);
   const idOrPrefix = positional[0];
-  if (!idOrPrefix) return fail('Usage: mycelium resume <sessionId|prefix> [--copy] [--exec]');
+  if (!idOrPrefix) return fail('Usage: mycelium resume <sessionId|prefix> [--copy] [--exec] [--force]');
   const found = findSession(idOrPrefix);
   if (!found.ok) return fail(found.error);
   const { session } = found;
@@ -50,6 +50,16 @@ export function resumeCmd(args) {
   // merge/split session, which does this same redirect automatically).
   if (session.mergedFrom?.length || session.splitFrom) {
     return fail(`${idOrPrefix}: merged/split session — not resumable. Use: mycelium handoff ${session.id}`);
+  }
+
+  // The agent pruned its own transcript (or it was captured on another
+  // machine): `--resume` would fail once run. Same check and same way out
+  // as the TUI's `r` (resume-handoff.js), with --force as its "try anyway".
+  if (!flags.force && !sourceSessionExists(session.source, session.id)) {
+    const label = AGENTS[session.source]?.label || session.source;
+    return fail(
+      `${session.id.slice(0, 8)}: ${label} no longer has this session on this machine. Continue it with: mycelium handoff ${session.id}\n(--force prints the resume command anyway)`,
+    );
   }
 
   const cmd = resumeCommandLine(session);

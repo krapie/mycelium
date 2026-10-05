@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, existsSync } from 'node:fs';
+import { mkdtempSync, existsSync, writeFileSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -44,10 +44,10 @@ test.afterEach(() => __clearTestProvider());
 
 const CLI_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'cli.js');
 
-function runCli(args, { home: overrideHome } = {}) {
+function runCli(args, { home: overrideHome, env = {} } = {}) {
   const res = spawnSync(process.execPath, [CLI_PATH, ...args], {
     encoding: 'utf8',
-    env: { ...process.env, MYCELIUM_HOME: overrideHome ?? home },
+    env: { ...process.env, MYCELIUM_HOME: overrideHome ?? home, ...env },
   });
   return { stdout: res.stdout ?? '', stderr: res.stderr ?? '', status: res.status };
 }
@@ -335,6 +335,28 @@ test('resume on a merged session redirects to handoff instead', () => {
   const { stderr, status } = runCli(['resume', 'cli-resume-merged']);
   assert.equal(status, 1);
   assert.match(stderr, /not resumable.*mycelium handoff cli-resume-merged/s);
+});
+
+test('resume on a session the agent no longer has points to handoff (#140)', () => {
+  // No ~/.claude transcript has this id, on CI or anywhere else.
+  seed('cli-resume-lost-0000', { source: 'claude', cwd: '/tmp' });
+  const { stderr, status } = runCli(['resume', 'cli-resume-lost-0000']);
+  assert.equal(status, 1);
+  assert.match(stderr, /no longer has this session.*mycelium handoff cli-resume-lost-0000/s);
+});
+
+test('resume --force still prints the command for a lost session', () => {
+  seed('cli-resume-lost-0001', { source: 'claude', cwd: '/tmp' });
+  // resumeCommandLine() requires the agent binary on PATH, and CI runners
+  // have no `claude` installed — give this one call a stand-in.
+  const bin = mkdtempSync(join(tmpdir(), 'mycelium-test-bin-'));
+  writeFileSync(join(bin, 'claude'), '#!/bin/sh\n');
+  chmodSync(join(bin, 'claude'), 0o755);
+  const { stdout, stderr, status } = runCli(['resume', 'cli-resume-lost-0001', '--force'], {
+    env: { PATH: `${bin}:${process.env.PATH}` },
+  });
+  assert.equal(status, 0, stderr);
+  assert.match(stdout, /--resume cli-resume-lost-0001/);
 });
 
 // --- Find: search, tags, list -------------------------------------------

@@ -18,7 +18,7 @@ Learn     autotag [<session>] [--force] 내용 기반 자동 태깅 (소급 일�
 Reuse     context <session>|--folder    조상 경로 컨텍스트 출력
           inject [--dir D] --folder F   AGENTS.md에 지식 주입
           handoff <session>            다른 에이전트용 인수인계 프롬프트
-          resume <session|prefix> [--copy|--exec]  이어열기 명령어 출력(새 탭 붙여넣기용) / 클립보드 복사 / 즉시 실행
+          resume <session|prefix> [--copy|--exec] [--force]  이어열기 명령어 출력(새 탭 붙여넣기용) / 클립보드 복사 / 즉시 실행 (원본이 없으면 handoff 안내)
 Find      search <q> [--tag t] [--folder f]
           list [--folder f] / tags     (_archive는 기본 숨김 — list --folder _archive)
 Run       (인자 없음) 또는 tui          인터랙티브 TUI (콕핏) — 켜져 있는 동안 스캔·정리·다이제스트를 자체적으로 수행
