@@ -228,7 +228,10 @@ export function search({ query, tags = [], folder, date, includeSuperseded = fal
   let rankOrder = null;
   const snippets = new Map();
 
-  if (query && query.trim()) {
+  // A query of nothing but quotes leaves no term once they're stripped, and
+  // an empty MATCH is an FTS5 syntax error — treat it as no text query.
+  const match = query ? ftsQuery(query) : '';
+  if (match) {
     // snippet() column index 1 = FTS's `body` (id is column 0 and UNINDEXED).
     // bm25 via `ORDER BY rank` puts relevance-scored hits first — otherwise
     // the outer started_at DESC sort would drown out topically-strong matches
@@ -237,7 +240,7 @@ export function search({ query, tags = [], folder, date, includeSuperseded = fal
       .prepare(
         "SELECT id, snippet(session_fts, 1, '', '', '…', 10) AS snip FROM session_fts WHERE session_fts MATCH ? ORDER BY rank",
       )
-      .all(ftsQuery(query));
+      .all(match);
     ids = new Set(rows.map((r) => r.id));
     rankOrder = new Map();
     rows.forEach((r, i) => {
@@ -281,8 +284,15 @@ export function search({ query, tags = [], folder, date, includeSuperseded = fal
 
 // Turn a free-text query into a safe FTS5 MATCH expression: quote each token so
 // punctuation / Korean text can't break the FTS grammar, OR them together.
+// Each term is a prefix match (`"term"*`): the default tokenizer keeps a
+// Korean particle on its word (지원을, 대시보드의), so an exact token never
+// found "지원" in "지원을 위해" — and "idempot" now finds "idempotency" (#143).
 function ftsQuery(q) {
-  const tokens = q.split(/\s+/).filter(Boolean).map((t) => `"${t.replace(/"/g, '')}"`);
+  const tokens = q
+    .split(/\s+/)
+    .map((t) => t.replace(/"/g, ''))
+    .filter(Boolean)
+    .map((t) => `"${t}"*`);
   return tokens.join(' OR ');
 }
 
