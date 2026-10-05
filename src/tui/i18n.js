@@ -22,6 +22,7 @@ const en = {
   'app.confirmQuitTitle': 'Quit?',
   'app.confirmQuitHint': (fg) => `Press {${fg}-fg}q{/} again to confirm, or any other key to cancel.`,
   'app.confirmLanguageTitle': 'Switch language?',
+  'app.restartManually': 'Language saved. Run mycelium again to apply it.',
   'app.confirmLanguageHint': (fg, label) =>
     `Press {${fg}-fg}l{/} again to switch to ${label} (Mycelium will restart), or any other key to cancel.`,
   'common.cancel': 'Cancel',
@@ -381,6 +382,7 @@ const ko = {
   'app.confirmQuitTitle': '종료할까요?',
   'app.confirmQuitHint': (fg) => `{${fg}-fg}q{/}를 한 번 더 누르면 종료, 다른 키를 누르면 취소합니다.`,
   'app.confirmLanguageTitle': '언어를 전환할까요?',
+  'app.restartManually': '언어 설정을 저장했습니다. mycelium 을 다시 실행하면 적용됩니다.',
   'app.confirmLanguageHint': (fg, label) =>
     `{${fg}-fg}l{/}을 한 번 더 누르면 ${label}(으)로 전환합니다 (Mycelium이 재시작됩니다), 다른 키를 누르면 취소합니다.`,
   'common.cancel': '취소',
