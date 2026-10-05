@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, rmSync, openSync, appendFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { runDaemon } from './cycles.js';
+import { killInFlight } from '../llm.js';
 import { ensureDirs, DAEMON_PID_PATH, DAEMON_LOG_PATH } from '../paths.js';
 
 // OS process-lifecycle concerns (spawning/detaching/pidfiles) — kept
@@ -13,6 +14,21 @@ function isAlive(pid) {
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Stop in-flight LLM children before the standalone daemon exits.
+ * `mycelium daemon --stop` sends SIGTERM, and without a handler Node exits
+ * immediately, leaving a running `claude -p` orphaned under PPID 1 (#139) —
+ * the same leak app.js's quit() already closes for the TUI.
+ */
+export function installShutdownHandlers(proc = process, exit = (code) => proc.exit(code)) {
+  for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP']) {
+    proc.on(sig, () => {
+      killInFlight();
+      exit(0);
+    });
   }
 }
 
