@@ -155,6 +155,18 @@ test('sessionCountsByDay() groups by day-of-month for the given YYYY-MM, matchin
   assert.equal(rows.some((r) => r.day === 1 && r.folder === 'a'), false); // April session excluded
 });
 
+test('listTags() drops a tag once no session carries it (#145)', () => {
+  seed('lt-gone', { extracted: { title: null, tags: ['soon-gone', 'stays'], summary: null, decisions: [], todos: [] } });
+  reindex();
+  assert.ok(listTags().some((t) => t.name === 'soon-gone'));
+  seed('lt-gone', { extracted: { title: null, tags: ['stays'], summary: null, decisions: [], todos: [] } });
+  reindex();
+  assert.equal(
+    listTags().some((t) => t.name === 'soon-gone'),
+    false,
+  );
+});
+
 test('listTags() returns tag names with usage counts, most-used first', () => {
   seed('lt-1', { extracted: { title: null, tags: ['popular'], summary: null, decisions: [], todos: [] } });
   seed('lt-2', { extracted: { title: null, tags: ['popular'], summary: null, decisions: [], todos: [] } });
