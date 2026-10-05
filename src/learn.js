@@ -114,7 +114,11 @@ export async function autoTagSession(sessionId, { existingTags } = {}) {
     n.extracted.title = parsed.title.trim();
   }
   if (Array.isArray(parsed.tags)) {
-    n.extracted.tags = parsed.tags.filter((t) => typeof t === 'string' && t.trim()).slice(0, 5);
+    // Tags a person added or removed by hand (tag()) outrank the LLM's
+    // guess, the same way titleLocked protects a hand-set title (#141).
+    const removed = new Set(n.humanRemovedTags || []);
+    const generated = parsed.tags.filter((t) => typeof t === 'string' && t.trim() && !removed.has(t)).slice(0, 5);
+    n.extracted.tags = [...new Set([...(n.humanTags || []), ...generated])];
   }
   if (typeof parsed.summary === 'string') n.extracted.summary = parsed.summary;
   if (Array.isArray(parsed.decisions)) n.extracted.decisions = parsed.decisions;

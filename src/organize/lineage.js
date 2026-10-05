@@ -25,9 +25,23 @@ export function tag(sessionId, add = [], remove = []) {
   const n = loadRaw(sessionId);
   if (!n) return { ok: false, error: `no session ${sessionId}` };
   const set = new Set(n.extracted.tags || []);
-  for (const t of remove) set.delete(t);
-  for (const t of add) set.add(t);
+  // Remembered separately so the next auto-tag, which rewrites
+  // extracted.tags from the LLM's reply, keeps what a person chose (#141).
+  const kept = new Set(n.humanTags || []);
+  const dropped = new Set(n.humanRemovedTags || []);
+  for (const t of remove) {
+    set.delete(t);
+    kept.delete(t);
+    dropped.add(t);
+  }
+  for (const t of add) {
+    set.add(t);
+    kept.add(t);
+    dropped.delete(t);
+  }
   n.extracted.tags = [...set];
+  n.humanTags = [...kept];
+  n.humanRemovedTags = [...dropped];
   n.organizedBy = 'human';
   saveRaw(n);
   return { ok: true, session: n };

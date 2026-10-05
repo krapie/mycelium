@@ -245,6 +245,8 @@ export function scan({ onImport } = {}) {
         // tagAll() treat an already-tracked session as never-tracked again
         // (harmless — see tagAll()'s doc comment — but still wrong state).
         neutral.titleLocked = existing.titleLocked ?? neutral.titleLocked;
+        neutral.humanTags = existing.humanTags ?? neutral.humanTags;
+        neutral.humanRemovedTags = existing.humanRemovedTags ?? neutral.humanRemovedTags;
         neutral.summarizedTurnCount = existing.summarizedTurnCount ?? neutral.summarizedTurnCount;
       }
       // First-time capture of an already-old session: file it straight into
