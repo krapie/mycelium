@@ -15,7 +15,7 @@ import {
   unmerge,
 } from '../organize.js';
 import { unsplit } from '../split.js';
-import { fail, parseFlags } from './util.js';
+import { fail, parseFlags, resolveSessionId } from './util.js';
 
 export async function organizeCmd(args) {
   // Always content-based classification; `--smart` is still accepted
@@ -88,8 +88,9 @@ export function mkdirCmd(args) {
 }
 
 export function mvCmd(args) {
-  const [sessionId, folder] = args;
-  if (!sessionId) return fail('Usage: mycelium mv <sessionId> <folder-path>');
+  const [idOrPrefix, folder] = args;
+  if (!idOrPrefix) return fail('Usage: mycelium mv <sessionId|prefix> <folder-path>');
+  const sessionId = resolveSessionId(idOrPrefix);
   const res = move(sessionId, folder || null);
   if (!res.ok) return fail(res.error);
   reindex();
@@ -97,8 +98,9 @@ export function mvCmd(args) {
 }
 
 export function tagCmd(args) {
-  const [sessionId, ...rest] = args;
-  if (!sessionId) return fail('Usage: mycelium tag <sessionId> +tag -tag');
+  const [idOrPrefix, ...rest] = args;
+  if (!idOrPrefix) return fail('Usage: mycelium tag <sessionId|prefix> +tag -tag');
+  const sessionId = resolveSessionId(idOrPrefix);
   const add = rest.filter((t) => t.startsWith('+')).map((t) => t.slice(1));
   const remove = rest.filter((t) => t.startsWith('-')).map((t) => t.slice(1));
   const res = tag(sessionId, add, remove);

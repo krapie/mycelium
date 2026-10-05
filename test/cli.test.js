@@ -241,6 +241,40 @@ test('knowledge on a folder with no sessions fails cleanly (not an LLM call)', (
   assert.match(stderr, /no sessions in cli-test\/nonexistent-folder/);
 });
 
+// --- <session> accepts the 8-char prefix `list` prints (#136) -----------
+
+test('mv, tag, context and handoff accept a unique id prefix', () => {
+  seed('pfx136aa-0000-4000-8000-000000000001', {
+    folder: null,
+    turns: [{ role: 'user', text: 'prefix lookup check', timestamp: null }],
+  });
+  let r = runCli(['mv', 'pfx136aa', 'cli-test/prefix']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(loadRaw('pfx136aa-0000-4000-8000-000000000001').folder, 'cli-test/prefix');
+  r = runCli(['tag', 'pfx136aa', '+viaprefix']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.ok(loadRaw('pfx136aa-0000-4000-8000-000000000001').extracted.tags.includes('viaprefix'));
+  r = runCli(['context', 'pfx136aa']);
+  assert.equal(r.status, 0, r.stderr);
+  r = runCli(['handoff', 'pfx136aa']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /prefix lookup check/);
+});
+
+test('an ambiguous prefix is refused instead of guessing', () => {
+  seed('pfx136bb-0000-4000-8000-000000000001', { folder: null });
+  seed('pfx136bb-0000-4000-8000-000000000002', { folder: null });
+  const { stderr, status } = runCli(['mv', 'pfx136bb', 'cli-test/prefix']);
+  assert.equal(status, 1);
+  assert.match(stderr, /ambiguous prefix/);
+});
+
+test('autotag on an unknown prefix fails before any LLM call', () => {
+  const { stderr, status } = runCli(['autotag', 'nosuch136']);
+  assert.equal(status, 1);
+  assert.match(stderr, /no session matching/);
+});
+
 // --- Reuse: context, inject, handoff, resume ----------------------------
 
 test('context for a session with nothing inherited says so', () => {

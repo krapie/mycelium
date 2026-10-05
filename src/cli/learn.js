@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { reindex } from '../index-db.js';
 import { autoTagSession, tagAll } from '../learn.js';
 import { generateDigest, extractKnowledge, foldersWithSessions } from '../insight.js';
-import { fail, parseFlags } from './util.js';
+import { fail, parseFlags, resolveSessionId } from './util.js';
 
 function fmtTags(tags) {
   return tags && tags.length ? '#' + tags.join(' #') : '(no tags)';
@@ -11,9 +11,10 @@ function fmtTags(tags) {
 export async function autotagCmd(args) {
   const { flags, positional } = parseFlags(args);
   if (positional[0]) {
-    const res = await autoTagSession(positional[0]);
+    const sessionId = resolveSessionId(positional[0]);
+    const res = await autoTagSession(sessionId);
     if (!res.ok) return fail(res.error);
-    console.log(`${positional[0].slice(0, 8)}  ${fmtTags(res.session.extracted.tags)}`);
+    console.log(`${sessionId.slice(0, 8)}  ${fmtTags(res.session.extracted.tags)}`);
     console.log(`  ${res.session.extracted.summary || ''}`);
   } else {
     const res = await tagAll({
