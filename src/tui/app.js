@@ -3,6 +3,7 @@ const blessed = pkg.default || pkg;
 import { C } from './theme.js';
 import { t, getLocale, setLocale } from './i18n.js';
 import { killInFlight } from '../llm.js';
+import { relaunch } from './restart.js';
 import { VERSION } from '../version.js';
 
 // blessed mis-compiles some xterm-256color capabilities (notably `Setulc`,
@@ -287,6 +288,16 @@ export function createApp({ input, output } = {}) {
       screen.destroy();
       process.exit(code);
     },
+    // The language switch's "Mycelium will restart" (#146). Falls back to
+    // quitting, with a one-line hint, where the process can't be replaced.
+    restart() {
+      killInFlight();
+      screen.destroy();
+      if (!relaunch()) {
+        console.log(t('app.restartManually'));
+        process.exit(0);
+      }
+    },
     // Lets a caller (the tutorial) intercept the global q quit instead of
     // it also firing right behind. Return true to swallow the keypress;
     // leave null (default) for the normal confirm-quit. Never gates C-c.
@@ -356,7 +367,7 @@ export function createApp({ input, output } = {}) {
       screen.render();
       if (key.name === 'l') {
         setLocale(next);
-        app.quit();
+        app.restart();
       }
     };
     screen.on('keypress', onKey);
