@@ -337,6 +337,21 @@ test('resume on a merged session redirects to handoff instead', () => {
   assert.match(stderr, /not resumable.*mycelium handoff cli-resume-merged/s);
 });
 
+test('resume on a session the agent no longer has points to handoff (#140)', () => {
+  // No ~/.claude transcript has this id, on CI or anywhere else.
+  seed('cli-resume-lost-0000', { source: 'claude', cwd: '/tmp' });
+  const { stderr, status } = runCli(['resume', 'cli-resume-lost-0000']);
+  assert.equal(status, 1);
+  assert.match(stderr, /no longer has this session.*mycelium handoff cli-resume-lost-0000/s);
+});
+
+test('resume --force still prints the command for a lost session', () => {
+  seed('cli-resume-lost-0001', { source: 'claude', cwd: '/tmp' });
+  const { stdout, status } = runCli(['resume', 'cli-resume-lost-0001', '--force']);
+  assert.equal(status, 0);
+  assert.match(stdout, /--resume cli-resume-lost-0001/);
+});
+
 // --- Find: search, tags, list -------------------------------------------
 
 test('search finds a seeded session by content and reports a result count', () => {
