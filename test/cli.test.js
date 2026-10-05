@@ -215,6 +215,29 @@ test('organize --limit bounds a reused queue too (#135)', () => {
   clearSuggestions(['orgid003', 'orgid004']);
 });
 
+test('organize --set-limit saves the per-run limit, and it caps queued suggestions (#167)', () => {
+  const { stdout, status } = runCli(['organize', '--set-limit', '2']);
+  assert.equal(status, 0);
+  assert.match(stdout, /organize limit set to 2/);
+  const ids = ['orglim01', 'orglim02', 'orglim03'];
+  for (const id of ids) seed(id, { folder: null });
+  queueSuggestions(ids.map((id) => ({ id, folder: 'cli-test/limit-saved', reason: 'r' })));
+  const res = runCli(['organize']);
+  assert.equal(res.status, 0);
+  assert.match(res.stdout, /showing 2 of 3 queued suggestion\(s\)/);
+  assert.match(res.stdout, /2 suggested/);
+  clearSuggestions(ids);
+  runCli(['organize', '--set-limit', '30']);
+});
+
+test('organize rejects a limit that is not a positive number (#167)', () => {
+  assert.equal(runCli(['organize', '--set-limit']).status, 1);
+  assert.equal(runCli(['organize', '--set-limit', '0']).status, 1);
+  const { stderr, status } = runCli(['organize', '--limit', 'abc']);
+  assert.equal(status, 1);
+  assert.match(stderr, /--limit needs a positive number/);
+});
+
 // --- Learn: autotag/digest/knowledge — only the LLM-free paths ----------
 
 test('autotag with no sessionId and nothing to tag reports zeros without calling the LLM', () => {

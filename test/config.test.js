@@ -5,7 +5,7 @@ import { dirname } from 'node:path';
 import { useTempHome } from './helpers.js';
 
 useTempHome();
-const { loadConfig, saveConfig } = await import('../src/config.js');
+const { loadConfig, saveConfig, organizeLimit, parseLimit, DEFAULT_ORGANIZE_LIMIT } = await import('../src/config.js');
 const { CONFIG_PATH } = await import('../src/paths.js');
 
 test('loadConfig() returns pure defaults when no config.json exists yet', () => {
@@ -54,4 +54,29 @@ test('saveConfig() writes exactly what it is given, then loadConfig() merges it 
 test('saveConfig() creates ~/.mycelium (and config.json) even before any other init', () => {
   saveConfig({ onboarded: true });
   assert.equal(loadConfig().onboarded, true);
+});
+
+test('parseLimit() accepts only positive integers (#167)', () => {
+  assert.equal(parseLimit('25'), 25);
+  assert.equal(parseLimit(5), 5);
+  for (const bad of [true, false, '', null, undefined, '0', '-3', '2.5', 'abc']) assert.equal(parseLimit(bad), null, String(bad));
+});
+
+test('organizeLimit(): saved setting, then MYCELIUM_SUMMARIZE_BATCH_LIMIT, then the default (#167)', () => {
+  const env = process.env.MYCELIUM_SUMMARIZE_BATCH_LIMIT;
+  try {
+    saveConfig({});
+    delete process.env.MYCELIUM_SUMMARIZE_BATCH_LIMIT;
+    assert.equal(organizeLimit(), DEFAULT_ORGANIZE_LIMIT);
+    process.env.MYCELIUM_SUMMARIZE_BATCH_LIMIT = '12';
+    assert.equal(organizeLimit(), 12);
+    saveConfig({ organizeLimit: 7 });
+    assert.equal(organizeLimit(), 7);
+    saveConfig({ organizeLimit: 'nonsense' });
+    assert.equal(organizeLimit(), 12);
+  } finally {
+    if (env === undefined) delete process.env.MYCELIUM_SUMMARIZE_BATCH_LIMIT;
+    else process.env.MYCELIUM_SUMMARIZE_BATCH_LIMIT = env;
+    saveConfig({});
+  }
 });

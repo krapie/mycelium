@@ -9,8 +9,8 @@ import {
   pendingSuggestions,
   queueSuggestions,
   clearSuggestions,
-  classificationCandidates,
   listTreeDirs,
+  organizeBatch,
 } from '../../organize.js';
 import { suggestSplitBoundaries, applySplit, unsplit } from '../../split.js';
 import { scan } from '../../scanner.js';
@@ -30,6 +30,7 @@ import { injectAgentsMd, dirsForFolder } from '../../reuse.js';
 import { launchAgent } from '../launch.js';
 import { createBacklog } from '../../backlog.js';
 import { t } from '../i18n.js';
+import { organizeLimit } from '../../config.js';
 
 // The Scan/Organize/Knowledge-review/Merge/Split/New-agent action handlers
 // bound by sessions.js's screenKey/listBox.key/foldersBox.key/openActionMenu
@@ -42,10 +43,6 @@ import { t } from '../i18n.js';
 // (app/state/boxes/currentRow/reloadFolders/reloadList) is a stable
 // reference for the view's whole lifetime.
 
-// Caps the number of sessions summarized by one `o` run, so a large
-// first-time backlog cannot exhaust a tight usage quota. Lower than
-// suggestPlacements()'s limit:200 because summarizing costs more per item.
-const SUMMARIZE_BATCH_LIMIT = Number(process.env.MYCELIUM_SUMMARIZE_BATCH_LIMIT || 30);
 
 // Prefills the merge title with the shared folder's leaf name (e.g.
 // `cases/onprem-connectivity` → "Onprem Connectivity") — only when all
@@ -124,13 +121,22 @@ async function runSmartOrganize(ctx) {
   // Deliberately unscoped (not filtered to state.folder): scoping this
   // was tried and backfired, silently ignoring a real pending
   // suggestion outside the current folder and recomputing for nothing.
-  let matches = pendingSuggestions();
+  // One `o` press processes at most organizeLimit() sessions in every step
+  // (config.json's organizeLimit, `mycelium organize --set-limit N`), so a
+  // large backlog can't exhaust a tight usage quota in one go; pressing `o`
+  // again continues with the next batch (#167).
+  const limit = organizeLimit();
+  const queued = pendingSuggestions();
+  let matches = queued.slice(0, limit);
+  // Shown in the review title when this press doesn't cover everything, so
+  // a capped batch doesn't look like the whole backlog got organized.
+  let outOf = queued.length > limit ? queued.length : 0;
   if (!matches.length) {
-    // Only summarizes sessions actually being classified, not the
-    // whole backlog.
-    const pending = classificationCandidates({ cooldownMs: 0, folder: state.folder }).filter(
-      (n) => !n.extracted.summary,
-    ).length;
+    // Summarizing and classifying share one batch of at most `limit`
+    // sessions — only those get summarized, not the whole backlog.
+    const batch = organizeBatch({ folder: state.folder, limit });
+    outOf = batch.total > limit ? batch.total : 0;
+    const pending = batch.unsummarized;
     // Real progress bars, not the animated-but-fake spinner — both
     // phases know a true total up front.
     const summarizeSpin = pending ? app.startProgressBar(t('sessions.summarizingLabel')) : null;
@@ -138,11 +144,7 @@ async function runSmartOrganize(ctx) {
     let summarizedDone = 0;
     const summarizeRes = await summarizeCandidates({
       folder: state.folder,
-      // Bounds this call's own subprocess volume — see
-      // SUMMARIZE_BATCH_LIMIT's own comment above. Pressing `o` again
-      // continues where this left off (already-summarized candidates
-      // are excluded up front, see classificationCandidates() above).
-      limit: SUMMARIZE_BATCH_LIMIT,
+      ids: batch.ids,
       onProgress: (s) => {
         if (s) summarized.push(s.id);
         summarizeSpin?.update(++summarizedDone, pending);
@@ -163,10 +165,7 @@ async function runSmartOrganize(ctx) {
     const res = await suggestPlacements({
       cooldownMs: 0,
       folder: state.folder,
-      // Same reasoning as daemon.js's SMART_ORGANIZE_BATCH_LIMIT — a
-      // large backlog could otherwise mean hundreds of LLM calls in
-      // one `o` press.
-      limit: 200,
+      ids: batch.ids,
       onProgress: (batch, total) => placeSpin.update(batch, total),
     });
     placeSpin.stop();
@@ -176,7 +175,7 @@ async function runSmartOrganize(ctx) {
     // exhaustion) still has real placements worth reviewing — surface
     // both: whatever's usable below, plus why the rest is missing.
     if (res.error) app.notify(t('smart.placementsStoppedEarly', res.error), 6);
-    if (!matches.length) return app.notify(t('smart.noMatches'), 3);
+    if (!matches.length) return app.notify(outOf ? t('smart.noMatchesMore', limit, outOf) : t('smart.noMatches'), outOf ? 5 : 3);
     queueSuggestions(matches);
   }
   // Cherry-pick which suggestions to actually apply — every suggestion
@@ -190,7 +189,7 @@ async function runSmartOrganize(ctx) {
     }${p.reason ? `  {${C.faint}-fg}(${p.reason}){/}` : ''}`,
     value: p,
   }));
-  multiSelectList(app, t('smart.previewTitle'), items, (chosen) => {
+  multiSelectList(app, outOf ? t('smart.previewTitleMore', limit, outOf) : t('smart.previewTitle'), items, (chosen) => {
     // Esc means what its own "esc cancel" label says — dismiss this
     // batch. Reviewed (Esc or Enter, applied or passed on) either way,
     // so it's cleared from the queue and won't keep reappearing next
