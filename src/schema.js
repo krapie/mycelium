@@ -20,6 +20,7 @@
  *   suggestedFolder, suggestedReason  // queued smart-organize guess, cleared on review
  *   lastClassifiedAt  // ISO timestamp, last time suggestPlacements() evaluated this session (any outcome)
  *   titleLocked       // true once a human sets the title (setContent) — autoTagSession() then never overwrites it
+ *   humanTags, humanRemovedTags  // tags a person added / removed via tag() — autoTagSession() keeps the first and never re-adds the second
  *   summarizedTurnCount  // turns.length as of the last autoTagSession() run — lets tagAll() re-summarize a session that grew instead of skipping it forever
  *   mergedFrom, splitFrom, supersededBy, splitInto  // split/merge lineage — see organize.js/split.js
  * }
@@ -82,6 +83,8 @@ export function emptyNeutral(id, source) {
     suggestedReason: null, // short LLM-given reason for suggestedFolder
     lastClassifiedAt: null, // suggestPlacements()'s last look at this session — avoids re-asking the LLM every cycle when nothing matched
     titleLocked: false, // true once a human sets the title — protects it from autoTagSession() overwrites
+    humanTags: [], // tags a person added by hand — autoTagSession() keeps them
+    humanRemovedTags: [], // tags a person removed by hand — autoTagSession() won't put them back
     summarizedTurnCount: null, // turns.length as of the last autoTagSession() run — null means "never tracked", see tagAll()
     mergedFrom: [], // ids folded into this session (non-empty only on a merge product)
     splitFrom: null, // id this session was sliced out of (non-null only on a split product)

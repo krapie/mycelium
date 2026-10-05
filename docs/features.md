@@ -74,7 +74,9 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   and clears any queued `suggestedFolder` so a suggestion computed before
   the move can't move it back (#135). [tested]
 - **Edit tags manually.** `tag(sessionId, add, remove)`. Also marks
-  human-owned. [tested]
+  human-owned, and records the change in `humanTags` / `humanRemovedTags`
+  so auto-tag keeps added tags and never re-adds removed ones (#141).
+  [tested]
 - **Edit title/summary manually.** `setContent(sessionId, { title, summary })`.
   A non-empty title sets `titleLocked: true`; clearing it to empty
   unlocks it again so auto-tag refills it. Summary always refreshes

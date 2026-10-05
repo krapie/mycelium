@@ -8,6 +8,7 @@ const { emptyNeutral } = await import('../src/schema.js');
 const { saveRaw, loadRaw, deleteRaw } = await import('../src/scanner.js');
 const { __setTestProvider, __clearTestProvider } = await import('../src/llm.js');
 const { autoTagSession, tagAll } = await import('../src/learn.js');
+const { tag } = await import('../src/organize.js');
 const { loadConfig, saveConfig } = await import('../src/config.js');
 
 function seed(id, overrides = {}) {
@@ -97,6 +98,16 @@ test('autoTagSession() never overwrites a titleLocked title, but still refreshes
   assert.equal(res.session.extracted.title, 'Human Title');
   assert.deepEqual(res.session.extracted.tags, ['fresh']);
   assert.equal(res.session.extracted.summary, 'fresh summary');
+});
+
+test('autoTagSession() keeps tags a person added and never re-adds ones they removed (#141)', async () => {
+  seed('learn-human-tags', { turns: [{ role: 'user', text: 'hi' }], extracted: { title: null, tags: ['go', 'temp'], summary: null, decisions: [], todos: [] } });
+  tag('learn-human-tags', ['urgent'], ['temp']);
+  __setTestProvider(async () => mockReply({ tags: ['go', 'temp', 'database'] }));
+
+  const res = await autoTagSession('learn-human-tags');
+
+  assert.deepEqual(res.session.extracted.tags, ['urgent', 'go', 'database']);
 });
 
 test('autoTagSession() returns ok:false and leaves the session untouched when the LLM reply is unparseable', async () => {
