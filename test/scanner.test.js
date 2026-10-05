@@ -167,6 +167,31 @@ test('scan() skips unchanged sessions on a second pass (same mtimeMs)', () => {
   });
 });
 
+test('scan() repairs a projectDir 0.3.5 mis-decoded from a hyphenated path, without re-parsing (#138)', () => {
+  const fakeRef = { id: 'hyphen-path-1', mtimeMs: 700 };
+  const stale = emptyNeutral(fakeRef.id, 'claude');
+  stale.turns = [{ role: 'user', text: 'hello there' }];
+  stale.cwd = '/work/my-project';
+  stale.projectDir = '/work/my/project';
+  stale._mtimeMs = fakeRef.mtimeMs;
+  saveRaw(stale);
+  let parsed = 0;
+  const fakeAdapter = {
+    name: 'claude',
+    listSessions: () => [fakeRef],
+    parse: () => {
+      parsed++;
+      throw new Error('an unchanged transcript must not be re-parsed');
+    },
+  };
+  withOnlyAdapters([fakeAdapter], () => {
+    const res = scan();
+    assert.equal(res.skipped, 1);
+  });
+  assert.equal(parsed, 0);
+  assert.equal(loadRaw('hyphen-path-1').projectDir, '/work/my-project');
+});
+
 test('scan() skips every adapter (real or fake) when MYCELIUM_DEMO_MODE=1, so mycelium demo never pulls real session content into its throwaway store', () => {
   const fakeRef = { id: 'demo-mode-should-skip-this', mtimeMs: 1000 };
   const fakeAdapter = {

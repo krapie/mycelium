@@ -187,6 +187,15 @@ export function scan({ onImport } = {}) {
         existing.source = 'claude';
         writeFileSync(rawPath(existing.id), JSON.stringify(existing, null, 2));
       }
+      // 0.3.5 decoded Claude Code's project folder name into projectDir, which
+      // turns a real '-' into '/' (`/a/my-project` → `/a/my/project`). #124
+      // fixed parse(), but the skip-if-unchanged check below means records
+      // captured before it would keep the wrong path forever. The transcript's
+      // own cwd was already stored alongside it, so repair from that (#138).
+      if (existing?.source === 'claude' && existing.cwd && existing.projectDir !== existing.cwd) {
+        existing.projectDir = existing.cwd;
+        writeFileSync(rawPath(existing.id), JSON.stringify(existing, null, 2));
+      }
       // Skip if we already captured this session and the file hasn't changed.
       if (existing && existing._mtimeMs === ref.mtimeMs) {
         skipped++;
