@@ -17,7 +17,8 @@ export async function daemonCmd(args) {
     console.log(res.started ? `daemon started (pid ${res.pid})` : `daemon already running (pid ${res.pid})`);
     return;
   }
-  const { runDaemon } = await import('../daemon.js');
+  const { runDaemon, installShutdownHandlers } = await import('../daemon.js');
+  installShutdownHandlers();
   await runDaemon();
 }
 
