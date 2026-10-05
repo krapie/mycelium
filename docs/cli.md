@@ -7,7 +7,8 @@ Everything works as individual commands without the TUI. Wherever a command take
 ```sh
 # Capture / Organize
 mycelium scan                                  # capture only, no folder assignment
-mycelium organize [--apply] [--limit N] [--folder <path>]  # content-based folder suggestions (summarizes first, can suggest new folders, --folder narrows to one folder+subfolders, preview-only until --apply, 200 per run by default)
+mycelium organize [--apply] [--limit N] [--folder <path>]  # content-based folder suggestions (summarizes first, can suggest new folders, --folder narrows to one folder+subfolders, preview-only until --apply)
+mycelium organize --set-limit N                 # sessions one organize run may process, in the TUI's o and here (default 30); --limit N overrides it for one run
 mycelium mkdir company/platform/auth
 mycelium mv <session> company/platform/auth
 mycelium tag <session> +urgent -miscategorized
@@ -102,5 +103,6 @@ Background upkeep's intervals and limits are all environment variable tunable. T
 | `MYCELIUM_SMART_ORGANIZE_MS` | 30 min | Smart-organize auto-compute interval |
 | `MYCELIUM_SMART_ORGANIZE_LIMIT` | 100 | Max sessions classified per smart-organize cycle |
 | `MYCELIUM_SMART_ORGANIZE_COOLDOWN_MS` | 24 h | Wait time before retrying an unmatched session |
+| `MYCELIUM_SUMMARIZE_BATCH_LIMIT` | 30 | Sessions one organize run (`o`, `mycelium organize`) may process, until `mycelium organize --set-limit N` saves a value of its own |
 | `MYCELIUM_SUMMARIZE_CONCURRENCY` | 3 | Concurrent `claude`/`codex` processes the auto smart-organize cycle spawns |
 | `MYCELIUM_DIGEST_KNOWLEDGE_LIMIT` | 10 | Max folders proposed for a knowledge refresh per call, whether triggered by the daemon's independent overnight cycle or the TUI's `k` command computing fresh. Unrelated to Digest (`d`) despite the env var's name |

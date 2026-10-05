@@ -30,6 +30,7 @@ import { injectAgentsMd, dirsForFolder } from '../../reuse.js';
 import { launchAgent } from '../launch.js';
 import { createBacklog } from '../../backlog.js';
 import { t } from '../i18n.js';
+import { organizeLimit } from '../../config.js';
 
 // The Scan/Organize/Knowledge-review/Merge/Split/New-agent action handlers
 // bound by sessions.js's screenKey/listBox.key/foldersBox.key/openActionMenu
@@ -42,10 +43,6 @@ import { t } from '../i18n.js';
 // (app/state/boxes/currentRow/reloadFolders/reloadList) is a stable
 // reference for the view's whole lifetime.
 
-// Caps the number of sessions summarized by one `o` run, so a large
-// first-time backlog cannot exhaust a tight usage quota. Lower than
-// suggestPlacements()'s limit:200 because summarizing costs more per item.
-const SUMMARIZE_BATCH_LIMIT = Number(process.env.MYCELIUM_SUMMARIZE_BATCH_LIMIT || 30);
 
 // Prefills the merge title with the shared folder's leaf name (e.g.
 // `cases/onprem-connectivity` → "Onprem Connectivity") — only when all
@@ -124,13 +121,19 @@ async function runSmartOrganize(ctx) {
   // Deliberately unscoped (not filtered to state.folder): scoping this
   // was tried and backfired, silently ignoring a real pending
   // suggestion outside the current folder and recomputing for nothing.
-  let matches = pendingSuggestions();
+  // One `o` press processes at most organizeLimit() sessions in every step
+  // (config.json's organizeLimit, `mycelium organize --set-limit N`), so a
+  // large backlog can't exhaust a tight usage quota in one go; pressing `o`
+  // again continues with the next batch (#167).
+  const limit = organizeLimit();
+  let matches = pendingSuggestions().slice(0, limit);
   if (!matches.length) {
     // Only summarizes sessions actually being classified, not the
     // whole backlog.
-    const pending = classificationCandidates({ cooldownMs: 0, folder: state.folder }).filter(
-      (n) => !n.extracted.summary,
-    ).length;
+    const pending = Math.min(
+      limit,
+      classificationCandidates({ cooldownMs: 0, folder: state.folder }).filter((n) => !n.extracted.summary).length,
+    );
     // Real progress bars, not the animated-but-fake spinner — both
     // phases know a true total up front.
     const summarizeSpin = pending ? app.startProgressBar(t('sessions.summarizingLabel')) : null;
@@ -138,11 +141,9 @@ async function runSmartOrganize(ctx) {
     let summarizedDone = 0;
     const summarizeRes = await summarizeCandidates({
       folder: state.folder,
-      // Bounds this call's own subprocess volume — see
-      // SUMMARIZE_BATCH_LIMIT's own comment above. Pressing `o` again
-      // continues where this left off (already-summarized candidates
-      // are excluded up front, see classificationCandidates() above).
-      limit: SUMMARIZE_BATCH_LIMIT,
+      // Pressing `o` again continues where this left off
+      // (already-summarized candidates are excluded up front).
+      limit,
       onProgress: (s) => {
         if (s) summarized.push(s.id);
         summarizeSpin?.update(++summarizedDone, pending);
@@ -163,10 +164,7 @@ async function runSmartOrganize(ctx) {
     const res = await suggestPlacements({
       cooldownMs: 0,
       folder: state.folder,
-      // Same reasoning as daemon.js's SMART_ORGANIZE_BATCH_LIMIT — a
-      // large backlog could otherwise mean hundreds of LLM calls in
-      // one `o` press.
-      limit: 200,
+      limit,
       onProgress: (batch, total) => placeSpin.update(batch, total),
     });
     placeSpin.stop();

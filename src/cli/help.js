@@ -4,6 +4,7 @@ export function printHelp(cmd) {
 Capture   scan                          세션 저장소 스캔 → 중립 스키마 (오래된 세션은 첫 캡처 시 _archive로, 나머지는 미분류로 시작)
           archive reeval [--days N]     현재/지정 임계값으로 auto-archive 재평가 (New↔_archive 복구/이동). --days는 기본값도 갱신
 Organize  organize [--apply] [--limit N] [--folder <경로>]   내용 기반 폴더 제안(요약 먼저 채움) — --folder로 특정 폴더(하위 포함)만 좁히기, --apply 전엔 미리보기만
+          organize --set-limit N        한 번의 정리(TUI o 포함)가 처리할 세션 수 (기본 30, --limit 은 이번 실행만)
           mkdir <folder>                폴더 생성
           mv <session> <folder>         세션 수동 이동
           tag <session> +t -t           태그 수동 편집

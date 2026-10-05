@@ -16,34 +16,51 @@ import {
 } from '../organize.js';
 import { unsplit } from '../split.js';
 import { fail, parseFlags, resolveSessionId } from './util.js';
+import { loadConfig, saveConfig, organizeLimit, parseLimit } from '../config.js';
 
 export async function organizeCmd(args) {
   // Always content-based classification; `--smart` is still accepted
   // (harmlessly ignored) for anyone with it in a saved script.
   const { flags } = parseFlags(args);
+  if (flags['set-limit'] !== undefined) {
+    const n = parseLimit(flags['set-limit']);
+    if (!n) return fail('Usage: mycelium organize --set-limit <positive number>');
+    saveConfig({ ...loadConfig(), organizeLimit: n });
+    console.log(`organize limit set to ${n} session(s) per run`);
+    return;
+  }
+  if (flags.limit !== undefined && !parseLimit(flags.limit)) return fail('--limit needs a positive number');
+  // One limit for every step of this run (#167): the saved organizeLimit,
+  // or --limit for just this run.
+  const limit = parseLimit(flags.limit) ?? organizeLimit();
   // Reuse whatever the daemon already queued (smartOrganizeCycle in
   // daemon.js) instead of recomputing — instant when the daemon's been
   // doing the work in the background.
   let placements = pendingSuggestions({ folder: flags.folder || undefined });
-  // --limit bounds the reused queue too, not just a fresh computation —
+  // The limit bounds the reused queue too, not just a fresh computation —
   // otherwise `organize --limit 5` after the TUI's background cycle queued
   // everything shows (and --apply applies) the whole queue (#135).
-  if (flags.limit) placements = placements.slice(0, Number(flags.limit));
+  const queued = placements.length;
+  placements = placements.slice(0, limit);
+  if (queued > limit) console.log(`showing ${limit} of ${queued} queued suggestion(s) — --apply files these, then run again for the next batch`);
   if (!placements.length) {
     // cooldownMs: 0 bypasses the daemon's "don't re-ask too soon"
     // throttle, since a human explicitly asked for this right now. Same
     // review-before-move safety net either way — nothing moves until
     // --apply.
-    const limit = flags.limit ? Number(flags.limit) : 200;
     // --folder scopes to that subtree (same as `list`/`search --folder`);
     // omitted means the whole store, matching this command's existing
     // default. There's no CLI equivalent of the TUI's "Root" yet — pass
     // a real folder to narrow.
     const folder = flags.folder || undefined;
     const pending = classificationCandidates({ cooldownMs: 0, folder }).filter((n) => !n.extracted.summary).length;
-    if (pending) console.log(`summarizing ${pending} session(s) first…`);
+    // Summarizing is the expensive step (one LLM call per session) and used
+    // to ignore --limit entirely, so a large backlog spent its whole quota here.
+    if (pending > limit) console.log(`summarizing ${limit} of ${pending} session(s) first (limit ${limit}; run again for the next batch)…`);
+    else if (pending) console.log(`summarizing ${pending} session(s) first…`);
     await summarizeCandidates({
       folder,
+      limit,
       onProgress: (s, err) => {
         if (err) console.log(`  ! ${err.message}`);
         else console.log(`  + ${s.id.slice(0, 8)}`);

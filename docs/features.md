@@ -104,11 +104,14 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   `suggestPlacements`), since a large first-time backlog otherwise means
   that many real LLM calls in one call, easily enough to exhaust a
   tighter usage quota mid-run (real report: "session 100% usage" against
-  ~70 unfiled sessions). The TUI's `o` handler passes
-  `SUMMARIZE_BATCH_LIMIT` (`sessions.js`, default 30,
-  `MYCELIUM_SUMMARIZE_BATCH_LIMIT`-overridable); pressing `o` again picks
-  up where it left off, since already-summarized candidates are
-  excluded. `suggestPlacements` prefers a folder's `KNOWLEDGE.md` over
+  ~70 unfiled sessions). One limit covers a whole organize run, in the
+  TUI's `o` and `mycelium organize` alike: `organizeLimit()` (`config.js`;
+  `config.json`'s `organizeLimit`, set with `mycelium organize --set-limit
+  N`, else `MYCELIUM_SUMMARIZE_BATCH_LIMIT`, else 30) caps the sessions
+  summarized, the sessions classified and the queued suggestions shown,
+  and `--limit N` overrides it for one CLI run (#167). Pressing `o` (or
+  running `organize` again) picks up where it left off, since
+  already-summarized candidates are excluded. [tested] `suggestPlacements` prefers a folder's `KNOWLEDGE.md` over
   raw summaries, chunks by `batchSize` (25), validates every returned
   folder path (`isSafeFolderPath`), flags `isNew` for folders that don't
   exist yet, and stamps `lastClassifiedAt` on every candidate seen

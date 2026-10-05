@@ -42,3 +42,23 @@ export function saveConfig(cfg) {
 export function contentLocale() {
   return loadConfig().locale === 'ko' ? 'ko' : 'en';
 }
+
+// How many sessions one organize run (TUI `o`, `mycelium organize`) may
+// process — summarize, classify, and queued suggestions alike — so a large
+// backlog is worked through in batches instead of one quota-draining run
+// (#167). Set with `mycelium organize --set-limit N`; until then
+// MYCELIUM_SUMMARIZE_BATCH_LIMIT (the TUI's older knob) or 30.
+export const DEFAULT_ORGANIZE_LIMIT = 30;
+
+export function parseLimit(value) {
+  // A bare `--limit` flag parses as `true`, and Number(true) is 1.
+  if (typeof value === 'boolean' || value === null || value === '') return null;
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
+export function organizeLimit() {
+  return (
+    parseLimit(loadConfig().organizeLimit) ?? parseLimit(process.env.MYCELIUM_SUMMARIZE_BATCH_LIMIT) ?? DEFAULT_ORGANIZE_LIMIT
+  );
+}
