@@ -11,6 +11,8 @@ import {
   __trackChildForTest,
   __inFlightCountForTest,
   __clearInFlightForTest,
+  claudeArgs,
+  isUnknownNoPersistenceFlag,
 } from '../src/llm.js';
 
 // Pure functions + the test-provider seam — no subprocess, no MYCELIUM_HOME
@@ -246,4 +248,15 @@ test('killInFlight() sends SIGTERM to every currently-tracked child', () => {
 test('killInFlight() with nothing tracked is a harmless no-op', () => {
   assert.equal(__inFlightCountForTest(), 0);
   assert.doesNotThrow(() => killInFlight());
+});
+
+test('headless claude calls ask Claude Code not to save them as sessions (#149)', () => {
+  const args = claudeArgs('prompt');
+  assert.ok(args.includes('--no-session-persistence'));
+  assert.equal(claudeArgs('prompt', { persist: true }).includes('--no-session-persistence'), false);
+});
+
+test('an older CLI rejecting the flag is recognized, so complete() retries without it', () => {
+  assert.equal(isUnknownNoPersistenceFlag("error: unknown option '--no-session-persistence'"), true);
+  assert.equal(isUnknownNoPersistenceFlag('Error: rate limited'), false);
 });

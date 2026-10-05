@@ -66,19 +66,40 @@ export function killInFlight() {
   for (const child of inFlight) child.kill('SIGTERM');
 }
 
-export function complete(prompt, { timeoutMs = 240000 } = {}) {
-  if (_testProvider) return Promise.resolve(_testProvider(prompt, { timeoutMs }));
-  const fullPrompt = `${META_MARKER}\n${prompt}`;
-  return new Promise((resolve, reject) => {
-    let cmd, args;
-    if (PROVIDER === 'codex') {
-      cmd = 'codex';
-      args = ['exec', fullPrompt, '--sandbox', 'read-only', '--skip-git-repo-check', '-c', 'approval_policy=never', '-m', CODEX_MODEL];
-    } else {
-      cmd = 'claude';
-      args = ['-p', fullPrompt, '--model', CLAUDE_MODEL, '--output-format', 'json'];
-    }
+// Without --no-session-persistence, Claude Code saves every one of these
+// headless calls as a session under ~/.claude/projects/<cwd>/: scan() skips
+// them (META_MARKER), but they pile up in `claude --resume` and change the
+// agent's own store behind the user's back (#149). Older CLIs don't know the
+// flag; the first such rejection turns it off for the rest of the process.
+let claudeSupportsNoPersistence = true;
 
+export function claudeArgs(fullPrompt, { persist = !claudeSupportsNoPersistence } = {}) {
+  const args = ['-p', fullPrompt, '--model', CLAUDE_MODEL, '--output-format', 'json'];
+  if (!persist) args.push('--no-session-persistence');
+  return args;
+}
+
+export function isUnknownNoPersistenceFlag(stderr) {
+  return /unknown option/i.test(stderr) && /no-session-persistence/.test(stderr);
+}
+
+export async function complete(prompt, { timeoutMs = 240000 } = {}) {
+  if (_testProvider) return _testProvider(prompt, { timeoutMs });
+  const fullPrompt = `${META_MARKER}\n${prompt}`;
+  if (PROVIDER === 'codex') {
+    return runCli('codex', ['exec', fullPrompt, '--sandbox', 'read-only', '--skip-git-repo-check', '-c', 'approval_policy=never', '-m', CODEX_MODEL], timeoutMs);
+  }
+  try {
+    return await runCli('claude', claudeArgs(fullPrompt), timeoutMs);
+  } catch (err) {
+    if (!claudeSupportsNoPersistence || !isUnknownNoPersistenceFlag(err.message)) throw err;
+    claudeSupportsNoPersistence = false;
+    return runCli('claude', claudeArgs(fullPrompt), timeoutMs);
+  }
+}
+
+function runCli(cmd, args, timeoutMs) {
+  return new Promise((resolve, reject) => {
     // windowsHide: on Windows, spawn() opens a real visible console window
     // for a console-subsystem child by default (Node's own windowsHide
     // default is false) — with dozens of these calls firing in the
