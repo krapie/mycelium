@@ -31,5 +31,6 @@ Clean     cleanup [tidy]                메타세션 제거 + 빈 폴더 정리 
           cleanup reset --yes           전체 데이터(~/.mycelium) 초기화
 Other     --version / -v / -V           설치된 버전 출력
 `);
-  process.exit(cmd ? 1 : 0);
+  // Asking for help is a success; an unknown command is not.
+  process.exit(!cmd || ['--help', '-h', 'help'].includes(cmd) ? 0 : 1);
 }

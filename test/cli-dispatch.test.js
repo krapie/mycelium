@@ -39,6 +39,11 @@ function runCliExpectFail(args) {
   assert.fail(`expected "mycelium ${args.join(' ')}" to exit non-zero, got: ${out}`);
 }
 
+test('--help prints help and exits 0 (#147)', () => {
+  const out = execFileSync(process.execPath, [cliPath, '--help'], { encoding: 'utf8' });
+  assert.match(out, /mycelium/i);
+});
+
 test('unknown command prints help and exits 1', () => {
   const { status, stdout } = runCliExpectFail(['bogus']);
   assert.equal(status, 1);

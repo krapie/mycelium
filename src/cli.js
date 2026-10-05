@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import './quiet-warnings.js';
 import { VERSION } from './version.js';
 import { scanCmd, reindexCmd, archiveCmd } from './cli/capture.js';
 import { organizeCmd, mkdirCmd, mvCmd, tagCmd, unmergeCmd, unsplitCmd } from './cli/organize.js';
