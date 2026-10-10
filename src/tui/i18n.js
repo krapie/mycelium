@@ -79,6 +79,10 @@ const en = {
   'sessions.sortLabel_date-asc': 'sort: oldest first',
   'sessions.sortLabel_date-desc': 'sort: newest first',
   'sessions.sortPickerTitle': 'Sort by',
+  'sessions.hostPickerTitle': 'Show sessions from',
+  'sessions.hostAll': 'All machines',
+  'sessions.hostThis': (name) => `${name} (this machine)`,
+  'sessions.hostSingle': 'Only one machine has sessions here yet — nothing to filter',
   'sessions.sortOption_recent': 'Newest first',
   'sessions.sortOption_dateAsc': 'Oldest first',
   'sessions.sortOption_title': 'Title A → Z',
@@ -96,6 +100,8 @@ const en = {
   'detail.lastActive': 'last active',
   'detail.firstRequest': 'First request:',
   'detail.id': 'ID:',
+  'detail.machine': 'Machine:',
+  'detail.thisMachine': 'this machine',
   'detail.summary': 'Summary',
   'detail.decisions': 'Decisions',
   'detail.todos': 'Action Items',
@@ -439,6 +445,10 @@ const ko = {
   'sessions.sortLabel_date-asc': '정렬: 오래된순',
   'sessions.sortLabel_date-desc': '정렬: 최신순',
   'sessions.sortPickerTitle': '정렬 기준',
+  'sessions.hostPickerTitle': '다음 컴퓨터의 세션만 보기',
+  'sessions.hostAll': '모든 컴퓨터',
+  'sessions.hostThis': (name) => `${name} (이 컴퓨터)`,
+  'sessions.hostSingle': '아직 한 컴퓨터의 세션뿐이라 필터할 게 없습니다',
   'sessions.sortOption_recent': '최신순',
   'sessions.sortOption_dateAsc': '오래된순',
   'sessions.sortOption_title': '제목 A → Z',
@@ -452,6 +462,8 @@ const ko = {
   'detail.lastActive': '최근 활동',
   'detail.firstRequest': '첫 요청:',
   'detail.id': 'ID:',
+  'detail.machine': '컴퓨터:',
+  'detail.thisMachine': '이 컴퓨터',
   'detail.summary': '요약',
   'detail.decisions': '결정',
   'detail.todos': '실행 항목',
@@ -749,6 +761,7 @@ Day to day, it's a simple loop: {${fg}-fg}s{/} capture → {${fg}-fg}o{/} organi
   {${fg}-fg}Shift+S{/} Split (LLM-suggested topic boundaries, review before applying — pieces land in the same folder, original stays visible; mycelium unsplit undoes it)
   {${fg}-fg}Shift+O{/} Cycle sort order — recent (default) → title A-Z → agent
   {${fg}-fg}Shift+T{/} Pick a sort order directly — newest/oldest first, title A-Z/Z-A
+  {${fg}-fg}Shift+H{/} Show sessions from one machine only (store synced across machines — see docs/sync.md)
 
 {bold}Detail panel{/}
 
@@ -828,6 +841,7 @@ ko['help.text'] = (fg, spore) => `{bold}Context Flywheel{/}
   {${fg}-fg}Shift+S{/} 분할 (LLM이 세션을 나눌 지점 제안, 검토 후 적용 — 조각은 원본과 같은 폴더에 생성, 원본은 그대로 목록에 남음; mycelium unsplit로 되돌리기)
   {${fg}-fg}Shift+O{/} 정렬 순서 전환 — 최신순(기본) → 제목순(A-Z) → 에이전트순
   {${fg}-fg}Shift+T{/} 정렬 방식 직접 선택 — 최신순/오래된순, 제목 A-Z/Z-A
+  {${fg}-fg}Shift+H{/} 한 컴퓨터의 세션만 보기 (여러 컴퓨터로 동기화한 저장소용 — docs/sync.md)
 
 {bold}상세 패널{/}
 

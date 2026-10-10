@@ -74,6 +74,12 @@ test('two stores sync through a bare repo: merge on first sync, field-level edit
   }
   assert.equal(b.raw('sess-a').host, 'laptop');
   assert.match(b.cli('list'), /sess-a/, 'synced sessions are reindexed on the receiving machine');
+  // The server can tell its own sessions from the laptop's.
+  assert.match(b.cli('list'), /sess-a.*@laptop/);
+  assert.match(b.cli('list'), /sess-b.*@server/);
+  const fromLaptop = b.cli('list', '--host', 'laptop');
+  assert.match(fromLaptop, /sess-a/);
+  assert.doesNotMatch(fromLaptop, /sess-b/);
 
   // Concurrent edits to one session merge field by field.
   a.cli('mkdir', 'work');

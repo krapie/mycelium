@@ -121,6 +121,10 @@ Automatic summarizing, smart organize, digests, and knowledge review run on the 
 
 Each session records the machine it was captured on (`host`). The agent's own transcript only exists on that machine, so pressing `r` elsewhere offers a [handoff](./handoff.md) instead of a resume.
 
+## Telling the machines apart
+
+Once the store holds sessions from more than one machine, every row in the Sessions list and the Calendar's day list carries an `@machine` badge: dim for this machine, highlighted for the others. The detail panel names the machine too. Press `Shift+H` to show one machine's sessions only. On the command line, `mycelium list` prints the same `@machine` and `mycelium list --host <machine>` filters to one. A store that only ever saw one machine shows none of this.
+
 If your project paths differ between machines, map them so a handoff opens in the right directory:
 
 ```sh

@@ -31,7 +31,7 @@ mycelium inject --dir <project> --folder <folder> # inject knowledge into AGENTS
 mycelium handoff <session>                     # print a handoff prompt
 mycelium resume <session|prefix> [--copy|--exec] [--force] # print/copy/immediately run the resume command (points to handoff if the agent no longer has the session; --force skips that check)
 mycelium search "query" --tag infra --folder company
-mycelium list / tags / reindex
+mycelium list [--host <machine>] / tags / reindex   # --host: one machine's sessions, on a store synced across machines
 
 # (optional) keep background upkeep running without the TUI
 mycelium daemon                 # run in the foreground

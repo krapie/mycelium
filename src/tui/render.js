@@ -38,7 +38,7 @@ export function splitSentences(text) {
  * Sessions detail panel and the Calendar tab's detail panel so both show the
  * exact same view instead of the calendar keeping a stripped-down copy.
  */
-export function formatSessionDetail(n) {
+export function formatSessionDetail(n, { thisMachine = null } = {}) {
   if (!n) return [];
   const lines = [];
   // Title as the headline, then metadata, then the description (summary).
@@ -63,6 +63,12 @@ export function formatSessionDetail(n) {
   // real id is shown at all now, needed for things like `mycelium resume
   // <id>`/`mycelium context <id>` or filing a bug report.
   lines.push(`{${C.faint}-fg}${t('detail.id')} #${n.id}{/}`);
+  // `thisMachine` is only passed for a store synced across machines (data.js's
+  // machines()), where it's the answer to "is this one mine, or from there?".
+  if (thisMachine && n.host) {
+    const mine = n.host === thisMachine;
+    lines.push(`{${mine ? C.faint : C.host}-fg}${t('detail.machine')} ${n.host}${mine ? ` (${t('detail.thisMachine')})` : ''}{/}`);
+  }
   if (n.extracted.tags?.length) {
     lines.push(n.extracted.tags.map((tg) => `{${C.tag}-fg}#${tg}{/}`).join(' '));
   }

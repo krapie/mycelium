@@ -8,6 +8,7 @@ export const C = {
   claude: '#8ab4d8', // claude-code agent label — was fox, same as the title color it sits next to
   kiro: '#e08fb0', // kiro agent label — distinct from fox/spore/claude/tag
   opencode: '#6bcf8f', // opencode agent label — distinct from fox/spore/claude/kiro/tag
+  host: '#d98c7a', // @machine badge on a synced store — this machine's own stays quiet (faint)
   tag: '#c9a3d9', // session tags — distinct from title (fox), claude, and spore/codex
   merged: '#a8c25a', // merge-product pseudo-source — distinct from every agent color above
   text: '#e9e4d6',

@@ -23,7 +23,7 @@ Reuse     context <session>|--folder    Print ancestor-path context
           handoff <session>             Handoff prompt for another agent
           resume <session|prefix> [--copy|--exec] [--force]  Print the resume command (to paste in a new tab) / copy to clipboard / run now (suggests handoff if the original is gone)
 Find      search <q> [--tag t] [--folder f]
-          list [--folder f] / tags      (_archive hidden by default — list --folder _archive)
+          list [--folder f] [--host m] / tags   (_archive hidden by default — list --folder _archive; --host: one machine's sessions on a synced store)
 Run       (no args) or tui              Interactive TUI (cockpit) — runs scan/organize/digest on its own while open
           daemon                        (optional) Background upkeep without the TUI (runs in the foreground)
           daemon --detach / --stop      (optional) Keep it running while the TUI is closed — detach / stop (same as scripts/run.sh·stop.sh)
@@ -61,7 +61,7 @@ Reuse     context <session>|--folder    조상 경로 컨텍스트 출력
           handoff <session>            다른 에이전트용 인수인계 프롬프트
           resume <session|prefix> [--copy|--exec] [--force]  이어열기 명령어 출력(새 탭 붙여넣기용) / 클립보드 복사 / 즉시 실행 (원본이 없으면 handoff 안내)
 Find      search <q> [--tag t] [--folder f]
-          list [--folder f] / tags     (_archive는 기본 숨김 — list --folder _archive)
+          list [--folder f] [--host m] / tags  (_archive는 기본 숨김 — list --folder _archive; --host: 동기화된 저장소에서 한 컴퓨터의 세션만)
 Run       (인자 없음) 또는 tui          인터랙티브 TUI (콕핏) — 켜져 있는 동안 스캔·정리·다이제스트를 자체적으로 수행
           daemon                        (선택) TUI 없이 백그라운드 업킵만 필요할 때 (포그라운드로 실행)
           daemon --detach / --stop      (선택) TUI가 꺼져 있을 때도 계속 돌리고 싶으면 — 분리 실행 / 정지 (scripts/run.sh·stop.sh와 동일)

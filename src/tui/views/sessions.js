@@ -52,7 +52,7 @@ export function sessionsView(opts = {}) {
   // translation anywhere they're used: undefined = Root (everything), null =
   // the New pseudo-folder (genuinely unfiled only), a path = that folder's
   // subtree.
-  const state = { folder: undefined, query: '', tags: [], selected: new Set(), sortBy: 'recent' };
+  const state = { folder: undefined, query: '', tags: [], selected: new Set(), sortBy: 'recent', host: null };
   const SORT_CYCLE = ['recent', 'title', 'agent'];
   let app;
   let foldersBox, listBox, detailBox;
@@ -114,6 +114,10 @@ export function sessionsView(opts = {}) {
   // search, else most-recent) — established Shift+O behavior. date-desc is
   // a real comparator for Shift+T's picker, so "newest first" always means
   // date order there, even mid-search.
+  // { thisMachine, hosts } for a store synced across machines, else null —
+  // refreshed by reloadList(), read by renderRows()/the detail panel.
+  let machines = null;
+
   function sortRows(list) {
     if (state.sortBy === 'title') {
       return [...list].sort((a, b) =>
@@ -148,7 +152,13 @@ export function sessionsView(opts = {}) {
     // is immune to setItems()'s text-matching heuristic.
     const wantId = rows[listBox.selected]?.id;
     const prevIndex = listBox.selected;
-    rows = sortRows(data.sessions({ folder: state.folder, query: state.query, tags: state.tags }));
+    // null once the store no longer holds more than one machine's sessions
+    // (e.g. sync was removed) — a leftover filter would hide everything.
+    machines = data.machines();
+    if (state.host && !machines?.hosts.includes(state.host)) state.host = null;
+    rows = data.sessions({ folder: state.folder, query: state.query, tags: state.tags });
+    if (state.host) rows = rows.filter((r) => r.host === state.host);
+    rows = sortRows(rows);
     renderRows();
     if (rows.length) {
       const idx = wantId ? rows.findIndex((r) => r.id === wantId) : -1;
@@ -205,6 +215,12 @@ export function sessionsView(opts = {}) {
         r.kind === 'backlog'
           ? `{${r.doneAt ? C.faint : C.fox}-fg}[${t(r.doneAt ? 'sessions.backlogOpenedBadge' : 'sessions.backlogBadge')}]{/}`
           : '';
+      // @machine, only on a store holding sessions from more than one machine.
+      // This machine's own is quiet, the other(s) stand out — what you want to
+      // tell apart at a glance is "from there".
+      const host = machines && r.host
+        ? `{${r.host === machines.thisMachine ? C.faint : C.host}-fg}@${truncateCells(r.host, 12)}{/}`
+        : '';
       const isNew = !r.folder ? `{${C.spore}-fg}[${t('sessions.newBadge')}]{/}` : '';
       // Under active search, lead with the FTS snippet — the row's row-reason.
       // The default preview (first user message) hides matches deep in the
@@ -214,7 +230,7 @@ export function sessionsView(opts = {}) {
         : r.title || r.summary || r.preview || t('common.noContent');
       // Built before the title so the title gets what's left of the row:
       // a title that overflows pushes the badges off the right edge.
-      const meta = [lineage.trim(), link.trim(), backlog, src, isNew].filter(Boolean).join(' ');
+      const meta = [lineage.trim(), link.trim(), backlog, src, host, isNew].filter(Boolean).join(' ');
       // +3: two cells of gap, plus one for blessed's {|} pivot, which pads
       // a row of wide characters one cell further than strWidth predicts.
       const reserved = pkg.unicode.strWidth(pkg.helpers.stripTags(`${mark}${meta}`)) + 3;
@@ -233,7 +249,7 @@ export function sessionsView(opts = {}) {
     // generic `|| t('folders.root')` fallback below would label New as Root
     // too, so catch it explicitly first.
     const crumb = state.folder === null ? t('folders.new') : state.folder || t('folders.root');
-    const filt = [state.query && `/${state.query}`, ...state.tags.map((tg) => `#${tg}`)].filter(Boolean).join(' ');
+    const filt = [state.query && `/${state.query}`, ...state.tags.map((tg) => `#${tg}`), state.host && `@${state.host}`].filter(Boolean).join(' ');
     const sortSuffix = state.sortBy === 'recent' ? '' : `  {${C.dim}-fg}${t('sessions.sortLabel_' + state.sortBy)}{/}`;
     app.setHeader(`${crumb}${filt ? '  {' + C.spore + '-fg}' + filt + '{/}' : ''}`, `${rows.length} sessions${sortSuffix}`);
   }
@@ -241,7 +257,7 @@ export function sessionsView(opts = {}) {
   function showDetail(id) {
     const n = data.detail(id);
     if (!n) return;
-    detailBox.setContent(formatSessionDetail(n).join('\n'));
+    detailBox.setContent(formatSessionDetail(n, { thisMachine: machines?.thisMachine }).join('\n'));
     detailBox.setScroll(0);
     app.render();
   }
@@ -590,6 +606,25 @@ export function sessionsView(opts = {}) {
             app.render();
           },
         );
+      });
+
+      // Shift+H: only sessions from one machine — for a store synced across
+      // machines (docs/sync.md). Client-side like sorting, so the Folders
+      // panel's counts still cover every machine.
+      listBox.key('S-h', () => {
+        machines = data.machines();
+        if (!machines) return app.notify(t('sessions.hostSingle'), 3);
+        const items = [
+          { label: t('sessions.hostAll'), value: '*' },
+          ...machines.hosts.map((h) => ({ label: h === machines.thisMachine ? t('sessions.hostThis', h) : h, value: h })),
+        ];
+        menu(app, t('sessions.hostPickerTitle'), items, (val) => {
+          listBox.focus();
+          if (val === undefined) return; // Escape — no change
+          state.host = val === '*' ? null : val;
+          reloadList();
+          app.render();
+        });
       });
 
       // *: select every session currently listed (this folder/search scope,

@@ -98,18 +98,23 @@ export function createCalendarTab(app, { onBack }) {
 
   function showCalDetail() {
     const r = dayRows[dayListBox.selected];
-    calDetailBox.setContent(r ? formatSessionDetail(data.detail(r.id)).join('\n') : t('common.noContent'));
+    calDetailBox.setContent(
+      r ? formatSessionDetail(data.detail(r.id), { thisMachine: data.machines()?.thisMachine }).join('\n') : t('common.noContent'),
+    );
     calDetailBox.setScroll(0);
   }
 
   function loadDay() {
     const date = ymd(year, month, day);
     dayRows = data.sessions({ date });
+    const machines = data.machines();
     const items = dayRows.length
       ? dayRows.map((r) => {
           const src = `{${sourceColor(r.source)}-fg}#${sourceLabel(r.source)}{/}`;
+          // Same @machine badge as the Sessions list, on a store synced across machines.
+          const host = machines && r.host ? `{${r.host === machines.thisMachine ? C.faint : C.host}-fg}@${r.host.slice(0, 12)}{/} ` : '';
           const title = (r.title || r.summary || r.preview || t('common.noContent')).replace(/\s+/g, ' ').slice(0, 60);
-          return `${title}{|}${src} {${C.dim}-fg}${r.folder || t('sessions.newBadge')}{/}`;
+          return `${title}{|}${host}${src} {${C.dim}-fg}${r.folder || t('sessions.newBadge')}{/}`;
         })
       : [`{gray-fg}${t('sessions.empty')}{/}`];
     dayListBox.setLabel(t('calendar.dayListLabel', date, dayRows.length));

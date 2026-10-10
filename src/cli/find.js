@@ -3,6 +3,7 @@ import { firstUserText, isBacklog } from '../schema.js';
 import { search, listTags } from '../index-db.js';
 import { isSuperseded } from '../organize.js';
 import { parseFlags } from './util.js';
+import { syncSettings } from '../sync.js';
 
 export function searchCmd(args) {
   const { flags, positional } = parseFlags(args);
@@ -31,10 +32,14 @@ export function listCmd(args) {
   // (index-db's superseded_by filter) — listing them beside the merge
   // product showed the same work twice (#144).
   raws = raws.filter((n) => !isSuperseded(n));
+  // --host narrows to one machine's sessions on a synced store (docs/sync.md).
+  if (flags.host && flags.host !== true) raws = raws.filter((n) => n.host === flags.host);
+  const synced = !!syncSettings();
   for (const n of raws) {
     const folder = n.folder || '_inbox';
     const tags = n.extracted.tags.length ? ` #${n.extracted.tags.join(' #')}` : '';
-    console.log(`${n.id.slice(0, 8)}  [${isBacklog(n) ? 'backlog' : n.source}]  ${folder}${tags}`);
+    const host = synced && n.host ? `  @${n.host}` : '';
+    console.log(`${n.id.slice(0, 8)}  [${isBacklog(n) ? 'backlog' : n.source}]  ${folder}${tags}${host}`);
     // A backlog item has no turns to preview — its title IS the line.
     console.log(`          ${(isBacklog(n) ? n.extracted.title || '' : firstUserText(n)).slice(0, 70)}`);
   }

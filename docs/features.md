@@ -567,6 +567,17 @@ As a user, I can **use one store from several machines** (a laptop and a home se
   reloads its view when sessions arrive (`startTuiRoutine()`'s
   `onSynced`). Off until `sync init`, and under `MYCELIUM_DEMO_MODE`.
   [untested]
+- **Tell the machines apart.** `data.machines()` (`src/tui/data.js`) is
+  `{ thisMachine, hosts }` only when sync is on *and* the index holds more
+  than one `host` (`listHosts()`, from the index's `host` column) — otherwise
+  no machine UI appears. Then: an `@machine` badge on Sessions rows and
+  Calendar day-list rows (dim for this machine, highlighted for others),
+  a `Machine:` line in `formatSessionDetail()`, `Shift+H` to filter the
+  Sessions list to one machine (client-side, like sorting), and `mycelium
+  list [--host m]`. An index built before the `host` column existed is
+  rebuilt once when the column is first added. [partial]
+  (`test/index-host.test.js`, `test/render.test.js`, `test/sync.test.js`; the
+  TUI badge and `Shift+H` picker are untested)
 - **Continue another machine's session here.** `localDirFor(session)` and
   `isFromOtherMachine(session)` (`src/agents.js`): `r` on a session whose
   `host` is another machine says where it was started and offers handoff;

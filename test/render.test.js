@@ -147,3 +147,12 @@ test('truncateCells() counts Hangul as two cells (#137)', () => {
   assert.equal(truncateCells('a결제', 2), 'a');
   assert.equal(truncateCells('짧음', 58), '짧음');
 });
+
+test('formatSessionDetail() shows which machine a session is from only when told this is a synced store', () => {
+  const n = session({ host: 'homeserver' });
+  const plain = formatSessionDetail(n).join('\n');
+  assert.doesNotMatch(plain, /Machine:/);
+  assert.match(formatSessionDetail(n, { thisMachine: 'laptop' }).join('\n'), /Machine: homeserver/);
+  const mine = formatSessionDetail({ ...n, host: 'laptop' }, { thisMachine: 'laptop' }).join('\n');
+  assert.match(mine, /Machine: laptop \(this machine\)/);
+});
