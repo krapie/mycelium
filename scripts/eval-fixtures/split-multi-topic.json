@@ -1,0 +1,18 @@
+{
+  "description": "split.js: a session covering two genuinely distinct topics (auth middleware, then an unrelated CSS bug) with a false-boundary tempter in between (a clarifying follow-up on the same topic) — checks both real-boundary detection and the over-fragmentation guard.",
+  "call": "split",
+  "sessions": [
+    {
+      "id": "eval-split-multi",
+      "startedAt": "2026-01-07T09:00:00.000Z",
+      "turns": [
+        { "role": "user", "text": "The JWT middleware is rejecting valid tokens intermittently, can you look into it?" },
+        { "role": "assistant", "text": "Found it — the clock skew tolerance was set to 0, so any token issued within a couple hundred milliseconds of the server's own clock drift gets rejected as 'not yet valid'. Setting a 5-second leeway on the nbf/iat checks fixes it." },
+        { "role": "user", "text": "Good catch, can you also make sure the leeway doesn't apply to the exp check?" },
+        { "role": "assistant", "text": "Right, exp should stay strict — only nbf/iat get the leeway. Updated the middleware so expiry is checked with zero tolerance." },
+        { "role": "user", "text": "Separately, the settings page's save button is misaligned on Safari, off by about 8px to the right." },
+        { "role": "assistant", "text": "That's a flexbox gap fallback issue — Safari's older versions don't support the gap property inside flex containers the way Chrome/Firefox do. Switched to margin-based spacing for that row instead, verified it renders correctly in both." }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "description": "insight/digest.js: sessions across two folders on the same day, one folder with two related sessions that a good narrative should synthesize into one beat rather than restating each — checks the 'synthesize across entries' rule.",
+  "call": "digest",
+  "date": "2026-01-09",
+  "sessions": [
+    {
+      "id": "eval-digest-1",
+      "folder": "retail-website/checkout",
+      "startedAt": "2026-01-09T09:00:00.000Z",
+      "extracted": { "summary": "Found the duplicate-order bug: the checkout button had no debounce, a slow network let a double-click submit twice." }
+    },
+    {
+      "id": "eval-digest-2",
+      "folder": "retail-website/checkout",
+      "startedAt": "2026-01-09T11:00:00.000Z",
+      "extracted": { "summary": "Fixed the duplicate-order bug with a client-side debounce plus a server-side idempotency key on the order-create endpoint." }
+    },
+    {
+      "id": "eval-digest-3",
+      "folder": "infra/ci",
+      "startedAt": "2026-01-09T14:00:00.000Z",
+      "extracted": { "summary": "CI was flaking on the integration test suite about 1 in 20 runs; root cause was a shared test DB not being reset between parallel test workers. Added per-worker DB schemas." }
+    }
+  ]
+}

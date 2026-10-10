@@ -221,3 +221,77 @@ test('suggestSplitBoundaries() reports a clean error when the LLM call fails', a
   assert.equal(res.ok, false);
   assert.match(res.error, /llm down/);
 });
+
+// Issue #70 (prompt quality) — the over-fragmentation guard, the minimum
+// range size, and the single-topic-is-normal framing actually reach the
+// prompt, both locales. Not testing model behavior — see
+// scripts/eval-prompts.js for that.
+test('suggestSplitBoundaries() prompt carries the over-fragmentation guard, minimum range size, and single-topic framing, both locales', async () => {
+  seed('sb-wording-en', { turns: turns(6) });
+  let seenPrompt;
+  __setTestProvider(async (prompt) => {
+    seenPrompt = prompt;
+    return JSON.stringify({ ranges: [{ from: 1, to: 6, label: 'one topic' }] });
+  });
+  await suggestSplitBoundaries('sb-wording-en');
+  assert.match(seenPrompt, /over-splitting/, 'EN prompt names the over-fragmentation guard');
+  assert.match(seenPrompt, /No range shorter than 2 turns/, 'EN prompt states the minimum range size');
+  assert.match(seenPrompt, /normal, expected answer/, 'EN prompt frames a single range as normal, not a failure');
+
+  saveConfig({ ...loadConfig(), locale: 'ko' });
+  seed('sb-wording-ko', { turns: turns(6) });
+  __setTestProvider(async (prompt) => {
+    seenPrompt = prompt;
+    return JSON.stringify({ ranges: [{ from: 1, to: 6, label: '한 주제' }] });
+  });
+  await suggestSplitBoundaries('sb-wording-ko');
+  assert.match(seenPrompt, /과하게 쪼갠 것이다/, 'ko prompt names the over-fragmentation guard');
+  assert.match(seenPrompt, /2턴보다 짧은 구간은 만들지 마라/, 'ko prompt states the minimum range size');
+  assert.match(seenPrompt, /정상적이고 기대되는 답/, 'ko prompt frames a single range as normal, not a failure');
+});
+
+// Every {...} example literal embedded in the prompt must itself parse —
+// same regression class as classify.js's old invalid-JSON skeleton
+// (issue #70).
+test('suggestSplitBoundaries()\'s embedded output-format example is valid, parseable JSON, both locales', async () => {
+  seed('sb-json-example-en', { turns: turns(4) });
+  let seenPrompt;
+  __setTestProvider(async (prompt) => {
+    seenPrompt = prompt;
+    return JSON.stringify({ ranges: [{ from: 1, to: 4, label: 'x' }] });
+  });
+  await suggestSplitBoundaries('sb-json-example-en');
+  const match = seenPrompt.match(/\{"ranges":.*\}/);
+  assert.ok(match, 'prompt contains an embedded {"ranges": ...} example');
+  JSON.parse(match[0]); // throws (failing the test) if invalid
+
+  saveConfig({ ...loadConfig(), locale: 'ko' });
+  seed('sb-json-example-ko', { turns: turns(4) });
+  __setTestProvider(async (prompt) => {
+    seenPrompt = prompt;
+    return JSON.stringify({ ranges: [{ from: 1, to: 4, label: 'x' }] });
+  });
+  await suggestSplitBoundaries('sb-json-example-ko');
+  const matchKo = seenPrompt.match(/\{"ranges":.*\}/);
+  assert.ok(matchKo, 'ko prompt contains an embedded {"ranges": ...} example');
+  JSON.parse(matchKo[0]);
+});
+
+// Guards the tutorial-mock-llm.js coupling — mockSplit() computes the
+// turn count via [...prompt.matchAll(/Turn (\d+) \[/g)] and takes the
+// max. New prose (the over-fragmentation guard etc.) must never
+// introduce a second "Turn N [" shape outside the real numbered
+// transcript, or a demo split would silently compute out-of-bounds
+// ranges instead of the real turn count.
+test('suggestSplitBoundaries() prompt contains exactly the real numbered turns, no leaked "Turn N [" shape from prose', async () => {
+  seed('sb-collision-guard', { turns: turns(5) });
+  let seenPrompt;
+  __setTestProvider(async (prompt) => {
+    seenPrompt = prompt;
+    return JSON.stringify({ ranges: [{ from: 1, to: 5, label: 'x' }] });
+  });
+  await suggestSplitBoundaries('sb-collision-guard');
+  const matches = [...seenPrompt.matchAll(/Turn (\d+) \[/g)];
+  assert.equal(matches.length, 5, 'exactly the 5 real numbered turns, no extra "Turn N [" from the new prose');
+  assert.equal(Math.max(...matches.map((m) => Number(m[1]))), 5, 'the max turn number matches the real turn count');
+});
