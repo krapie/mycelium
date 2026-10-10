@@ -55,7 +55,7 @@ function seedSession(m, id, name) {
   `);
 }
 
-test('two stores sync through a bare repo: merge on first sync, field-level edits, deletes and knowledge conflicts', { skip: !hasGit }, () => {
+test('two-way: two stores sync through a bare repo: merge on first sync, field-level edits, deletes and knowledge conflicts', { skip: !hasGit }, () => {
   const root = mkdtempSync(join(tmpdir(), 'mycelium-sync-'));
   const remote = join(root, 'remote.git');
   const a = machine(join(root, 'a'));
@@ -65,8 +65,8 @@ test('two stores sync through a bare repo: merge on first sync, field-level edit
   seedSession(b, 'sess-b', 'server');
 
   // First sync merges the two existing stores.
-  a.cli('sync', 'init', remote);
-  b.cli('sync', 'init', remote, '--worker');
+  a.cli('sync', 'init', remote, '--two-way');
+  b.cli('sync', 'init', remote, '--two-way', '--worker');
   a.cli('sync');
   for (const m of [a, b]) {
     assert.ok(existsSync(join(m.home, 'raw', 'sess-a.json')));
@@ -140,4 +140,75 @@ test('a synced machine that is not the worker skips automatic LLM upkeep', async
     __clearTestProvider();
   }
   assert.equal(calls, 0);
+});
+
+test('one-way: a machine only sends; the collecting machine gathers everything and keeps what a sender deletes', { skip: !hasGit }, () => {
+  const root = mkdtempSync(join(tmpdir(), 'mycelium-push-'));
+  const remote = join(root, 'remote.git');
+  const laptop = machine(join(root, 'laptop'));
+  const server = machine(join(root, 'server'));
+  const guest = machine(join(root, 'guest'));
+  laptop.cli('sync', 'host', remote);
+  seedSession(laptop, 'lap-1', 'laptop');
+  seedSession(laptop, 'lap-2', 'laptop');
+  seedSession(server, 'srv-1', 'server');
+  seedSession(guest, 'gst-1', 'guest');
+
+  // One-way is the default for init.
+  laptop.cli('sync', 'init', remote);
+  assert.match(laptop.cli('sync', 'mode'), /^push/);
+  server.cli('sync', 'init', remote, '--collect', '--worker');
+  assert.match(laptop.cli('sync'), /sent/);
+  server.cli('sync');
+
+  // The server gathers the laptop's sessions; the laptop never receives the server's.
+  assert.ok(existsSync(join(server.home, 'raw', 'lap-1.json')));
+  assert.equal(server.raw('lap-1').host, 'laptop');
+  laptop.cli('sync');
+  assert.equal(existsSync(join(laptop.home, 'raw', 'srv-1.json')), false);
+  assert.doesNotMatch(laptop.cli('list'), /srv-1/);
+
+  // Later changes on the laptop reach the server.
+  laptop.cli('tag', 'lap-1', '+urgent');
+  laptop.cli('sync');
+  server.cli('sync');
+  assert.ok(server.raw('lap-1').extracted.tags.includes('urgent'));
+
+  // Deleting on the sender does not delete on the server.
+  laptop.run(`const { deleteSession } = await import('${organizeUrl}'); deleteSession('lap-2');`);
+  laptop.cli('sync');
+  server.cli('sync');
+  assert.equal(existsSync(join(laptop.home, 'raw', 'lap-2.json')), false);
+  assert.ok(existsSync(join(server.home, 'raw', 'lap-2.json')), 'the central copy is kept');
+  server.cli('sync'); // and stays settled on the next pass
+  assert.ok(existsSync(join(server.home, 'raw', 'lap-2.json')));
+
+  // Opting in makes later deletions propagate.
+  assert.match(server.cli('sync', 'deletes', 'propagate'), /propagate/);
+  laptop.run(`const { deleteSession } = await import('${organizeUrl}'); deleteSession('lap-1');`);
+  laptop.cli('sync');
+  server.cli('sync');
+  assert.equal(existsSync(join(server.home, 'raw', 'lap-1.json')), false);
+
+  // A two-way machine gets everything the collecting machine holds, through main.
+  guest.cli('sync', 'init', remote, '--two-way');
+  server.cli('sync');
+  guest.cli('sync');
+  assert.ok(existsSync(join(guest.home, 'raw', 'srv-1.json')));
+  assert.ok(existsSync(join(guest.home, 'raw', 'lap-2.json')));
+  assert.match(server.cli('list'), /@laptop/);
+});
+
+test('a pushing machine runs LLM upkeep itself; modes and flags are validated', { skip: !hasGit }, () => {
+  const root = mkdtempSync(join(tmpdir(), 'mycelium-mode-'));
+  const remote = join(root, 'remote.git');
+  const m = machine(join(root, 'm'));
+  m.cli('sync', 'host', remote);
+  seedSession(m, 'mode-1', 'laptop');
+  m.cli('sync', 'init', remote);
+  assert.match(m.cli('sync', 'worker'), /on/, 'nobody else summarizes a pushing machine\'s sessions');
+  assert.throws(() => m.cli('sync', 'mode', 'sideways'), /mode must be one of/);
+  assert.throws(() => m.cli('sync', 'init', remote, '--collect', '--two-way'), /pick one/);
+  assert.match(m.cli('sync', 'mode', 'two-way'), /^two-way/);
+  assert.match(m.cli('sync', 'worker'), /off/);
 });

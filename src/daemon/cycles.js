@@ -4,7 +4,7 @@ import { summarizeCandidates, suggestPlacements, applyPlacements, queueSuggestio
 import { tagAll } from '../learn.js';
 import { generateDigest, proposeKnowledgeRefreshes } from '../insight.js';
 import { loadConfig } from '../config.js';
-import { syncOnce, syncSettings, isLlmWorker } from '../sync.js';
+import { syncOnce, syncSettings, syncMode, isLlmWorker } from '../sync.js';
 
 // The cadence/policy layer: what runs, how often, and in what order — kept
 // separate from process.js's OS-level concerns (spawning/detaching/pidfiles).
@@ -221,7 +221,7 @@ export async function runDaemon({ log = console, onFirstScanDone, onSynced } = {
   );
 
   const sync = syncSettings();
-  if (sync) log.log(`  sync: ${sync.remote} every ${SYNC_INTERVAL_MS}ms (this machine runs LLM upkeep: ${isLlmWorker() ? 'yes' : 'no'})`);
+  if (sync) log.log(`  sync: ${syncMode()} → ${sync.remote} every ${SYNC_INTERVAL_MS}ms (this machine runs LLM upkeep: ${isLlmWorker() ? 'yes' : 'no'})`);
 
   // Pull first, so this machine's first scan and LLM passes see what the
   // others already did. Only awaited when sync is on: without it the first

@@ -55,15 +55,47 @@ export function syncSettings() {
   return s?.remote ? s : null;
 }
 
-/** Only one machine runs the automatic LLM upkeep on a synced store — see cycles.js. */
+/**
+ * How this machine syncs:
+ *  - 'push' (the default for new setups): sends its own store to the remote
+ *    and never takes anything back, so it holds only what it captured itself.
+ *  - 'collect': the central machine — merges every machine's push (plus
+ *    two-way machines' changes) into one store, which only it holds in full.
+ *  - 'two-way': exchanges changes with the remote both ways, so every
+ *    two-way machine ends up with everything.
+ * Setups made before modes existed were two-way.
+ */
+export const SYNC_MODES = ['push', 'two-way', 'collect'];
+
+export function syncMode() {
+  return syncSettings()?.mode || 'two-way';
+}
+
+/**
+ * Whether this machine runs the automatic LLM upkeep (summaries, smart
+ * organize, digests, knowledge review). A pushing machine always does: it
+ * receives nothing from anywhere else, so nobody else will summarize its
+ * sessions. Two-way and collect machines share one store, so exactly one of
+ * them (`--worker`) does it, or every machine would pay for the same calls.
+ */
 export function isLlmWorker() {
   const s = syncSettings();
-  return !s || !!s.worker;
+  return !s || s.mode === 'push' || !!s.worker;
+}
+
+/** Settings are stored per machine in config.json — see git.js's GITIGNORE. */
+export function updateSyncSettings(patch) {
+  const cfg = loadConfig();
+  saveConfig({ ...cfg, sync: { ...cfg.sync, ...patch } });
 }
 
 export function setWorker(on) {
-  const cfg = loadConfig();
-  saveConfig({ ...cfg, sync: { ...cfg.sync, worker: !!on } });
+  updateSyncSettings({ worker: !!on });
+}
+
+/** One branch per pushing machine on the remote, so pushes never conflict. */
+export function machineBranch(name = machineName()) {
+  return `machines/${name.replace(/[^\w.-]/g, '_')}`;
 }
 
 /**
@@ -102,7 +134,7 @@ export async function createHostRepo(path) {
  * The first sync itself (cycle.js) is what merges this store with whatever
  * the remote already has.
  */
-export async function initRepo(remote, { worker = false } = {}) {
+export async function initRepo(remote, { worker = false, mode = 'push', propagateDeletes = false } = {}) {
   ensureDirs();
   if (!existsSync(join(HOME, '.git'))) {
     const r = await git(['init', '-b', BRANCH]);
@@ -125,6 +157,6 @@ export async function initRepo(remote, { worker = false } = {}) {
   excludedIds(); // moves an old config.json delete list into the tracked file
 
   const cfg = loadConfig();
-  saveConfig({ ...cfg, sync: { remote, worker } });
+  saveConfig({ ...cfg, sync: { remote, worker, mode, propagateDeletes } });
   return { ok: true };
 }

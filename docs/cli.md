@@ -40,10 +40,14 @@ mycelium daemon --stop          # stop it
 
 # Sync one store across machines (see docs/sync.md)
 mycelium sync host ~/mycelium.git                  # on the central machine: create the shared repo
-mycelium sync init <git-url> [--worker]            # sync this machine's store with it (--worker: this machine runs LLM upkeep)
+mycelium sync init ~/mycelium.git --collect --worker  # on the central machine: gather every machine's sessions here
+mycelium sync init <git-url>                       # on another machine: send its sessions, take nothing back (default)
+mycelium sync init <git-url> --two-way             # ...or exchange everything both ways
 mycelium sync                                      # sync now (the TUI/daemon also sync every 2 min)
-mycelium sync status                               # remote, machine name, unsynced changes
-mycelium sync worker [on|off]                      # automatic LLM upkeep on this machine
+mycelium sync status                               # remote, mode, machine name, unsynced changes
+mycelium sync mode [push|two-way|collect]          # show/change how this machine syncs
+mycelium sync deletes [keep|propagate]             # central machine: keep (default) or follow deletions made on a sending machine
+mycelium sync worker [on|off]                      # automatic LLM upkeep on this machine (always on for a one-way machine)
 mycelium sync map /Users/you/code /home/you/code   # map another machine's paths to this one's, for handoffs
 
 # interactive tutorial with fake sessions, the full lifecycle (organize, learn,

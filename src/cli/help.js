@@ -30,7 +30,9 @@ Run       (no args) or tui              Interactive TUI (cockpit) — runs scan/
           demo                          Interactive tutorial with fake sessions (separate store, never touches real data) — 3-minute demo
           lang [en|ko]                  Set/show the display language (default en)
 Sync      sync host <path>              Create the central repo every machine syncs through (run on the home server/NAS)
-          sync init <git-url> [--worker] Sync this machine's store with that repo (merges the two stores on first run). --worker = this machine runs automatic LLM upkeep
+          sync init <git-url> [--collect|--two-way] [--worker]  Send this machine's store to that repo (default: one-way, nothing comes back). --collect = the central machine that gathers everyone's sessions; --two-way = also receive what others have. --worker = runs the automatic LLM upkeep (one-way machines always do)
+          sync mode [push|two-way|collect]  Show/change how this machine syncs
+          sync deletes [keep|propagate]  On the collecting machine: keep (default) or delete sessions a pushing machine deleted
           sync [now] / sync status      Sync now (the TUI/daemon also sync every few minutes) / show remote, machine and pending changes
           sync worker [on|off]          Turn automatic LLM upkeep on/off for this machine
           sync map [<from> <to>]        Map another machine's path prefix to this one's (used when continuing its sessions here)
@@ -68,7 +70,9 @@ Run       (인자 없음) 또는 tui          인터랙티브 TUI (콕핏) — �
           demo                          가짜 세션으로 인터랙티브 튜토리얼 실행(별도 스토어, 실제 데이터 안 건드림) — 3분 데모용
           lang [en|ko]                  표시 언어 설정/확인 (기본 en)
 Sync      sync host <path>              모든 컴퓨터가 함께 쓰는 중앙 저장소 생성 (홈 서버/NAS에서 실행)
-          sync init <git-url> [--worker] 이 컴퓨터의 저장소를 중앙 저장소와 동기화 (처음 실행 시 두 저장소를 합침). --worker = 이 컴퓨터가 자동 LLM 작업 담당
+          sync init <git-url> [--collect|--two-way] [--worker]  이 컴퓨터의 저장소를 그 저장소로 보냄 (기본: 일방향, 받아오는 것 없음). --collect = 모든 컴퓨터의 세션을 모으는 중앙 컴퓨터, --two-way = 다른 컴퓨터의 것도 받음, --worker = 자동 LLM 작업 담당 (일방향 컴퓨터는 항상 직접 함)
+          sync mode [push|two-way|collect]  이 컴퓨터의 동기화 방식 확인/변경
+          sync deletes [keep|propagate]  수집 컴퓨터에서: 보내는 컴퓨터가 지운 세션을 유지(기본)할지 같이 지울지
           sync [now] / sync status      지금 동기화 (TUI·데몬도 몇 분마다 자동 동기화) / 원격·컴퓨터·미동기화 변경 확인
           sync worker [on|off]          이 컴퓨터의 자동 LLM 작업 켜기/끄기
           sync map [<from> <to>]        다른 컴퓨터의 경로 접두사를 이 컴퓨터 경로로 매핑 (그 컴퓨터의 세션을 여기서 이어갈 때 사용)

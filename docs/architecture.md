@@ -21,7 +21,7 @@ To move sessions between machines, copy `raw/` and `tree/`, then run `mycelium r
 
 ## Design Principles
 
-- **Local-only**: sessions are stored only on your machines, never on a Mycelium-owned server. [Sync](./sync.md) is opt-in and goes through a git repo you host. The interface is a local terminal TUI, but organize/autotag/knowledge calls do send selected session content to whichever CLI/provider you've configured (`claude`/`codex`), the same as any direct use of that CLI.
+- **Local-only**: sessions are stored only on your machines, never on a Mycelium-owned server. [Sync](./sync.md) is opt-in and goes through a git repo you host; by default a machine only sends its sessions there. The interface is a local terminal TUI, but organize/autotag/knowledge calls do send selected session content to whichever CLI/provider you've configured (`claude`/`codex`), the same as any direct use of that CLI.
 - **Model-agnostic**: the storage format is a neutral schema, not any one
   vendor's session format. Adding a new agent means one adapter file (see
   [`CONTRIBUTING.md`](../CONTRIBUTING.md)).

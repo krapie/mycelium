@@ -528,13 +528,30 @@ As a user, I can **write down something to work on later, before any agent has r
 
 As a user, I can **use one store from several machines** (a laptop and a home server), so sessions, backlog items, folders and knowledge captured on either show up on both. See [`docs/sync.md`](./sync.md).
 
+- **Three modes, one-way by default.** `syncMode()`: `push` (the default
+  for `sync init`) sends this machine's store to its own branch
+  `machines/<name>` on the remote and never fetches, so it holds only what
+  it captured and can't conflict; `collect` (`--collect`, the central
+  machine) does the two-way pass and also merges every `machines/*` branch
+  (`collectPushed()`); `two-way` (`--two-way`, and what setups from before
+  modes existed are treated as) merges `main` both ways. `mycelium sync
+  mode [m]` shows/changes it. A pushing machine always runs its own LLM
+  upkeep (`isLlmWorker()`) since nothing else will summarize it. [tested]
+  (`test/sync.test.js`)
+- **Sessions deleted on a pushing machine are kept on the collecting one.**
+  `collectPushed()` restores any `raw/` file a pusher's merge would delete
+  and keeps a file the pusher deleted but the collector edited; only
+  `raw/` — folder renames/removals still follow the pusher. `mycelium sync
+  deletes propagate` (`config.sync.propagateDeletes`) turns this off; two-way
+  machines always propagate deletes. [tested] (`test/sync.test.js`)
 - **Set up.** `mycelium sync host <path>` (`createHostRepo()`: a bare git
-  repo) and `mycelium sync init <git-url> [--worker]` (`initRepo()`: turns
+  repo) and `mycelium sync init <git-url> [--collect|--two-way] [--worker]` (`initRepo()`: turns
   `HOME` into a working copy, writes `.gitignore` for machine-local files —
   `db/`, `config.json`, daemon files — and `.gitattributes` routing each
   file kind to a merge driver, stamps `host` on pre-existing records, then
-  runs the first sync, which merges the two existing stores with
-  `--allow-unrelated-histories`). [tested] (`test/sync.test.js`)
+  runs the first sync, which for a two-way/collect machine merges the two
+  existing stores with `--allow-unrelated-histories`). [tested]
+  (`test/sync.test.js`)
 - **One sync pass.** `syncOnce()`: commit local changes as this machine →
   fetch → merge → push (one retry if another machine pushed in between) →
   reindex exactly the `raw/` files the merge changed
@@ -557,11 +574,12 @@ As a user, I can **use one store from several machines** (a laptop and a home se
   keeps this machine's `KNOWLEDGE.md` and parks the other one, written as
   `KNOWLEDGE.pending.md` after the merge so it shows up in `k`. Digests and
   pending files take the other side's version. [tested] (`test/sync.test.js`)
-- **One machine runs LLM upkeep.** `isLlmWorker()`: on a synced store,
-  `smartOrganizeCycle`/`digestCycle`/`knowledgeReviewCycle` and scan-time
-  tagging run only where `--worker` (or `mycelium sync worker on`) is set;
-  the worker also tags sessions that arrive through sync. Manual keys work
-  everywhere. [tested] (`test/sync.test.js`)
+- **One machine per shared store runs LLM upkeep.** `isLlmWorker()`: on a
+  two-way/collect machine, `smartOrganizeCycle`/`digestCycle`/
+  `knowledgeReviewCycle` and scan-time tagging run only where `--worker`
+  (or `mycelium sync worker on`) is set; the worker also tags sessions that
+  arrive through sync. Manual keys work everywhere. [tested]
+  (`test/sync.test.js`)
 - **Background sync.** `syncCycle()` in `daemon/cycles.js`: at start
   (before the first scan) and every `MYCELIUM_SYNC_MS` (2 min); the TUI
   reloads its view when sessions arrive (`startTuiRoutine()`'s
