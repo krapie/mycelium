@@ -666,8 +666,11 @@ As a user, I can **use one store from several machines** (a laptop and a home se
 - **One overridable data home.** `HOME`/`RAW_DIR`/etc., `ensureDirs()`. [tested]
 - **A stable name for this machine.** `machineName()`. Short hostname,
   persisted to `config.json` on first use so it doesn't drift when the
-  network renames the host. `saveRaw()` stamps it as `host` on every record
-  that doesn't have one, plus an `updatedAt`. [tested] (`test/config.test.js`,
+  network renames the host. `scan()` stamps it as `host` on what it captures
+  (and on a local record that lost it), backlog/merge/split creation does
+  too; `saveRaw()` only stamps `updatedAt`, since a later editor can't know
+  where a record came from. Sync's merge never changes a record's host.
+  [tested] (`test/config.test.js`,
   `test/scanner.test.js`)
 - **Deleted-session list that syncs.** `excludedIds()`/`addExcludedId()`.
   One id per line in `excluded.txt` (merged by git's `union` driver), not

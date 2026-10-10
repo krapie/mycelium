@@ -100,10 +100,10 @@ export function loadRaw(id) {
 
 export function saveRaw(neutral) {
   ensureDirs();
-  // A record without a host was made on this machine: sync's init backfills
-  // every pre-existing record before the first push, so anything still null
-  // afterwards was created here.
-  if (!neutral.host) neutral.host = machineName();
+  // `host` is stamped by whoever CAPTURES or CREATES a record (scan(),
+  // backlog/merge/split creation) and never here: a later editor can't know
+  // where a record came from, and stamping the editor's name on one that
+  // arrived without a host (from a machine on older code) mislabels it.
   neutral.updatedAt = new Date().toISOString();
   writeFileSync(rawPath(neutral.id), JSON.stringify(neutral, null, 2));
 }
@@ -184,6 +184,10 @@ export function scan({ onImport } = {}) {
         continue;
       }
       const existing = loadRaw(ref.id);
+      if (existing && !existing.host) {
+        existing.host = machineName();
+        saveRaw(existing);
+      }
       // One-time migration: the claude-code adapter's `name` (and every
       // session's `source`) used to be 'claude-code', renamed to 'claude' to
       // match what AGENTS/binFor/sourceColor always keyed on. Sessions
@@ -269,6 +273,9 @@ export function scan({ onImport } = {}) {
         neutral.humanRemovedTags = existing.humanRemovedTags ?? neutral.humanRemovedTags;
         neutral.summarizedTurnCount = existing.summarizedTurnCount ?? neutral.summarizedTurnCount;
       }
+      // This session came from one of THIS machine's agent stores, so it is
+      // this machine's — including a record that lost its host elsewhere.
+      neutral.host = existing?.host ?? machineName();
       // First-time capture of an already-old session: file it straight into
       // _archive instead of New, keeping a large historical backlog out of
       // triage while still capturing it losslessly. Gated on `!existing`

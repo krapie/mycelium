@@ -78,3 +78,12 @@ test('no common ancestor (both stores added the record) still merges', () => {
   assert.equal(out.folder, 'f');
   assert.equal(out.turns.length, 2);
 });
+
+test('where a record came from never changes: the ancestor\'s host wins over a later writer\'s', () => {
+  const base = rec({ host: 'laptop' });
+  const out = mergeSession(base, rec({ host: 'server', folder: 'a', organizedBy: 'human' }), rec({ host: 'other', folder: 'b' }));
+  assert.equal(out.host, 'laptop');
+  // A record that arrived without one picks up the side that has it.
+  const fill = mergeSession(rec({ host: null }), rec({ host: null, folder: 'f' }), rec({ host: 'laptop' }));
+  assert.equal(fill.host, 'laptop');
+});

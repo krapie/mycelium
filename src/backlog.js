@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { loadRaw, saveRaw, allRaw } from './scanner.js';
 import { emptyNeutral, isBacklog, backlogSeedMarker } from './schema.js';
 import { isInSubtree } from './organize.js';
-import { contentLocale } from './config.js';
+import { contentLocale, machineName } from './config.js';
 
 /**
  * Backlog items: a session you write yourself, before any agent has run.
@@ -40,6 +40,7 @@ export function createBacklog({ title, description = '', folder = null } = {}) {
   // id every list/detail view shows.
   const n = emptyNeutral(randomUUID(), null);
   n.kind = 'backlog';
+  n.host = machineName();
   n.startedAt = now;
   n.endedAt = now;
   n.folder = folder ?? null;

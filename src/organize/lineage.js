@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { loadRaw, saveRaw, allRaw, deleteRaw } from '../scanner.js';
-import { addExcludedId } from '../config.js';
+import { addExcludedId, machineName } from '../config.js';
 import { emptyNeutral, isBacklog } from '../schema.js';
 import { mkdir } from './folders.js';
 
@@ -199,6 +199,7 @@ export function mergeSessions(ids, { title } = {}) {
   originals.sort((a, b) => (a.startedAt || '').localeCompare(b.startedAt || ''));
 
   const merged = emptyNeutral(randomUUID(), 'merged');
+  merged.host = machineName();
   merged.startedAt = originals[0].startedAt;
   merged.endedAt = originals[originals.length - 1].endedAt;
   merged.mergedFrom = originals.map((n) => n.id);

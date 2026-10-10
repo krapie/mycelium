@@ -78,6 +78,9 @@ export function mergeSession(base, ours, theirs) {
     else if (PLACEMENT_FIELDS.includes(k)) out[k] = placement[k];
     else if (UNION_FIELDS.includes(k)) out[k] = union(o, t);
     else if (k === 'titleLocked') out[k] = !!(o || t);
+    // Where a record came from doesn't change: keep the ancestor's, else
+    // whichever side has one.
+    else if (k === 'host') out[k] = b.host ?? o ?? t;
     else if (k === 'updatedAt') out[k] = time(theirs) > time(ours) ? t : o;
     else out[k] = newer(ours, theirs)[k];
   }

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { complete, parseJsonReply } from './llm.js';
 import { loadRaw, saveRaw, deleteRaw } from './scanner.js';
 import { emptyNeutral, isBacklog } from './schema.js';
-import { contentLocale } from './config.js';
+import { contentLocale, machineName } from './config.js';
 
 // Cap per-turn text sent to the LLM (not a head/tail slice like learn.js's
 // sessionExcerpt — split needs every turn's INDEX to stay visible so the
@@ -98,6 +98,7 @@ export function applySplit(sessionId, ranges) {
     const slice = original.turns.slice(Math.max(0, r.from - 1), r.to);
     if (!slice.length) continue;
     const piece = emptyNeutral(randomUUID(), original.source);
+    piece.host = machineName();
     piece.cwd = original.cwd;
     piece.projectDir = original.projectDir;
     piece.startedAt = original.startedAt;
