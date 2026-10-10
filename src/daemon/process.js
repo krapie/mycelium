@@ -52,14 +52,14 @@ export function installShutdownHandlers(proc = process, exit = (code) => proc.ex
  * and the TUI mounts/evaluates its own first paint well before that scan
  * could plausibly finish on a real backlog.
  */
-export function startTuiRoutine(onFirstScanDone) {
+export function startTuiRoutine(onFirstScanDone, onSynced) {
   if (process.env.MYCELIUM_NO_AUTOSTART) return;
   ensureDirs();
   const fileLog = {
     log: (...args) => appendFileSync(DAEMON_LOG_PATH, `[${new Date().toISOString()}] ${args.join(' ')}\n`),
     error: (...args) => appendFileSync(DAEMON_LOG_PATH, `[${new Date().toISOString()}] ${args.join(' ')}\n`),
   };
-  runDaemon({ log: fileLog, onFirstScanDone });
+  runDaemon({ log: fileLog, onFirstScanDone, onSynced });
 }
 
 /**

@@ -34,7 +34,8 @@ src/
   backlog.js          user-written intent notes (kind: 'backlog'), opened as a seeded handoff
   split.js            LLM-suggested session splitting
   index-db.js         sqlite (FTS5) index — derived, rebuildable from raw/
-  config.js           config.json read/write (locale, excluded ids, etc.)
+  config.js           config.json read/write (locale, machine name, etc.) + excluded.txt (deleted ids)
+  sync.js             barrel — see src/sync/{git,merge,cycle}.js (store sync across machines via git, docs/sync.md)
   llm.js              headless LLM calls via the user's own claude/codex CLI subscription
   agents.js           derives binFor/resumeArgsFor from the adapter registry
   adapters/           one file per agent CLI (claude-code.js, codex.js, kiro.js) + index.js registry

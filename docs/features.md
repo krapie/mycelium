@@ -53,7 +53,10 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
 
 ## Organize: Folder tree (`src/organize.js`)
 
-- **Create a folder.** `mkdir(folderPath)`. [tested]
+- **Create a folder.** `mkdir(folderPath)`. An empty folder gets a `.keep`
+  marker so git sync (which doesn't track empty dirs) carries it to other
+  machines; `keepEmptyFolders()` backfills older folders at `sync init`.
+  [tested]
 - **List the full tree** (including empty folders). `listTreeDirs()`.
   `_inbox` excluded (virtual); `_archive` present but hidden from
   default views. [untested]
@@ -82,8 +85,9 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   unlocks it again so auto-tag refills it. Summary always refreshes
   regardless. [tested]
 - **Delete a session (Mycelium-only, original log untouched).**
-  `deleteSession(sessionId)`. Adds to `config.excludedSessionIds`
-  (persistent tombstone); sweeps every other session's
+  `deleteSession(sessionId)`. Adds the id to `excluded.txt` (persistent
+  tombstone, synced so another machine's scan doesn't re-import it; see
+  `excludedIds()` below); sweeps every other session's
   `continuedTo`/`mergedFrom`/`supersededBy`/`splitInto` to remove
   dangling backlinks; returns `touchedIds` for reindexing. [tested]
 
@@ -520,6 +524,57 @@ As a user, I can **write down something to work on later, before any agent has r
   `spawnDetachedDaemon()`/`stopDetachedDaemon()`. Idempotent via pidfile
   and liveness check. [untested]
 
+## Sync (`src/sync.js`, `src/sync/{git,merge,cycle}.js`, `src/cli/sync.js`)
+
+As a user, I can **use one store from several machines** (a laptop and a home server), so sessions, backlog items, folders and knowledge captured on either show up on both. See [`docs/sync.md`](./sync.md).
+
+- **Set up.** `mycelium sync host <path>` (`createHostRepo()`: a bare git
+  repo) and `mycelium sync init <git-url> [--worker]` (`initRepo()`: turns
+  `HOME` into a working copy, writes `.gitignore` for machine-local files —
+  `db/`, `config.json`, daemon files — and `.gitattributes` routing each
+  file kind to a merge driver, stamps `host` on pre-existing records, then
+  runs the first sync, which merges the two existing stores with
+  `--allow-unrelated-histories`). [tested] (`test/sync.test.js`)
+- **One sync pass.** `syncOnce()`: commit local changes as this machine →
+  fetch → merge → push (one retry if another machine pushed in between) →
+  reindex exactly the `raw/` files the merge changed
+  (`reindexOne`/`removeFromIndex`). Guarded by `sync.lock` (stale after
+  10 min) since the TUI and a detached daemon can both run. Delete-vs-edit
+  conflicts resolve to the deletion; anything else left unresolved aborts
+  the merge and keeps this machine's copy for the next pass. ssh runs in
+  batch mode so background sync never prompts. [tested]
+  (`test/sync.test.js`)
+- **Field-level merge of session records.** `mergeSession(base, ours,
+  theirs)`, invoked by git as `mycelium sync merge-driver session`: a
+  field only one side changed comes from that side; when both changed,
+  capture fields come from the longer transcript, `extracted` from the
+  summary covering more turns, placement from a human over automation
+  (else newer `updatedAt`), lineage/hand-edited tag arrays are unioned,
+  and a locked human title always survives. Drivers are re-registered
+  before every pass because they embed absolute node/cli paths. [tested]
+  (`test/sync-merge.test.js`)
+- **Knowledge conflicts become review proposals.** The `knowledge` driver
+  keeps this machine's `KNOWLEDGE.md` and parks the other one, written as
+  `KNOWLEDGE.pending.md` after the merge so it shows up in `k`. Digests and
+  pending files take the other side's version. [tested] (`test/sync.test.js`)
+- **One machine runs LLM upkeep.** `isLlmWorker()`: on a synced store,
+  `smartOrganizeCycle`/`digestCycle`/`knowledgeReviewCycle` and scan-time
+  tagging run only where `--worker` (or `mycelium sync worker on`) is set;
+  the worker also tags sessions that arrive through sync. Manual keys work
+  everywhere. [tested] (`test/sync.test.js`)
+- **Background sync.** `syncCycle()` in `daemon/cycles.js`: at start
+  (before the first scan) and every `MYCELIUM_SYNC_MS` (2 min); the TUI
+  reloads its view when sessions arrive (`startTuiRoutine()`'s
+  `onSynced`). Off until `sync init`, and under `MYCELIUM_DEMO_MODE`.
+  [untested]
+- **Continue another machine's session here.** `localDirFor(session)` and
+  `isFromOtherMachine(session)` (`src/agents.js`): `r` on a session whose
+  `host` is another machine says where it was started and offers handoff;
+  handoff's default dir goes through `config.pathMap` (`mycelium sync
+  map <from> <to>`) and is dropped if it still doesn't exist here, instead
+  of offering to create the other machine's path. [partial]
+  (`localDirFor` tested in `test/sync.test.js`; the TUI prompt is not)
+
 ## Agents / Adapters (`src/agents.js`, `src/adapters/*`)
 
 - **See which agent CLIs are installed.** `which(cmd)`. PATH scan. [untested]
@@ -580,6 +635,15 @@ As a user, I can **write down something to work on later, before any agent has r
   Merges `{...DEFAULTS, ...parsed}` (new defaults auto-backfill old
   files); corrupt JSON falls back to pure `DEFAULTS`, never throws. [tested]
 - **One overridable data home.** `HOME`/`RAW_DIR`/etc., `ensureDirs()`. [tested]
+- **A stable name for this machine.** `machineName()`. Short hostname,
+  persisted to `config.json` on first use so it doesn't drift when the
+  network renames the host. `saveRaw()` stamps it as `host` on every record
+  that doesn't have one, plus an `updatedAt`. [tested] (`test/config.test.js`,
+  `test/scanner.test.js`)
+- **Deleted-session list that syncs.** `excludedIds()`/`addExcludedId()`.
+  One id per line in `excluded.txt` (merged by git's `union` driver), not
+  `config.json`, which is machine-local. An older `config.excludedSessionIds`
+  list moves over on first read. [tested] (`test/config.test.js`)
 
 ## Index / Search (`src/index-db.js`)
 

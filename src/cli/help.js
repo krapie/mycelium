@@ -29,6 +29,11 @@ Run       (no args) or tui              Interactive TUI (cockpit) — runs scan/
           daemon --detach / --stop      (optional) Keep it running while the TUI is closed — detach / stop (same as scripts/run.sh·stop.sh)
           demo                          Interactive tutorial with fake sessions (separate store, never touches real data) — 3-minute demo
           lang [en|ko]                  Set/show the display language (default en)
+Sync      sync host <path>              Create the central repo every machine syncs through (run on the home server/NAS)
+          sync init <git-url> [--worker] Sync this machine's store with that repo (merges the two stores on first run). --worker = this machine runs automatic LLM upkeep
+          sync [now] / sync status      Sync now (the TUI/daemon also sync every few minutes) / show remote, machine and pending changes
+          sync worker [on|off]          Turn automatic LLM upkeep on/off for this machine
+          sync map [<from> <to>]        Map another machine's path prefix to this one's (used when continuing its sessions here)
 Clean     cleanup [tidy]                Remove meta-sessions + empty folders, rebuild the index
           cleanup folders|archive|index Partial cleanup
           cleanup reset --yes           Wipe all data (~/.mycelium)
@@ -62,6 +67,11 @@ Run       (인자 없음) 또는 tui          인터랙티브 TUI (콕핏) — �
           daemon --detach / --stop      (선택) TUI가 꺼져 있을 때도 계속 돌리고 싶으면 — 분리 실행 / 정지 (scripts/run.sh·stop.sh와 동일)
           demo                          가짜 세션으로 인터랙티브 튜토리얼 실행(별도 스토어, 실제 데이터 안 건드림) — 3분 데모용
           lang [en|ko]                  표시 언어 설정/확인 (기본 en)
+Sync      sync host <path>              모든 컴퓨터가 함께 쓰는 중앙 저장소 생성 (홈 서버/NAS에서 실행)
+          sync init <git-url> [--worker] 이 컴퓨터의 저장소를 중앙 저장소와 동기화 (처음 실행 시 두 저장소를 합침). --worker = 이 컴퓨터가 자동 LLM 작업 담당
+          sync [now] / sync status      지금 동기화 (TUI·데몬도 몇 분마다 자동 동기화) / 원격·컴퓨터·미동기화 변경 확인
+          sync worker [on|off]          이 컴퓨터의 자동 LLM 작업 켜기/끄기
+          sync map [<from> <to>]        다른 컴퓨터의 경로 접두사를 이 컴퓨터 경로로 매핑 (그 컴퓨터의 세션을 여기서 이어갈 때 사용)
 Clean     cleanup [tidy]                메타세션 제거 + 빈 폴더 정리 + 인덱스 재생성
           cleanup folders|archive|index 부분 정리
           cleanup reset --yes           전체 데이터(~/.mycelium) 초기화

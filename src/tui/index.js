@@ -101,10 +101,13 @@ export async function runTui({ forceTutorial = false } = {}) {
   // others missed the modal's only fair chance to fire. `getApi` is a
   // closure since each site's `api` is still undefined when this runs.
   const startUpkeepAndRecheck = (getApi) =>
-    startTuiRoutine(() => {
-      getApi()?.reloadAll();
-      notifyPostMount(app);
-    });
+    startTuiRoutine(
+      () => {
+        getApi()?.reloadAll();
+        notifyPostMount(app);
+      },
+      () => getApi()?.reloadAll(),
+    );
 
   // `mycelium demo` (cli.js) — MYCELIUM_HOME already points at a throwaway
   // store by the time this process started, so there's no real data to

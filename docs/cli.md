@@ -38,6 +38,14 @@ mycelium daemon                 # run in the foreground
 mycelium daemon --detach        # run detached in the background (idempotent)
 mycelium daemon --stop          # stop it
 
+# Sync one store across machines (see docs/sync.md)
+mycelium sync host ~/mycelium.git                  # on the central machine: create the shared repo
+mycelium sync init <git-url> [--worker]            # sync this machine's store with it (--worker: this machine runs LLM upkeep)
+mycelium sync                                      # sync now (the TUI/daemon also sync every 2 min)
+mycelium sync status                               # remote, machine name, unsynced changes
+mycelium sync worker [on|off]                      # automatic LLM upkeep on this machine
+mycelium sync map /Users/you/code /home/you/code   # map another machine's paths to this one's, for handoffs
+
 # interactive tutorial with fake sessions, the full lifecycle (organize, learn,
 # reuse, merge/split), LLM calls mocked so it's fast and deterministic.
 # Separate ~/.mycelium-demo store, your real data is never touched. Asks for
@@ -99,6 +107,7 @@ Background upkeep's intervals and limits are all environment variable tunable. T
 | Env var | Default | Meaning |
 |---|---|---|
 | `MYCELIUM_SCAN_MS` | 5 min | Scan (capture) interval |
+| `MYCELIUM_SYNC_MS` | 2 min | Sync interval, once `mycelium sync init` has run (see [Sync](./sync.md)) |
 | `MYCELIUM_TAG_BATCH_LIMIT` | 20 | Max sessions auto-summarized/tagged per scan cycle (oldest first, rest next cycle) |
 | `MYCELIUM_SMART_ORGANIZE_MS` | 30 min | Smart-organize auto-compute interval |
 | `MYCELIUM_SMART_ORGANIZE_LIMIT` | 100 | Max sessions classified per smart-organize cycle |

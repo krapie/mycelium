@@ -13,14 +13,15 @@ Everything is stored locally under `~/.mycelium/` by default; set `MYCELIUM_HOME
     KNOWLEDGE.md          per-folder project knowledge (the unit of inheritance)
   digests/YYYY-Wnn.md    narrative digests
   db/index.db            sqlite FTS5 search index (rebuildable)
-  config.json            deletion list, display language (locale), etc.
+  config.json            display language (locale), machine name, sync settings, etc. (never synced)
+  excluded.txt           ids of deleted sessions, so a rescan doesn't bring them back
 ```
 
 To move sessions between machines, copy `raw/` and `tree/`, then run `mycelium reindex` on the destination.
 
 ## Design Principles
 
-- **Local-only**: sessions are stored only on the machine, never on a Mycelium-owned server. The interface is a local terminal TUI, but organize/autotag/knowledge calls do send selected session content to whichever CLI/provider you've configured (`claude`/`codex`), the same as any direct use of that CLI.
+- **Local-only**: sessions are stored only on your machines, never on a Mycelium-owned server. [Sync](./sync.md) is opt-in and goes through a git repo you host. The interface is a local terminal TUI, but organize/autotag/knowledge calls do send selected session content to whichever CLI/provider you've configured (`claude`/`codex`), the same as any direct use of that CLI.
 - **Model-agnostic**: the storage format is a neutral schema, not any one
   vendor's session format. Adding a new agent means one adapter file (see
   [`CONTRIBUTING.md`](../CONTRIBUTING.md)).
@@ -47,7 +48,8 @@ Every lifecycle operation lives in one small set of core modules under `src/`, i
 - `reuse.js` — `KNOWLEDGE.md` → `AGENTS.md` injection.
 - `handoff.js` — cross-agent handoff prompt composition.
 - `index-db.js` — sqlite (FTS5) search index, derived and rebuildable from `raw/`.
-- `config.js` — `config.json` read/write (locale, excluded ids, etc.).
+- `config.js` — `config.json` read/write (locale, machine name, etc.) and `excluded.txt`.
+- `sync.js` — barrel for `sync/{git,merge,cycle}.js`: store sync across machines via git.
 - `llm.js` — headless LLM calls via the user's own `claude`/`codex` CLI subscription.
 - `agents.js`, `adapters/*.js` — the agent-CLI registry (`binFor`/`resumeArgsFor`, per-adapter `parse()`).
 - `daemon.js` (barrel → `daemon/{cycles,process}.js`) — background cadence over the modules above; a scheduler, not a fourth interface.

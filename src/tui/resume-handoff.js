@@ -1,5 +1,5 @@
 import { launchAgent, resumeSession } from './launch.js';
-import { resumeCommandLine, AGENTS } from '../agents.js';
+import { resumeCommandLine, AGENTS, localDirFor, isFromOtherMachine } from '../agents.js';
 import { buildHandoff } from '../handoff.js';
 import { buildBacklogSeed, markBacklogEntered } from '../backlog.js';
 import { foldProductIntoSession } from '../organize.js';
@@ -96,10 +96,11 @@ export function createResumeHandoff(app, { getCurrentRow, afterResume, afterHand
     if (!hb.ok) return app.notify(hb.error, 3);
     const isDerived = r.mergedFrom?.length || r.splitFrom;
     // Default the new session's working dir to the handed-off session's own
-    // dir (row rows don't carry cwd/projectDir — load the raw record). Falls
+    // dir (row rows don't carry cwd/projectDir — load the raw record), mapped
+    // to this machine for a synced session (agents.js's localDirFor()). Falls
     // back to undefined (resolveDir then uses process.cwd()) if unknown.
     const n = data.detail(r.id);
-    const defaultDir = n?.projectDir || n?.cwd || undefined;
+    const defaultDir = n ? localDirFor(n) : undefined;
     // launchAgent() (launch.js) already reindexes exactly what changed, and
     // already linkContinuation()s the new session to r.id.
     launchAgent(app, { folder: r.folder, seed: hb.prompt, parentId: r.id, defaultDir, title: fallback ? t('launch.selectAgentFallback') : t('launch.selectAgentHandoff') }, (mine) => {
@@ -143,7 +144,10 @@ export function createResumeHandoff(app, { getCurrentRow, afterResume, afterHand
     if (n?.mergedFrom?.length || n?.splitFrom) return doHandoff({ fallback: true });
     if (!sourceSessionExists(r.source, r.id)) {
       const label = AGENTS[r.source]?.label || r.source;
-      return menu(app, t('resume.expiredTitle', label), [
+      // Synced from another machine: its transcript lives there, so this
+      // isn't "expired" — say where it is instead.
+      const title = isFromOtherMachine(n) ? t('resume.otherMachineTitle', label, n.host) : t('resume.expiredTitle', label);
+      return menu(app, title, [
         { label: t('resume.expiredHandoff'), value: 'handoff' },
         { label: t('resume.expiredTryAnyway'), value: 'anyway' },
       ], (choice) => {

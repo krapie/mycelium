@@ -99,6 +99,7 @@ Full guide in [`docs/`](./docs):
 - [**TUI**](./docs/tui.md) — the 3-column interface + every keyboard shortcut
 - [**Learn/Reuse loop**](./docs/learn-reuse.md) — how sessions pass knowledge forward
 - [**Handoff**](./docs/handoff.md) — continuing work across agent CLIs
+- [**Sync**](./docs/sync.md) — one store across several machines (laptop + home server)
 - [**CLI reference**](./docs/cli.md) — every subcommand, for scripting
 - [**Architecture**](./docs/architecture.md) — data location, design principles, status
 - [**Feature catalog**](./docs/features.md) — every capability, with test-coverage status

@@ -9,6 +9,7 @@ Start with [How It Works](./how-it-works.md) for the short version: the loop, wh
 - [How It Works](./how-it-works.md). The loop and the data flow, in two diagrams.
 - [Learn/Reuse loop](./learn-reuse.md). What a finished session feeds into the next one, and what runs automatically.
 - [Handoff](./handoff.md). Continuing the same work on a different agent.
+- [Sync](./sync.md). One store shared by several machines.
 - [TUI](./tui.md). The three-panel interface and every key.
 
 ## Reference

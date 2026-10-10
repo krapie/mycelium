@@ -340,6 +340,7 @@ const en = {
   'resume.copied': (line) => `Command copied to clipboard:\n${line}`,
   'resume.copyFailed': (line) => `Copy failed (no clipboard tool found) — command:\n${line}`,
   'resume.expiredTitle': (label) => `${label} session no longer available — continue via Handoff?`,
+  'resume.otherMachineTitle': (label, host) => `${label} session was started on ${host} — continue here via Handoff?`,
   'resume.expiredHandoff': 'Continue via Handoff',
   'resume.expiredTryAnyway': 'Try resuming anyway',
 
@@ -655,6 +656,7 @@ const ko = {
   'resume.copied': (line) => `명령어가 클립보드에 복사됨:\n${line}`,
   'resume.copyFailed': (line) => `복사 실패 (클립보드 도구 없음) — 명령어:\n${line}`,
   'resume.expiredTitle': (label) => `${label} 세션을 더 이상 사용할 수 없음 — 핸드오프로 이어가시겠어요?`,
+  'resume.otherMachineTitle': (label, host) => `${host}에서 시작된 ${label} 세션입니다 — 여기서 핸드오프로 이어가시겠어요?`,
   'resume.expiredHandoff': '핸드오프로 이어가기',
   'resume.expiredTryAnyway': '그래도 이어열기 시도',
 

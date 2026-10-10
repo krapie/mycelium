@@ -83,6 +83,7 @@ Mycelium은 모든 데이터를 사용자 머신(`~/.mycelium/`)에만 저장하
 - [**TUI**](./docs/tui.md) — 3컬럼 인터페이스 + 전체 키보드 단축키
 - [**Learn/Reuse 루프**](./docs/learn-reuse.md) — 세션들이 지식을 다음으로 어떻게 전달하는지
 - [**Handoff**](./docs/handoff.md) — 에이전트 CLI 간에 작업을 이어가는 법
+- [**Sync**](./docs/sync.md) — 여러 컴퓨터(노트북 + 홈 서버)에서 하나의 저장소 쓰기
 - [**CLI 레퍼런스**](./docs/cli.md) — 스크립팅용 서브커맨드 전체
 - [**Architecture**](./docs/architecture.md) — 데이터 위치, 설계 원칙, 상태
 - [**Feature catalog**](./docs/features.md) — 모든 기능, 테스트 커버리지 상태 포함

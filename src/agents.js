@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import { ADAPTERS, getAdapter } from './adapters/index.js';
+import { loadConfig, machineName } from './config.js';
 
 /**
  * Per-agent CLI wiring, shared by the TUI (src/tui/launch.js) and the plain
@@ -32,6 +33,33 @@ export function resumeArgsFor(source, sessionId) {
 export function workDirFor(session) {
   const candidates = [session.projectDir, session.cwd].filter(Boolean);
   return candidates.find((d) => existsSync(d)) || null;
+}
+
+/**
+ * Where a session's work lives on THIS machine. A session synced from
+ * another machine (sync/) carries that machine's paths — `/Users/me/code/x`
+ * on a laptop is `/home/me/code/x` on a home server — so config.json's
+ * `pathMap` ({ "/Users/me/code": "/home/me/code" }, see `mycelium sync map`)
+ * rewrites the prefix. For a session from another machine, a dir that still
+ * doesn't exist here is dropped rather than returned: handing it to the
+ * launcher would offer to create the other machine's path on this one.
+ */
+export function localDirFor(session) {
+  const map = Object.entries(loadConfig().pathMap || {});
+  const dirs = [session.projectDir, session.cwd].filter(Boolean);
+  for (const d of dirs) {
+    if (existsSync(d)) return d;
+    for (const [from, to] of map) {
+      if (d !== from && !d.startsWith(from.replace(/\/$/, '') + '/')) continue;
+      const mapped = to.replace(/\/$/, '') + d.slice(from.replace(/\/$/, '').length);
+      if (existsSync(mapped)) return mapped;
+    }
+  }
+  return isFromOtherMachine(session) ? undefined : dirs[0];
+}
+
+export function isFromOtherMachine(session) {
+  return !!session?.host && session.host !== machineName();
 }
 
 const quoteArg = (s) => (/^[\w./-]+$/.test(s) ? s : `'${String(s).replace(/'/g, `'\\''`)}'`);
