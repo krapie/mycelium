@@ -5,7 +5,7 @@ import { ADAPTERS, getAdapter } from './adapters/index.js';
 import { META_MARKER } from './llm.js';
 import { isCommandNoise } from './adapters/claude-code.js';
 import { isBacklog, backlogSeedId } from './schema.js';
-import { loadConfig } from './config.js';
+import { loadConfig, excludedIds, machineName } from './config.js';
 
 function rawPath(id) {
   // session ids are uuids / safe filenames already, but guard anyway
@@ -100,6 +100,11 @@ export function loadRaw(id) {
 
 export function saveRaw(neutral) {
   ensureDirs();
+  // A record without a host was made on this machine: sync's init backfills
+  // every pre-existing record before the first push, so anything still null
+  // afterwards was created here.
+  if (!neutral.host) neutral.host = machineName();
+  neutral.updatedAt = new Date().toISOString();
   writeFileSync(rawPath(neutral.id), JSON.stringify(neutral, null, 2));
 }
 
@@ -139,7 +144,7 @@ export function scan({ onImport } = {}) {
   ensureDirs();
   purgeMeta();
   const cfg = loadConfig();
-  const excluded = new Set(cfg.excludedSessionIds || []);
+  const excluded = excludedIds();
   const archiveDays = Number(cfg.archiveOlderThanDays) || 0;
   const archiveCutoff = Date.now() - archiveDays * 86400000;
   let scanned = 0;
@@ -188,7 +193,7 @@ export function scan({ onImport } = {}) {
       // a re-parse, and a no-op after the first pass on a given session.
       if (existing?.source === 'claude-code') {
         existing.source = 'claude';
-        writeFileSync(rawPath(existing.id), JSON.stringify(existing, null, 2));
+        saveRaw(existing);
       }
       // 0.3.5 decoded Claude Code's project folder name into projectDir, which
       // turns a real '-' into '/' (`/a/my-project` → `/a/my/project`). #124
@@ -197,7 +202,7 @@ export function scan({ onImport } = {}) {
       // own cwd was already stored alongside it, so repair from that (#138).
       if (existing?.source === 'claude' && existing.cwd && existing.projectDir !== existing.cwd) {
         existing.projectDir = existing.cwd;
-        writeFileSync(rawPath(existing.id), JSON.stringify(existing, null, 2));
+        saveRaw(existing);
       }
       // Records captured before the claude adapter dropped its slash-command
       // bookkeeping (<local-command-caveat> etc.) still carry it as turns —
@@ -259,6 +264,7 @@ export function scan({ onImport } = {}) {
         // tagAll() treat an already-tracked session as never-tracked again
         // (harmless — see tagAll()'s doc comment — but still wrong state).
         neutral.titleLocked = existing.titleLocked ?? neutral.titleLocked;
+        neutral.host = existing.host ?? neutral.host;
         neutral.humanTags = existing.humanTags ?? neutral.humanTags;
         neutral.humanRemovedTags = existing.humanRemovedTags ?? neutral.humanRemovedTags;
         neutral.summarizedTurnCount = existing.summarizedTurnCount ?? neutral.summarizedTurnCount;
@@ -276,7 +282,7 @@ export function scan({ onImport } = {}) {
       }
       neutral._mtimeMs = ref.mtimeMs;
 
-      writeFileSync(rawPath(neutral.id), JSON.stringify(neutral, null, 2));
+      saveRaw(neutral);
       // Only delete the item's own record once the session that replaces it
       // is durably on disk — see consumeBacklogItem()'s doc comment.
       if (consumedId) {

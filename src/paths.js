@@ -15,6 +15,11 @@ export const CONFIG_PATH = join(HOME, 'config.json');
 export const INBOX = join(TREE_DIR, '_inbox');
 export const DAEMON_PID_PATH = join(HOME, 'daemon.pid'); // same file scripts/run.sh writes
 export const DAEMON_LOG_PATH = join(HOME, 'daemon.log');
+// Deleted-session ids, one per line. A plain tracked file rather than a
+// config.json key so a deletion on one machine reaches the others through
+// sync (sync/) — config.json stays machine-local.
+export const EXCLUDED_PATH = join(HOME, 'excluded.txt');
+export const SYNC_LOCK_PATH = join(HOME, 'sync.lock');
 
 export function ensureDirs() {
   for (const d of [HOME, RAW_DIR, TREE_DIR, DIGEST_DIR, DB_DIR, INBOX]) {

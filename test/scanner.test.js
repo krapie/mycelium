@@ -434,3 +434,15 @@ test('sourceSessionExists() skips the real check under MYCELIUM_DEMO_MODE, defau
     else process.env.MYCELIUM_DEMO_MODE = prev;
   }
 });
+
+test('saveRaw() stamps this machine as host and an updatedAt, but keeps a host already set', async () => {
+  const { machineName } = await import('../src/config.js');
+  const mine = emptyNeutral('host-mine', 'claude');
+  saveRaw(mine);
+  assert.equal(loadRaw('host-mine').host, machineName());
+  assert.ok(Date.parse(loadRaw('host-mine').updatedAt));
+
+  const synced = { ...emptyNeutral('host-other', 'claude'), host: 'homeserver' };
+  saveRaw(synced);
+  assert.equal(loadRaw('host-other').host, 'homeserver');
+});

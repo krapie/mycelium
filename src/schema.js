@@ -90,6 +90,8 @@ export function emptyNeutral(id, source) {
     splitFrom: null, // id this session was sliced out of (non-null only on a split product)
     supersededBy: [], // merge product that replaced this session — hidden by default, like _archive
     splitInto: [], // pieces sliced out of this session — informational only, this session STAYS visible
+    host: null, // machineName() of the machine that captured/created it — set by saveRaw(), see config.js
+    updatedAt: null, // last saveRaw() — the tiebreak sync/merge.js uses when two machines changed the same field
   };
 }
 

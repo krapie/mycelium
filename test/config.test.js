@@ -1,12 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { writeFileSync, mkdirSync } from 'node:fs';
+import { writeFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { useTempHome } from './helpers.js';
 
 useTempHome();
-const { loadConfig, saveConfig, organizeLimit, parseLimit, DEFAULT_ORGANIZE_LIMIT } = await import('../src/config.js');
-const { CONFIG_PATH } = await import('../src/paths.js');
+const { loadConfig, saveConfig, organizeLimit, parseLimit, DEFAULT_ORGANIZE_LIMIT, machineName, excludedIds, addExcludedId } = await import(
+  '../src/config.js'
+);
+const { CONFIG_PATH, EXCLUDED_PATH } = await import('../src/paths.js');
 
 test('loadConfig() returns pure defaults when no config.json exists yet', () => {
   assert.deepEqual(loadConfig(), {
@@ -79,4 +81,21 @@ test('organizeLimit(): saved setting, then MYCELIUM_SUMMARIZE_BATCH_LIMIT, then 
     else process.env.MYCELIUM_SUMMARIZE_BATCH_LIMIT = env;
     saveConfig({});
   }
+});
+
+test('machineName() is derived once and then stays fixed', () => {
+  saveConfig({});
+  const first = machineName();
+  assert.ok(first && !first.includes('.'));
+  assert.equal(loadConfig().machineName, first);
+  saveConfig({ ...loadConfig(), machineName: 'laptop' });
+  assert.equal(machineName(), 'laptop');
+});
+
+test('excludedIds() moves an older config.json list into excluded.txt', () => {
+  saveConfig({ excludedSessionIds: ['b', 'a'] });
+  addExcludedId('c');
+  assert.deepEqual([...excludedIds()].sort(), ['a', 'b', 'c']);
+  assert.deepEqual(loadConfig().excludedSessionIds, []);
+  assert.equal(readFileSync(EXCLUDED_PATH, 'utf8'), 'a\nb\nc\n');
 });

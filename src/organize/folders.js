@@ -1,5 +1,5 @@
 import { join, dirname } from 'node:path';
-import { mkdirSync, existsSync, renameSync, rmSync, readdirSync } from 'node:fs';
+import { mkdirSync, existsSync, renameSync, rmSync, readdirSync, writeFileSync } from 'node:fs';
 import { ensureDirs, TREE_DIR } from '../paths.js';
 import { saveRaw, allRaw } from '../scanner.js';
 
@@ -37,7 +37,22 @@ export function mkdir(folderPath) {
   ensureDirs();
   const dir = folderDir(folderPath);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  keepIfEmpty(dir);
   return folderPath;
+}
+
+// git doesn't track empty directories, so a freshly-made folder with nothing
+// in it yet would vanish from every other synced machine. Only directories
+// are ever read as folders (listTreeDirs()), so the marker file is invisible.
+const KEEP_FILE = '.keep';
+function keepIfEmpty(dir) {
+  if (!readdirSync(dir).length) writeFileSync(join(dir, KEEP_FILE), '');
+}
+
+/** Give every currently-empty folder its marker — sync's init runs this once
+ * for folders made before markers existed. */
+export function keepEmptyFolders() {
+  for (const f of listTreeDirs()) keepIfEmpty(folderDir(f));
 }
 
 /**

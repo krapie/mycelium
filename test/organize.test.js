@@ -147,13 +147,19 @@ test('setContent() summary-only calls do not touch organizedBy', () => {
   assert.equal(res.session.organizedBy, 'auto');
 });
 
-test('deleteSession() removes the raw file and adds the id to config.excludedSessionIds', async () => {
+test('deleteSession() removes the raw file and adds the id to the shared exclude list', async () => {
   seed('del-1');
   const res = deleteSession('del-1');
   assert.equal(res.ok, true);
   assert.equal(loadRaw('del-1'), null);
-  const { loadConfig } = await import('../src/config.js');
-  assert.ok(loadConfig().excludedSessionIds.includes('del-1'));
+  const { excludedIds } = await import('../src/config.js');
+  assert.ok(excludedIds().has('del-1'));
+});
+
+test('mkdir() leaves a marker in an empty folder so git sync keeps it', () => {
+  mkdir('keep/empty');
+  assert.ok(existsSync(join(TREE_DIR, 'keep', 'empty', '.keep')));
+  assert.ok(organize.listTreeDirs().includes('keep/empty'));
 });
 
 test('deleteSession() sweeps backlinks off every other session pointing at it', () => {
