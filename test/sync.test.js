@@ -212,3 +212,73 @@ test('a pushing machine runs LLM upkeep itself; modes and flags are validated', 
   assert.match(m.cli('sync', 'mode', 'two-way'), /^two-way/);
   assert.match(m.cli('sync', 'worker'), /off/);
 });
+
+test('renameMachine() relabels only this machine\'s sessions, and refuses bad or taken names', async () => {
+  const { renameMachine } = await import('../src/sync.js');
+  const { saveRaw, loadRaw } = await import('../src/scanner.js');
+  const { emptyNeutral } = await import('../src/schema.js');
+  const { loadConfig, saveConfig, machineName } = await import('../src/config.js');
+  saveConfig({ ...loadConfig(), machineName: 'old-name', sync: undefined });
+  for (const [id, host] of [['rn-mine', 'old-name'], ['rn-theirs', 'homeserver'], ['rn-none', null]]) {
+    saveRaw({ ...emptyNeutral(id, 'claude'), host });
+  }
+
+  const bad = await renameMachine('has space');
+  assert.equal(bad.ok, false);
+  assert.match((await renameMachine('homeserver')).error, /already carry/);
+  assert.equal(machineName(), 'old-name', 'a refused rename changes nothing');
+
+  const r = await renameMachine('macbook');
+  assert.equal(r.ok, true);
+  assert.equal(r.relabeled, 1);
+  assert.equal(machineName(), 'macbook');
+  assert.equal(loadRaw('rn-mine').host, 'macbook');
+  assert.equal(loadRaw('rn-theirs').host, 'homeserver');
+  assert.equal(loadRaw('rn-none').host, null);
+  assert.equal((await renameMachine('macbook')).unchanged, true);
+});
+
+test('renaming a one-way machine moves its remote branch, and the collecting machine picks up the new name', { skip: !hasGit }, () => {
+  const root = mkdtempSync(join(tmpdir(), 'mycelium-rename-'));
+  const remote = join(root, 'remote.git');
+  const laptop = machine(join(root, 'laptop'));
+  const server = machine(join(root, 'server'));
+  const guest = machine(join(root, 'guest'));
+  laptop.cli('sync', 'host', remote);
+  seedSession(laptop, 'rn-1', 'Kevins-Personal-Macbook');
+  seedSession(server, 'rn-2', 'kevinprk');
+  seedSession(guest, 'rn-3', 'guest');
+  server.cli('sync', 'init', remote, '--collect', '--worker');
+  laptop.cli('sync', 'init', remote);
+  server.cli('sync');
+  const branches = () => execFileSync('git', ['ls-remote', '--heads', remote], { encoding: 'utf8' });
+  assert.match(branches(), /machines\/Kevins-Personal-Macbook/);
+  assert.equal(server.raw('rn-1').host, 'Kevins-Personal-Macbook');
+
+  // Rename the laptop: its records, its remote branch, and the server's view of them.
+  assert.match(laptop.cli('sync', 'name', 'macbook'), /renamed Kevins-Personal-Macbook → macbook \(1 session/);
+  assert.equal(laptop.cli('sync', 'name').trim(), 'macbook');
+  assert.match(branches(), /machines\/macbook/);
+  assert.doesNotMatch(branches(), /Kevins-Personal-Macbook/, 'the old branch is deleted once the new one is pushed');
+  server.cli('sync');
+  assert.equal(server.raw('rn-1').host, 'macbook');
+  assert.equal(server.raw('rn-2').host, 'kevinprk', 'the server\'s own sessions are untouched');
+  assert.match(server.cli('list', '--host', 'macbook'), /rn-1/);
+
+  // Rename the collecting machine: a two-way client gets it through main.
+  guest.cli('sync', 'init', remote, '--two-way');
+  server.cli('sync');
+  guest.cli('sync');
+  assert.equal(guest.raw('rn-2').host, 'kevinprk');
+  server.cli('sync', 'name', 'homeserver');
+  guest.cli('sync');
+  assert.equal(guest.raw('rn-2').host, 'homeserver');
+  assert.equal(guest.raw('rn-1').host, 'macbook');
+
+  // A name chosen at init is in place before the first push.
+  const phone = machine(join(root, 'phone'));
+  seedSession(phone, 'rn-4', 'phone-default');
+  phone.cli('sync', 'init', remote, '--name', 'phone');
+  assert.equal(phone.raw('rn-4').host, 'phone');
+  assert.match(branches(), /machines\/phone/);
+});

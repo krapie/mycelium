@@ -45,6 +45,20 @@ export function saveConfig(cfg) {
  * DHCP-assigned name), and a name that drifts would make this machine's own
  * sessions look foreign to it.
  */
+// Short enough for the @name badge on a list row, and safe in a git branch
+// name (sync/git.js's machineBranch()).
+const MACHINE_NAME = /^[\w.-]{1,32}$/;
+
+export function isValidMachineName(name) {
+  return typeof name === 'string' && MACHINE_NAME.test(name);
+}
+
+/** Just the config value — sync/machine.js's renameMachine() is the command
+ * that also relabels existing sessions and the remote. */
+export function setMachineName(name) {
+  saveConfig({ ...loadConfig(), machineName: name });
+}
+
 export function machineName() {
   const cfg = loadConfig();
   if (cfg.machineName) return cfg.machineName;

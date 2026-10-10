@@ -5,3 +5,4 @@
 export * from './sync/git.js';
 export * from './sync/merge.js';
 export * from './sync/cycle.js';
+export * from './sync/machine.js';

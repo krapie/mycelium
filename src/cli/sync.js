@@ -34,20 +34,39 @@ export async function syncCmd(args) {
     if (!r.ok) fail(r.error);
     console.log(`${r.existed ? 'already a sync repo' : 'created sync repo'}: ${path}`);
     console.log(`on this machine (collects everyone's sessions):  mycelium sync init ${path} --collect --worker`);
-    console.log(`on other machines (send theirs here):            mycelium sync init ssh://<user>@<this-host>${path}`);
+    console.log(`on other machines (send theirs here):            mycelium sync init ssh://<user>@<this-host>${path} --name <laptop>`);
     console.log('(add --two-way on another machine to also receive everything the others have)');
     return;
   }
 
   if (sub === 'init') {
-    if (!rest[0]) fail('usage: mycelium sync init <git-url> [--collect | --two-way] [--worker] [--propagate-deletes]');
+    if (!rest[0]) fail('usage: mycelium sync init <git-url> [--collect | --two-way] [--worker] [--propagate-deletes] [--name <machine>]');
     if (flags.collect && flags['two-way']) fail('pick one of --collect and --two-way');
+    if (flags.name === true) fail('--name needs a machine name');
     if (!(await sync.hasGit())) fail('git is not installed — sync needs it');
+    // Before the first push, so the remote never sees the default name.
+    if (flags.name) {
+      const named = await sync.renameMachine(flags.name);
+      if (!named.ok) fail(named.error);
+    }
     const mode = flags.collect ? 'collect' : flags['two-way'] ? 'two-way' : 'push';
     const r = await sync.initRepo(rest[0], { worker: !!flags.worker, mode, propagateDeletes: !!flags['propagate-deletes'] });
     if (!r.ok) fail(r.error);
     console.log(`sync set up → ${rest[0]} (${MODE_TEXT[mode]})`);
     return report(await sync.syncOnce());
+  }
+
+  // The label on every session this machine captures (`@name`, Shift+H,
+  // `list --host`). Defaults to the short hostname.
+  if (sub === 'name') {
+    const { machineName } = await import('../config.js');
+    if (!rest[0]) return console.log(machineName());
+    const r = await sync.renameMachine(rest[0]);
+    if (!r.ok) fail(r.error);
+    if (r.unchanged) return console.log(`this machine is already called ${r.name}`);
+    console.log(`renamed ${r.old} → ${r.name} (${r.relabeled} session(s) relabeled)`);
+    if (r.sync) report(r.sync);
+    return;
   }
 
   if (sub === 'mode') {

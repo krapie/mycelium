@@ -45,6 +45,7 @@ mycelium sync init <git-url>                       # on another machine: send it
 mycelium sync init <git-url> --two-way             # ...or exchange everything both ways
 mycelium sync                                      # sync now (the TUI/daemon also sync every 2 min)
 mycelium sync status                               # remote, mode, machine name, unsynced changes
+mycelium sync name [macbook]                       # show/rename this machine (the @label on its sessions); init also takes --name
 mycelium sync mode [push|two-way|collect]          # show/change how this machine syncs
 mycelium sync deletes [keep|propagate]             # central machine: keep (default) or follow deletions made on a sending machine
 mycelium sync worker [on|off]                      # automatic LLM upkeep on this machine (always on for a one-way machine)

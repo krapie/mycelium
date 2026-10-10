@@ -141,6 +141,19 @@ mv ~/.mycelium ~/.mycelium.synced && cp -a ~/.mycelium.backup-<date> ~/.mycelium
 
 Each session records the machine it was captured on (`host`). The agent's own transcript only exists on that machine, so pressing `r` elsewhere offers a [handoff](./handoff.md) instead of a resume.
 
+## Naming machines
+
+Each machine labels the sessions it captures with a name: the short hostname by default (`Kevins-Personal-Macbook`, `kevinprk`). Pick something you'll recognise in the `@machine` badges:
+
+```sh
+mycelium sync name macbook                   # on the laptop
+mycelium sync name homeserver                # on the server
+mycelium sync name                           # show this machine's name
+mycelium sync init <git-url> --name macbook  # or choose it when setting up
+```
+
+Renaming relabels the machine's existing sessions and, for a one-way machine, moves its branch on the remote (the old one is deleted once the new one is pushed). The central machine picks the new name up on its next sync, and two-way machines through the shared store; run the command on each machine, in either order. Names are 1–32 letters, digits, `.`, `_` or `-`, and a name another machine's sessions already carry is refused.
+
 ## Telling the machines apart
 
 Once the store holds sessions from more than one machine (on the collecting or a two-way machine), every row in the Sessions list and the Calendar's day list carries an `@machine` badge: dim for this machine, highlighted for the others. The detail panel names the machine too. Press `Shift+H` to show one machine's sessions only. On the command line, `mycelium list` prints the same `@machine` and `mycelium list --host <machine>` filters to one. A store that only ever saw one machine shows none of this, which is why a one-way machine never does.

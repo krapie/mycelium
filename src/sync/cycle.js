@@ -4,7 +4,7 @@ import { HOME, SYNC_LOCK_PATH } from '../paths.js';
 import { machineName } from '../config.js';
 import { loadRaw } from '../scanner.js';
 import { reindex, reindexOne, removeFromIndex } from '../index-db.js';
-import { git, syncSettings, syncMode, machineBranch, registerMergeDrivers, BRANCH } from './git.js';
+import { git, syncSettings, syncMode, machineBranch, updateSyncSettings, registerMergeDrivers, BRANCH } from './git.js';
 import { mergeSession } from './merge.js';
 
 // Both the TUI's in-process upkeep and a detached `mycelium daemon` can run on
@@ -188,6 +188,22 @@ async function reindexChanged(before, after) {
 }
 
 /**
+ * Branches this machine pushed under a name it no longer has (renameMachine()
+ * lists them). Only removed after the new branch is safely on the remote, and
+ * kept listed until the delete actually worked, so a pass that couldn't reach
+ * the remote tries again.
+ */
+async function deleteStaleBranches() {
+  const stale = syncSettings()?.staleBranches || [];
+  const left = [];
+  for (const b of stale) {
+    const d = await git(['push', '-q', 'origin', '--delete', `refs/heads/${b}`]);
+    if (!d.ok && !/does not exist|not exist/.test(d.stderr)) left.push(b);
+  }
+  if (left.length !== stale.length) updateSyncSettings({ staleBranches: left });
+}
+
+/**
  * A pushing machine only ever sends: its store goes to its own branch on the
  * remote, which nobody else writes, so there is nothing to merge and nothing
  * to conflict. Force is safe for the same reason (and needed if the local
@@ -196,7 +212,10 @@ async function reindexChanged(before, after) {
 async function pushOnly() {
   await commitAll(`sync: ${machineName()}`);
   const p = await git(['push', '-q', '--force', 'origin', `HEAD:refs/heads/${machineBranch()}`]);
-  return p.missing ? { ok: false, error: p.stderr } : p.ok ? { ok: true, changed: [], sentOnly: true } : { ok: false, error: `push failed: ${p.stderr}` };
+  if (p.missing) return { ok: false, error: p.stderr };
+  if (!p.ok) return { ok: false, error: `push failed: ${p.stderr}` };
+  await deleteStaleBranches();
+  return { ok: true, changed: [], sentOnly: true };
 }
 
 /**
@@ -218,7 +237,8 @@ export async function syncOnce() {
     if (syncMode() === 'push') return await pushOnly();
     await commitAll(`sync: ${machineName()}`);
     const before = await head();
-    const f = await git(['fetch', '-q', 'origin']);
+    // --prune: a pushing machine that was renamed deletes its old branch.
+    const f = await git(['fetch', '-q', '--prune', 'origin']);
     if (f.missing) return { ok: false, error: f.stderr };
     if (!f.ok) return { ok: false, error: `fetch failed: ${f.stderr}` };
     const m = await mergeRemote();

@@ -672,6 +672,18 @@ As a user, I can **use one store from several machines** (a laptop and a home se
   where a record came from. Sync's merge never changes a record's host.
   [tested] (`test/config.test.js`,
   `test/scanner.test.js`)
+- **Rename a machine.** `mycelium sync name <name>` / `sync init --name`
+  (`renameMachine()`, `src/sync/machine.js`): relabels this machine's
+  sessions (`host`), writes the config, reindexes, then syncs. A one-way
+  machine's remote branch moves with the name — the old one is recorded in
+  `config.sync.staleBranches` and deleted after the new push succeeds
+  (retried until it does), and the sync fetch prunes it. The collecting
+  machine and two-way machines take the new name through a normal 3-way
+  merge (the pusher's branch history is unchanged, so the old name is the
+  common ancestor). Refuses an invalid name or one another machine's
+  sessions already carry; idempotent, relabeling before and after the
+  config write so an interrupted run or a racing daemon is mended by
+  rerunning. [tested] (`test/sync.test.js`)
 - **Deleted-session list that syncs.** `excludedIds()`/`addExcludedId()`.
   One id per line in `excluded.txt` (merged by git's `union` driver), not
   `config.json`, which is machine-local. An older `config.excludedSessionIds`

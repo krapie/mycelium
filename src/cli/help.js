@@ -31,6 +31,7 @@ Run       (no args) or tui              Interactive TUI (cockpit) — runs scan/
           lang [en|ko]                  Set/show the display language (default en)
 Sync      sync host <path>              Create the central repo every machine syncs through (run on the home server/NAS)
           sync init <git-url> [--collect|--two-way] [--worker]  Send this machine's store to that repo (default: one-way, nothing comes back). --collect = the central machine that gathers everyone's sessions; --two-way = also receive what others have. --worker = runs the automatic LLM upkeep (one-way machines always do)
+          sync name [<name>]            Show/rename this machine — the @label on its sessions (default: hostname); relabels existing sessions and the remote. sync init takes --name too
           sync mode [push|two-way|collect]  Show/change how this machine syncs
           sync deletes [keep|propagate]  On the collecting machine: keep (default) or delete sessions a pushing machine deleted
           sync [now] / sync status      Sync now (the TUI/daemon also sync every few minutes) / show remote, machine and pending changes
@@ -71,6 +72,7 @@ Run       (인자 없음) 또는 tui          인터랙티브 TUI (콕핏) — �
           lang [en|ko]                  표시 언어 설정/확인 (기본 en)
 Sync      sync host <path>              모든 컴퓨터가 함께 쓰는 중앙 저장소 생성 (홈 서버/NAS에서 실행)
           sync init <git-url> [--collect|--two-way] [--worker]  이 컴퓨터의 저장소를 그 저장소로 보냄 (기본: 일방향, 받아오는 것 없음). --collect = 모든 컴퓨터의 세션을 모으는 중앙 컴퓨터, --two-way = 다른 컴퓨터의 것도 받음, --worker = 자동 LLM 작업 담당 (일방향 컴퓨터는 항상 직접 함)
+          sync name [<이름>]            이 컴퓨터의 이름(세션에 붙는 @표시, 기본: 호스트명) 확인/변경 — 기존 세션과 원격도 같이 바꿈. sync init에도 --name 사용 가능
           sync mode [push|two-way|collect]  이 컴퓨터의 동기화 방식 확인/변경
           sync deletes [keep|propagate]  수집 컴퓨터에서: 보내는 컴퓨터가 지운 세션을 유지(기본)할지 같이 지울지
           sync [now] / sync status      지금 동기화 (TUI·데몬도 몇 분마다 자동 동기화) / 원격·컴퓨터·미동기화 변경 확인
