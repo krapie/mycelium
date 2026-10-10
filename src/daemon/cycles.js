@@ -221,7 +221,7 @@ export async function runDaemon({ log = console, onFirstScanDone, onSynced } = {
   );
 
   const sync = syncSettings();
-  if (sync) log.log(`  sync: ${sync.remote} every ${SYNC_INTERVAL_MS}ms (LLM upkeep ${isLlmWorker() ? 'on' : 'off'} on this machine)`);
+  if (sync) log.log(`  sync: ${sync.remote} every ${SYNC_INTERVAL_MS}ms (this machine runs LLM upkeep: ${isLlmWorker() ? 'yes' : 'no'})`);
 
   // Pull first, so this machine's first scan and LLM passes see what the
   // others already did. Only awaited when sync is on: without it the first
