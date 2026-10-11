@@ -171,7 +171,7 @@ async function activate(ctx) {
   // belong to a folder open here. Checked now — a window opened just for this
   // arrives after the request was written — and again as new requests land.
   const takeLaunches = () => {
-    for (const launch of claim(launchDir(), workspaceDirs())) openLaunch(launch).catch(() => {});
+    for (const launch of claim(launchDir(), workspaceDirs())) openLaunch(launch, log).catch((e) => log.appendLine(`launch failed: ${e.message}`));
   };
   fs.mkdirSync(launchDir(), { recursive: true });
   const launches = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(launchDir()), '*.json'));

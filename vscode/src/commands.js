@@ -44,7 +44,7 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
     const folders = workspaceDirs();
     const mode = vscode.workspace.getConfiguration('mycelium').get('openSessionIn');
     const hasProject = relatedTo(launch.cwd, folders);
-    if (mode === 'thisWindow' || hasProject) return openLaunch(forWindow(launch, { hasProject }));
+    if (mode === 'thisWindow' || hasProject) return openLaunch(forWindow(launch, { hasProject }), log);
 
     const file = enqueue(launchDir(), launch);
     await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(launch.cwd), { forceNewWindow: folders.length > 0 });
@@ -54,7 +54,7 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
       if (!pending(file)) return;
     }
     if (!withdraw(file)) return; // taken at the last moment
-    await openLaunch(forWindow(launch, { hasProject: false }));
+    await openLaunch(forWindow(launch, { hasProject: false }), log);
     vscode.window.showWarningMessage(`Mycelium: the window for ${launch.cwd} didn't pick this up (is the Mycelium extension installed there?), so it started here instead.`);
   };
 

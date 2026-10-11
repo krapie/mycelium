@@ -45,7 +45,7 @@ test('a panel request is kept only in a window that has the session\'s project o
 const calls = { exec: [], warn: [], terminals: [], activated: 0 };
 const state = { installed: true, activateFails: null, execFails: null, settings: {} };
 const fake = {
-  extensions: { getExtension: (id) => (state.installed && id === EXT_ID ? { activate: async () => { calls.activated++; calls.exec.push('activate'); if (state.activateFails) throw state.activateFails; } } : undefined) },
+  extensions: { getExtension: (id) => (state.installed && id === EXT_ID ? { packageJSON: { version: '2.1.296' }, isActive: true, activate: async () => { calls.activated++; calls.exec.push('activate'); if (state.activateFails) throw state.activateFails; } } : undefined) },
   commands: { executeCommand: async (...a) => { calls.exec.push(a); if (state.execFails) throw state.execFails; } },
   workspace: { getConfiguration: (section) => ({ get: (k) => state.settings[`${section}.${k}`] }) },
   window: {
@@ -131,4 +131,22 @@ test('asking for the panel by name, without the extension, says why it is a term
   reset(); state.settings['claudeCode.useTerminal'] = true; // installed, but Claude Code prefers the terminal
   await openLaunch(launch({ panel: { sessionId: UUID } }));
   assert.equal(calls.warn.length, 0, 'a preference is not a problem to report');
+});
+
+test('every launch decision is written to the log, so a panel that did not open can be explained', async () => {
+  reset();
+  const lines = [];
+  const log = { appendLine: (l) => lines.push(l) };
+  await openLaunch(launch({ panel: { sessionId: UUID } }), log);
+  assert.match(lines[0], /launch: claude in \/p; panel requested: yes; Claude Code: 2\.1\.296 \(active\)/);
+  assert.ok(lines.some((l) => l.includes(`${PANEL_COMMAND}(session=${UUID}, prompt=none)`)));
+  assert.ok(lines.some((l) => /command returned/.test(l)));
+
+  reset(); lines.length = 0; state.settings['claudeCode.useTerminal'] = true;
+  await openLaunch(launch({ panel: { sessionId: UUID } }), log);
+  assert.ok(lines.some((l) => /panel not used: mycelium\.claudeCode\.openIn=undefined, claudeCode\.useTerminal=true/.test(l)));
+
+  reset(); lines.length = 0; state.installed = false;
+  await openLaunch(launch({ panel: {} }), log);
+  assert.match(lines[0], /not installed\/enabled here/);
 });

@@ -17,14 +17,16 @@ function panelWanted(agentKey) {
   );
 }
 
-async function openInClaudePanel({ sessionId, prompt }) {
+async function openInClaudePanel({ sessionId, prompt }, log) {
   if (sessionId !== undefined && !isSessionId(sessionId)) throw new Error('not a Claude Code session id');
   const ext = claudeExtension();
   if (!ext) throw new Error('the Claude Code extension is not installed');
   // Its commands only exist once it has started, and a window opened just for
   // this launch may not have started it yet.
   await ext.activate();
+  log.appendLine(`Claude Code panel: ${PANEL_COMMAND}(session=${sessionId ?? '(new conversation)'}, prompt=${prompt ? `${prompt.length} chars` : 'none'}) — Claude Code ${ext.packageJSON.version}`);
   await vscode.commands.executeCommand(PANEL_COMMAND, sessionId, prompt);
+  log.appendLine('Claude Code panel: command returned');
 }
 
 /**
@@ -32,19 +34,25 @@ async function openInClaudePanel({ sessionId, prompt }) {
  * `panel` request and the panel is wanted here, otherwise in a terminal (every
  * launch also carries the command line, so the fallback is always possible).
  */
-async function openLaunch(launch) {
+async function openLaunch(launch, log = { appendLine() {} }) {
+  const ext = claudeExtension();
+  log.appendLine(`launch: ${launch.key} in ${launch.cwd}; panel requested: ${launch.panel ? 'yes' : 'no'}; Claude Code: ${ext ? `${ext.packageJSON.version} (${ext.isActive ? 'active' : 'not yet active'})` : 'not installed/enabled here'}`);
   if (launch.panel) {
     if (panelWanted(launch.key)) {
       try {
-        await openInClaudePanel(launch.panel);
+        await openInClaudePanel(launch.panel, log);
         return;
       } catch (err) {
+        log.appendLine(`Claude Code panel failed: ${err.message}`);
         vscode.window.showWarningMessage(`Mycelium: couldn't open it in the Claude Code panel (${err.message}); starting it in a terminal instead.`);
       }
-    } else if (vscode.workspace.getConfiguration('mycelium').get('claudeCode.openIn') === 'panel' && !claudeExtension()) {
-      // Only when the panel was asked for by name: in `auto`, not having the
-      // extension just means a terminal, which is not worth a message.
-      vscode.window.showWarningMessage('Mycelium: the Claude Code extension is not installed or enabled in this window, so it is starting in a terminal.');
+    } else {
+      log.appendLine(`panel not used: mycelium.claudeCode.openIn=${vscode.workspace.getConfiguration('mycelium').get('claudeCode.openIn')}, claudeCode.useTerminal=${vscode.workspace.getConfiguration('claudeCode').get('useTerminal')}`);
+      if (vscode.workspace.getConfiguration('mycelium').get('claudeCode.openIn') === 'panel' && !ext) {
+        // Only when the panel was asked for by name: in `auto`, not having the
+        // extension just means a terminal, which is not worth a message.
+        vscode.window.showWarningMessage('Mycelium: the Claude Code extension is not installed or enabled in this window, so it is starting in a terminal.');
+      }
     }
   }
   openTerminal(launch);
