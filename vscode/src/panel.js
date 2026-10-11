@@ -59,6 +59,7 @@ class SessionPanel {
     const run = (cmd, ...args) => vscode.commands.executeCommand(cmd, ...args);
     switch (m.action) {
       case 'resume':
+      case 'resumeInTerminal':
       case 'handoff':
       case 'move':
       case 'tag':

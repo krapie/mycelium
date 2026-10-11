@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { relatedTo, enqueue, claim, pending, withdraw, TTL } = require('../src/launch.js');
+const claude = (dir) => claim(dir, ['/work/app']);
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'mycelium-launch-'));
 const L = (cwd) => ({ cwd, bin: 'claude', args: ['--resume', 'abc'], name: 'n', key: 'claude' });
@@ -71,4 +72,24 @@ test('the sender can withdraw an unclaimed request, but not one that was taken',
   const b = enqueue(dir, L('/work/app'));
   claim(dir, ['/work/app']);
   assert.equal(withdraw(b), false);
+});
+
+test('a launch may ask for the Claude Code panel; the command line stays required as the fallback', () => {
+  const dir = tmp();
+  enqueue(dir, { ...L('/work/app'), panel: { sessionId: 'abc', prompt: 'hi' } });
+  enqueue(dir, { ...L('/work/app'), panel: {} }); // a new conversation
+  const got = claude(dir);
+  // (readdir order is not the order they were queued in)
+  assert.deepEqual(got.map((l) => JSON.stringify(l.panel)).sort(), ['{"sessionId":"abc","prompt":"hi"}', '{}']);
+  // a panel request without the fallback command line is not a launch at all
+  fs.writeFileSync(path.join(dir, 'nocmd.json'), JSON.stringify({ cwd: '/work/app', panel: { sessionId: 'x' }, created: Date.now() }));
+  assert.deepEqual(claude(dir), []);
+});
+
+test('a malformed panel request is dropped rather than half-run', () => {
+  const dir = tmp();
+  for (const [i, panel] of [[1, 'x'], [2, { sessionId: 5 }], [3, { prompt: ['a'] }], [4, null]]) {
+    fs.writeFileSync(path.join(dir, `bad${i}.json`), JSON.stringify({ ...L('/work/app'), panel, created: Date.now() }));
+  }
+  assert.deepEqual(claude(dir), []);
 });

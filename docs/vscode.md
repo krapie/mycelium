@@ -36,6 +36,17 @@ Smart organize and knowledge extraction call your own `claude` or `codex` login 
 
 Knowledge updates the daemon staged overnight show as a count in the status bar; **Review Knowledge Updates** walks through them one diff at a time.
 
+## Claude Code panel
+
+If the [Claude Code extension](https://marketplace.visualstudio.com/items?itemName=anthropic.claude-code) is installed, Claude sessions open in its own panel instead of a terminal:
+
+- **Resume** on a Claude session reopens that conversation in the Claude Code panel — in a window on the session's project directory, which is also where Claude Code looks the session up.
+- **Hand off** to Claude and **Start New Agent → Claude** open a new conversation there. A handoff prompt is put in the input box for you to read and send; nothing is sent for you.
+- **Resume in terminal** (right-click a session, or the *In terminal* button on its page) still gives you the terminal. Other agents (Codex, Kiro, OpenCode) always use a terminal.
+- `mycelium.claudeCode.openIn` decides: `auto` (default) follows Claude Code's own `claudeCode.useTerminal` setting, `panel` and `terminal` force one.
+
+What this doesn't do: Claude Code's own session list shows Claude's sessions, and there is no way for another extension to add Mycelium's folders or summaries to it — browsing and organizing stay in the Mycelium sidebar, which now hands off to the panel. It uses the same entry point as Claude Code's `vscode://anthropic.claude-code/open?session=…&prompt=…` link (checked against Claude Code 2.1.296); if that ever stops working, Mycelium falls back to a terminal and tells you.
+
 ## What's on screen
 
 - **Actions** — everything you can do, in the order you'd do it, with how much is waiting (unfiled sessions, knowledge to review). The title also shows which store the window is reading (`~/.mycelium`, or a sample store).
@@ -49,7 +60,7 @@ Agent colors (Claude, Codex, Kiro, OpenCode, merged, backlog) follow the theme a
 
 ## Which window a session opens in
 
-Sessions are tied to the directory they ran in, and you will usually have a window per project. **Resume**, **Hand off** and **Start New Agent Session** therefore open their terminal in a window on that session's own directory: if this window already has the project open (or a folder inside or around it), the terminal opens here; otherwise VS Code opens a window on that directory — or switches this one, if it has no folder open — and the terminal starts there, the way a new tab would.
+Sessions are tied to the directory they ran in, and you will usually have a window per project. **Resume**, **Hand off** and **Start New Agent Session** therefore open (a terminal, or the Claude Code panel for Claude sessions) in a window on that session's own directory: if this window already has the project open (or a folder inside or around it), the terminal opens here; otherwise VS Code opens a window on that directory — or switches this one, if it has no folder open — and the terminal starts there, the way a new tab would.
 
 This hand-off needs the Mycelium extension to be **installed**, because the new window has to run it too (`npm run install:local` in `vscode/`). If the other window doesn't take the request within about 15 seconds, the session starts in the current window instead and says so. To always use the current window, set `mycelium.openSessionIn` to `thisWindow`.
 

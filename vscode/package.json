@@ -2,7 +2,7 @@
   "name": "mycelium-vscode",
   "displayName": "Mycelium",
   "description": "Browse, resume and hand off your AI coding-agent sessions from the sidebar.",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "publisher": "krapie",
   "author": "krapie",
   "license": "MIT",
@@ -283,6 +283,11 @@
         "command": "mycelium.showLog",
         "title": "%cmd.showLog%",
         "category": "Mycelium"
+      },
+      {
+        "command": "mycelium.resumeInTerminal",
+        "title": "%cmd.resumeTerminal%",
+        "category": "Mycelium"
       }
     ],
     "menus": {
@@ -325,6 +330,10 @@
         },
         {
           "command": "mycelium.viewTranscript",
+          "when": "false"
+        },
+        {
+          "command": "mycelium.resumeInTerminal",
           "when": "false"
         }
       ],
@@ -445,6 +454,11 @@
           "command": "mycelium.mkdir",
           "when": "view =~ /^mycelium\\./ && viewItem == folder",
           "group": "3_organize@1"
+        },
+        {
+          "command": "mycelium.resumeInTerminal",
+          "when": "view =~ /^mycelium\\./ && viewItem == session",
+          "group": "1_use@1b"
         }
       ]
     },
@@ -681,6 +695,21 @@
             "%config.openIn.this%"
           ],
           "description": "%config.openIn%"
+        },
+        "mycelium.claudeCode.openIn": {
+          "type": "string",
+          "default": "auto",
+          "enum": [
+            "auto",
+            "panel",
+            "terminal"
+          ],
+          "enumDescriptions": [
+            "%config.claudeOpenIn.auto%",
+            "%config.claudeOpenIn.panel%",
+            "%config.claudeOpenIn.terminal%"
+          ],
+          "description": "%config.claudeOpenIn%"
         }
       }
     }

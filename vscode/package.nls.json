@@ -6,7 +6,7 @@
   "cmd.scan": "Scan for New Sessions",
   "cmd.search": "Search Sessions",
   "cmd.open": "Open Session",
-  "cmd.resume": "Resume Session in Terminal",
+  "cmd.resume": "Resume Session",
   "cmd.handoff": "Hand Off to Another Agent",
   "cmd.copyPrompt": "Copy Handoff Prompt",
   "cmd.newAgent": "Start New Agent Session",
@@ -52,7 +52,7 @@
   "walk.search.title": "Find: search and open an old session",
   "walk.search.desc": "Search by anything you remember — a file, an error, a decision. Open a result to read its summary, decisions and to-dos in one place.\n[Search sessions](command:mycelium.search)",
   "walk.resume.title": "Reuse: resume or hand off",
-  "walk.resume.desc": "**Resume** continues a session in a terminal tab. **Hand off** gives another agent the context — to switch from Claude to Codex mid-task. Merged or split sessions can only be handed off.\nHover a session and press ▶ or ⇄, or use the buttons on its page.",
+  "walk.resume.desc": "**Resume** continues a session in a terminal tab — or in the Claude Code panel, if you have that extension. **Hand off** gives another agent the context — to switch from Claude to Codex mid-task. Merged or split sessions can only be handed off.\nHover a session and press ▶ or ⇄, or use the buttons on its page.",
   "walk.newAgent.title": "Reuse: start a new session, already informed",
   "walk.newAgent.desc": "Start an agent in a folder. Mycelium first offers to put that folder's knowledge into the project's AGENTS.md, so the new session starts with what the old ones learned.\n[Start an agent](command:mycelium.newAgent)",
   "view.actions": "Actions",
@@ -62,5 +62,10 @@
   "welcome.outdated": "The Mycelium command-line tool is too old for this extension (it needs 0.5.0 or newer).\n\nUpdate it, then reload the window:\n`npm install -g @kevinprk/mycelium`\nor `brew upgrade mycelium`\n[Reload Window](command:workbench.action.reloadWindow)",
   "capability.untrusted": "Mycelium starts agent CLIs and runs commands in your project, so it only runs in folders you trust.",
   "cmd.showLog": "Show Log",
-  "welcome.node": "Mycelium found its command-line tool, but not Node.js, which it needs (version 22.16 or newer).\n\nVS Code may have started without your shell's PATH: start it from a terminal with `code`, or install Node.js from nodejs.org.\n[Show log](command:mycelium.showLog)\n[Reload Window](command:workbench.action.reloadWindow)"
+  "welcome.node": "Mycelium found its command-line tool, but not Node.js, which it needs (version 22.16 or newer).\n\nVS Code may have started without your shell's PATH: start it from a terminal with `code`, or install Node.js from nodejs.org.\n[Show log](command:mycelium.showLog)\n[Reload Window](command:workbench.action.reloadWindow)",
+  "cmd.resumeTerminal": "Resume Session in Terminal",
+  "config.claudeOpenIn": "Where Resume, Hand off and Start New Agent open a Claude Code session when the Claude Code extension is installed.",
+  "config.claudeOpenIn.auto": "In the Claude Code panel, unless the Claude Code extension is set to use the terminal (`claudeCode.useTerminal`).",
+  "config.claudeOpenIn.panel": "Always in the Claude Code panel.",
+  "config.claudeOpenIn.terminal": "Always in a terminal."
 }

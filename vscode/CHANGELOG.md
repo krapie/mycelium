@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.0
+
+- **Claude Code sessions open in the Claude Code panel.** With the Claude Code extension installed, **Resume** on a Claude session reopens that conversation in its own panel (in a window on the session's project), and **Hand off** to Claude or **Start New Agent** → Claude starts a new conversation there, with the handoff prompt in the input box. *Resume in terminal* (context menu, and a button on the session page) keeps the old behavior. `mycelium.claudeCode.openIn` (`auto` / `panel` / `terminal`) chooses; `auto` follows Claude Code's own `claudeCode.useTerminal`. If the panel can't be opened, it falls back to a terminal and says so.
+
 ## 0.1.1
 
 - Fixed "can't find the CLI" when it is installed. An editor started from the Dock doesn't always get your shell's PATH, so `mycelium` wasn't found — and even a full path failed, because the script needs `node` on PATH too. The extension now finds the CLI on PATH, in the usual install locations (Homebrew, npm global, nvm, Volta, asdf, `%APPDATA%\npm`) and, as a last resort, through your login shell, and runs it with a PATH that can find `node`.
