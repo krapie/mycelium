@@ -34,4 +34,14 @@ function claudeTarget({ mode = 'auto', installed, useTerminal, agentKey }) {
   return useTerminal ? 'terminal' : 'panel';
 }
 
-module.exports = { EXT_ID, PANEL_COMMAND, isSessionId, isClaudeSession, claudeTarget };
+/**
+ * A panel request only works in a window that has the session's project open —
+ * Claude Code looks a session up through the project of the window it runs in.
+ * In any other window (the setting says "this window", or the project's window
+ * never answered) the launch goes to a terminal, which carries the directory.
+ */
+function forWindow(launch, { hasProject }) {
+  return hasProject || !launch.panel ? launch : { ...launch, panel: undefined };
+}
+
+module.exports = { EXT_ID, PANEL_COMMAND, isSessionId, isClaudeSession, claudeTarget, forWindow };

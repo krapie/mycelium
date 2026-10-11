@@ -60,7 +60,7 @@ Agent colors (Claude, Codex, Kiro, OpenCode, merged, backlog) follow the theme a
 
 ## Which window a session opens in
 
-Sessions are tied to the directory they ran in, and you will usually have a window per project. **Resume**, **Hand off** and **Start New Agent Session** therefore open their terminal in a window on that session's own directory: if this window already has the project open (or a folder inside or around it), the terminal opens here; otherwise VS Code opens a window on that directory — or switches this one, if it has no folder open — and the terminal starts there, the way a new tab would.
+Sessions are tied to the directory they ran in, and you will usually have a window per project. **Resume**, **Hand off** and **Start New Agent Session** therefore open (a terminal, or the Claude Code panel for Claude sessions) in a window on that session's own directory: if this window already has the project open (or a folder inside or around it), the terminal opens here; otherwise VS Code opens a window on that directory — or switches this one, if it has no folder open — and the terminal starts there, the way a new tab would.
 
 This hand-off needs the Mycelium extension to be **installed**, because the new window has to run it too (`npm run install:local` in `vscode/`). If the other window doesn't take the request within about 15 seconds, the session starts in the current window instead and says so. To always use the current window, set `mycelium.openSessionIn` to `thisWindow`.
 

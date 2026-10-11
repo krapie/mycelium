@@ -3,8 +3,8 @@ const vscode = require('vscode');
 const { transcriptMarkdown } = require('./markdown.js');
 const { relativeTime, agentKey } = require('./format.js');
 const { strings } = require('./i18n.js');
-const { openLaunch, panelWanted } = require('./open-session.js');
-const { isClaudeSession } = require('./claude-code.js');
+const { openLaunch } = require('./open-session.js');
+const { isClaudeSession, forWindow } = require('./claude-code.js');
 const { launchDir, relatedTo, enqueue, pending, withdraw } = require('./launch.js');
 const { workspaceDirs } = require('./views.js');
 const { registerAi } = require('./ai.js');
@@ -43,7 +43,8 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
   const startSession = async (launch) => {
     const folders = workspaceDirs();
     const mode = vscode.workspace.getConfiguration('mycelium').get('openSessionIn');
-    if (mode === 'thisWindow' || relatedTo(launch.cwd, folders)) return openLaunch(launch);
+    const hasProject = relatedTo(launch.cwd, folders);
+    if (mode === 'thisWindow' || hasProject) return openLaunch(forWindow(launch, { hasProject }));
 
     const file = enqueue(launchDir(), launch);
     await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(launch.cwd), { forceNewWindow: folders.length > 0 });
@@ -53,7 +54,7 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
       if (!pending(file)) return;
     }
     if (!withdraw(file)) return; // taken at the last moment
-    await openLaunch(launch);
+    await openLaunch(forWindow(launch, { hasProject: false }));
     vscode.window.showWarningMessage(`Mycelium: the window for ${launch.cwd} didn't pick this up (is the Mycelium extension installed there?), so it started here instead.`);
   };
 
@@ -170,7 +171,7 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
     if (!row) return;
     try {
       const cmd = await client.request('resumeCommand', { id: row.id });
-      const panel = !terminalOnly && isClaudeSession(row) && panelWanted('claude') ? { sessionId: row.id } : undefined;
+      const panel = !terminalOnly && isClaudeSession(row) ? { sessionId: row.id } : undefined; // the window that runs it decides if the panel is available
       await startSession({ name: row.title || row.id.slice(0, 8), cwd: cmd.cwd, bin: cmd.bin, args: cmd.args, key: agentKey(row), panel });
     } catch (err) {
       if (!/use handoff/.test(err.message)) throw err;
@@ -196,7 +197,7 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
     if (!dir) return;
     const cmd = await client.request('newCommand', { agentKey: agent.key, dir, seed: prompt });
     // Into Claude Code's panel the prompt is put in the input box, ready to send
-    const panel = agent.key === 'claude' && panelWanted('claude') ? { prompt } : undefined;
+    const panel = agent.key === 'claude' ? { prompt } : undefined;
     await startSession({ name: `${agent.label} ← ${row.title || row.id.slice(0, 8)}`, cwd: cmd.cwd, bin: cmd.bin, args: cmd.args, key: agent.key, panel });
   });
 
@@ -223,7 +224,7 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
       }
     }
     const cmd = await client.request('newCommand', { agentKey: agent.key, dir });
-    const panel = agent.key === 'claude' && panelWanted('claude') ? {} : undefined; // {} = a new conversation
+    const panel = agent.key === 'claude' ? {} : undefined; // {} = a new conversation
     await startSession({ name: agent.label, cwd: cmd.cwd, bin: cmd.bin, args: cmd.args, key: agent.key, panel });
   });
 

@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const Module = require('node:module');
-const { isSessionId, isClaudeSession, claudeTarget, PANEL_COMMAND, EXT_ID } = require('../src/claude-code.js');
+const { isSessionId, isClaudeSession, claudeTarget, forWindow, PANEL_COMMAND, EXT_ID } = require('../src/claude-code.js');
 
 const UUID = '3f2a9c1e-5b7d-4e8a-9c3b-1a2b3c4d5e6f';
 
@@ -30,6 +30,15 @@ test('auto follows the Claude Code extension\'s own choice; panel/terminal force
   assert.equal(t({ mode: 'terminal' }), 'terminal');
   assert.equal(t({ installed: false, mode: 'panel' }), 'terminal');
   assert.equal(t({ agentKey: 'codex', mode: 'panel' }), 'terminal');
+});
+
+test('a panel request is kept only in a window that has the session\'s project open', () => {
+  const l = { cwd: '/p', bin: 'claude', args: [], key: 'claude', panel: { sessionId: UUID } };
+  assert.equal(forWindow(l, { hasProject: true }), l);
+  const elsewhere = forWindow(l, { hasProject: false });
+  assert.equal(elsewhere.panel, undefined);
+  assert.deepEqual([elsewhere.cwd, elsewhere.bin], ['/p', 'claude'], 'the terminal fallback keeps everything it needs');
+  assert.equal(forWindow({ cwd: '/p', bin: 'x', args: [] }, { hasProject: false }).panel, undefined);
 });
 
 // ---- openLaunch, against a stand-in for the editor
@@ -106,4 +115,20 @@ test('a launch without a panel request is always a terminal; other agents never 
   assert.equal(calls.terminals.length, 1);
   assert.equal(panelWanted('codex'), false);
   assert.equal(panelWanted('claude'), true);
+});
+
+test('asking for the panel by name, without the extension, says why it is a terminal; in auto it stays quiet', async () => {
+  reset(); state.installed = false; state.settings['mycelium.claudeCode.openIn'] = 'panel';
+  await openLaunch(launch({ panel: { sessionId: UUID } }));
+  assert.equal(calls.terminals.length, 1);
+  assert.match(calls.warn[0], /not installed or enabled in this window/);
+
+  reset(); state.installed = false; // auto
+  await openLaunch(launch({ panel: { sessionId: UUID } }));
+  assert.equal(calls.terminals.length, 1);
+  assert.equal(calls.warn.length, 0);
+
+  reset(); state.settings['claudeCode.useTerminal'] = true; // installed, but Claude Code prefers the terminal
+  await openLaunch(launch({ panel: { sessionId: UUID } }));
+  assert.equal(calls.warn.length, 0, 'a preference is not a problem to report');
 });

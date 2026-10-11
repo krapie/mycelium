@@ -33,12 +33,18 @@ async function openInClaudePanel({ sessionId, prompt }) {
  * launch also carries the command line, so the fallback is always possible).
  */
 async function openLaunch(launch) {
-  if (launch.panel && panelWanted(launch.key)) {
-    try {
-      await openInClaudePanel(launch.panel);
-      return;
-    } catch (err) {
-      vscode.window.showWarningMessage(`Mycelium: couldn't open it in the Claude Code panel (${err.message}); starting it in a terminal instead.`);
+  if (launch.panel) {
+    if (panelWanted(launch.key)) {
+      try {
+        await openInClaudePanel(launch.panel);
+        return;
+      } catch (err) {
+        vscode.window.showWarningMessage(`Mycelium: couldn't open it in the Claude Code panel (${err.message}); starting it in a terminal instead.`);
+      }
+    } else if (vscode.workspace.getConfiguration('mycelium').get('claudeCode.openIn') === 'panel' && !claudeExtension()) {
+      // Only when the panel was asked for by name: in `auto`, not having the
+      // extension just means a terminal, which is not worth a message.
+      vscode.window.showWarningMessage('Mycelium: the Claude Code extension is not installed or enabled in this window, so it is starting in a terminal.');
     }
   }
   openTerminal(launch);
