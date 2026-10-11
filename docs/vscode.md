@@ -18,7 +18,7 @@ code --install-extension mycelium-vscode-0.1.0.vsix     # `cursor` / `windsurf` 
 
 Or download the `.vsix` from the release page and use *Extensions → `…` → Install from VSIX…*. The extension is not on a marketplace yet, so there is no auto-update: install the newer `.vsix` to update. Each computer keeps its own `~/.mycelium`; the extension shows whatever store it finds on that machine.
 
-On Windows the terminal command is written for whichever shell the integrated terminal uses (PowerShell, cmd or bash); cmd flattens a multi-line handoff prompt onto one line, so PowerShell (the default) is the better fit for Hand off.
+On Windows the terminal command is written for whichever shell the integrated terminal uses (PowerShell, cmd or bash). cmd has no safe way to quote an arbitrary handoff prompt, so when the terminal's shell is cmd and an argument isn't made of plain words, that one terminal opens in PowerShell instead.
 
 ## Using it: the loop, step by step
 

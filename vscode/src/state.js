@@ -32,9 +32,10 @@ function handleError(err) {
     setContext('mycelium.connected', false);
     return;
   }
-  if (err.message !== lastMessage) {
-    lastMessage = err.message;
-    vscode.window.showErrorMessage(`Mycelium: ${err.message}`);
+  const message = (err && err.message) || String(err);
+  if (message !== lastMessage) {
+    lastMessage = message;
+    vscode.window.showErrorMessage(`Mycelium: ${message}`);
   }
 }
 

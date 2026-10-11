@@ -9,7 +9,7 @@ function fakeChild(onLine) {
   const proc = new EventEmitter();
   proc.stdout = new EventEmitter();
   proc.stderr = new EventEmitter();
-  proc.stdin = { write: (l) => onLine(proc, JSON.parse(l)), end() {} };
+  proc.stdin = Object.assign(new EventEmitter(), { write: (l) => onLine(proc, JSON.parse(l)), end() {} });
   proc.kill = () => proc.emit('close', 0);
   return proc;
 }
@@ -100,6 +100,17 @@ test('on Windows the CLI is run through a shell, with a spaced path quoted; else
   await mk('darwin', '/opt/homebrew/bin/my cel').request('x');
   assert.deepEqual(seen.map((s) => [s.cmd, s.shell]), [['"C:\\Program Files\\nodejs\\mycelium.cmd"', true], ['mycelium', true], ['/opt/homebrew/bin/my cel', false]]);
   assert.ok(seen.every((s) => s.args.join(' ') === 'serve --stdio' && s.windowsHide === true));
+});
+
+test('a write that fails because the child just exited fails the call instead of crashing the host', async () => {
+  let child;
+  const c = new Client({ spawnFn: () => (child = fakeChild(() => {})) });
+  const p = c.request('hello');
+  child.stdin.emit('error', Object.assign(new Error('write EPIPE'), { code: 'EPIPE' })); // would be an uncaught exception with no listener
+  await assert.rejects(p, /EPIPE/);
+  // and the next request starts a fresh child
+  const c2 = new Client({ spawnFn: () => fakeChild((q, r) => reply(q, r.id, { result: 'ok' })) });
+  assert.equal(await c2.request('hello'), 'ok');
 });
 
 test('transcriptMarkdown labels turns and truncates a huge one', () => {

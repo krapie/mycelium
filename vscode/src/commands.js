@@ -22,10 +22,11 @@ function register(ctx, { client, panel, refresh, foldersView, language }) {
         try {
           await fn(...args);
         } catch (err) {
-          if (err.code === 'ENOENT') {
-            const pick = await vscode.window.showErrorMessage(`${err.message}. Install with: npm i -g @kevinprk/mycelium`, 'Open Settings');
+          const message = (err && err.message) || String(err);
+          if (err && err.code === 'ENOENT') {
+            const pick = await vscode.window.showErrorMessage(`${message}. Install with: npm i -g @kevinprk/mycelium`, 'Open Settings');
             if (pick) vscode.commands.executeCommand('workbench.action.openSettings', 'mycelium.path');
-          } else vscode.window.showErrorMessage(`Mycelium: ${err.message}`);
+          } else vscode.window.showErrorMessage(`Mycelium: ${message}`);
         }
       }),
     );

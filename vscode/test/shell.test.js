@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { shellKind, commandFor } = require('../src/shell.js');
+const { shellKind, commandFor, needsFallbackShell } = require('../src/shell.js');
 const { compareVersions, isOutdated, MIN_CLI } = require('../src/version.js');
 
 test('shellKind reads the shell from its path, on either OS', () => {
@@ -25,11 +25,26 @@ test('PowerShell: call operator, every argument single-quoted, quotes doubled', 
   assert.equal(commandFor('C:\\x\\pwsh.exe', 'claude', []), "& 'claude'");
 });
 
-test('cmd: simple words bare, others double-quoted, newlines flattened (best effort)', () => {
-  assert.equal(commandFor('C:\\Windows\\System32\\cmd.exe', 'claude', ['--resume', 'abc']), 'claude --resume abc');
-  assert.equal(commandFor('C:\\Windows\\System32\\cmd.exe', 'claude', ['two words']), 'claude "two words"');
-  assert.equal(commandFor('C:\\Windows\\System32\\cmd.exe', 'claude', ['line one\nline two']), 'claude "line one line two"');
-  assert.equal(commandFor('C:\\Windows\\System32\\cmd.exe', 'claude', ['say "hi"']), 'claude "say \\"hi\\""');
+test('PowerShell also treats typographic single quotes as quotes, so every one is doubled', () => {
+  // ’ would otherwise end the string and let what follows run as code
+  assert.equal(commandFor('C:\\x\\pwsh.exe', 'codex', ['don\u2019t \u2018x\u2019; calc']), "& 'codex' 'don\u2019\u2019t \u2018\u2018x\u2019\u2019; calc'");
+});
+
+test('cmd: harmless words are written out, spaces get quotes, and nothing else is ever quoted for cmd', () => {
+  const cmd = 'C:\\Windows\\System32\\cmd.exe';
+  assert.equal(commandFor(cmd, 'claude', ['--resume', 'abc']), 'claude --resume abc');
+  assert.equal(commandFor(cmd, 'claude', ['two words']), 'claude "two words"');
+  for (const bad of ['say "hi" & calc', 'a & b', '50%', 'x^y', 'a|b', 'a<b', 'line\nbreak', 'it\u2019s', '!x!']) {
+    assert.throws(() => commandFor(cmd, 'claude', [bad]), /cannot safely quote/, JSON.stringify(bad));
+  }
+});
+
+test('a prompt that cmd cannot carry makes the launch fall back to PowerShell; other shells never do', () => {
+  const cmd = 'C:\\Windows\\System32\\cmd.exe';
+  assert.equal(needsFallbackShell(cmd, 'claude', ['continue the work: "a & b"']), true);
+  assert.equal(needsFallbackShell(cmd, 'claude', ['--resume', 'abc-123']), false);
+  assert.equal(needsFallbackShell('C:\\x\\pwsh.exe', 'claude', ['"a & b"']), false);
+  assert.equal(needsFallbackShell('/bin/zsh', 'claude', ['"a & b"']), false);
 });
 
 test('compareVersions orders numerically and puts a pre-release below its release', () => {

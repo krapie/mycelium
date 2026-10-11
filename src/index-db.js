@@ -208,14 +208,25 @@ function jsonArrayLength(s) {
  * `date` ('YYYY-MM-DD'), if given, narrows to that single day (matches
  * folder's post-query filter style rather than a separate WHERE clause).
  */
+// A recorded directory can be Windows-style (`C:\work\app\pkg`), and the
+// caller's own spelling may differ (`c:/Work/app`): compare without caring
+// about the separator, a trailing one, or case — drive letters and Windows
+// paths are case-insensitive. A POSIX path is left alone (a `\` is a legal
+// character in a name there).
+const winLike = (p) => /^[A-Za-z]:[\\/]|^\\\\/.test(p);
+const normDir = (p) => (winLike(p) ? p.replace(/\\/g, '/').toLowerCase() : p).replace(/\/+$/, '');
+
 export function listSessions({ folder, date, dir, includeSuperseded = false } = {}) {
   const d = openDb();
   let rows = d.prepare('SELECT * FROM sessions ORDER BY started_at DESC').all();
   // Sessions that ran in `dir` or anywhere below it — an editor's "this
   // workspace" view, where the workspace folder is usually a project root.
   if (dir) {
-    const base = dir.replace(/\/+$/, '');
-    rows = rows.filter((r) => r.work_dir && (r.work_dir === base || r.work_dir.startsWith(base + '/')));
+    const base = normDir(dir);
+    rows = rows.filter((r) => {
+      const w = r.work_dir && normDir(r.work_dir);
+      return w && (w === base || w.startsWith(base + '/'));
+    });
   }
   // Matches sessionCountsByDay()'s grouping — a day's session list should be
   // "sessions active that day", same basis as what the calendar grid counted.

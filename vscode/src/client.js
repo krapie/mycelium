@@ -49,6 +49,10 @@ class Client {
       if (this.proc === proc) this.proc = null;
       this.failAll(err);
     };
+    // The child can exit between a request being queued and written; the write
+    // then fails on stdin itself, and an unhandled stream 'error' would take
+    // the whole extension host down instead of failing just this call.
+    if (proc.stdin && proc.stdin.on) proc.stdin.on('error', (e) => died(e));
     proc.on('error', (e) => died(e.code === 'ENOENT' ? Object.assign(new Error(`mycelium CLI not found: ${this.command}`), { code: 'ENOENT' }) : e));
     proc.on('close', (code) => {
       // A CLI from before `serve` existed prints its help and exits 0 without

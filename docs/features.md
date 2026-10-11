@@ -662,67 +662,14 @@ As a user, I can **write down something to work on later, before any agent has r
 
 ## Editor bridge (`src/bridge.js`, `src/cli/serve.js`) and VS Code extension (`vscode/`), see [`docs/vscode.md`](./vscode.md)
 
-- **Drive the store over JSON-RPC.** `mycelium serve --stdio` reads one
-  JSON-RPC 2.0 request per line and answers on stdout, running requests one
-  at a time in arrival order. `console.log`/`warn`/`info` are redirected to
-  stderr first, so a stray log line from any module can't corrupt a response.
-  Errors from the underlying `{ ok: false, error }` results become JSON-RPC
-  errors (-32000); unknown methods -32601, bad JSON -32700. A notification
-  (no id) gets no reply. [tested] (`test/bridge.test.js`, including a real
-  spawned process whose stdout must be pure JSON)
-- **Bridge methods only map onto existing functions.** `folders`/`sessions`/
-  `detail`/`tags`/`scan`/`mkdir`/`move`/`tag`/`agents`/`resumeCommand`/
-  `newCommand`/`handoff`/`dirsForFolder`/`context`/`inject`; no store logic
-  lives in the bridge. `move`/`mkdir` reject unsafe folder paths
-  (`isSafeFolderPath`), `resumeCommand` refuses merge/split products and
-  sessions the agent no longer has (same as `mycelium resume`), `detail`
-  omits `turns`. [partial] (folders/sessions/detail/move/tag/mkdir/handoff
-  covered; `resumeCommand`/`newCommand`/`inject`/`agents` not yet)
-- **Bridge LLM steps.** `autotag` (ids, or whatever lacks a summary up to
-  `limit`), `organizeSuggest` → `organizeApply`, `knowledgeBuild` →
-  `knowledgeSave`, `knowledgePending`/`Promote`/`Dismiss`, and `cancel`
-  (`killInFlight()`). These three long ones (`LONG`) run outside serve.js's
-  one-at-a-time queue and report `progress` notifications tagged with the
-  caller's token. `organizeSuggest` shares `reviewablePlacements()` with
-  `mycelium organize`, so both bound and order the work the same way.
-  [tested] (`test/bridge-llm.test.js`, with a fake LLM provider; progress
-  lines over a real pipe are covered by the client tests, not by an LLM run)
-- **Filter sessions by working directory.** The index records the directory
-  a session ran in (`work_dir`); `listSessions({ dir })` / bridge
-  `sessions({ dir })` match that directory and anything below it (not a
-  sibling sharing a string prefix). An index from before the column is
-  rebuilt once. [tested] (`test/index-workdir.test.js`, `test/bridge.test.js`)
-- **Start a session in the window of its own project.** Resume / Hand off /
-  New Agent open their terminal in a window on the session's directory (or
-  here, if this window's folders already contain or sit inside it). The
-  request is a file in `~/.mycelium-vscode-launch/` that the target window's
-  extension claims by deleting it — the sender waits for that, and falls back
-  to starting here (with a note) if nobody does within ~15s. Requests older
-  than two minutes are dropped; two windows on one project can't both take
-  one. `mycelium.openSessionIn: thisWindow` opts out. [partial]
-  (`vscode/test/launch.test.js` covers relatedness, claiming, staleness and
-  atomicity; opening the windows themselves needs a running editor)
-- **Know when the CLI is missing or too old.** A CLI from before `serve`
-  prints its help and exits 0 without answering; the client reports that as
-  `OLD_CLI` ("needs 0.5.0 or newer"), as does a `hello` older than `MIN_CLI`.
-  Both show an upgrade welcome view instead of an empty sidebar. [tested]
-  (`vscode/test/client.test.js`, `shell.test.js`)
-- **Run on Windows.** `which()` splits PATH on `;` and tries PATHEXT there;
-  the client spawns the CLI through a shell on win32; terminals get
-  `bin`/`args`/`cwd` (never a POSIX command line) and the receiving window
-  quotes them for its own shell (bash/zsh, PowerShell, cmd). [partial]
-  (every rule is unit-tested with an injected platform; the CI vscode job
-  also runs on a Windows runner, but no one has driven a real Windows
-  editor yet)
-- **Browse and reuse from the editor sidebar.** Four views (Actions,
-  This Workspace, Folders, and a hidden-by-default Recent), a themed session page with Resume / Hand off /
-  Move / Tags / Summarize, drag-and-drop filing, smart organize with a
-  tick-list review, folder knowledge extraction with a diff before saving,
-  search, injecting into AGENTS.md, and a Get Started walkthrough. Refreshes
-  when files under `raw/` change. [partial] (`vscode/test/` covers the RPC
-  client, progress matching, the session-page HTML — including that session
-  text can't inject markup — and the time/grouping helpers; the views and
-  commands need a running editor and are verified manually)
+- **Drive the store over JSON-RPC.** `mycelium serve --stdio` reads one JSON-RPC 2.0 request per line and answers on stdout, running requests one at a time in arrival order. `console.log`/`warn`/`info` are redirected to stderr first, so a stray log line from any module can't corrupt a response. Errors from the underlying `{ ok: false, error }` results become JSON-RPC errors (-32000); unknown methods -32601, bad JSON -32700. A notification (no id) gets no reply. [tested] (`test/bridge.test.js`, including a real spawned process whose stdout must be pure JSON)
+- **Bridge methods only map onto existing functions.** `folders`/`sessions`/`detail`/`tags`/`scan`/`mkdir`/`move`/`tag`/`agents`/`resumeCommand`/`newCommand`/`handoff`/`dirsForFolder`/`context`/`inject`; no store logic lives in the bridge. `move`/`mkdir` reject unsafe folder paths (`isSafeFolderPath`), `resumeCommand` refuses merge/split products and sessions the agent no longer has (same as `mycelium resume`), `detail` omits `turns`. [partial] (folders/sessions/detail/move/tag/mkdir/handoff covered; `resumeCommand`/`newCommand`/`inject`/`agents` not yet)
+- **Bridge LLM steps.** `autotag` (ids, or whatever lacks a summary up to `limit`), `organizeSuggest` → `organizeApply`, `knowledgeBuild` → `knowledgeSave`, `knowledgePending`/`Promote`/`Dismiss`, and `cancel` (`killInFlight()`). These three long ones (`LONG`) run outside serve.js's one-at-a-time queue and report `progress` notifications tagged with the caller's token. Results are applied to the record as it is when the LLM call returns, not as it was when it started, so a move, tag or delete made in between is kept (`autoTagSession()`, `suggestPlacements()`). `organizeSuggest` shares `reviewablePlacements()` with `mycelium organize`, so both bound and order the work the same way. [tested] (`test/bridge-llm.test.js`, with a fake LLM provider; progress lines over a real pipe are covered by the client tests, not by an LLM run)
+- **Filter sessions by working directory.** The index records the directory a session ran in (`work_dir`); `listSessions({ dir })` / bridge `sessions({ dir })` match that directory and anything below it (not a sibling sharing a string prefix). An index from before the column is rebuilt once. [tested] (`test/index-workdir.test.js`, `test/bridge.test.js`)
+- **Start a session in the window of its own project.** Resume / Hand off / New Agent open their terminal in a window on the session's directory (or here, if this window's folders already contain or sit inside it). The request is a file in `~/.mycelium-vscode-launch/` that the target window's extension claims by deleting it — the sender waits for that, and falls back to starting here (with a note) if nobody does within ~15s. Requests older than two minutes are dropped; two windows on one project can't both take one. `mycelium.openSessionIn: thisWindow` opts out. [partial] (`vscode/test/launch.test.js` covers relatedness, claiming, staleness and atomicity; opening the windows themselves needs a running editor)
+- **Know when the CLI is missing or too old.** A CLI from before `serve` prints its help and exits 0 without answering; the client reports that as `OLD_CLI` ("needs 0.5.0 or newer"), as does a `hello` older than `MIN_CLI`. Both show an upgrade welcome view instead of an empty sidebar. [tested] (`vscode/test/client.test.js`, `shell.test.js`)
+- **Run on Windows.** `which()` splits PATH on `;` and tries PATHEXT there; the client spawns the CLI through a shell on win32; terminals get `bin`/`args`/`cwd` (never a POSIX command line) and the receiving window quotes them for its own shell (bash/zsh, PowerShell; a `cmd` terminal gets only harmless words — anything else, such as a handoff prompt, runs that terminal in PowerShell instead, since cmd has no safe quoting and PowerShell's typographic quotes are doubled too). [partial] (every rule is unit-tested with an injected platform; the CI vscode job also runs on a Windows runner, but no one has driven a real Windows editor yet)
+- **Browse and reuse from the editor sidebar.** Four views (Actions, This Workspace, Folders, and a hidden-by-default Recent), a themed session page with Resume / Hand off / Move / Tags / Summarize, drag-and-drop filing, smart organize with a tick-list review, folder knowledge extraction with a diff before saving, search, injecting into AGENTS.md, and a Get Started walkthrough. Refreshes when files under `raw/` change. [partial] (`vscode/test/` covers the RPC client, progress matching, the session-page HTML — including that session text can't inject markup — and the time/grouping helpers; the views and commands need a running editor and are verified manually)
 
 ## TUI: App shell (`src/tui/app.js`, `index.js`)
 

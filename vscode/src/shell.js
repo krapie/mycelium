@@ -9,18 +9,33 @@ function shellKind(shellPath) {
   return 'posix';
 }
 
+// Arguments here can come from a transcript (a handoff prompt), so quoting is
+// a security boundary, not a nicety: a prompt must never be able to end its
+// own quotes and run what follows.
+
+// cmd.exe has no reliable way to quote a `"`, `%`, `^`, `&`, newline… (`\"` is
+// the target program's rule, not cmd's, so a quote can close the string early
+// and let `&` run a command). Rather than try, only words made of harmless
+// characters are written for cmd at all; anything else is run in PowerShell
+// instead (needsFallbackShell).
+const CMD_SAFE = /^[\w.\\/:=@+, -]*$/;
+
 const QUOTE = {
   posix: (s) => (/^[\w./:=@%+-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`),
-  // Always single-quoted: nothing inside expands, and a ' is doubled.
-  powershell: (s) => `'${s.replace(/'/g, "''")}'`,
-  // cmd has no way to quote a newline, so a multi-line argument (a handoff
-  // prompt) is flattened onto one line; best effort, the default Windows
-  // terminal is PowerShell.
+  // Single-quoted means nothing inside expands — but PowerShell also treats the
+  // typographic single quotes (U+2018 ‘ U+2019 ’ U+201A ‚ U+201B ‛) as quote
+  // characters, and prose is full of them. Every one is doubled, like '.
+  powershell: (s) => `'${s.replace(/['\u2018\u2019\u201A\u201B]/g, (c) => c + c)}'`,
   cmd: (s) => {
-    const flat = s.replace(/\r?\n/g, ' ');
-    return /^[\w.\\/:=@+-]+$/.test(flat) ? flat : `"${flat.replace(/"/g, '\\"')}"`;
+    if (!CMD_SAFE.test(s)) throw new Error('cmd cannot safely quote this argument');
+    return /^[\w.\\/:=@+,-]+$/.test(s) ? s : `"${s}"`;
   },
 };
+
+/** True when this shell can't safely be given these arguments and the launch must use PowerShell. */
+function needsFallbackShell(shellPath, bin, args = []) {
+  return shellKind(shellPath) === 'cmd' && ![bin, ...args].every((a) => CMD_SAFE.test(a));
+}
 
 /**
  * The line to type into a terminal to run `bin args…` in that terminal's own
@@ -36,4 +51,4 @@ function commandFor(shellPath, bin, args = []) {
   return rest ? `${head} ${rest}` : head;
 }
 
-module.exports = { shellKind, commandFor };
+module.exports = { shellKind, commandFor, needsFallbackShell };

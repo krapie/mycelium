@@ -348,10 +348,16 @@ export async function suggestPlacements({
       // Stamp every candidate the LLM actually saw this round, matched or
       // not — "already asked" is what the cooldown needs, independent of the
       // outcome.
+      //
+      // Re-read each record: `chunk` is what was loaded before the LLM call,
+      // and saving it would undo a move/tag made in the meantime (and bring
+      // back a session deleted meanwhile).
       const now = new Date().toISOString();
       for (const n of chunk) {
-        n.lastClassifiedAt = now;
-        saveRaw(n);
+        const cur = loadRaw(n.id);
+        if (!cur) continue;
+        cur.lastClassifiedAt = now;
+        saveRaw(cur);
       }
       completedChunks++;
       if (onProgress) onProgress(completedChunks, chunks.length);
