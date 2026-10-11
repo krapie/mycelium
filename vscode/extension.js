@@ -16,13 +16,39 @@ const { workspaceDirs } = require('./src/views.js');
 const { strings } = require('./src/i18n.js');
 const { state, markConnected, handleError, setContext } = require('./src/state.js');
 const { isOutdated, MIN_CLI } = require('./src/version.js');
+const { resolveCli, childEnv, loginShellPath } = require('./src/cli-path.js');
 
 const MIN_PROTOCOL = 1;
 
-function makeClient() {
+// Finds the CLI and the PATH to run it with, without trusting the environment
+// VS Code gave us: started from the Dock, it often has no Homebrew/npm bin
+// directory on its PATH (see cli-path.js). The login shell is asked only if the
+// usual places don't have it, at most once per window, and the answer is cached.
+function makeClient(ctx, log) {
   const cfg = vscode.workspace.getConfiguration('mycelium');
   const home = cfg.get('home');
-  return new Client({ command: cfg.get('path') || 'mycelium', env: home ? { MYCELIUM_HOME: home } : {} });
+  const configured = cfg.get('path') || 'mycelium';
+  let askedShell = false;
+  const resolver = async () => {
+    let extraDirs = [];
+    let r = resolveCli({ configured });
+    if (!r.dir) {
+      let loginPath = ctx.globalState.get('mycelium.loginPath');
+      if (!loginPath && !askedShell) {
+        askedShell = true;
+        log.appendLine("not found in the usual places — asking the login shell for its PATH (can take a few seconds)…");
+        loginPath = await loginShellPath();
+        if (loginPath) await ctx.globalState.update('mycelium.loginPath', loginPath);
+      }
+      if (loginPath) {
+        extraDirs = loginPath.split(path.delimiter);
+        r = resolveCli({ configured, extraDirs });
+      }
+    }
+    log.appendLine(r.from ? `looking for "${configured}": found ${r.command} (${r.from})` : `looking for "${configured}": NOT FOUND. Looked in: ${r.searched.join(', ') || '(nothing)'}`);
+    return { command: r.command, env: childEnv({ dir: r.dir, extraDirs }) };
+  };
+  return new Client({ resolver, log: (l) => log.appendLine(l), env: home ? { MYCELIUM_HOME: home } : {} });
 }
 
 async function activate(ctx) {
@@ -31,7 +57,9 @@ async function activate(ctx) {
 
   // One indirection so a settings change swaps the CLI path/home without
   // re-registering anything: every consumer calls through `proxy`.
-  let client = makeClient();
+  const log = vscode.window.createOutputChannel('Mycelium');
+  ctx.subscriptions.push(log);
+  let client = makeClient(ctx, log);
   const proxy = { request: (m, p, o) => client.request(m, p, o) };
 
   let foldersView;
@@ -130,14 +158,14 @@ async function activate(ctx) {
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (!e.affectsConfiguration('mycelium')) return;
       client.dispose();
-      client = makeClient();
+      client = makeClient(ctx, log);
       watch().then(refresh);
     }),
     vscode.workspace.onDidChangeWorkspaceFolders(refresh),
     { dispose: () => { clearTimeout(debounce); watcher?.dispose(); client.dispose(); } },
   );
 
-  register(ctx, { client: proxy, panel, refresh, foldersView, language });
+  register(ctx, { client: proxy, panel, refresh, foldersView, language, log });
 
   // Sessions another window asked this one to start (see launch.js): any that
   // belong to a folder open here. Checked now — a window opened just for this

@@ -16,11 +16,19 @@ let lastMessage = '';
 function markConnected() {
   setContext('mycelium.cliMissing', false);
   setContext('mycelium.cliOutdated', false);
+  setContext('mycelium.nodeMissing', false);
   setContext('mycelium.connected', true);
 }
 
 /** A failed request from a view: a missing or outdated CLI becomes a welcome view, anything else one error toast. */
 function handleError(err) {
+  if (err && err.code === 'NO_NODE') {
+    setContext('mycelium.nodeMissing', true);
+    setContext('mycelium.cliMissing', false);
+    setContext('mycelium.cliOutdated', false);
+    setContext('mycelium.connected', false);
+    return;
+  }
   if (err && err.code === 'OLD_CLI') {
     setContext('mycelium.cliOutdated', true);
     setContext('mycelium.cliMissing', false);

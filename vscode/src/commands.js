@@ -13,7 +13,7 @@ const GUIDE = 'krapie.mycelium-vscode#mycelium.start';
 
 const rowsOf = (el, sel) => (sel && sel.length ? sel : [el]).filter((e) => e && e.type === 'session').map((e) => e.row);
 
-function register(ctx, { client, panel, refresh, foldersView, language }) {
+function register(ctx, { client, panel, refresh, foldersView, language, log }) {
   const t = strings(language);
 
   const run = (id, fn) =>
@@ -95,6 +95,7 @@ function register(ctx, { client, panel, refresh, foldersView, language }) {
   );
 
   run('mycelium.refresh', refresh);
+  run('mycelium.showLog', () => log.show(true));
 
   run('mycelium.scan', () =>
     vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Mycelium: scanning…' }, async () => {

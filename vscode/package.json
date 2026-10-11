@@ -2,7 +2,7 @@
   "name": "mycelium-vscode",
   "displayName": "Mycelium",
   "description": "Browse, resume and hand off your AI coding-agent sessions from the sidebar.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "krapie",
   "author": "krapie",
   "license": "MIT",
@@ -73,7 +73,7 @@
         {
           "id": "mycelium.actions",
           "name": "%view.actions%",
-          "when": "!mycelium.cliMissing && !mycelium.cliOutdated"
+          "when": "!mycelium.cliMissing && !mycelium.cliOutdated && !mycelium.nodeMissing"
         },
         {
           "id": "mycelium.workspace",
@@ -109,17 +109,17 @@
       {
         "view": "mycelium.folders",
         "contents": "%welcome.empty%",
-        "when": "!mycelium.cliMissing && !mycelium.cliOutdated && mycelium.storeEmpty"
+        "when": "!mycelium.cliMissing && !mycelium.cliOutdated && !mycelium.nodeMissing && mycelium.storeEmpty"
       },
       {
         "view": "mycelium.workspace",
         "contents": "%welcome.workspace%",
-        "when": "!mycelium.cliMissing && !mycelium.cliOutdated"
+        "when": "!mycelium.cliMissing && !mycelium.cliOutdated && !mycelium.nodeMissing"
       },
       {
         "view": "mycelium.recent",
         "contents": "%welcome.recent%",
-        "when": "!mycelium.cliMissing && !mycelium.cliOutdated"
+        "when": "!mycelium.cliMissing && !mycelium.cliOutdated && !mycelium.nodeMissing"
       },
       {
         "view": "mycelium.folders",
@@ -135,6 +135,21 @@
         "view": "mycelium.recent",
         "contents": "%welcome.outdated%",
         "when": "mycelium.cliOutdated"
+      },
+      {
+        "view": "mycelium.folders",
+        "contents": "%welcome.node%",
+        "when": "mycelium.nodeMissing"
+      },
+      {
+        "view": "mycelium.workspace",
+        "contents": "%welcome.node%",
+        "when": "mycelium.nodeMissing"
+      },
+      {
+        "view": "mycelium.recent",
+        "contents": "%welcome.node%",
+        "when": "mycelium.nodeMissing"
       }
     ],
     "commands": [
@@ -263,6 +278,11 @@
         "title": "%cmd.guide%",
         "category": "Mycelium",
         "icon": "$(question)"
+      },
+      {
+        "command": "mycelium.showLog",
+        "title": "%cmd.showLog%",
+        "category": "Mycelium"
       }
     ],
     "menus": {

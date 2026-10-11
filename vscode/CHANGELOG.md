@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1
+
+- Fixed "can't find the CLI" when it is installed. An editor started from the Dock doesn't always get your shell's PATH, so `mycelium` wasn't found — and even a full path failed, because the script needs `node` on PATH too. The extension now finds the CLI on PATH, in the usual install locations (Homebrew, npm global, nvm, Volta, asdf, `%APPDATA%\npm`) and, as a last resort, through your login shell, and runs it with a PATH that can find `node`.
+- A CLI from before `serve` (0.4.x) is now reported as too old; it was shown as "exited (1)".
+- New *Mycelium: Show Log* command and a Mycelium output channel that say where the CLI was looked for and what it printed; a missing Node.js has its own message.
+
 ## 0.1.0
 
 First release.
