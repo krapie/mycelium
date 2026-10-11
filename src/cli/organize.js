@@ -4,13 +4,9 @@ import {
   mkdir,
   move,
   tag,
-  suggestPlacements,
+  reviewablePlacements,
   applyPlacements,
-  summarizeCandidates,
-  pendingSuggestions,
-  queueSuggestions,
   clearSuggestions,
-  organizeBatch,
   listTreeDirs,
   unmerge,
 } from '../organize.js';
@@ -33,54 +29,29 @@ export async function organizeCmd(args) {
   // One limit for every step of this run (#167): the saved organizeLimit,
   // or --limit for just this run.
   const limit = parseLimit(flags.limit) ?? organizeLimit();
-  // Reuse whatever the daemon already queued (smartOrganizeCycle in
+  // Reuses whatever the daemon already queued (smartOrganizeCycle in
   // daemon.js) instead of recomputing — instant when the daemon's been
-  // doing the work in the background.
-  let placements = pendingSuggestions({ folder: flags.folder || undefined });
-  // The limit bounds the reused queue too, not just a fresh computation —
-  // otherwise `organize --limit 5` after the TUI's background cycle queued
-  // everything shows (and --apply applies) the whole queue (#135).
-  const queued = placements.length;
-  placements = placements.slice(0, limit);
-  if (queued > limit) console.log(`showing ${limit} of ${queued} queued suggestion(s) — --apply files these, then run again for the next batch`);
+  // doing the work in the background. Nothing moves until --apply.
+  const res = await reviewablePlacements({
+    folder: flags.folder || undefined,
+    limit,
+    onEvent: (e) => {
+      if (e.type === 'queue-limited') console.log(`showing ${e.shown} of ${e.queued} queued suggestion(s) — --apply files these, then run again for the next batch`);
+      else if (e.type === 'batch-limited') console.log(`organizing ${e.limit} of ${e.total} session(s) this run (limit ${e.limit}; run again for the next batch)`);
+      else if (e.type === 'summarizing') console.log(`summarizing ${e.count} session(s) first…`);
+      else if (e.type === 'summarize-error') console.log(`  ! ${e.error.message}`);
+      else if (e.type === 'summarized') console.log(`  + ${e.id.slice(0, 8)}`);
+      else if (e.type === 'classifying') {
+        reindex();
+        console.log('classifying…');
+      } else if (e.type === 'batch' && e.total > 1) console.log(`  batch ${e.done}/${e.total}`);
+    },
+  });
+  if (!res.ok) return fail(res.error);
+  const placements = res.placements;
   if (!placements.length) {
-    // cooldownMs: 0 bypasses the daemon's "don't re-ask too soon"
-    // throttle, since a human explicitly asked for this right now. Same
-    // review-before-move safety net either way — nothing moves until
-    // --apply.
-    // --folder scopes to that subtree (same as `list`/`search --folder`);
-    // omitted means the whole store, matching this command's existing
-    // default. There's no CLI equivalent of the TUI's "Root" yet — pass
-    // a real folder to narrow.
-    const folder = flags.folder || undefined;
-    const batch = organizeBatch({ folder, limit });
-    if (batch.total > limit) console.log(`organizing ${limit} of ${batch.total} session(s) this run (limit ${limit}; run again for the next batch)`);
-    // Summarizing is the expensive step (one LLM call per session), so it
-    // only covers this run's batch, not the whole backlog.
-    if (batch.unsummarized) console.log(`summarizing ${batch.unsummarized} session(s) first…`);
-    await summarizeCandidates({
-      folder,
-      ids: batch.ids,
-      onProgress: (s, err) => {
-        if (err) console.log(`  ! ${err.message}`);
-        else console.log(`  + ${s.id.slice(0, 8)}`);
-      },
-    });
-    reindex();
-    console.log('classifying…');
-    const res = await suggestPlacements({
-      cooldownMs: 0,
-      folder,
-      ids: batch.ids,
-      onProgress: (done, total) => total > 1 && console.log(`  batch ${done}/${total}`),
-    });
-    if (!res.ok) return fail(res.error);
-    if (!res.placements.length) {
-      console.log('no confident placements found');
-      return;
-    }
-    placements = res.placements;
-    queueSuggestions(placements); // persists even if this run doesn't --apply
+    console.log('no confident placements found');
+    return;
   }
   const existingDirs = new Set(listTreeDirs());
   for (const p of placements) {

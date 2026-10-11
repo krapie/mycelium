@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { win32, posix } from 'node:path';
 import { ADAPTERS, getAdapter } from './adapters/index.js';
 
 /**
@@ -11,10 +12,24 @@ import { ADAPTERS, getAdapter } from './adapters/index.js';
  */
 export const AGENTS = Object.fromEntries(ADAPTERS.map((a) => [a.name, a]));
 
-/** Which CLIs are actually installed → which agents we can offer. */
-export function which(cmd) {
-  const paths = (process.env.PATH || '').split(':');
-  return paths.some((p) => p && existsSync(`${p}/${cmd}`));
+/**
+ * Which CLIs are actually installed → which agents we can offer.
+ *
+ * Windows spells all of this differently: PATH entries are split on ';' (a ':'
+ * split cuts every `C:\…` in two), and an npm-installed CLI is a `claude.cmd`
+ * shim, so each PATHEXT suffix is tried too. `platform`/`env`/`exists` are
+ * injectable so that behavior is tested on any host.
+ */
+export function which(cmd, { platform = process.platform, env = process.env, exists = existsSync } = {}) {
+  const win = platform === 'win32';
+  const pathKey = (win && Object.keys(env).find((k) => k.toUpperCase() === 'PATH')) || 'PATH';
+  const dirs = (env[pathKey] || '')
+    .split(win ? ';' : ':')
+    .map((d) => (win ? d.replace(/^"|"$/g, '') : d))
+    .filter(Boolean);
+  const exts = win ? ['', ...(env.PATHEXT || '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean)] : [''];
+  const join = win ? win32.join : posix.join;
+  return dirs.some((d) => exts.some((e) => exists(join(d, cmd + e))));
 }
 
 export function binFor(source) {

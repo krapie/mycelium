@@ -1,0 +1,668 @@
+{
+  "name": "mycelium-vscode",
+  "displayName": "Mycelium",
+  "description": "Browse, resume and hand off your AI coding-agent sessions from the sidebar.",
+  "version": "0.1.0",
+  "publisher": "krapie",
+  "author": "krapie",
+  "license": "MIT",
+  "private": true,
+  "preview": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/krapie/mycelium.git",
+    "directory": "vscode"
+  },
+  "homepage": "https://github.com/krapie/mycelium/blob/main/docs/vscode.md",
+  "bugs": {
+    "url": "https://github.com/krapie/mycelium/issues"
+  },
+  "keywords": [
+    "ai",
+    "claude-code",
+    "codex",
+    "kiro",
+    "opencode",
+    "coding-agent",
+    "sessions",
+    "context",
+    "handoff"
+  ],
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other",
+    "AI"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "%capability.untrusted%"
+    },
+    "virtualWorkspaces": false
+  },
+  "main": "./extension.js",
+  "activationEvents": [
+    "onView:mycelium.actions",
+    "onView:mycelium.workspace",
+    "onView:mycelium.recent",
+    "onView:mycelium.folders",
+    "onStartupFinished"
+  ],
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "seed": "node scripts/seed-dev-store.mjs",
+    "dev": "npm run seed && code --new-window --extensionDevelopmentPath=\"$PWD\" \"$HOME/.mycelium-vscode-dev-repo\"",
+    "package": "npx --yes @vscode/vsce@4.0.0 package --no-dependencies",
+    "dev:real": "node scripts/open-real.mjs",
+    "install:local": "npm run package -- -o mycelium-vscode.vsix && code --install-extension mycelium-vscode.vsix --force"
+  },
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "mycelium",
+          "title": "Mycelium",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "mycelium": [
+        {
+          "id": "mycelium.actions",
+          "name": "%view.actions%",
+          "when": "!mycelium.cliMissing && !mycelium.cliOutdated"
+        },
+        {
+          "id": "mycelium.workspace",
+          "name": "%view.workspace%"
+        },
+        {
+          "id": "mycelium.folders",
+          "name": "%view.folders%"
+        },
+        {
+          "id": "mycelium.recent",
+          "name": "%view.recent%",
+          "visibility": "hidden"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "mycelium.folders",
+        "contents": "%welcome.cli%",
+        "when": "mycelium.cliMissing"
+      },
+      {
+        "view": "mycelium.workspace",
+        "contents": "%welcome.cli%",
+        "when": "mycelium.cliMissing"
+      },
+      {
+        "view": "mycelium.recent",
+        "contents": "%welcome.cli%",
+        "when": "mycelium.cliMissing"
+      },
+      {
+        "view": "mycelium.folders",
+        "contents": "%welcome.empty%",
+        "when": "!mycelium.cliMissing && !mycelium.cliOutdated && mycelium.storeEmpty"
+      },
+      {
+        "view": "mycelium.workspace",
+        "contents": "%welcome.workspace%",
+        "when": "!mycelium.cliMissing && !mycelium.cliOutdated"
+      },
+      {
+        "view": "mycelium.recent",
+        "contents": "%welcome.recent%",
+        "when": "!mycelium.cliMissing && !mycelium.cliOutdated"
+      },
+      {
+        "view": "mycelium.folders",
+        "contents": "%welcome.outdated%",
+        "when": "mycelium.cliOutdated"
+      },
+      {
+        "view": "mycelium.workspace",
+        "contents": "%welcome.outdated%",
+        "when": "mycelium.cliOutdated"
+      },
+      {
+        "view": "mycelium.recent",
+        "contents": "%welcome.outdated%",
+        "when": "mycelium.cliOutdated"
+      }
+    ],
+    "commands": [
+      {
+        "command": "mycelium.refresh",
+        "title": "%cmd.refresh%",
+        "category": "Mycelium",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "mycelium.scan",
+        "title": "%cmd.scan%",
+        "category": "Mycelium",
+        "icon": "$(sync)"
+      },
+      {
+        "command": "mycelium.search",
+        "title": "%cmd.search%",
+        "category": "Mycelium",
+        "icon": "$(search)"
+      },
+      {
+        "command": "mycelium.open",
+        "title": "%cmd.open%",
+        "category": "Mycelium"
+      },
+      {
+        "command": "mycelium.resume",
+        "title": "%cmd.resume%",
+        "category": "Mycelium",
+        "icon": "$(play)"
+      },
+      {
+        "command": "mycelium.handoff",
+        "title": "%cmd.handoff%",
+        "category": "Mycelium",
+        "icon": "$(arrow-swap)"
+      },
+      {
+        "command": "mycelium.copyHandoffPrompt",
+        "title": "%cmd.copyPrompt%",
+        "category": "Mycelium"
+      },
+      {
+        "command": "mycelium.newAgent",
+        "title": "%cmd.newAgent%",
+        "category": "Mycelium",
+        "icon": "$(add)"
+      },
+      {
+        "command": "mycelium.injectAgentsMd",
+        "title": "%cmd.inject%",
+        "category": "Mycelium"
+      },
+      {
+        "command": "mycelium.move",
+        "title": "%cmd.move%",
+        "category": "Mycelium"
+      },
+      {
+        "command": "mycelium.tag",
+        "title": "%cmd.tag%",
+        "category": "Mycelium"
+      },
+      {
+        "command": "mycelium.mkdir",
+        "title": "%cmd.mkdir%",
+        "category": "Mycelium",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "mycelium.copyId",
+        "title": "%cmd.copyId%",
+        "category": "Mycelium"
+      },
+      {
+        "command": "mycelium.autotag",
+        "title": "%cmd.autotag%",
+        "category": "Mycelium",
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "mycelium.autotagAll",
+        "title": "%cmd.autotagAll%",
+        "category": "Mycelium"
+      },
+      {
+        "command": "mycelium.organize",
+        "title": "%cmd.organize%",
+        "category": "Mycelium",
+        "icon": "$(wand)"
+      },
+      {
+        "command": "mycelium.extractKnowledge",
+        "title": "%cmd.extract%",
+        "category": "Mycelium",
+        "icon": "$(book)"
+      },
+      {
+        "command": "mycelium.reviewKnowledge",
+        "title": "%cmd.review%",
+        "category": "Mycelium"
+      },
+      {
+        "command": "mycelium.openKnowledge",
+        "title": "%cmd.openKnowledge%",
+        "category": "Mycelium"
+      },
+      {
+        "command": "mycelium.revealFolder",
+        "title": "%cmd.reveal%",
+        "category": "Mycelium"
+      },
+      {
+        "command": "mycelium.viewTranscript",
+        "title": "%cmd.transcript%",
+        "category": "Mycelium"
+      },
+      {
+        "command": "mycelium.menu",
+        "title": "%cmd.menu%",
+        "category": "Mycelium"
+      },
+      {
+        "command": "mycelium.openGuide",
+        "title": "%cmd.guide%",
+        "category": "Mycelium",
+        "icon": "$(question)"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "mycelium.open",
+          "when": "false"
+        },
+        {
+          "command": "mycelium.resume",
+          "when": "false"
+        },
+        {
+          "command": "mycelium.handoff",
+          "when": "false"
+        },
+        {
+          "command": "mycelium.copyHandoffPrompt",
+          "when": "false"
+        },
+        {
+          "command": "mycelium.move",
+          "when": "false"
+        },
+        {
+          "command": "mycelium.tag",
+          "when": "false"
+        },
+        {
+          "command": "mycelium.copyId",
+          "when": "false"
+        },
+        {
+          "command": "mycelium.autotag",
+          "when": "false"
+        },
+        {
+          "command": "mycelium.revealFolder",
+          "when": "false"
+        },
+        {
+          "command": "mycelium.viewTranscript",
+          "when": "false"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "mycelium.search",
+          "when": "view == mycelium.folders",
+          "group": "navigation@1"
+        },
+        {
+          "command": "mycelium.refresh",
+          "when": "view == mycelium.folders",
+          "group": "navigation@9"
+        },
+        {
+          "command": "mycelium.mkdir",
+          "when": "view == mycelium.folders",
+          "group": "1_more@1"
+        },
+        {
+          "command": "mycelium.refresh",
+          "when": "view == mycelium.workspace",
+          "group": "navigation@9"
+        },
+        {
+          "command": "mycelium.search",
+          "when": "view == mycelium.recent",
+          "group": "navigation@1"
+        },
+        {
+          "command": "mycelium.refresh",
+          "when": "view == mycelium.recent",
+          "group": "navigation@9"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "mycelium.resume",
+          "when": "view =~ /^mycelium\\./ && viewItem == session",
+          "group": "inline@1"
+        },
+        {
+          "command": "mycelium.handoff",
+          "when": "view =~ /^mycelium\\./ && viewItem =~ /^(session|product)$/",
+          "group": "inline@2"
+        },
+        {
+          "command": "mycelium.newAgent",
+          "when": "view =~ /^mycelium\\./ && viewItem == folder",
+          "group": "inline@1"
+        },
+        {
+          "command": "mycelium.organize",
+          "when": "view =~ /^mycelium\\./ && viewItem == folder",
+          "group": "inline@2"
+        },
+        {
+          "command": "mycelium.resume",
+          "when": "view =~ /^mycelium\\./ && viewItem == session",
+          "group": "1_use@1"
+        },
+        {
+          "command": "mycelium.handoff",
+          "when": "view =~ /^mycelium\\./ && viewItem =~ /^(session|product)$/",
+          "group": "1_use@2"
+        },
+        {
+          "command": "mycelium.copyHandoffPrompt",
+          "when": "view =~ /^mycelium\\./ && viewItem =~ /^(session|product)$/",
+          "group": "1_use@3"
+        },
+        {
+          "command": "mycelium.move",
+          "when": "view =~ /^mycelium\\./ && viewItem =~ /^(session|product|backlog)$/",
+          "group": "2_organize@1"
+        },
+        {
+          "command": "mycelium.tag",
+          "when": "view =~ /^mycelium\\./ && viewItem =~ /^(session|product|backlog)$/",
+          "group": "2_organize@2"
+        },
+        {
+          "command": "mycelium.autotag",
+          "when": "view =~ /^mycelium\\./ && viewItem =~ /^(session|product)$/",
+          "group": "2_organize@3"
+        },
+        {
+          "command": "mycelium.copyId",
+          "when": "view =~ /^mycelium\\./ && viewItem =~ /^(session|product|backlog)$/",
+          "group": "3_misc@1"
+        },
+        {
+          "command": "mycelium.newAgent",
+          "when": "view =~ /^mycelium\\./ && viewItem == folder",
+          "group": "1_use@1"
+        },
+        {
+          "command": "mycelium.injectAgentsMd",
+          "when": "view =~ /^mycelium\\./ && viewItem == folder",
+          "group": "1_use@2"
+        },
+        {
+          "command": "mycelium.organize",
+          "when": "view =~ /^mycelium\\./ && viewItem == folder",
+          "group": "2_ai@1"
+        },
+        {
+          "command": "mycelium.extractKnowledge",
+          "when": "view =~ /^mycelium\\./ && viewItem == folder",
+          "group": "2_ai@2"
+        },
+        {
+          "command": "mycelium.openKnowledge",
+          "when": "view =~ /^mycelium\\./ && viewItem == folder",
+          "group": "2_ai@3"
+        },
+        {
+          "command": "mycelium.mkdir",
+          "when": "view =~ /^mycelium\\./ && viewItem == folder",
+          "group": "3_organize@1"
+        }
+      ]
+    },
+    "colors": [
+      {
+        "id": "mycelium.agent.claude",
+        "description": "%color.claude%",
+        "defaults": {
+          "dark": "#8ab4d8",
+          "light": "#3d78a8",
+          "highContrast": "#8ab4d8",
+          "highContrastLight": "#3d78a8"
+        }
+      },
+      {
+        "id": "mycelium.agent.codex",
+        "description": "%color.codex%",
+        "defaults": {
+          "dark": "#d4a24e",
+          "light": "#9a6b12",
+          "highContrast": "#d4a24e",
+          "highContrastLight": "#9a6b12"
+        }
+      },
+      {
+        "id": "mycelium.agent.kiro",
+        "description": "%color.kiro%",
+        "defaults": {
+          "dark": "#e08fb0",
+          "light": "#b04a7c",
+          "highContrast": "#e08fb0",
+          "highContrastLight": "#b04a7c"
+        }
+      },
+      {
+        "id": "mycelium.agent.opencode",
+        "description": "%color.opencode%",
+        "defaults": {
+          "dark": "#6bcf8f",
+          "light": "#2d8a52",
+          "highContrast": "#6bcf8f",
+          "highContrastLight": "#2d8a52"
+        }
+      },
+      {
+        "id": "mycelium.agent.merged",
+        "description": "%color.merged%",
+        "defaults": {
+          "dark": "#a8c25a",
+          "light": "#6b8a1f",
+          "highContrast": "#a8c25a",
+          "highContrastLight": "#6b8a1f"
+        }
+      },
+      {
+        "id": "mycelium.agent.backlog",
+        "description": "%color.backlog%",
+        "defaults": {
+          "dark": "#7fe0c4",
+          "light": "#1f8f74",
+          "highContrast": "#7fe0c4",
+          "highContrastLight": "#1f8f74"
+        }
+      }
+    ],
+    "walkthroughs": [
+      {
+        "id": "mycelium.start",
+        "title": "%walk.title%",
+        "description": "%walk.desc%",
+        "steps": [
+          {
+            "id": "connect",
+            "title": "%walk.connect.title%",
+            "description": "%walk.connect.desc%",
+            "media": {
+              "image": {
+                "dark": "media/walkthrough/loop-dark.svg",
+                "light": "media/walkthrough/loop-light.svg",
+                "hc": "media/walkthrough/loop-dark.svg",
+                "hcLight": "media/walkthrough/loop-light.svg"
+              },
+              "altText": "Capture, Organize, Learn, Reuse"
+            },
+            "completionEvents": [
+              "onContext:mycelium.connected"
+            ]
+          },
+          {
+            "id": "scan",
+            "title": "%walk.scan.title%",
+            "description": "%walk.scan.desc%",
+            "media": {
+              "image": {
+                "dark": "media/walkthrough/capture-dark.svg",
+                "light": "media/walkthrough/capture-light.svg",
+                "hc": "media/walkthrough/capture-dark.svg",
+                "hcLight": "media/walkthrough/capture-light.svg"
+              },
+              "altText": "Capture, Organize, Learn, Reuse"
+            },
+            "completionEvents": [
+              "onCommand:mycelium.scan"
+            ]
+          },
+          {
+            "id": "summarize",
+            "title": "%walk.summarize.title%",
+            "description": "%walk.summarize.desc%",
+            "media": {
+              "image": {
+                "dark": "media/walkthrough/learn-dark.svg",
+                "light": "media/walkthrough/learn-light.svg",
+                "hc": "media/walkthrough/learn-dark.svg",
+                "hcLight": "media/walkthrough/learn-light.svg"
+              },
+              "altText": "Capture, Organize, Learn, Reuse"
+            },
+            "completionEvents": [
+              "onCommand:mycelium.autotagAll"
+            ]
+          },
+          {
+            "id": "organize",
+            "title": "%walk.organize.title%",
+            "description": "%walk.organize.desc%",
+            "media": {
+              "image": {
+                "dark": "media/walkthrough/organize-dark.svg",
+                "light": "media/walkthrough/organize-light.svg",
+                "hc": "media/walkthrough/organize-dark.svg",
+                "hcLight": "media/walkthrough/organize-light.svg"
+              },
+              "altText": "Capture, Organize, Learn, Reuse"
+            },
+            "completionEvents": [
+              "onCommand:mycelium.organize"
+            ]
+          },
+          {
+            "id": "knowledge",
+            "title": "%walk.knowledge.title%",
+            "description": "%walk.knowledge.desc%",
+            "media": {
+              "image": {
+                "dark": "media/walkthrough/learn-dark.svg",
+                "light": "media/walkthrough/learn-light.svg",
+                "hc": "media/walkthrough/learn-dark.svg",
+                "hcLight": "media/walkthrough/learn-light.svg"
+              },
+              "altText": "Capture, Organize, Learn, Reuse"
+            },
+            "completionEvents": [
+              "onCommand:mycelium.extractKnowledge"
+            ]
+          },
+          {
+            "id": "search",
+            "title": "%walk.search.title%",
+            "description": "%walk.search.desc%",
+            "media": {
+              "image": {
+                "dark": "media/walkthrough/reuse-dark.svg",
+                "light": "media/walkthrough/reuse-light.svg",
+                "hc": "media/walkthrough/reuse-dark.svg",
+                "hcLight": "media/walkthrough/reuse-light.svg"
+              },
+              "altText": "Capture, Organize, Learn, Reuse"
+            },
+            "completionEvents": [
+              "onCommand:mycelium.search"
+            ]
+          },
+          {
+            "id": "resume",
+            "title": "%walk.resume.title%",
+            "description": "%walk.resume.desc%",
+            "media": {
+              "image": {
+                "dark": "media/walkthrough/reuse-dark.svg",
+                "light": "media/walkthrough/reuse-light.svg",
+                "hc": "media/walkthrough/reuse-dark.svg",
+                "hcLight": "media/walkthrough/reuse-light.svg"
+              },
+              "altText": "Capture, Organize, Learn, Reuse"
+            },
+            "completionEvents": [
+              "onCommand:mycelium.resume",
+              "onCommand:mycelium.handoff"
+            ]
+          },
+          {
+            "id": "newAgent",
+            "title": "%walk.newAgent.title%",
+            "description": "%walk.newAgent.desc%",
+            "media": {
+              "image": {
+                "dark": "media/walkthrough/reuse-dark.svg",
+                "light": "media/walkthrough/reuse-light.svg",
+                "hc": "media/walkthrough/reuse-dark.svg",
+                "hcLight": "media/walkthrough/reuse-light.svg"
+              },
+              "altText": "Capture, Organize, Learn, Reuse"
+            },
+            "completionEvents": [
+              "onCommand:mycelium.newAgent"
+            ]
+          }
+        ]
+      }
+    ],
+    "configuration": {
+      "title": "Mycelium",
+      "properties": {
+        "mycelium.path": {
+          "type": "string",
+          "default": "mycelium",
+          "description": "%config.path%"
+        },
+        "mycelium.home": {
+          "type": "string",
+          "default": "",
+          "description": "%config.home%"
+        },
+        "mycelium.openSessionIn": {
+          "type": "string",
+          "default": "projectWindow",
+          "enum": [
+            "projectWindow",
+            "thisWindow"
+          ],
+          "enumDescriptions": [
+            "%config.openIn.project%",
+            "%config.openIn.this%"
+          ],
+          "description": "%config.openIn%"
+        }
+      }
+    }
+  }
+}

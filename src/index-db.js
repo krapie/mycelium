@@ -60,13 +60,24 @@ export function openDb() {
       if (!String(err.message).includes('duplicate column')) throw err;
     }
   }
+  // `work_dir` (the directory a session ran in, for an editor's "this
+  // workspace" view) arrived after the index did: an index built before it has
+  // every row's work_dir empty until rebuilt. Rebuilding is cheap and the
+  // index is derived, so do it once, right when the column first appears on a
+  // non-empty index.
+  try {
+    db.exec('ALTER TABLE sessions ADD COLUMN work_dir TEXT');
+    if (db.prepare('SELECT COUNT(*) AS n FROM sessions').get().n > 0) reindex();
+  } catch (err) {
+    if (!String(err.message).includes('duplicate column')) throw err;
+  }
   return db;
 }
 
 function prepareWriters(d) {
   return {
     insSession: d.prepare(
-      'INSERT OR REPLACE INTO sessions (id, source, folder, started_at, ended_at, preview, title, summary, organized_by, kind, done_at, continuation_of, continued_to, tags, merged_from, split_from, superseded_by, split_into) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT OR REPLACE INTO sessions (id, source, folder, started_at, ended_at, preview, title, summary, organized_by, kind, done_at, continuation_of, continued_to, tags, merged_from, split_from, superseded_by, split_into, work_dir) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     ),
     insFts: d.prepare('INSERT INTO session_fts (id, body) VALUES (?, ?)'),
     upsertTag: d.prepare('INSERT OR IGNORE INTO tags (name) VALUES (?)'),
@@ -95,6 +106,7 @@ function writeSessionRow(w, n) {
     n.splitFrom ?? null,
     JSON.stringify(n.supersededBy || []),
     JSON.stringify(n.splitInto || []),
+    n.projectDir || n.cwd || null,
   );
   w.insFts.run(n.id, searchableText(n));
   for (const tag of n.extracted.tags || []) {
@@ -196,9 +208,26 @@ function jsonArrayLength(s) {
  * `date` ('YYYY-MM-DD'), if given, narrows to that single day (matches
  * folder's post-query filter style rather than a separate WHERE clause).
  */
-export function listSessions({ folder, date, includeSuperseded = false } = {}) {
+// A recorded directory can be Windows-style (`C:\work\app\pkg`), and the
+// caller's own spelling may differ (`c:/Work/app`): compare without caring
+// about the separator, a trailing one, or case — drive letters and Windows
+// paths are case-insensitive. A POSIX path is left alone (a `\` is a legal
+// character in a name there).
+const winLike = (p) => /^[A-Za-z]:[\\/]|^\\\\/.test(p);
+const normDir = (p) => (winLike(p) ? p.replace(/\\/g, '/').toLowerCase() : p).replace(/\/+$/, '');
+
+export function listSessions({ folder, date, dir, includeSuperseded = false } = {}) {
   const d = openDb();
   let rows = d.prepare('SELECT * FROM sessions ORDER BY started_at DESC').all();
+  // Sessions that ran in `dir` or anywhere below it — an editor's "this
+  // workspace" view, where the workspace folder is usually a project root.
+  if (dir) {
+    const base = normDir(dir);
+    rows = rows.filter((r) => {
+      const w = r.work_dir && normDir(r.work_dir);
+      return w && (w === base || w.startsWith(base + '/'));
+    });
+  }
   // Matches sessionCountsByDay()'s grouping — a day's session list should be
   // "sessions active that day", same basis as what the calendar grid counted.
   if (date) rows = rows.filter((r) => (r.ended_at || r.started_at || '').slice(0, 10) === date);

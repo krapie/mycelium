@@ -55,3 +55,32 @@ jobs:
 
       - name: E2E test
         run: npm run test:e2e
+
+  vscode:
+    name: vscode extension test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+
+      - name: Test
+        working-directory: vscode
+        run: npm test
+
+      # The Windows PATH/PATHEXT lookup lives in the core CLI; this is where it
+      # runs on a real Windows runner.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test the cross-platform agent lookup
+        run: node --test test/which.test.js

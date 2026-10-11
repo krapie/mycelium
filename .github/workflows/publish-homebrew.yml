@@ -20,6 +20,9 @@ on:
 
 jobs:
   update-homebrew-tap:
+    # The extension has its own releases (publish-vscode.yml, tags `vscode-v*`);
+    # they must not publish the CLI to npm / bump the formula.
+    if: ${{ !startsWith(github.event.release.tag_name, 'vscode-') }}
     runs-on: macos-latest # Homebrew is preinstalled here; ubuntu-latest is not
     permissions:
       contents: read

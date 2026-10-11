@@ -32,6 +32,7 @@ Run       (no args) or tui              Interactive TUI (cockpit) — runs scan/
 Clean     cleanup [tidy]                Remove meta-sessions + empty folders, rebuild the index
           cleanup folders|archive|index Partial cleanup
           cleanup reset --yes           Wipe all data (~/.mycelium)
+Editor    serve --stdio                 JSON-RPC over stdin/stdout for editor integrations (the VS Code extension runs this)
 Other     --version / -v / -V           Print the installed version
 `,
   ko: `Mycelium — AI 협업 컨텍스트 라이프사이클
@@ -65,6 +66,7 @@ Run       (인자 없음) 또는 tui          인터랙티브 TUI (콕핏) — �
 Clean     cleanup [tidy]                메타세션 제거 + 빈 폴더 정리 + 인덱스 재생성
           cleanup folders|archive|index 부분 정리
           cleanup reset --yes           전체 데이터(~/.mycelium) 초기화
+Editor    serve --stdio                 에디터 연동용 JSON-RPC (stdin/stdout) — VS Code 확장이 이 명령을 실행
 Other     --version / -v / -V           설치된 버전 출력
 `,
 };

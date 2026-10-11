@@ -85,6 +85,13 @@ mycelium cleanup reset --yes # full reset: delete ~/.mycelium entirely → re-sc
 
 For a clean start: `mycelium cleanup reset --yes && mycelium scan`.
 
+## Editor integration
+
+```sh
+mycelium serve --stdio    # newline-delimited JSON-RPC 2.0 on stdin/stdout; exits when stdin closes
+```
+Not meant to be run by hand — the VS Code extension (see [VS Code](./vscode.md)) starts it and talks to it, so an editor never imports this package's modules or needs its own `node:sqlite`. Anything the methods print goes to stderr; stdout carries only responses and progress notifications for the LLM-backed methods.
+
 ## Background-only, no TUI (optional)
 
 If you want scanning, organizing, and digests to keep running without the TUI open (headless use, always on a server), start a detached daemon process explicitly:
