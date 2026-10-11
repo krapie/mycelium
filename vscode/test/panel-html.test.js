@@ -96,3 +96,12 @@ test('agentKey maps sources, merge products and backlog items', () => {
   assert.equal(agentKey({ kind: 'backlog' }), 'backlog');
   assert.equal(agentKey({ source: 'who-knows' }), 'claude');
 });
+
+test('a Claude session offers "In terminal" next to Resume; other agents, merge products and backlog items do not', () => {
+  const uuid = '3f2a9c1e-5b7d-4e8a-9c3b-1a2b3c4d5e6f';
+  assert.match(render({ ...base, id: uuid }), /data-action="resumeInTerminal"/);
+  assert.doesNotMatch(render({ ...base, id: uuid, source: 'codex' }), /resumeInTerminal/);
+  assert.doesNotMatch(render({ ...base, id: uuid, mergedFrom: ['a', 'b'] }), /resumeInTerminal/);
+  assert.doesNotMatch(render({ ...base, id: uuid, kind: 'backlog' }), /resumeInTerminal/);
+  assert.doesNotMatch(render(base), /resumeInTerminal/, 'an id Claude Code could not resume');
+});

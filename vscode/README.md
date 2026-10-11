@@ -28,7 +28,7 @@ or *Extensions* → `…` → *Install from VSIX…*. To update, install the new
 
 The **Get Started** walkthrough opens the first time (reopen it with *Mycelium: Open the Guide*). In short, open the Mycelium icon in the activity bar and use **Actions**: scan for sessions, summarize them, smart-organize them into folders, extract a folder's knowledge, search, and start or resume sessions. Full guide: [docs/vscode.md](https://github.com/krapie/mycelium/blob/main/docs/vscode.md).
 
-Resume, Hand off and Start New Agent open their terminal in a window on the session's own project directory (this needs the extension installed in that window too; set `mycelium.openSessionIn` to `thisWindow` to always use the current one).
+With the Claude Code extension installed, Claude sessions open in its panel instead of a terminal (`mycelium.claudeCode.openIn`; *Resume in terminal* keeps the terminal). Resume, Hand off and Start New Agent open in a window on the session's own project directory (this needs the extension installed in that window too; set `mycelium.openSessionIn` to `thisWindow` to always use the current one).
 
 ## Settings
 

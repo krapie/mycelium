@@ -11,7 +11,7 @@ const { SessionPanel } = require('./src/panel.js');
 const { ActionsView } = require('./src/actions.js');
 const { register, GUIDE } = require('./src/commands.js');
 const { launchDir, claim } = require('./src/launch.js');
-const { openTerminal } = require('./src/session-terminal.js');
+const { openLaunch } = require('./src/open-session.js');
 const { workspaceDirs } = require('./src/views.js');
 const { strings } = require('./src/i18n.js');
 const { state, markConnected, handleError, setContext } = require('./src/state.js');
@@ -171,7 +171,7 @@ async function activate(ctx) {
   // belong to a folder open here. Checked now — a window opened just for this
   // arrives after the request was written — and again as new requests land.
   const takeLaunches = () => {
-    for (const launch of claim(launchDir(), workspaceDirs())) openTerminal(launch);
+    for (const launch of claim(launchDir(), workspaceDirs())) openLaunch(launch).catch(() => {});
   };
   fs.mkdirSync(launchDir(), { recursive: true });
   const launches = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(launchDir()), '*.json'));

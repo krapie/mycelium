@@ -2,6 +2,7 @@
 const css = require('./panel-css.js');
 const { strings } = require('./i18n.js');
 const { relativeTime, agentKey, agentLabel } = require('./format.js');
+const { isClaudeSession } = require('./claude-code.js');
 
 // Everything below that came from a session (title, summary, paths, ids…)
 // originates in an agent transcript, i.e. it is untrusted: it only ever
@@ -101,6 +102,7 @@ function renderPanel(d, { nonce, language = 'en', now = Date.now() } = {}) {
 ${x.tags && x.tags.length ? `<div class="tags">${x.tags.map((g) => `<span class="tag">#${esc(g)}</span>`).join('')}</div>` : ''}
 <div class="actions">
 ${button({ action: 'resume', label: t.resume, icon: ICON.play, primary: true, disabled: !!hint, title: hint })}
+${isClaudeSession(d) ? button({ action: 'resumeInTerminal', label: t.resumeTerminal, icon: ICON.play, title: t.resumeTerminalTip }) : ''}
 ${button({ action: 'handoff', label: t.handoff, icon: ICON.swap, disabled: backlog, title: backlog ? t.backlogNotResumable : '' })}
 ${button({ action: 'copyPrompt', label: t.copyPrompt, icon: ICON.copy, disabled: backlog })}
 ${button({ action: 'move', label: t.move, icon: ICON.folder })}

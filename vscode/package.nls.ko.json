@@ -6,7 +6,7 @@
   "cmd.scan": "새 세션 스캔",
   "cmd.search": "세션 검색",
   "cmd.open": "세션 열기",
-  "cmd.resume": "터미널에서 세션 이어하기",
+  "cmd.resume": "세션 이어하기",
   "cmd.handoff": "다른 에이전트로 핸드오프",
   "cmd.copyPrompt": "핸드오프 프롬프트 복사",
   "cmd.newAgent": "새 에이전트 세션 시작",
@@ -52,7 +52,7 @@
   "walk.search.title": "Find: 옛 세션 검색하고 열기",
   "walk.search.desc": "기억나는 아무 단서로 검색하세요 — 파일 이름, 에러, 결정 내용 등. 결과를 열면 요약, 결정사항, 할 일을 한 화면에서 볼 수 있습니다.\n[세션 검색](command:mycelium.search)",
   "walk.resume.title": "Reuse: 이어하기 / 핸드오프",
-  "walk.resume.desc": "**이어하기**는 터미널 탭에서 세션을 계속합니다. **핸드오프**는 다른 에이전트에게 맥락을 넘깁니다 — 작업 중간에 Claude에서 Codex로 바꿀 때 씁니다. 병합·분할된 세션은 핸드오프만 가능합니다.\n세션에 마우스를 올려 ▶ 또는 ⇄ 를 누르거나, 세션 페이지의 버튼을 쓰세요.",
+  "walk.resume.desc": "**이어하기**는 터미널 탭에서 세션을 계속합니다 (Claude Code 확장이 있으면 그 패널에서). **핸드오프**는 다른 에이전트에게 맥락을 넘깁니다 — 작업 중간에 Claude에서 Codex로 바꿀 때 씁니다. 병합·분할된 세션은 핸드오프만 가능합니다.\n세션에 마우스를 올려 ▶ 또는 ⇄ 를 누르거나, 세션 페이지의 버튼을 쓰세요.",
   "walk.newAgent.title": "Reuse: 지식을 안고 새 세션 시작",
   "walk.newAgent.desc": "폴더에서 에이전트를 시작합니다. 먼저 그 폴더의 지식을 프로젝트의 AGENTS.md에 넣을지 물어서, 새 세션이 이전 세션들이 배운 것을 알고 시작합니다.\n[에이전트 시작](command:mycelium.newAgent)",
   "view.actions": "작업",
@@ -62,5 +62,10 @@
   "welcome.outdated": "Mycelium 명령줄 도구가 이 확장에 비해 너무 오래되었습니다 (0.5.0 이상이 필요합니다).\n\n업데이트한 뒤 창을 다시 불러오세요:\n`npm install -g @kevinprk/mycelium`\n또는 `brew upgrade mycelium`\n[창 다시 불러오기](command:workbench.action.reloadWindow)",
   "capability.untrusted": "Mycelium은 프로젝트에서 에이전트 CLI를 실행하므로 신뢰하는 폴더에서만 동작합니다.",
   "cmd.showLog": "로그 보기",
-  "welcome.node": "Mycelium 명령줄 도구는 찾았지만 필요한 Node.js(22.16 이상)를 찾지 못했습니다.\n\nVS Code가 쉘의 PATH 없이 시작된 것일 수 있습니다. 터미널에서 `code`로 실행하거나 nodejs.org에서 Node.js를 설치하세요.\n[로그 보기](command:mycelium.showLog)\n[창 다시 불러오기](command:workbench.action.reloadWindow)"
+  "welcome.node": "Mycelium 명령줄 도구는 찾았지만 필요한 Node.js(22.16 이상)를 찾지 못했습니다.\n\nVS Code가 쉘의 PATH 없이 시작된 것일 수 있습니다. 터미널에서 `code`로 실행하거나 nodejs.org에서 Node.js를 설치하세요.\n[로그 보기](command:mycelium.showLog)\n[창 다시 불러오기](command:workbench.action.reloadWindow)",
+  "cmd.resumeTerminal": "터미널에서 세션 이어하기",
+  "config.claudeOpenIn": "Claude Code 확장이 설치되어 있을 때 이어하기, 핸드오프, 새 에이전트 시작이 Claude Code 세션을 여는 위치입니다.",
+  "config.claudeOpenIn.auto": "Claude Code 확장이 터미널을 쓰도록 설정(`claudeCode.useTerminal`)되어 있지 않으면 Claude Code 패널에서 엽니다.",
+  "config.claudeOpenIn.panel": "항상 Claude Code 패널에서 엽니다.",
+  "config.claudeOpenIn.terminal": "항상 터미널에서 엽니다."
 }

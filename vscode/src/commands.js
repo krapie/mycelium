@@ -3,7 +3,8 @@ const vscode = require('vscode');
 const { transcriptMarkdown } = require('./markdown.js');
 const { relativeTime, agentKey } = require('./format.js');
 const { strings } = require('./i18n.js');
-const { openTerminal } = require('./session-terminal.js');
+const { openLaunch, panelWanted } = require('./open-session.js');
+const { isClaudeSession } = require('./claude-code.js');
 const { launchDir, relatedTo, enqueue, pending, withdraw } = require('./launch.js');
 const { workspaceDirs } = require('./views.js');
 const { registerAi } = require('./ai.js');
@@ -31,28 +32,29 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
       }),
     );
 
-  // Where a session starts. Its terminal belongs in the window of the project
-  // it ran in: if that is not what this window has open, ask VS Code for a
-  // window on that directory and hand the launch over (launch.js). Without a
-  // folder open here, this window itself switches to the project. If nothing
-  // in the other window takes the request — the extension isn't installed
-  // there, say — it starts here instead of silently doing nothing.
-  const terminal = async (name, cwd, bin, args, key) => {
-    const launch = { name, cwd, bin, args, key };
+  // Where a session starts. It belongs in the window of the project it ran in
+  // (a terminal there, or the Claude Code panel — Claude Code only finds a
+  // session through the project its window has open): if that is not what this
+  // window has open, ask VS Code for a window on that directory and hand the
+  // launch over (launch.js). Without a folder open here, this window itself
+  // switches to the project. If nothing in the other window takes the request
+  // — the extension isn't installed there, say — it starts here instead of
+  // silently doing nothing.
+  const startSession = async (launch) => {
     const folders = workspaceDirs();
     const mode = vscode.workspace.getConfiguration('mycelium').get('openSessionIn');
-    if (mode === 'thisWindow' || relatedTo(cwd, folders)) return openTerminal(launch);
+    if (mode === 'thisWindow' || relatedTo(launch.cwd, folders)) return openLaunch(launch);
 
     const file = enqueue(launchDir(), launch);
-    await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(cwd), { forceNewWindow: folders.length > 0 });
+    await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(launch.cwd), { forceNewWindow: folders.length > 0 });
     if (!folders.length) return; // this window reloads onto the folder and takes the request itself
     for (let i = 0; i < 30; i++) {
       await new Promise((r) => setTimeout(r, 500));
       if (!pending(file)) return;
     }
     if (!withdraw(file)) return; // taken at the last moment
-    openTerminal(launch);
-    vscode.window.showWarningMessage(`Mycelium: the window for ${cwd} didn't pick this up (is the Mycelium extension installed there?), so it started here instead.`);
+    await openLaunch(launch);
+    vscode.window.showWarningMessage(`Mycelium: the window for ${launch.cwd} didn't pick this up (is the Mycelium extension installed there?), so it started here instead.`);
   };
 
   const pickDir = async (folder) => {
@@ -160,18 +162,24 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
     load('').catch(() => {}); // most recent first, before anything is typed
   });
 
-  run('mycelium.resume', async (el) => {
+  // A Claude Code session opens in the Claude Code panel when that extension
+  // is there (and `mycelium.claudeCode.openIn` / its own `useTerminal` allow
+  // it); every other agent, and `terminalOnly`, uses a terminal.
+  const resumeSession = async (el, { terminalOnly = false } = {}) => {
     const [row] = rowsOf(el);
     if (!row) return;
     try {
       const cmd = await client.request('resumeCommand', { id: row.id });
-      await terminal(row.title || row.id.slice(0, 8), cmd.cwd, cmd.bin, cmd.args, agentKey(row));
+      const panel = !terminalOnly && isClaudeSession(row) && panelWanted('claude') ? { sessionId: row.id } : undefined;
+      await startSession({ name: row.title || row.id.slice(0, 8), cwd: cmd.cwd, bin: cmd.bin, args: cmd.args, key: agentKey(row), panel });
     } catch (err) {
       if (!/use handoff/.test(err.message)) throw err;
       const pick = await vscode.window.showWarningMessage(err.message, 'Hand off');
       if (pick) await vscode.commands.executeCommand('mycelium.handoff', el);
     }
-  });
+  };
+  run('mycelium.resume', (el) => resumeSession(el));
+  run('mycelium.resumeInTerminal', (el) => resumeSession(el, { terminalOnly: true }));
 
   run('mycelium.handoff', async (el) => {
     const [row] = rowsOf(el);
@@ -187,7 +195,9 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
     const dir = d.projectDir || d.cwd || (await pickDir(row.folder));
     if (!dir) return;
     const cmd = await client.request('newCommand', { agentKey: agent.key, dir, seed: prompt });
-    await terminal(`${agent.label} ← ${row.title || row.id.slice(0, 8)}`, cmd.cwd, cmd.bin, cmd.args, agent.key);
+    // Into Claude Code's panel the prompt is put in the input box, ready to send
+    const panel = agent.key === 'claude' && panelWanted('claude') ? { prompt } : undefined;
+    await startSession({ name: `${agent.label} ← ${row.title || row.id.slice(0, 8)}`, cwd: cmd.cwd, bin: cmd.bin, args: cmd.args, key: agent.key, panel });
   });
 
   run('mycelium.copyHandoffPrompt', async (el) => {
@@ -213,7 +223,8 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
       }
     }
     const cmd = await client.request('newCommand', { agentKey: agent.key, dir });
-    await terminal(agent.label, cmd.cwd, cmd.bin, cmd.args, agent.key);
+    const panel = agent.key === 'claude' && panelWanted('claude') ? {} : undefined; // {} = a new conversation
+    await startSession({ name: agent.label, cwd: cmd.cwd, bin: cmd.bin, args: cmd.args, key: agent.key, panel });
   });
 
   run('mycelium.injectAgentsMd', async (el) => {
