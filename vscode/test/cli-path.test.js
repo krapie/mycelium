@@ -85,17 +85,23 @@ test('loginShellPath returns the shell\'s PATH and ignores whatever the rc files
     c.stdout.emit('data', 'Welcome back!\nnvm loaded\n__MYCELIUM_PATH__/opt/homebrew/bin:/usr/bin__MYCELIUM_PATH__');
     c.emit('close');
   });
-  assert.equal(await loginShellPath({ shell: '/bin/zsh', spawnFn }), '/opt/homebrew/bin:/usr/bin');
+  assert.equal(await loginShellPath({ platform: 'linux', shell: '/bin/zsh', spawnFn }), '/opt/homebrew/bin:/usr/bin');
 });
 
 test('loginShellPath gives up after its own timeout instead of hanging', async () => {
   const t0 = Date.now();
-  assert.equal(await loginShellPath({ shell: '/bin/zsh', timeoutMs: 30, spawnFn: fakeShell(() => {}) }), null);
+  assert.equal(await loginShellPath({ platform: 'linux', shell: '/bin/zsh', timeoutMs: 30, spawnFn: fakeShell(() => {}) }), null);
   assert.ok(Date.now() - t0 < 1000);
 });
 
 test('loginShellPath is null when the shell fails to start or prints nothing useful', async () => {
-  assert.equal(await loginShellPath({ shell: '/bin/zsh', spawnFn: fakeShell((c) => c.emit('error', new Error('boom'))) }), null);
-  assert.equal(await loginShellPath({ shell: '/bin/zsh', spawnFn: fakeShell((c) => { c.stdout.emit('data', 'no markers'); c.emit('close'); }) }), null);
-  assert.equal(await loginShellPath({ shell: '', spawnFn: fakeShell(() => {}) }), null);
+  assert.equal(await loginShellPath({ platform: 'linux', shell: '/bin/zsh', spawnFn: fakeShell((c) => c.emit('error', new Error('boom'))) }), null);
+  assert.equal(await loginShellPath({ platform: 'linux', shell: '/bin/zsh', spawnFn: fakeShell((c) => { c.stdout.emit('data', 'no markers'); c.emit('close'); }) }), null);
+  assert.equal(await loginShellPath({ platform: 'linux', shell: '', spawnFn: fakeShell(() => {}) }), null);
+});
+
+test('loginShellPath never starts a shell on Windows', async () => {
+  let started = false;
+  assert.equal(await loginShellPath({ platform: 'win32', shell: 'C:\\Windows\\System32\\cmd.exe', spawnFn: () => { started = true; return fakeShell(() => {})(); } }), null);
+  assert.equal(started, false);
 });

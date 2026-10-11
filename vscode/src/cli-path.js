@@ -87,9 +87,9 @@ const MARK = '__MYCELIUM_PATH__';
  * Code's is 10s and gives up with a modal). Async — a slow shell must not
  * freeze the extension host. Resolves to the PATH string, or null on any failure.
  */
-function loginShellPath({ shell = process.env.SHELL, timeoutMs = 15000, spawnFn = spawn } = {}) {
+function loginShellPath({ shell = process.env.SHELL, timeoutMs = 15000, spawnFn = spawn, platform = process.platform } = {}) {
   return new Promise((resolve) => {
-    if (!shell || process.platform === 'win32') return resolve(null);
+    if (!shell || platform === 'win32') return resolve(null);
     let out = '';
     let done = false;
     const finish = (v) => {
