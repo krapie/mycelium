@@ -16,13 +16,15 @@ const TTL = 120000; // a request nobody claimed in two minutes is stale
 
 const launchDir = (home = os.homedir()) => path.join(home, '.mycelium-vscode-launch');
 
-const within = (child, parent) => {
-  const rel = path.relative(parent, child);
-  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+// `p` is injectable so the Windows rules (case-insensitive drive letters, `\`)
+// are tested from any host.
+const within = (child, parent, p) => {
+  const rel = p.relative(parent, child);
+  return rel === '' || (!rel.startsWith('..') && !p.isAbsolute(rel));
 };
 
 /** Is `dir` part of the same project as one of the open folders (either one containing the other)? */
-const relatedTo = (dir, folders) => folders.some((f) => within(dir, f) || within(f, dir));
+const relatedTo = (dir, folders, p = path) => folders.some((f) => within(dir, f, p) || within(f, dir, p));
 
 /** Queue a launch; returns the file whose disappearance means "someone took it". */
 function enqueue(dir, launch, now = Date.now()) {
@@ -51,7 +53,9 @@ function claim(dir, folders, now = Date.now()) {
     } catch {
       continue; // being renamed into place, or not ours to judge
     }
-    if (!launch || typeof launch.cwd !== 'string' || typeof launch.line !== 'string') continue;
+    // The program and its arguments, not a command line: only the window that
+    // runs it knows which shell it has to quote for.
+    if (!launch || typeof launch.cwd !== 'string' || typeof launch.bin !== 'string' || !Array.isArray(launch.args) || !launch.args.every((a) => typeof a === 'string')) continue;
     if (now - launch.created > TTL) {
       try {
         fs.unlinkSync(file);

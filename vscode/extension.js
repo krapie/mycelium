@@ -14,7 +14,8 @@ const { launchDir, claim } = require('./src/launch.js');
 const { openTerminal } = require('./src/session-terminal.js');
 const { workspaceDirs } = require('./src/views.js');
 const { strings } = require('./src/i18n.js');
-const { state, markConnected, handleError } = require('./src/state.js');
+const { state, markConnected, handleError, setContext } = require('./src/state.js');
+const { isOutdated, MIN_CLI } = require('./src/version.js');
 
 const MIN_PROTOCOL = 1;
 
@@ -93,6 +94,13 @@ async function activate(ctx) {
     watcher?.dispose();
     try {
       const hello = await proxy.request('hello');
+      if (isOutdated(hello.version)) {
+        // Answers `hello` but predates methods this extension calls.
+        setContext('mycelium.cliOutdated', true);
+        setContext('mycelium.connected', false);
+        vscode.window.showWarningMessage(`Mycelium CLI ${hello.version} is too old for this extension (needs ${MIN_CLI}+). Update: npm install -g @kevinprk/mycelium`);
+        return;
+      }
       state.home = hello.home;
       // Which store this window is showing, in plain sight — a sample store and
       // a real one look alike, and mixing them up is a real mistake to make.

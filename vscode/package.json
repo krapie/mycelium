@@ -4,13 +4,30 @@
   "description": "Browse, resume and hand off your AI coding-agent sessions from the sidebar.",
   "version": "0.1.0",
   "publisher": "krapie",
+  "author": "krapie",
   "license": "MIT",
   "private": true,
+  "preview": true,
   "repository": {
     "type": "git",
     "url": "git+https://github.com/krapie/mycelium.git",
     "directory": "vscode"
   },
+  "homepage": "https://github.com/krapie/mycelium/blob/main/docs/vscode.md",
+  "bugs": {
+    "url": "https://github.com/krapie/mycelium/issues"
+  },
+  "keywords": [
+    "ai",
+    "claude-code",
+    "codex",
+    "kiro",
+    "opencode",
+    "coding-agent",
+    "sessions",
+    "context",
+    "handoff"
+  ],
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -18,6 +35,13 @@
     "Other",
     "AI"
   ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "%capability.untrusted%"
+    },
+    "virtualWorkspaces": false
+  },
   "main": "./extension.js",
   "activationEvents": [
     "onView:mycelium.actions",
@@ -30,12 +54,9 @@
     "test": "node --test test/*.test.js",
     "seed": "node scripts/seed-dev-store.mjs",
     "dev": "npm run seed && code --new-window --extensionDevelopmentPath=\"$PWD\" \"$HOME/.mycelium-vscode-dev-repo\"",
-    "package": "vsce package --no-dependencies --skip-license",
+    "package": "npx --yes @vscode/vsce@4.0.0 package --no-dependencies",
     "dev:real": "node scripts/open-real.mjs",
     "install:local": "npm run package -- -o mycelium-vscode.vsix && code --install-extension mycelium-vscode.vsix --force"
-  },
-  "devDependencies": {
-    "@vscode/vsce": "^3.0.0"
   },
   "contributes": {
     "viewsContainers": {
@@ -52,7 +73,7 @@
         {
           "id": "mycelium.actions",
           "name": "%view.actions%",
-          "when": "!mycelium.cliMissing"
+          "when": "!mycelium.cliMissing && !mycelium.cliOutdated"
         },
         {
           "id": "mycelium.workspace",
@@ -88,17 +109,32 @@
       {
         "view": "mycelium.folders",
         "contents": "%welcome.empty%",
-        "when": "!mycelium.cliMissing && mycelium.storeEmpty"
+        "when": "!mycelium.cliMissing && !mycelium.cliOutdated && mycelium.storeEmpty"
       },
       {
         "view": "mycelium.workspace",
         "contents": "%welcome.workspace%",
-        "when": "!mycelium.cliMissing"
+        "when": "!mycelium.cliMissing && !mycelium.cliOutdated"
       },
       {
         "view": "mycelium.recent",
         "contents": "%welcome.recent%",
-        "when": "!mycelium.cliMissing"
+        "when": "!mycelium.cliMissing && !mycelium.cliOutdated"
+      },
+      {
+        "view": "mycelium.folders",
+        "contents": "%welcome.outdated%",
+        "when": "mycelium.cliOutdated"
+      },
+      {
+        "view": "mycelium.workspace",
+        "contents": "%welcome.outdated%",
+        "when": "mycelium.cliOutdated"
+      },
+      {
+        "view": "mycelium.recent",
+        "contents": "%welcome.outdated%",
+        "when": "mycelium.cliOutdated"
       }
     ],
     "commands": [

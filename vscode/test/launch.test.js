@@ -7,7 +7,7 @@ const path = require('node:path');
 const { relatedTo, enqueue, claim, pending, withdraw, TTL } = require('../src/launch.js');
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'mycelium-launch-'));
-const L = (cwd) => ({ cwd, line: `cd ${cwd} && claude`, name: 'n', key: 'claude' });
+const L = (cwd) => ({ cwd, bin: 'claude', args: ['--resume', 'abc'], name: 'n', key: 'claude' });
 
 test('relatedTo: the same project, in either direction; never a sibling that shares a prefix', () => {
   assert.equal(relatedTo('/work/app', ['/work/app']), true);
@@ -18,6 +18,15 @@ test('relatedTo: the same project, in either direction; never a sibling that sha
   assert.equal(relatedTo('/work/app', []), false);
 });
 
+test('relatedTo follows Windows rules when given path.win32: drive letters ignore case, both separators work', () => {
+  const w = path.win32;
+  assert.equal(relatedTo('C:\\Work\\App\\src', ['c:\\work\\app'], w), true);
+  assert.equal(relatedTo('c:\\work\\app', ['C:\\Work\\App\\packages\\web'], w), true);
+  assert.equal(relatedTo('C:\\work\\application', ['C:\\work\\app'], w), false);
+  assert.equal(relatedTo('D:\\work\\app', ['C:\\work\\app'], w), false, 'another drive is another project');
+  assert.equal(relatedTo('C:/work/app/src', ['C:\\work\\app'], w), true);
+});
+
 test('a window claims requests for its project, and claiming is the acknowledgement', () => {
   const dir = tmp();
   const file = enqueue(dir, L('/work/app'));
@@ -26,7 +35,7 @@ test('a window claims requests for its project, and claiming is the acknowledgem
   assert.equal(pending(file), true);
   const got = claim(dir, ['/work/app']);
   assert.equal(got.length, 1);
-  assert.equal(got[0].line, 'cd /work/app && claude');
+  assert.deepEqual([got[0].bin, got[0].args], ['claude', ['--resume', 'abc']]);
   assert.equal(pending(file), false, 'taken — the sender sees it vanish');
 });
 
@@ -49,6 +58,8 @@ test('a half-written request is never read, and junk files are ignored', () => {
   fs.writeFileSync(path.join(dir, 'x.json.tmp'), '{"cwd":"/work/app"'); // mid-rename
   fs.writeFileSync(path.join(dir, 'junk.json'), 'not json');
   fs.writeFileSync(path.join(dir, 'wrong.json'), JSON.stringify({ cwd: 5 }));
+  fs.writeFileSync(path.join(dir, 'oldformat.json'), JSON.stringify({ cwd: '/work/app', line: 'cd x && claude', created: Date.now() })); // a command line, not bin/args
+  fs.writeFileSync(path.join(dir, 'badargs.json'), JSON.stringify({ cwd: '/work/app', bin: 'claude', args: ['ok', 5], created: Date.now() }));
   assert.deepEqual(claim(dir, ['/work/app']), []);
   assert.deepEqual(claim(path.join(dir, 'missing'), ['/work/app']), []);
 });

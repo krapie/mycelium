@@ -58,5 +58,7 @@
   "view.actions": "작업",
   "config.openIn": "이어하기, 핸드오프, 새 에이전트 시작의 터미널을 여는 위치입니다.",
   "config.openIn.project": "세션이 실행된 프로젝트 디렉터리의 창에서 엽니다 (없으면 새 창을 엽니다).",
-  "config.openIn.this": "지금 창에서, 열려 있는 폴더와 상관없이 엽니다."
+  "config.openIn.this": "지금 창에서, 열려 있는 폴더와 상관없이 엽니다.",
+  "welcome.outdated": "Mycelium 명령줄 도구가 이 확장에 비해 너무 오래되었습니다 (0.5.0 이상이 필요합니다).\n\n업데이트한 뒤 창을 다시 불러오세요:\n`npm install -g @kevinprk/mycelium`\n또는 `brew upgrade mycelium`\n[창 다시 불러오기](command:workbench.action.reloadWindow)",
+  "capability.untrusted": "Mycelium은 프로젝트에서 에이전트 CLI를 실행하므로 신뢰하는 폴더에서만 동작합니다."
 }

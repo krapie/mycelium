@@ -6,6 +6,20 @@ The `vscode/` extension puts Mycelium in the editor's sidebar. It works with VS 
 
 It needs the `mycelium` CLI (`npm i -g @kevinprk/mycelium`) — the extension runs `mycelium serve --stdio` and shows what it returns. The first time it activates it opens a **Get Started** walkthrough; reopen it any time with **Mycelium: Open the Guide**.
 
+## Install
+
+Each computer needs the **CLI (0.5.0 or newer)** and the **extension**. The extension tells you if the CLI is missing or too old.
+
+```sh
+npm install -g @kevinprk/mycelium            # or: brew install krapie/tap/mycelium   (Node ≥ 22.16)
+gh release download vscode-v0.1.0 -R krapie/mycelium -p '*.vsix'
+code --install-extension mycelium-vscode-0.1.0.vsix     # `cursor` / `windsurf` work the same way
+```
+
+Or download the `.vsix` from the release page and use *Extensions → `…` → Install from VSIX…*. The extension is not on a marketplace yet, so there is no auto-update: install the newer `.vsix` to update. Each computer keeps its own `~/.mycelium`; the extension shows whatever store it finds on that machine.
+
+On Windows the terminal command is written for whichever shell the integrated terminal uses (PowerShell, cmd or bash); cmd flattens a multi-line handoff prompt onto one line, so PowerShell (the default) is the better fit for Hand off.
+
 ## Using it: the loop, step by step
 
 | Stage | What you want | Where |
@@ -47,7 +61,18 @@ This hand-off needs the Mycelium extension to be **installed**, because the new 
 | `mycelium.home` | Data directory (`MYCELIUM_HOME`); empty uses `~/.mycelium`. |
 | `mycelium.openSessionIn` | `projectWindow` (default): terminals open in a window on the session's directory. `thisWindow`: always here. |
 
+## Releasing the extension (maintainers)
+
+The extension is versioned separately from the CLI, and its releases are tagged `vscode-v<version>` so they don't collide with the CLI's `v<version>`.
+
+1. Bump `version` in `vscode/package.json` and add a `vscode/CHANGELOG.md` entry. If the extension now needs newer CLI features, raise `MIN_CLI` in `vscode/src/version.js` — and that CLI has to be released first (`v<cli version>`, which publishes to npm and Homebrew).
+2. Publish a GitHub Release with tag `vscode-v<version>` and notes. [`publish-vscode.yml`](../.github/workflows/publish-vscode.yml) checks the tag against `vscode/package.json`, runs the tests, builds `mycelium-vscode-<version>.vsix` and attaches it to the release. `publish.yml` and `publish-homebrew.yml` skip `vscode-` tags.
+3. To try the file before releasing: `cd vscode && npm run package`, then install it into a throwaway profile: `code --user-data-dir /tmp/u --extensions-dir /tmp/e --install-extension mycelium-vscode-<version>.vsix`.
+
 ## Try it locally
+
+The dev scripts below (`dev`, `dev:real`, seeding) are for macOS and Linux; they aren't part of the packaged extension.
+
 
 ```sh
 cd vscode && npm run dev        # `npm run seed -- en` for English sample data

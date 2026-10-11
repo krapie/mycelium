@@ -702,6 +702,18 @@ As a user, I can **write down something to work on later, before any agent has r
   one. `mycelium.openSessionIn: thisWindow` opts out. [partial]
   (`vscode/test/launch.test.js` covers relatedness, claiming, staleness and
   atomicity; opening the windows themselves needs a running editor)
+- **Know when the CLI is missing or too old.** A CLI from before `serve`
+  prints its help and exits 0 without answering; the client reports that as
+  `OLD_CLI` ("needs 0.5.0 or newer"), as does a `hello` older than `MIN_CLI`.
+  Both show an upgrade welcome view instead of an empty sidebar. [tested]
+  (`vscode/test/client.test.js`, `shell.test.js`)
+- **Run on Windows.** `which()` splits PATH on `;` and tries PATHEXT there;
+  the client spawns the CLI through a shell on win32; terminals get
+  `bin`/`args`/`cwd` (never a POSIX command line) and the receiving window
+  quotes them for its own shell (bash/zsh, PowerShell, cmd). [partial]
+  (every rule is unit-tested with an injected platform; the CI vscode job
+  also runs on a Windows runner, but no one has driven a real Windows
+  editor yet)
 - **Browse and reuse from the editor sidebar.** Four views (Actions,
   This Workspace, Folders, and a hidden-by-default Recent), a themed session page with Resume / Hand off /
   Move / Tags / Summarize, drag-and-drop filing, smart organize with a

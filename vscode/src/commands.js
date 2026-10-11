@@ -36,8 +36,8 @@ function register(ctx, { client, panel, refresh, foldersView, language }) {
   // folder open here, this window itself switches to the project. If nothing
   // in the other window takes the request — the extension isn't installed
   // there, say — it starts here instead of silently doing nothing.
-  const terminal = async (name, cwd, line, key) => {
-    const launch = { name, cwd, line, key };
+  const terminal = async (name, cwd, bin, args, key) => {
+    const launch = { name, cwd, bin, args, key };
     const folders = workspaceDirs();
     const mode = vscode.workspace.getConfiguration('mycelium').get('openSessionIn');
     if (mode === 'thisWindow' || relatedTo(cwd, folders)) return openTerminal(launch);
@@ -163,7 +163,7 @@ function register(ctx, { client, panel, refresh, foldersView, language }) {
     if (!row) return;
     try {
       const cmd = await client.request('resumeCommand', { id: row.id });
-      await terminal(row.title || row.id.slice(0, 8), cmd.cwd, cmd.line, agentKey(row));
+      await terminal(row.title || row.id.slice(0, 8), cmd.cwd, cmd.bin, cmd.args, agentKey(row));
     } catch (err) {
       if (!/use handoff/.test(err.message)) throw err;
       const pick = await vscode.window.showWarningMessage(err.message, 'Hand off');
@@ -185,7 +185,7 @@ function register(ctx, { client, panel, refresh, foldersView, language }) {
     const dir = d.projectDir || d.cwd || (await pickDir(row.folder));
     if (!dir) return;
     const cmd = await client.request('newCommand', { agentKey: agent.key, dir, seed: prompt });
-    await terminal(`${agent.label} ← ${row.title || row.id.slice(0, 8)}`, cmd.cwd, cmd.line, agent.key);
+    await terminal(`${agent.label} ← ${row.title || row.id.slice(0, 8)}`, cmd.cwd, cmd.bin, cmd.args, agent.key);
   });
 
   run('mycelium.copyHandoffPrompt', async (el) => {
@@ -211,7 +211,7 @@ function register(ctx, { client, panel, refresh, foldersView, language }) {
       }
     }
     const cmd = await client.request('newCommand', { agentKey: agent.key, dir });
-    await terminal(agent.label, cmd.cwd, cmd.line, agent.key);
+    await terminal(agent.label, cmd.cwd, cmd.bin, cmd.args, agent.key);
   });
 
   run('mycelium.injectAgentsMd', async (el) => {

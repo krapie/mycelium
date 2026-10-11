@@ -1,0 +1,52 @@
+name: Publish VS Code extension
+
+# Fires when a maintainer publishes a GitHub Release whose tag is
+# `vscode-v<version>` (the extension is versioned separately from the CLI, so
+# its tags don't collide with `v<version>`). Builds the .vsix and attaches it
+# to that release; there is no registry to publish to, people install the file
+# (docs/vscode.md). publish.yml and publish-homebrew.yml skip these tags.
+on:
+  release:
+    types: [published]
+
+jobs:
+  vsix:
+    if: ${{ startsWith(github.event.release.tag_name, 'vscode-v') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # attach the file to the release
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+
+      - name: Tag matches the extension's version
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          VERSION="${TAG#vscode-v}"
+          PKG="$(node -p "require('./vscode/package.json').version")"
+          if [ "$VERSION" != "$PKG" ]; then
+            echo "::error::tag $TAG is for $VERSION but vscode/package.json says $PKG — bump it (or retag) first"
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Test
+        working-directory: vscode
+        run: npm test
+
+      - name: Build the .vsix
+        working-directory: vscode
+        run: npx --yes @vscode/vsce@4.0.0 package --no-dependencies -o "mycelium-vscode-${VERSION}.vsix"
+
+      - name: Attach it to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" "vscode/mycelium-vscode-${VERSION}.vsix" --clobber

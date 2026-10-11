@@ -82,6 +82,26 @@ test('progress notifications reach only the call that asked, and a progress call
   assert.deepEqual(seen, [1, 2]);
 });
 
+test('a CLI that exits cleanly without ever answering is reported as too old, not as a mystery exit', async () => {
+  const c = new Client({ spawnFn: () => fakeChild((p) => p.emit('close', 0)) });
+  await assert.rejects(c.request('hello'), (e) => e.code === 'OLD_CLI' && /0\.5\.0/.test(e.message) && /npm install -g/.test(e.message));
+});
+
+test('a clean exit AFTER answering is not "too old"', async () => {
+  const c = new Client({ spawnFn: () => fakeChild((p, r) => { reply(p, r.id, { result: 1 }); p.emit('close', 0); }) });
+  assert.equal(await c.request('hello'), 1);
+});
+
+test('on Windows the CLI is run through a shell, with a spaced path quoted; elsewhere it is not', async () => {
+  const seen = [];
+  const mk = (platform, command) => new Client({ platform, command, spawnFn: (cmd, args, opts) => { seen.push({ cmd, args, shell: opts.shell, windowsHide: opts.windowsHide }); return fakeChild((p, r) => reply(p, r.id, { result: 1 })); } });
+  await mk('win32', 'C:\\Program Files\\nodejs\\mycelium.cmd').request('x');
+  await mk('win32', 'mycelium').request('x');
+  await mk('darwin', '/opt/homebrew/bin/my cel').request('x');
+  assert.deepEqual(seen.map((s) => [s.cmd, s.shell]), [['"C:\\Program Files\\nodejs\\mycelium.cmd"', true], ['mycelium', true], ['/opt/homebrew/bin/my cel', false]]);
+  assert.ok(seen.every((s) => s.args.join(' ') === 'serve --stdio' && s.windowsHide === true));
+});
+
 test('transcriptMarkdown labels turns and truncates a huge one', () => {
   const md = transcriptMarkdown({
     id: 'abc', extracted: { title: 'Fix login' },

@@ -58,5 +58,7 @@
   "view.actions": "Actions",
   "config.openIn": "Where Resume, Hand off and Start New Agent open their terminal.",
   "config.openIn.project": "In a window on the session's own project directory (opens one if needed).",
-  "config.openIn.this": "In this window, whatever folder it has open."
+  "config.openIn.this": "In this window, whatever folder it has open.",
+  "welcome.outdated": "The Mycelium command-line tool is too old for this extension (it needs 0.5.0 or newer).\n\nUpdate it, then reload the window:\n`npm install -g @kevinprk/mycelium`\nor `brew upgrade mycelium`\n[Reload Window](command:workbench.action.reloadWindow)",
+  "capability.untrusted": "Mycelium starts agent CLIs and runs commands in your project, so it only runs in folders you trust."
 }

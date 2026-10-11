@@ -1,5 +1,6 @@
 'use strict';
 const { spawn } = require('node:child_process');
+const { MIN_CLI } = require('./version.js');
 
 /**
  * Line-delimited JSON-RPC client over a `mycelium serve --stdio` child.
@@ -9,11 +10,12 @@ const { spawn } = require('node:child_process');
  * dead extension.
  */
 class Client {
-  constructor({ command = 'mycelium', env = {}, timeoutMs = 60000, spawnFn = spawn } = {}) {
+  constructor({ command = 'mycelium', env = {}, timeoutMs = 60000, spawnFn = spawn, platform = process.platform } = {}) {
     this.command = command;
     this.env = env;
     this.timeoutMs = timeoutMs;
     this.spawnFn = spawnFn;
+    this.platform = platform;
     this.proc = null;
     this.nextId = 1;
     this.pending = new Map();
@@ -23,13 +25,23 @@ class Client {
 
   start() {
     if (this.proc) return this.proc;
-    const proc = this.spawnFn(this.command, ['serve', '--stdio'], {
+    // On Windows an npm-installed CLI is `mycelium.cmd`, which spawn() can only
+    // run through a shell; a shell also needs a path with spaces quoted.
+    const win = this.platform === 'win32';
+    const command = win && /\s/.test(this.command) && !/^".*"$/.test(this.command) ? `"${this.command}"` : this.command;
+    const proc = this.spawnFn(command, ['serve', '--stdio'], {
       env: { ...process.env, ...this.env },
       stdio: ['pipe', 'pipe', 'pipe'],
+      shell: win,
+      windowsHide: true,
     });
+    let replied = false;
     this.proc = proc;
     this.buf = '';
-    proc.stdout.on('data', (d) => this.onData(String(d)));
+    proc.stdout.on('data', (d) => {
+      replied = true;
+      this.onData(String(d));
+    });
     proc.stderr?.on('data', () => {});
     // 'error' (ENOENT: CLI not installed) and 'close' both end up here; the
     // pending calls fail with the reason instead of waiting for a timeout.
@@ -38,7 +50,14 @@ class Client {
       this.failAll(err);
     };
     proc.on('error', (e) => died(e.code === 'ENOENT' ? Object.assign(new Error(`mycelium CLI not found: ${this.command}`), { code: 'ENOENT' }) : e));
-    proc.on('close', (code) => died(new Error(`mycelium serve exited (${code})`)));
+    proc.on('close', (code) => {
+      // A CLI from before `serve` existed prints its help and exits 0 without
+      // ever answering; say so, instead of an unexplained "exited (0)".
+      if (code === 0 && !replied && this.pending.size) {
+        return died(Object.assign(new Error(`The mycelium command-line tool is too old for this extension (it needs ${MIN_CLI} or newer). Update it: npm install -g @kevinprk/mycelium`), { code: 'OLD_CLI' }));
+      }
+      died(new Error(`mycelium serve exited (${code})`));
+    });
     return proc;
   }
 
