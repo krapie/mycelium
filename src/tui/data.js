@@ -74,6 +74,7 @@ function mapRow(r) {
     splitFrom: r.split_from,
     supersededBy: parseJsonArray(r.superseded_by),
     splitInto: parseJsonArray(r.split_into),
+    workDir: r.work_dir || null,
     snippet: r.snippet || null,
   };
 }
@@ -85,14 +86,14 @@ function mapRow(r) {
 // version of this function squashed undefined into null here ("no folder ⇒
 // treat as unfiled"), which is exactly why Root only ever showed unfiled
 // sessions — that's now New's job, and Root means the literal top level.
-export function sessions({ folder, query, tags, date } = {}) {
+export function sessions({ folder, query, tags, date, dir } = {}) {
   const searching = !!(query || (tags && tags.length) || date);
   if (searching) {
     let rows = search({ query, tags: tags || [], folder, date }).map(mapRow);
     if (folder) rows = rows.filter((r) => r.folder === folder || (r.folder && r.folder.startsWith(folder + '/')));
     return rows;
   }
-  return listSessions({ folder }).map(mapRow);
+  return listSessions({ folder, dir }).map(mapRow);
 }
 
 /** Session counts per day for one calendar month, excluding _archive (same

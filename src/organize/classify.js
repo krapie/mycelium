@@ -429,3 +429,46 @@ export function applyPlacements(placements) {
   }
   return applied;
 }
+
+/**
+ * The review list for "organize": suggestions the daemon already queued, or
+ * — when there are none — a fresh run (summarize what lacks a summary, then
+ * classify, then queue the result). Shared by `mycelium organize` and the
+ * editor bridge so both bound and order the work identically; progress goes
+ * out as plain events, and each caller decides how to show them.
+ *
+ * Doesn't reindex: it can't import index-db.js (which imports this barrel),
+ * and the summaries it writes only reach the index when the caller does.
+ */
+export async function reviewablePlacements({ folder, limit, onEvent = () => {} } = {}) {
+  // The limit bounds the reused queue too, not just a fresh computation —
+  // otherwise a small --limit after a background cycle queued everything
+  // would show (and apply) the whole queue (#135).
+  const queued = pendingSuggestions({ folder });
+  const reused = queued.slice(0, limit);
+  if (queued.length > limit) onEvent({ type: 'queue-limited', shown: limit, queued: queued.length });
+  if (reused.length) return { ok: true, placements: reused, fresh: false };
+
+  // cooldownMs: 0 bypasses the daemon's "don't re-ask too soon" throttle,
+  // since a human explicitly asked for this right now.
+  const batch = organizeBatch({ folder, limit });
+  if (batch.total > limit) onEvent({ type: 'batch-limited', limit, total: batch.total });
+  // Summarizing is the expensive step (one LLM call per session), so it only
+  // covers this run's batch, not the whole backlog.
+  if (batch.unsummarized) onEvent({ type: 'summarizing', count: batch.unsummarized });
+  await summarizeCandidates({
+    folder,
+    ids: batch.ids,
+    onProgress: (s, err) => onEvent(err ? { type: 'summarize-error', error: err } : { type: 'summarized', id: s.id }),
+  });
+  onEvent({ type: 'classifying' });
+  const res = await suggestPlacements({
+    cooldownMs: 0,
+    folder,
+    ids: batch.ids,
+    onProgress: (done, total) => onEvent({ type: 'batch', done, total }),
+  });
+  if (!res.ok) return res;
+  queueSuggestions(res.placements); // persists even if the caller never applies
+  return { ok: true, placements: res.placements, fresh: true };
+}
