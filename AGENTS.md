@@ -97,8 +97,9 @@ Full reference: [`docs/tui.md`](./docs/tui.md). Quick map, since a change to any
 | Capture | `s` scan |
 | Organize | `m` move · `t` tag · `o` smart organize |
 | Learn | `a` auto-tag/summarize · `w` extract folder knowledge · `k` review + inject knowledge updates across every active folder at once (unrelated to Digest/`d`) |
-| Reuse | `n` new agent (asks: open here, or copy command for another tab) · `h` handoff · `r` resume · `i` inject AGENTS.md |
+| Reuse | `n` new agent (asks: open here, or copy command for another tab) · `h` handoff · `r` resume · `c` preview the folder's inherited context · `i` inject AGENTS.md |
 | Backlog | `b` write an item to start later · `r`/detail-`Enter` start it (seeded handoff) · `e` edit its title + notes |
+| Clip | `p` pin turns of a session verbatim (its own `Clips` collection under `New`, alongside `Backlog`; counts as must-reflect material next time `w`/`k` drafts knowledge) |
 | Navigation | `Enter`/`→` drill in · `Esc`/`←` back · `Space` multi-select · `/` search · `v` Calendar tab |
 | Other | `Shift+M` merge · `Shift+S` split · `Shift+O` cycle sort · `y` copy · `d` digests · `g` re-show onboarding · `l` switch language (confirm, then restarts) · `?` full shortcut list · `q` quit |
 

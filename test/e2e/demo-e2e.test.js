@@ -181,10 +181,10 @@ test('demo: full lifecycle walkthrough — organize, learn, reuse, merge, split,
     // Step 4 — ←: back to Folders (real fix for the panel-focus bug —
     // organize's apply flow leaves focus on Sessions, so this is required
     // before folder-list navigation means anything). Then walk down to
-    // retail-website/express-reorder (Root → New → retail-website →
+    // retail-website/express-reorder (Root → New → Backlog → Clips → retail-website →
     // cart-rounding-fix → express-reorder, alphabetical) and open it.
     sendKey(input, 'left');
-    await sendKeys(input, ['down', 'down', 'down', 'down'], 30);
+    await sendKeys(input, ['down', 'down', 'down', 'down', 'down', 'down'], 30);
     await waitFor(() => api.state.folder === 'retail-website/express-reorder', { timeoutMs: 1000 });
     sendKey(input, 'enter');
     await new Promise((r) => setTimeout(r, 30));
@@ -303,9 +303,9 @@ test('demo (cse persona): 3-way merge across DX/VPC/ALB sessions, then split —
     sendKey(input, 'enter');
     await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 2000 });
 
-    // Root → New → cases → onprem-connectivity (alphabetically before s3-cross-account).
+    // Root → New → Backlog → Clips → cases → onprem-connectivity (alphabetically before s3-cross-account).
     sendKey(input, 'left');
-    await sendKeys(input, ['down', 'down', 'down'], 30);
+    await sendKeys(input, ['down', 'down', 'down', 'down', 'down'], 30);
     await waitFor(() => api.state.folder === 'cases/onprem-connectivity', { timeoutMs: 1000 });
     sendKey(input, 'enter');
     await new Promise((r) => setTimeout(r, 30));
@@ -388,7 +388,7 @@ test('demo (ko locale): organize + learn produces real Korean content, not just 
     await waitFor(() => app.screen.children.length === baseline, { timeoutMs: 2000 });
 
     sendKey(input, 'left');
-    await sendKeys(input, ['down', 'down', 'down'], 30);
+    await sendKeys(input, ['down', 'down', 'down', 'down', 'down'], 30);
     await waitFor(() => api.state.folder === 'cases/onprem-connectivity', { timeoutMs: 1000 });
     sendKey(input, 'enter');
     await new Promise((r) => setTimeout(r, 30));
@@ -474,7 +474,7 @@ test('demo: the narrator box stays visible (in front) once a real modal opens on
     await settle();
     sendKey(input, 'left');
     await settle();
-    await sendKeys(input, ['down', 'down', 'down', 'down'], 30);
+    await sendKeys(input, ['down', 'down', 'down', 'down', 'down', 'down'], 30);
     sendKey(input, 'enter');
     await settle();
     baseline = app.screen.children.length;
@@ -742,7 +742,7 @@ test('demo: finishing the tutorial on the actual last step reports completed:tru
     await settle();
     sendKey(input, 'left');
     await settle();
-    await sendKeys(input, ['down', 'down', 'down', 'down'], 30);
+    await sendKeys(input, ['down', 'down', 'down', 'down', 'down', 'down'], 30);
     sendKey(input, 'enter');
     await settle();
     baseline = app.screen.children.length;
@@ -858,7 +858,7 @@ test('demo: pressing a later step\'s key early (skipping step 1) still lets the 
     await settle();
     sendKey(input, 'left');
     await settle();
-    await sendKeys(input, ['down', 'down', 'down', 'down'], 30);
+    await sendKeys(input, ['down', 'down', 'down', 'down', 'down', 'down'], 30);
     sendKey(input, 'enter');
     await settle();
     baseline = app.screen.children.length;

@@ -11,6 +11,7 @@ import pkg from 'neo-blessed';
 import { C, sourceColor, sourceLabel } from './theme.js';
 import * as data from './data.js';
 import { t } from './i18n.js';
+import { listClips } from '../clip.js';
 
 // Break a summary paragraph into sentence-sized bullet points for the detail
 // pane. summary is stored as prose (learn.js asks the LLM for 2-3 sentences),
@@ -110,6 +111,37 @@ export function formatSessionDetail(n) {
   if (n.splitInto?.length) {
     const labels = n.splitInto.map((id) => refLabel(id)).join(', ');
     lines.push('', `{${C.merged}-fg}${t('detail.splitInto', n.splitInto.length, labels)}{/}`);
+  }
+  const clips = listClips({ sessionId: n.id });
+  if (clips.length) {
+    lines.push('', `{${C.fox}-fg}${t('detail.clips', clips.length)}{/}`);
+    for (const c of clips) {
+      const range = c.from === c.to ? `#${c.from}` : `#${c.from}-${c.to}`;
+      const preview = c.turns.map((tn) => tn.text).join(' ').replace(/\s+/g, ' ');
+      // Clips are mostly code/logs — escape so a literal `{...}` isn't parsed as a blessed tag.
+      const body = pkg.escape(`${c.note ? `${c.note} — ` : ''}${preview.slice(0, 120)}`);
+      lines.push(`- {${C.faint}-fg}${range}{/} ${body}`);
+    }
+  }
+  return lines;
+}
+
+/**
+ * A clip's detail body (the Clips entry under New): its note as the
+ * headline, where it came from, then the pinned turns in full — the
+ * session detail's own preview stops at 120 chars, this is where the whole
+ * text is read. Escaped: clips are mostly code/logs.
+ */
+export function formatClipDetail(c) {
+  if (!c) return [];
+  const lines = [];
+  if (c.note) lines.push(`{${C.fox}-fg}{bold}${pkg.escape(c.note)}{/}`, '');
+  const range = c.from === c.to ? `#${c.from}` : `#${c.from}-${c.to}`;
+  const from = pkg.escape(c.sessionTitle || c.sessionId.slice(0, 8));
+  lines.push(`{${sourceColor(c.source)}-fg}${sourceLabel(c.source)}{/}  {${C.dim}-fg}${from} ${range} · ${(c.createdAt || '').slice(0, 16).replace('T', ' ')}{/}`);
+  lines.push(`{${C.faint}-fg}${data.detail(c.sessionId) ? t('clip.jumpHint') : t('clip.sourceGone')}{/}`, '');
+  for (const turn of c.turns) {
+    lines.push(`{${C.faint}-fg}[${turn.role}]{/}`, pkg.escape(turn.text), '');
   }
   return lines;
 }
