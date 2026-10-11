@@ -3,6 +3,9 @@
 ## 0.2.1
 
 - Fixed "Mycelium: claude is not installed" for people who have the Claude Code **extension** but no `claude` command on their PATH. The extension ships its own claude, so opening a Claude session in its panel no longer needs the CLI; Claude is also offered under Hand off and Start New Agent in that case. A terminal still needs the CLI, and if neither is available you are told so instead of getting a terminal that prints "command not found". Needs `mycelium` CLI 0.5.1 for this; with 0.5.0 everything else works as before.
+- When an agent still isn't found — it lives in a directory only your login shell knows, and VS Code never got your shell's `PATH` — the extension now asks the login shell once, restarts the CLI with that `PATH` and tries again, instead of giving up.
+- A command that fails is now written to **Mycelium: Show Log** (it used to show only in a notification), including what was asked of the CLI.
+- Fixed a race when the CLI is restarted: the previous process's late exit could fail the first request sent to the new one.
 
 ## 0.2.0
 

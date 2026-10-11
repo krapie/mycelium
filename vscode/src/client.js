@@ -63,7 +63,11 @@ class Client {
     // 'error' (ENOENT: CLI not installed) and 'close' both end up here; the
     // pending calls fail with the reason instead of waiting for a timeout.
     const died = (err) => {
-      if (this.proc === proc) this.proc = null;
+      // Only the current child's end is news. A child we replaced (reset(), or one
+      // that already died) reports its exit late — after its successor may be
+      // answering requests — and must not fail those.
+      if (this.proc !== proc) return;
+      this.proc = null;
       this.failAll(err);
     };
     // The child can exit between a request being queued and written; the write
@@ -92,6 +96,22 @@ class Client {
       died(new Error(`mycelium serve exited (${code})${stderrTail.trim() ? `: ${stderrTail.trim()}` : ''}`));
     });
     return proc;
+  }
+
+  /** Forget the resolved CLI/PATH and the running child: the next request resolves and starts afresh. */
+  reset() {
+    this.spec = null;
+    const proc = this.proc;
+    this.proc = null;
+    this.failAll(new Error('restarting'));
+    if (proc) {
+      try {
+        proc.stdin.end();
+        proc.kill();
+      } catch {
+        /* already gone */
+      }
+    }
   }
 
   async resolveSpec() {

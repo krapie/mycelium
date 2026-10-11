@@ -5,6 +5,7 @@ const { relativeTime, agentKey } = require('./format.js');
 const { strings } = require('./i18n.js');
 const { openLaunch, panelWanted } = require('./open-session.js');
 const { isClaudeSession, forWindow } = require('./claude-code.js');
+const { withWiderPath } = require('./retry.js');
 const { launchDir, relatedTo, enqueue, pending, withdraw } = require('./launch.js');
 const { workspaceDirs } = require('./views.js');
 const { registerAi } = require('./ai.js');
@@ -24,6 +25,7 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
           await fn(...args);
         } catch (err) {
           const message = (err && err.message) || String(err);
+          log.appendLine(`${id} failed: ${message}`);
           if (err && err.code === 'ENOENT') {
             const pick = await vscode.window.showErrorMessage(`${message}. Install with: npm i -g @kevinprk/mycelium`, 'Open Settings');
             if (pick) vscode.commands.executeCommand('workbench.action.openSettings', 'mycelium.path');
@@ -58,6 +60,10 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
     vscode.window.showWarningMessage(`Mycelium: the window for ${launch.cwd} didn't pick this up (is the Mycelium extension installed there?), so it started here instead.`);
   };
 
+  // The CLI looks for agents on the PATH it was started with; if one isn't
+  // found, widen that PATH from the login shell once and ask again.
+  const askCli = (method, params) => withWiderPath(() => client.request(method, params), () => client.widenPath(), (l) => log.appendLine(l));
+
   const pickDir = async (folder) => {
     const dirs = new Set(workspaceDirs());
     if (folder) for (const d of await client.request('dirsForFolder', { folder })) dirs.add(d);
@@ -70,8 +76,9 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
     // `all` (a CLI from 0.5.1) also returns agents that aren't on PATH; Claude
     // is still usable then, through Claude Code's panel. An older CLI ignores
     // `all` and sends only what is on PATH, as before.
-    const all = await client.request('agents', { all: true });
-    const agents = all.filter((a) => a.onPath !== false || (a.key === 'claude' && panelWanted('claude')));
+    const usable = (all) => all.filter((a) => a.onPath !== false || (a.key === 'claude' && panelWanted('claude')));
+    let agents = usable(await client.request('agents', { all: true }));
+    if (!agents.length && (await client.widenPath())) agents = usable(await client.request('agents', { all: true }));
     if (!agents.length && !extra.length) {
       vscode.window.showWarningMessage('Mycelium: no agent CLI found on PATH (install claude, codex, …)');
       return undefined;
@@ -176,7 +183,7 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
     try {
       const panel = !terminalOnly && isClaudeSession(row) ? { sessionId: row.id } : undefined; // the window that runs it decides if the panel is available
       // The panel needs no `claude` on PATH (Claude Code ships its own), so don't refuse for that
-      const cmd = await client.request('resumeCommand', { id: row.id, allowMissingBin: !!panel });
+      const cmd = await askCli('resumeCommand', { id: row.id, allowMissingBin: !!panel });
       await startSession({ name: row.title || row.id.slice(0, 8), cwd: cmd.cwd, bin: cmd.bin, args: cmd.args, key: agentKey(row), panel, binMissing: cmd.binMissing });
     } catch (err) {
       if (!/use handoff/.test(err.message)) throw err;
@@ -202,7 +209,7 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
     if (!dir) return;
     // Into Claude Code's panel the prompt is put in the input box, ready to send
     const panel = agent.key === 'claude' ? { prompt } : undefined;
-    const cmd = await client.request('newCommand', { agentKey: agent.key, dir, seed: prompt, allowMissingBin: !!panel });
+    const cmd = await askCli('newCommand', { agentKey: agent.key, dir, seed: prompt, allowMissingBin: !!panel });
     await startSession({ name: `${agent.label} ← ${row.title || row.id.slice(0, 8)}`, cwd: cmd.cwd, bin: cmd.bin, args: cmd.args, key: agent.key, panel, binMissing: cmd.binMissing });
   });
 
@@ -229,7 +236,7 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
       }
     }
     const panel = agent.key === 'claude' ? {} : undefined; // {} = a new conversation
-    const cmd = await client.request('newCommand', { agentKey: agent.key, dir, allowMissingBin: !!panel });
+    const cmd = await askCli('newCommand', { agentKey: agent.key, dir, allowMissingBin: !!panel });
     await startSession({ name: agent.label, cwd: cmd.cwd, bin: cmd.bin, args: cmd.args, key: agent.key, panel, binMissing: cmd.binMissing });
   });
 

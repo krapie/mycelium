@@ -29,26 +29,44 @@ function makeClient(ctx, log) {
   const home = cfg.get('home');
   const configured = cfg.get('path') || 'mycelium';
   let askedShell = false;
+  // The directories the login shell has on its PATH, once we've asked it. They
+  // go into the CLI's PATH too, not only into the search for the CLI itself:
+  // the CLI looks for the agents (claude, codex…) on that PATH.
+  let loginDirs = [];
+  const askLoginShell = async () => {
+    let loginPath = ctx.globalState.get('mycelium.loginPath');
+    if (!loginPath && !askedShell) {
+      askedShell = true;
+      log.appendLine('asking the login shell for its PATH (can take a few seconds)…');
+      loginPath = await loginShellPath();
+      if (loginPath) await ctx.globalState.update('mycelium.loginPath', loginPath);
+    }
+    if (loginPath) loginDirs = loginPath.split(path.delimiter);
+    return loginDirs;
+  };
   const resolver = async () => {
-    let extraDirs = [];
-    let r = resolveCli({ configured });
+    let r = resolveCli({ configured, extraDirs: loginDirs });
     if (!r.dir) {
-      let loginPath = ctx.globalState.get('mycelium.loginPath');
-      if (!loginPath && !askedShell) {
-        askedShell = true;
-        log.appendLine("not found in the usual places — asking the login shell for its PATH (can take a few seconds)…");
-        loginPath = await loginShellPath();
-        if (loginPath) await ctx.globalState.update('mycelium.loginPath', loginPath);
-      }
-      if (loginPath) {
-        extraDirs = loginPath.split(path.delimiter);
-        r = resolveCli({ configured, extraDirs });
-      }
+      log.appendLine('the CLI is not in the usual places');
+      r = resolveCli({ configured, extraDirs: await askLoginShell() });
     }
     log.appendLine(r.from ? `looking for "${configured}": found ${r.command} (${r.from})` : `looking for "${configured}": NOT FOUND. Looked in: ${r.searched.join(', ') || '(nothing)'}`);
-    return { command: r.command, env: childEnv({ dir: r.dir, extraDirs }) };
+    return { command: r.command, env: childEnv({ dir: r.dir, extraDirs: loginDirs }) };
   };
-  return new Client({ resolver, log: (l) => log.appendLine(l), env: home ? { MYCELIUM_HOME: home } : {} });
+  const client = new Client({ resolver, log: (l) => log.appendLine(l), env: home ? { MYCELIUM_HOME: home } : {} });
+  /**
+   * An agent wasn't found on the PATH the CLI had: learn the login shell's
+   * directories (once) and restart the CLI with them. True if that added any.
+   */
+  client.widenPath = async () => {
+    const before = loginDirs.length;
+    const after = (await askLoginShell()).length;
+    if (after <= before) return false;
+    log.appendLine(`the login shell added ${after - before} PATH entr${after - before === 1 ? 'y' : 'ies'}; restarting the CLI with them`);
+    client.reset();
+    return true;
+  };
+  return client;
 }
 
 async function activate(ctx) {
@@ -60,7 +78,7 @@ async function activate(ctx) {
   const log = vscode.window.createOutputChannel('Mycelium');
   ctx.subscriptions.push(log);
   let client = makeClient(ctx, log);
-  const proxy = { request: (m, p, o) => client.request(m, p, o) };
+  const proxy = { request: (m, p, o) => client.request(m, p, o), widenPath: () => client.widenPath() };
 
   let foldersView;
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
