@@ -24,6 +24,8 @@ Organize  organize [--apply] [--limit N] [--folder <path>]   Suggest folders by 
 Backlog   backlog add "<title>" [--desc D] [--folder F]   Write down work to start later (same as TUI b)
           backlog list [--folder f]                       Backlog items not started yet (or not yet linked to a session)
           backlog open <id|prefix> [--agent a] [--dir D] [--copy]  Print the command that starts a backlog item (to paste in a new tab)
+Clip      clip add <session> [--turn N[-M]] [--note T]  Pin part of a conversation verbatim (same as TUI p; no --turn lists the turns)
+          clip list [--folder f] [--session s] / show <clip> / rm <clip>
 Learn     autotag [<session>] [--force] Content-based auto-tagging (retroactive, in bulk)
           digest [week] [--date D]      Daily/weekly narrative digest
           knowledge [<folder>]          Extract per-folder KNOWLEDGE.md
@@ -58,6 +60,8 @@ Organize  organize [--apply] [--limit N] [--folder <경로>]   내용 기반 폴
 Backlog   backlog add "<제목>" [--desc D] [--folder F]   나중에 할 작업을 미리 적어두기 (TUI b와 동일)
           backlog list [--folder f]                      아직 시작 안 한(또는 세션이 아직 안 잡힌) 백로그 목록
           backlog open <id|prefix> [--agent a] [--dir D] [--copy]  백로그를 시작하는 명령어 출력(새 탭 붙여넣기용)
+Clip      clip add <session> [--turn N[-M]] [--note T]  대화 일부를 원문 그대로 고정 (TUI p와 동일, --turn 없으면 턴 목록 출력)
+          clip list [--folder f] [--session s] / show <clip> / rm <clip>
 Learn     autotag [<session>] [--force] 내용 기반 자동 태깅 (소급 일괄)
           digest [week] [--date D]      일일/주간 서사 다이제스트
           knowledge [<folder>]          폴더별 KNOWLEDGE.md 추출
