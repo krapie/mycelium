@@ -55,6 +55,13 @@ async function openLaunch(launch, log = { appendLine() {} }) {
       }
     }
   }
+  if (launch.binMissing) {
+    // The panel was the only way to run it (Claude Code ships its own claude),
+    // and it isn't available here: a terminal would only print "command not found".
+    log.appendLine(`not started: ${launch.bin} is not on PATH and the Claude Code panel is not available`);
+    vscode.window.showErrorMessage(`Mycelium: ${launch.bin} is not installed (it isn't on PATH) and the Claude Code panel isn't available in this window. Install the ${launch.bin} CLI, or enable the Claude Code extension.`);
+    return;
+  }
   openTerminal(launch);
 }
 

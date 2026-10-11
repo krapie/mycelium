@@ -42,7 +42,7 @@ test('a panel request is kept only in a window that has the session\'s project o
 });
 
 // ---- openLaunch, against a stand-in for the editor
-const calls = { exec: [], warn: [], terminals: [], activated: 0 };
+const calls = { exec: [], warn: [], errors: [], terminals: [], activated: 0 };
 const state = { installed: true, activateFails: null, execFails: null, settings: {} };
 const fake = {
   extensions: { getExtension: (id) => (state.installed && id === EXT_ID ? { packageJSON: { version: '2.1.296' }, isActive: true, activate: async () => { calls.activated++; calls.exec.push('activate'); if (state.activateFails) throw state.activateFails; } } : undefined) },
@@ -50,6 +50,7 @@ const fake = {
   workspace: { getConfiguration: (section) => ({ get: (k) => state.settings[`${section}.${k}`] }) },
   window: {
     showWarningMessage: (m) => calls.warn.push(m),
+    showErrorMessage: (m) => calls.errors.push(m),
     createTerminal: (o) => { const t = { o, sent: [], show() {}, sendText(x) { t.sent.push(x); } }; calls.terminals.push(t); return t; },
   },
   ThemeIcon: class {}, ThemeColor: class {}, env: { shell: '/bin/zsh' },
@@ -59,7 +60,7 @@ Module._load = function (request, ...rest) { return request === 'vscode' ? fake 
 const { openLaunch, panelWanted } = require('../src/open-session.js');
 Module._load = orig;
 
-const reset = () => { calls.exec.length = calls.warn.length = calls.terminals.length = 0; calls.activated = 0; Object.assign(state, { installed: true, activateFails: null, execFails: null, settings: {} }); };
+const reset = () => { calls.exec.length = calls.warn.length = calls.errors.length = calls.terminals.length = 0; calls.activated = 0; Object.assign(state, { installed: true, activateFails: null, execFails: null, settings: {} }); };
 const launch = (over = {}) => ({ name: 'n', cwd: '/p', bin: 'claude', args: ['--resume', UUID], key: 'claude', ...over });
 
 test('a panel launch activates the Claude Code extension first, then opens the session in its panel; no terminal', async () => {
@@ -149,4 +150,32 @@ test('every launch decision is written to the log, so a panel that did not open 
   reset(); lines.length = 0; state.installed = false;
   await openLaunch(launch({ panel: {} }), log);
   assert.match(lines[0], /not installed\/enabled here/);
+});
+
+test('a Claude session opens in the panel even when `claude` is not on PATH (Claude Code ships its own)', async () => {
+  reset();
+  await openLaunch(launch({ binMissing: true, panel: { sessionId: UUID } }));
+  assert.deepEqual(calls.exec.at(-1), [PANEL_COMMAND, UUID, undefined]);
+  assert.equal(calls.terminals.length, 0);
+  assert.equal(calls.errors.length, 0);
+});
+
+test('with no `claude` on PATH and no panel to use, say so instead of opening a terminal that cannot run it', async () => {
+  for (const setup of [
+    () => { state.installed = false; },                                  // no Claude Code extension
+    () => { state.settings['claudeCode.useTerminal'] = true; },          // Claude Code prefers the terminal
+    () => { state.execFails = new Error('boom'); },                      // the panel call fails
+  ]) {
+    reset(); setup();
+    await openLaunch(launch({ binMissing: true, panel: { sessionId: UUID } }));
+    assert.equal(calls.terminals.length, 0, 'no terminal that would only print "command not found"');
+    assert.match(calls.errors.at(-1), /claude is not installed.*Claude Code panel isn't available/s);
+  }
+});
+
+test('a missing binary only matters when a terminal was the way to run it', async () => {
+  reset();
+  await openLaunch(launch()); // no binMissing, no panel: the normal terminal launch
+  assert.equal(calls.terminals.length, 1);
+  assert.equal(calls.errors.length, 0);
 });

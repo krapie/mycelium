@@ -93,3 +93,13 @@ test('a malformed panel request is dropped rather than half-run', () => {
   }
   assert.deepEqual(claude(dir), []);
 });
+
+test('binMissing travels with a launch, and a non-boolean one is dropped', () => {
+  const dir = tmp();
+  enqueue(dir, { ...L('/work/app'), binMissing: true, panel: { sessionId: 'abc' } });
+  const got = claude(dir);
+  assert.equal(got.length, 1);
+  assert.equal(got[0].binMissing, true);
+  fs.writeFileSync(path.join(dir, 'bad.json'), JSON.stringify({ ...L('/work/app'), binMissing: 'yes', created: Date.now() }));
+  assert.deepEqual(claude(dir), []);
+});

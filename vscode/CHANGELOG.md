@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- Fixed "Mycelium: claude is not installed" for people who have the Claude Code **extension** but no `claude` command on their PATH. The extension ships its own claude, so opening a Claude session in its panel no longer needs the CLI; Claude is also offered under Hand off and Start New Agent in that case. A terminal still needs the CLI, and if neither is available you are told so instead of getting a terminal that prints "command not found". Needs `mycelium` CLI 0.5.1 for this; with 0.5.0 everything else works as before.
+
 ## 0.2.0
 
 - **Claude Code sessions open in the Claude Code panel.** With the Claude Code extension installed, **Resume** on a Claude session reopens that conversation in its own panel (in a window on the session's project), and **Hand off** to Claude or **Start New Agent** → Claude starts a new conversation there, with the handoff prompt in the input box. *Resume in terminal* (context menu, and a button on the session page) keeps the old behavior. `mycelium.claudeCode.openIn` (`auto` / `panel` / `terminal`) chooses; `auto` follows Claude Code's own `claudeCode.useTerminal`. If the panel can't be opened, it falls back to a terminal and says so.

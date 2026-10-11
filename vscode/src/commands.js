@@ -3,7 +3,7 @@ const vscode = require('vscode');
 const { transcriptMarkdown } = require('./markdown.js');
 const { relativeTime, agentKey } = require('./format.js');
 const { strings } = require('./i18n.js');
-const { openLaunch } = require('./open-session.js');
+const { openLaunch, panelWanted } = require('./open-session.js');
 const { isClaudeSession, forWindow } = require('./claude-code.js');
 const { launchDir, relatedTo, enqueue, pending, withdraw } = require('./launch.js');
 const { workspaceDirs } = require('./views.js');
@@ -67,7 +67,11 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
   };
 
   const pickAgent = async (placeHolder, extra = []) => {
-    const agents = await client.request('agents');
+    // `all` (a CLI from 0.5.1) also returns agents that aren't on PATH; Claude
+    // is still usable then, through Claude Code's panel. An older CLI ignores
+    // `all` and sends only what is on PATH, as before.
+    const all = await client.request('agents', { all: true });
+    const agents = all.filter((a) => a.onPath !== false || (a.key === 'claude' && panelWanted('claude')));
     if (!agents.length && !extra.length) {
       vscode.window.showWarningMessage('Mycelium: no agent CLI found on PATH (install claude, codex, …)');
       return undefined;
@@ -170,9 +174,10 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
     const [row] = rowsOf(el);
     if (!row) return;
     try {
-      const cmd = await client.request('resumeCommand', { id: row.id });
       const panel = !terminalOnly && isClaudeSession(row) ? { sessionId: row.id } : undefined; // the window that runs it decides if the panel is available
-      await startSession({ name: row.title || row.id.slice(0, 8), cwd: cmd.cwd, bin: cmd.bin, args: cmd.args, key: agentKey(row), panel });
+      // The panel needs no `claude` on PATH (Claude Code ships its own), so don't refuse for that
+      const cmd = await client.request('resumeCommand', { id: row.id, allowMissingBin: !!panel });
+      await startSession({ name: row.title || row.id.slice(0, 8), cwd: cmd.cwd, bin: cmd.bin, args: cmd.args, key: agentKey(row), panel, binMissing: cmd.binMissing });
     } catch (err) {
       if (!/use handoff/.test(err.message)) throw err;
       const pick = await vscode.window.showWarningMessage(err.message, 'Hand off');
@@ -195,10 +200,10 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
     const d = await client.request('detail', { id: row.id });
     const dir = d.projectDir || d.cwd || (await pickDir(row.folder));
     if (!dir) return;
-    const cmd = await client.request('newCommand', { agentKey: agent.key, dir, seed: prompt });
     // Into Claude Code's panel the prompt is put in the input box, ready to send
     const panel = agent.key === 'claude' ? { prompt } : undefined;
-    await startSession({ name: `${agent.label} ← ${row.title || row.id.slice(0, 8)}`, cwd: cmd.cwd, bin: cmd.bin, args: cmd.args, key: agent.key, panel });
+    const cmd = await client.request('newCommand', { agentKey: agent.key, dir, seed: prompt, allowMissingBin: !!panel });
+    await startSession({ name: `${agent.label} ← ${row.title || row.id.slice(0, 8)}`, cwd: cmd.cwd, bin: cmd.bin, args: cmd.args, key: agent.key, panel, binMissing: cmd.binMissing });
   });
 
   run('mycelium.copyHandoffPrompt', async (el) => {
@@ -223,9 +228,9 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
         if (yes === 'Yes') await client.request('inject', { dir, folder });
       }
     }
-    const cmd = await client.request('newCommand', { agentKey: agent.key, dir });
     const panel = agent.key === 'claude' ? {} : undefined; // {} = a new conversation
-    await startSession({ name: agent.label, cwd: cmd.cwd, bin: cmd.bin, args: cmd.args, key: agent.key, panel });
+    const cmd = await client.request('newCommand', { agentKey: agent.key, dir, allowMissingBin: !!panel });
+    await startSession({ name: agent.label, cwd: cmd.cwd, bin: cmd.bin, args: cmd.args, key: agent.key, panel, binMissing: cmd.binMissing });
   });
 
   run('mycelium.injectAgentsMd', async (el) => {
