@@ -87,6 +87,15 @@ test('a CLI that exits cleanly without ever answering is reported as too old, no
   await assert.rejects(c.request('hello'), (e) => e.code === 'OLD_CLI' && /0\.5\.0/.test(e.message) && /npm install -g/.test(e.message));
 });
 
+test('a 0.4.x CLI prints its help on stdout and exits 1 — still reported as too old (this is what the real one does)', async () => {
+  const c = new Client({ spawnFn: () => {
+    const p = fakeChild(() => {});
+    setImmediate(() => { p.stdout.emit('data', 'Mycelium — context lifecycle for AI collaboration\n\nCapture   scan   Scan agent session stores\n'); p.emit('close', 1); });
+    return p;
+  } });
+  await assert.rejects(c.request('hello'), (e) => e.code === 'OLD_CLI' && /0\.5\.0/.test(e.message));
+});
+
 test('a clean exit AFTER answering is not "too old"', async () => {
   const c = new Client({ spawnFn: () => fakeChild((p, r) => { reply(p, r.id, { result: 1 }); p.emit('close', 0); }) });
   assert.equal(await c.request('hello'), 1);
@@ -111,6 +120,71 @@ test('a write that fails because the child just exited fails the call instead of
   // and the next request starts a fresh child
   const c2 = new Client({ spawnFn: () => fakeChild((q, r) => reply(q, r.id, { result: 'ok' })) });
   assert.equal(await c2.request('hello'), 'ok');
+});
+
+test('a resolver is asked once, before the first spawn, and its command and PATH are what runs', async () => {
+  const spawned = [];
+  let asked = 0;
+  const c = new Client({
+    resolver: async () => (asked++, { command: '/opt/homebrew/bin/mycelium', env: { PATH: '/opt/homebrew/bin:/usr/bin' } }),
+    spawnFn: (cmd, args, opts) => (spawned.push({ cmd, path: opts.env.PATH }), fakeChild((p, r) => reply(p, r.id, { result: 'ok' }))),
+  });
+  assert.equal(await c.request('hello'), 'ok');
+  assert.equal(await c.request('hello'), 'ok');
+  assert.equal(asked, 1);
+  assert.deepEqual(spawned, [{ cmd: '/opt/homebrew/bin/mycelium', path: '/opt/homebrew/bin:/usr/bin' }]);
+});
+
+test('a "not found" forgets the resolution, so installing the CLI later is noticed without a reload', async () => {
+  let asked = 0;
+  let spawns = 0;
+  const c = new Client({
+    resolver: async () => (asked++, { command: 'mycelium', env: {} }),
+    spawnFn: () => {
+      spawns++;
+      if (spawns === 1) {
+        const p = fakeChild(() => {});
+        setImmediate(() => p.emit('error', Object.assign(new Error('spawn'), { code: 'ENOENT' })));
+        return p;
+      }
+      return fakeChild((p, r) => reply(p, r.id, { result: 'found' }));
+    },
+  });
+  await assert.rejects(c.request('hello'), (e) => e.code === 'ENOENT');
+  assert.equal(await c.request('hello'), 'found');
+  assert.equal(asked, 2);
+});
+
+test('node missing from the child PATH is named as such, not as "exited (127)"', async () => {
+  for (const said of ['env: node: No such file or directory\n', "'node' is not recognized as an internal or external command", '/usr/bin/env: ‘node’: No such file', 'node: command not found']) {
+    const c = new Client({ spawnFn: () => {
+      const p = fakeChild(() => {});
+      setImmediate(() => { p.stderr.emit('data', said); p.emit('close', 127); });
+      return p;
+    } });
+    await assert.rejects(c.request('hello'), (e) => e.code === 'NO_NODE' && /Node\.js was not found/.test(e.message), said);
+  }
+});
+
+test('any other failed start keeps what the CLI said on stderr in the error', async () => {
+  const c = new Client({ spawnFn: () => {
+    const p = fakeChild(() => {});
+    setImmediate(() => { p.stderr.emit('data', 'SyntaxError: unexpected token'); p.emit('close', 1); });
+    return p;
+  } });
+  await assert.rejects(c.request('hello'), /exited \(1\): SyntaxError: unexpected token/);
+});
+
+test('the client logs what it ran and what came back', async () => {
+  const lines = [];
+  const c = new Client({ log: (l) => lines.push(l), resolver: async () => ({ command: '/x/mycelium', env: { PATH: '/x' } }), spawnFn: () => {
+    const p = fakeChild(() => {});
+    setImmediate(() => { p.stderr.emit('data', 'boom'); p.emit('close', 2); });
+    return p;
+  } });
+  await c.request('hello').catch(() => {});
+  assert.match(lines[0], /starting: \/x\/mycelium serve --stdio.*PATH=\/x/);
+  assert.match(lines[1], /exited \(2\); stderr: boom/);
 });
 
 test('transcriptMarkdown labels turns and truncates a huge one', () => {

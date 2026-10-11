@@ -61,6 +61,16 @@ This hand-off needs the Mycelium extension to be **installed**, because the new 
 | `mycelium.home` | Data directory (`MYCELIUM_HOME`); empty uses `~/.mycelium`. |
 | `mycelium.openSessionIn` | `projectWindow` (default): terminals open in a window on the session's directory. `thisWindow`: always here. |
 
+## Troubleshooting
+
+**"Mycelium can't find its command-line tool", but it is installed.** An editor started from the Dock or Finder doesn't always get your shell's `PATH`. When VS Code can't resolve it in time it shows *"Unable to resolve your shell environment…"* — that message is VS Code's own and the extension can't hide it. The extension looks for `mycelium` on `PATH`, then in the usual install locations (Homebrew, npm global, nvm, Volta, asdf, `%APPDATA%\npm`), then asks your login shell once, and runs it with a `PATH` that includes the CLI's own directory so `node` is found too. If it still can't: run *Mycelium: Show Log* (it lists where it looked), set `mycelium.path` to the full path (`which mycelium`), or start VS Code from a terminal with `code`.
+
+**The "Unable to resolve your shell environment" message keeps appearing.** VS Code runs your shell as a login, interactive shell (`zsh -ilc …`) and gives up after about 10 seconds. Time it with `time zsh -ilc exit`; the usual culprits are version-manager and conda/pyenv init, prompt plugins, and anything in your rc files that asks a question.
+
+**"…too old for this extension".** The CLI is older than the extension needs (0.5.0+): `npm install -g @kevinprk/mycelium`, then `mycelium --version`. If you also have a Homebrew copy, check which one `which mycelium` finds.
+
+**"Node.js was not found".** The CLI was found but `node` isn't on the `PATH` VS Code started with: install Node.js 22.16 or newer, or start VS Code from a terminal with `code`.
+
 ## Releasing the extension (maintainers)
 
 The extension is versioned separately from the CLI, and its releases are tagged `vscode-v<version>` so they don't collide with the CLI's `v<version>`.
