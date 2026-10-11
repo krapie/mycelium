@@ -6,7 +6,7 @@ import js from '@eslint/js';
 export default [
   js.configs.recommended,
   {
-    files: ['**/*.js'],
+    files: ['**/*.{js,mjs}'],
     languageOptions: {
       ecmaVersion: 2023,
       sourceType: 'module',
@@ -36,6 +36,15 @@ export default [
     },
   },
   {
-    ignores: ['node_modules/**', 'desktop/**'],
+    // The extension is CommonJS (VS Code loads `main` with require, and we
+    // ship no bundler), unlike the ESM core above.
+    files: ['vscode/**/*.js'],
+    languageOptions: {
+      sourceType: 'commonjs',
+      globals: { require: 'readonly', module: 'writable', __dirname: 'readonly' },
+    },
+  },
+  {
+    ignores: ['node_modules/**', 'desktop/**', 'vscode/node_modules/**'],
   },
 ];

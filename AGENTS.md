@@ -36,11 +36,13 @@ src/
   index-db.js         sqlite (FTS5) index — derived, rebuildable from raw/
   config.js           config.json read/write (locale, excluded ids, etc.)
   llm.js              headless LLM calls via the user's own claude/codex CLI subscription
+  bridge.js           method table behind `mycelium serve --stdio` (JSON-RPC for editor integrations; docs/vscode.md)
   agents.js           derives binFor/resumeArgsFor from the adapter registry
   adapters/           one file per agent CLI (claude-code.js, codex.js, kiro.js) + index.js registry
   tui/                the neo-blessed interface — app.js (shell), views/ (sessions.js, calendar.js),
                        widgets/ (pickers.js, viewers.js), data.js (thin read layer over scanner+index-db),
                        tutorial.js + tutorial-data.js + tutorial-mock-llm.js + personas.js (first-run tour / `mycelium demo`)
+vscode/               VS Code extension (CommonJS, no bundler, no runtime deps) — talks only to `mycelium serve`, never imports src/
 docs/                 detailed guides (linked from README.md's "Learn More")
 test/                 node:test suite — see "Tests" below
 .github/              CI/CD workflows, issue/PR templates
