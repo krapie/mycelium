@@ -53,13 +53,18 @@ const quoteArg = (s) => (/^[\w./-]+$/.test(s) ? s : `'${String(s).replace(/'/g, 
 
 /** Build a copy-pasteable `cd <dir> && <bin> <args>` line — shared by
  * `mycelium resume` (CLI) and the TUI's "copy command" resume option. */
-export function resumeCommandLine(session) {
+export function resumeCommandLine(session, { requireBin = true } = {}) {
   const bin = binFor(session.source);
-  if (!which(bin)) return { ok: false, error: `${bin} not installed` };
+  // `requireBin: false` is for a caller that doesn't need the program: the
+  // VS Code extension opens a Claude session in Claude Code's own panel, which
+  // ships its own claude binary, so a `claude` missing from PATH is no reason
+  // to refuse. It gets `binMissing` and decides for itself.
+  const onPath = which(bin);
+  if (!onPath && requireBin) return { ok: false, error: `${bin} not installed` };
   const cwd = workDirFor(session);
   if (!cwd) return { ok: false, error: 'no working directory found for this session' };
   const args = resumeArgsFor(session.source, session.id);
-  return { ok: true, line: `cd ${quoteArg(cwd)} && ${quoteArg(bin)} ${args.map(quoteArg).join(' ')}`, bin, args, cwd };
+  return { ok: true, line: `cd ${quoteArg(cwd)} && ${quoteArg(bin)} ${args.map(quoteArg).join(' ')}`, bin, args, cwd, ...(onPath ? {} : { binMissing: true }) };
 }
 
 /** Same shape as resumeCommandLine(), but for starting a brand-new session
@@ -69,7 +74,7 @@ export function resumeCommandLine(session) {
  * alternative to launch.js's normal in-terminal foreground() handoff — see
  * launchAgent()'s `copyOnly` option. `agentKey` is one of AGENTS' own keys
  * (the same picker launch.js already uses to choose it). */
-export function newCommandLine({ agentKey, dir, seed }) {
+export function newCommandLine({ agentKey, dir, seed }, { requireBin = true } = {}) {
   const agent = AGENTS[agentKey];
   if (!agent) return { ok: false, error: 'unknown agent' };
   // MYCELIUM_DEMO_MODE (set for the tutorial's whole run, see tutorial.js's
@@ -78,10 +83,9 @@ export function newCommandLine({ agentKey, dir, seed }) {
   // installed at all, which would otherwise make the tutorial's copy-only
   // `n` step fail with "<bin> not installed" instead of the intended
   // "copied to clipboard" confirmation.
-  if (process.env.MYCELIUM_DEMO_MODE !== '1' && !which(agent.bin)) {
-    return { ok: false, error: `${agent.bin} not installed` };
-  }
+  const onPath = process.env.MYCELIUM_DEMO_MODE === '1' || which(agent.bin);
+  if (!onPath && requireBin) return { ok: false, error: `${agent.bin} not installed` };
   if (!dir || !existsSync(dir)) return { ok: false, error: 'no working directory found' };
   const args = agent.newArgs(seed);
-  return { ok: true, line: `cd ${quoteArg(dir)} && ${quoteArg(agent.bin)} ${args.map(quoteArg).join(' ')}`, bin: agent.bin, args, cwd: dir };
+  return { ok: true, line: `cd ${quoteArg(dir)} && ${quoteArg(agent.bin)} ${args.map(quoteArg).join(' ')}`, bin: agent.bin, args, cwd: dir, ...(onPath ? {} : { binMissing: true }) };
 }

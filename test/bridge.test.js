@@ -105,3 +105,44 @@ test('folders marks which carry a KNOWLEDGE.md; detail resolves lineage', async 
   assert.equal(d.lineage.continuationOf[0].id, 'bbbbbbbb-2222');
   assert.deepEqual(d.lineage.mergedFrom, []);
 });
+
+test('agents lists only what is on PATH by default, and every agent with onPath when asked', async () => {
+  const prev = process.env.PATH;
+  process.env.PATH = '';
+  try {
+    assert.deepEqual((await call('agents')).result, []);
+    const all = (await call('agents', { all: true })).result;
+    assert.ok(all.length >= 3);
+    assert.ok(all.every((a) => a.onPath === false && a.key && a.label && a.bin));
+    assert.ok(all.some((a) => a.key === 'claude'));
+  } finally {
+    process.env.PATH = prev;
+  }
+});
+
+test('resumeCommand and newCommand can be told to accept an agent that is not on PATH', async () => {
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bridge-bin-'));
+  const n = seed('eeeeeeee-0000', 'resume me');
+  n.projectDir = dir;
+  saveRaw(n);
+  reindex();
+  const prev = process.env.PATH;
+  process.env.PATH = '';
+  try {
+    // refused by default, as before
+    assert.equal((await call('newCommand', { agentKey: 'claude', dir })).error.message, 'claude not installed');
+    // accepted when the caller has another way to run it
+    const res = (await call('newCommand', { agentKey: 'claude', dir, allowMissingBin: true })).result;
+    assert.equal(res.binMissing, true);
+    assert.equal(res.cwd, dir);
+    // resumeCommand likewise (this seed's source has no adapter, so the "agent still has it" check passes)
+    assert.equal((await call('resumeCommand', { id: 'eeeeeeee-0000' })).error.message, 'claude not installed');
+    const resumed = (await call('resumeCommand', { id: 'eeeeeeee-0000', allowMissingBin: true })).result;
+    assert.deepEqual([resumed.binMissing, resumed.cwd, resumed.args], [true, dir, ['--resume', 'eeeeeeee-0000']]);
+  } finally {
+    process.env.PATH = prev;
+  }
+});
