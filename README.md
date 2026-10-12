@@ -6,7 +6,11 @@
 [![coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/krapie/511d91209145406ab7f7ed1e9fbcd49c/raw/mycelium-coverage.json)](https://github.com/krapie/mycelium/actions/workflows/coverage.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D22.16-brightgreen)](https://nodejs.org)
+[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/krapie.mycelium-vscode?label=VS%20Code)](https://marketplace.visualstudio.com/items?itemName=krapie.mycelium-vscode)
 [![Ask DeepWiki](https://img.shields.io/badge/Ask-DeepWiki-blue)](https://deepwiki.com/krapie/mycelium)
+
+> [!NOTE]
+> **Try the [VS Code extension](#vs-code-extension)** — the same sessions, folders and knowledge in your editor's sidebar; resume or hand off a session in one click.
 
 *[한국어 가이드](./README.ko.md)*
 
@@ -41,6 +45,7 @@ Engineer by picking a different persona when it asks.
 
 - Node.js ≥ 22.16, git
 - AI agents: `claude` / `codex` / `kiro-cli` / `opencode`
+- VS Code, Cursor, or Windsurf — only for the [extension](#vs-code-extension)
 
 ## Install
 
@@ -59,6 +64,15 @@ To hack on it, clone instead:
 git clone https://github.com/krapie/mycelium.git
 cd mycelium && npm install && npm link
 ```
+
+### VS Code extension
+
+Install the CLI above first (0.5.1 or newer) — the extension runs it.
+```sh
+code --install-extension krapie.mycelium-vscode   # Cursor / Windsurf: same id, from Open VSX
+```
+
+[Marketplace](https://marketplace.visualstudio.com/items?itemName=krapie.mycelium-vscode) · [Open VSX](https://open-vsx.org/extension/krapie/mycelium-vscode) · [Guide](./docs/vscode.md)
 
 ## Getting Started
 

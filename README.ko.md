@@ -6,7 +6,11 @@
 [![coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/krapie/511d91209145406ab7f7ed1e9fbcd49c/raw/mycelium-coverage.json)](https://github.com/krapie/mycelium/actions/workflows/coverage.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D22.16-brightgreen)](https://nodejs.org)
+[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/krapie.mycelium-vscode?label=VS%20Code)](https://marketplace.visualstudio.com/items?itemName=krapie.mycelium-vscode)
 [![Ask DeepWiki](https://img.shields.io/badge/Ask-DeepWiki-blue)](https://deepwiki.com/krapie/mycelium)
+
+> [!NOTE]
+> **[VS Code 확장](#vs-code-확장)으로 써 보세요** — 같은 세션·폴더·지식을 에디터 사이드바에서 보고, 클릭 한 번으로 세션을 재개하거나 핸드오프할 수 있습니다.
 
 *[English guide](./README.md)*
 
@@ -37,6 +41,7 @@ Local-first, 모델 중립, 사람이 통제.
 
 - Node.js ≥ 22.16, git
 - AI 에이전트: `claude` / `codex` / `kiro-cli` / `opencode`
+- VS Code, Cursor 또는 Windsurf — [확장](#vs-code-확장)을 쓸 때만
 
 ## 설치
 
@@ -55,6 +60,15 @@ brew install krapie/tap/mycelium
 git clone https://github.com/krapie/mycelium.git
 cd mycelium && npm install && npm link
 ```
+
+### VS Code 확장
+
+위의 CLI(0.5.1 이상)를 먼저 설치하세요 — 확장이 CLI를 실행합니다.
+```sh
+code --install-extension krapie.mycelium-vscode   # Cursor / Windsurf: 같은 id, Open VSX에서 설치
+```
+
+[Marketplace](https://marketplace.visualstudio.com/items?itemName=krapie.mycelium-vscode) · [Open VSX](https://open-vsx.org/extension/krapie/mycelium-vscode) · [가이드](./docs/vscode.md)
 
 ## 시작하기
 
@@ -83,6 +97,7 @@ Mycelium은 모든 데이터를 사용자 머신(`~/.mycelium/`)에만 저장하
 - [**TUI**](./docs/tui.md) — 3컬럼 인터페이스 + 전체 키보드 단축키
 - [**Learn/Reuse 루프**](./docs/learn-reuse.md) — 세션들이 지식을 다음으로 어떻게 전달하는지
 - [**Handoff**](./docs/handoff.md) — 에이전트 CLI 간에 작업을 이어가는 법
+- [**VS Code**](./docs/vscode.md) — 에디터 사이드바에서 쓰는 같은 세션 패널
 - [**CLI 레퍼런스**](./docs/cli.md) — 스크립팅용 서브커맨드 전체
 - [**Architecture**](./docs/architecture.md) — 데이터 위치, 설계 원칙, 상태
 - [**Feature catalog**](./docs/features.md) — 모든 기능, 테스트 커버리지 상태 포함
