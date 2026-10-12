@@ -1,12 +1,11 @@
 {
   "name": "mycelium-vscode",
-  "displayName": "Mycelium",
+  "displayName": "Mycelium for VS Code",
   "description": "Browse, resume and hand off your AI coding-agent sessions from the sidebar.",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "publisher": "krapie",
   "author": "krapie",
   "license": "MIT",
-  "private": true,
   "preview": true,
   "repository": {
     "type": "git",
@@ -28,6 +27,11 @@
     "context",
     "handoff"
   ],
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#14140f",
+    "theme": "dark"
+  },
   "engines": {
     "vscode": "^1.90.0"
   },

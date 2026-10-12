@@ -15,14 +15,13 @@ Works in VS Code, Cursor and Windsurf, on macOS, Linux and Windows.
 
 ## Install
 
-Download the `.vsix` from the [latest extension release](https://github.com/krapie/mycelium/releases?q=vscode-v) and install it:
+Search for **Mycelium for VS Code** in the Extensions panel, or:
 
 ```sh
-gh release download vscode-v0.1.0 -R krapie/mycelium -p '*.vsix'
-code --install-extension mycelium-vscode-0.1.0.vsix        # cursor / windsurf work the same way
+code --install-extension krapie.mycelium-vscode        # cursor / windsurf too
 ```
 
-or *Extensions* → `…` → *Install from VSIX…*. To update, install the newer file the same way.
+It is also on [Open VSX](https://open-vsx.org/extension/krapie/mycelium-vscode) (what Cursor, Windsurf and VSCodium use), and every release has its `.vsix` on [GitHub](https://github.com/krapie/mycelium/releases?q=vscode-v) for *Extensions → `…` → Install from VSIX…*.
 
 ## Getting started
 
@@ -47,6 +46,10 @@ With the Claude Code extension installed, Claude sessions open in its panel inst
 **"…too old for this extension".** The CLI is older than the extension needs (0.5.0+): `npm install -g @kevinprk/mycelium`, then `mycelium --version`. If you also have a Homebrew copy, check which one `which mycelium` finds.
 
 **"Node.js was not found".** The CLI was found but `node` isn't on the `PATH` VS Code started with: install Node.js 22.16 or newer, or start VS Code from a terminal with `code`.
+
+## Privacy
+
+No telemetry, no accounts, no network calls of its own. It runs the `mycelium` CLI on your machine and shows what it returns; sessions stay in `~/.mycelium`. The AI steps (summarize, smart organize, folder knowledge) and Resume / Hand off / Start New Agent run *your* `claude`, `codex` etc. under *your* login, and so send session content to that provider exactly as using it directly does. The extension only runs in folders you trust.
 
 ## Using several computers
 

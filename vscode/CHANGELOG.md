@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.2
+
+First release on the VS Code Marketplace and Open VSX.
+
+- Renamed **Mycelium for VS Code** (the id, `krapie.mycelium-vscode`, is unchanged), with a listing icon and banner.
+- The README is now the extension's page: install from the Marketplace (or `.vsix`), and a privacy statement.
+- No behavior changes.
+
 ## 0.2.1
 
 - Fixed "Mycelium: claude is not installed" for people who have the Claude Code **extension** but no `claude` command on their PATH. The extension ships its own claude, so opening a Claude session in its panel no longer needs the CLI; Claude is also offered under Hand off and Start New Agent in that case. A terminal still needs the CLI, and if neither is available you are told so instead of getting a terminal that prints "command not found". Needs `mycelium` CLI 0.5.1 for this; with 0.5.0 everything else works as before.
