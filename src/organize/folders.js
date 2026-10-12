@@ -1,3 +1,12 @@
+/*
+ * Copyright 2026 The Mycelium Authors. All rights reserved.
+ *
+ * Use of this source code is governed by the MIT License
+ * that can be found in the LICENSE file.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 import { join, dirname } from 'node:path';
 import { mkdirSync, existsSync, renameSync, rmSync, readdirSync } from 'node:fs';
 import { ensureDirs, TREE_DIR } from '../paths.js';

@@ -1,3 +1,12 @@
+/*
+ * Copyright 2026 The Mycelium Authors. All rights reserved.
+ *
+ * Use of this source code is governed by the MIT License
+ * that can be found in the LICENSE file.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Imported first by cli.js, ahead of anything that loads node:sqlite. On
 // Node 22 that module emits "ExperimentalWarning: SQLite is an experimental
 // feature" on every command — the first thing a user saw after

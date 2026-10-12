@@ -1,3 +1,12 @@
+/*
+ * Copyright 2026 The Mycelium Authors. All rights reserved.
+ *
+ * Use of this source code is governed by the MIT License
+ * that can be found in the LICENSE file.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Opens an Extension Development Host on your REAL ~/.mycelium store, with
 // this repo as the workspace so "This Workspace" has sessions in it.
 // Unlike `npm run dev` nothing is seeded or wiped — what you see is yours, and

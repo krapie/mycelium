@@ -1,3 +1,12 @@
+/*
+ * Copyright 2026 The Mycelium Authors. All rights reserved.
+ *
+ * Use of this source code is governed by the MIT License
+ * that can be found in the LICENSE file.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Regenerates media/walkthrough/*.svg — the Capture → Organize → Learn →
 // Reuse loop with one stage lit, in a dark and a light variant (a walkthrough
 // image can't inherit the theme's colors, so each theme gets its own file).

@@ -1,3 +1,12 @@
+/*
+ * Copyright 2026 The Mycelium Authors. All rights reserved.
+ *
+ * Use of this source code is governed by the MIT License
+ * that can be found in the LICENSE file.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 import { readFileSync } from 'node:fs';
 import { reindex } from '../index-db.js';
 import { autoTagSession, tagAll } from '../learn.js';

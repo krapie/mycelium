@@ -1,3 +1,12 @@
+/*
+ * Copyright 2026 The Mycelium Authors. All rights reserved.
+ *
+ * Use of this source code is governed by the MIT License
+ * that can be found in the LICENSE file.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 /**
  * Replace this process with a fresh copy of itself (same argv, same env), so
  * a setting read once at startup — the UI locale — takes effect. execve keeps
