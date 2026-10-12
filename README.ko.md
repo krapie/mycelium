@@ -68,6 +68,8 @@ cd mycelium && npm install && npm link
 code --install-extension krapie.mycelium-vscode   # Cursor / Windsurf: 같은 id, Open VSX에서 설치
 ```
 
+![VS Code의 Mycelium — 사이드바와 세션 페이지](https://github.com/krapie/mycelium/releases/download/demo-assets/vscode-hero.png)
+
 [Marketplace](https://marketplace.visualstudio.com/items?itemName=krapie.mycelium-vscode) · [Open VSX](https://open-vsx.org/extension/krapie/mycelium-vscode) · [가이드](./docs/vscode.md)
 
 ## 시작하기

@@ -72,6 +72,8 @@ Install the CLI above first (0.5.1 or newer) — the extension runs it.
 code --install-extension krapie.mycelium-vscode   # Cursor / Windsurf: same id, from Open VSX
 ```
 
+![Mycelium in VS Code — the sidebar and a session page](https://github.com/krapie/mycelium/releases/download/demo-assets/vscode-hero.png)
+
 [Marketplace](https://marketplace.visualstudio.com/items?itemName=krapie.mycelium-vscode) · [Open VSX](https://open-vsx.org/extension/krapie/mycelium-vscode) · [Guide](./docs/vscode.md)
 
 ## Getting Started
