@@ -6,7 +6,7 @@
 [![coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/krapie/511d91209145406ab7f7ed1e9fbcd49c/raw/mycelium-coverage.json)](https://github.com/krapie/mycelium/actions/workflows/coverage.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D22.16-brightgreen)](https://nodejs.org)
-[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/krapie.mycelium-vscode?label=VS%20Code)](https://marketplace.visualstudio.com/items?itemName=krapie.mycelium-vscode)
+[![VS Code Marketplace](https://img.shields.io/open-vsx/v/krapie/mycelium-vscode?label=VS%20Code%20extension)](https://marketplace.visualstudio.com/items?itemName=krapie.mycelium-vscode)
 [![Ask DeepWiki](https://img.shields.io/badge/Ask-DeepWiki-blue)](https://deepwiki.com/krapie/mycelium)
 
 > [!NOTE]
@@ -33,6 +33,14 @@ Local-first, 모델 중립, 사람이 통제.
 
 `mycelium demo`가 같은 사이클을 인터랙티브하게 안내합니다. `npm install -g @kevinprk/mycelium && mycelium demo`로 실행해보세요. Cloud Support Engineer 대신 Software Engineer / Solutions Architect로 보고 싶으면, 시작할 때 페르소나를 다른 것으로 고르면 됩니다.
 
+## VS Code 확장
+
+에디터가 편하다면: 확장은 같은 세션·폴더·지식을 VS Code 사이드바에 보여 주고, 클릭 한 번으로 세션을 재개하거나 핸드오프합니다(Claude Code가 있으면 그 패널에서 열립니다). CLI(0.5.1 이상)를 실행하는 방식이라 [CLI를 먼저 설치](#설치)하세요.
+
+![VS Code의 Mycelium — 사이드바와 세션 페이지](https://github.com/krapie/mycelium/releases/download/demo-assets/vscode-hero.png)
+
+[Marketplace](https://marketplace.visualstudio.com/items?itemName=krapie.mycelium-vscode) · [Open VSX](https://open-vsx.org/extension/krapie/mycelium-vscode) · [가이드](./docs/vscode.md)
+
 ## 요구 사항
 
 > **Mycelium은 사용자의 LLM 사용량을 소진합니다.** `organize`, `autotag`, `knowledge`, split 제안은 사용자의 `claude`/`codex` CLI를 호출합니다 — mycelium이 열려 있는 동안 백그라운드에서 자동으로도 호출됩니다. `MYCELIUM_NO_AUTOSTART=1`로 비활성화하거나, [`docs/cli.md`](./docs/cli.md)에서 조정하세요.
@@ -55,22 +63,16 @@ npm install -g @kevinprk/mycelium
 brew install krapie/tap/mycelium
 ```
 
+[VS Code 확장](#vs-code-확장)은 (위의 CLI가 필요합니다):
+```sh
+code --install-extension krapie.mycelium-vscode   # Cursor / Windsurf: 같은 id, Open VSX에서 설치
+```
+
 직접 코드를 만지려면 clone:
 ```sh
 git clone https://github.com/krapie/mycelium.git
 cd mycelium && npm install && npm link
 ```
-
-### VS Code 확장
-
-위의 CLI(0.5.1 이상)를 먼저 설치하세요 — 확장이 CLI를 실행합니다.
-```sh
-code --install-extension krapie.mycelium-vscode   # Cursor / Windsurf: 같은 id, Open VSX에서 설치
-```
-
-![VS Code의 Mycelium — 사이드바와 세션 페이지](https://github.com/krapie/mycelium/releases/download/demo-assets/vscode-hero.png)
-
-[Marketplace](https://marketplace.visualstudio.com/items?itemName=krapie.mycelium-vscode) · [Open VSX](https://open-vsx.org/extension/krapie/mycelium-vscode) · [가이드](./docs/vscode.md)
 
 ## 시작하기
 

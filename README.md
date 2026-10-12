@@ -6,7 +6,7 @@
 [![coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/krapie/511d91209145406ab7f7ed1e9fbcd49c/raw/mycelium-coverage.json)](https://github.com/krapie/mycelium/actions/workflows/coverage.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D22.16-brightgreen)](https://nodejs.org)
-[![VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/krapie.mycelium-vscode?label=VS%20Code)](https://marketplace.visualstudio.com/items?itemName=krapie.mycelium-vscode)
+[![VS Code Marketplace](https://img.shields.io/open-vsx/v/krapie/mycelium-vscode?label=VS%20Code%20extension)](https://marketplace.visualstudio.com/items?itemName=krapie.mycelium-vscode)
 [![Ask DeepWiki](https://img.shields.io/badge/Ask-DeepWiki-blue)](https://deepwiki.com/krapie/mycelium)
 
 > [!NOTE]
@@ -34,6 +34,14 @@ Local-first, model-agnostic, human-controlled.
 Software Engineer / Solutions Architect instead of a Cloud Support
 Engineer by picking a different persona when it asks.
 
+## VS Code extension
+
+Prefer your editor? The extension puts the same sessions, folders, and knowledge in VS Code's sidebar — resume or hand off a session in one click, in Claude Code's panel when you have it. It runs the CLI (0.5.1 or newer), so [install that first](#install).
+
+![Mycelium in VS Code — the sidebar and a session page](https://github.com/krapie/mycelium/releases/download/demo-assets/vscode-hero.png)
+
+[Marketplace](https://marketplace.visualstudio.com/items?itemName=krapie.mycelium-vscode) · [Open VSX](https://open-vsx.org/extension/krapie/mycelium-vscode) · [Guide](./docs/vscode.md)
+
 ## Requirements
 
 > **Mycelium uses your own LLM usage.** `organize`, `autotag`, `knowledge`,
@@ -59,22 +67,16 @@ Or via Homebrew:
 brew install krapie/tap/mycelium
 ```
 
+For the [VS Code extension](#vs-code-extension) (needs the CLI above):
+```sh
+code --install-extension krapie.mycelium-vscode   # Cursor / Windsurf: same id, from Open VSX
+```
+
 To hack on it, clone instead:
 ```sh
 git clone https://github.com/krapie/mycelium.git
 cd mycelium && npm install && npm link
 ```
-
-### VS Code extension
-
-Install the CLI above first (0.5.1 or newer) — the extension runs it.
-```sh
-code --install-extension krapie.mycelium-vscode   # Cursor / Windsurf: same id, from Open VSX
-```
-
-![Mycelium in VS Code — the sidebar and a session page](https://github.com/krapie/mycelium/releases/download/demo-assets/vscode-hero.png)
-
-[Marketplace](https://marketplace.visualstudio.com/items?itemName=krapie.mycelium-vscode) · [Open VSX](https://open-vsx.org/extension/krapie/mycelium-vscode) · [Guide](./docs/vscode.md)
 
 ## Getting Started
 
