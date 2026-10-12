@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { newCommandLine } from '../src/agents.js';
+import { newCommandLine, resumeCommandLine } from '../src/agents.js';
 
 // which() reads real process.env.PATH — no MYCELIUM_HOME dependency, so no
 // useTempHome()/dynamic-import dance needed here (see AGENTS.md's Tests
@@ -59,4 +59,54 @@ test('newCommandLine() still fails for an unknown agent key or a missing directo
     if (prevDemoMode === undefined) delete process.env.MYCELIUM_DEMO_MODE;
     else process.env.MYCELIUM_DEMO_MODE = prevDemoMode;
   }
+});
+
+// A caller that has another way to run the agent (the VS Code extension's
+// Claude Code panel ships its own claude) must not be refused for a missing
+// `claude` on PATH — but every existing caller keeps being refused.
+function withoutAgentsOnPath(fn) {
+  const prev = { PATH: process.env.PATH, demo: process.env.MYCELIUM_DEMO_MODE };
+  process.env.PATH = '';
+  delete process.env.MYCELIUM_DEMO_MODE;
+  try {
+    return fn(mkdtempSync(join(tmpdir(), 'mycelium-agents-')));
+  } finally {
+    process.env.PATH = prev.PATH;
+    if (prev.demo === undefined) delete process.env.MYCELIUM_DEMO_MODE;
+    else process.env.MYCELIUM_DEMO_MODE = prev.demo;
+  }
+}
+
+test('newCommandLine({ requireBin: false }) still builds the command for a missing binary and says it is missing', () => {
+  withoutAgentsOnPath((dir) => {
+    const res = newCommandLine({ agentKey: 'claude', dir, seed: 'hi' }, { requireBin: false });
+    assert.equal(res.ok, true);
+    assert.equal(res.binMissing, true);
+    assert.equal(res.cwd, dir);
+    assert.equal(res.bin, 'claude');
+    // and the default is unchanged
+    assert.equal(newCommandLine({ agentKey: 'claude', dir }).ok, false);
+  });
+});
+
+test('resumeCommandLine() refuses a missing binary by default, and with requireBin:false returns the cwd and args plus binMissing', () => {
+  withoutAgentsOnPath((dir) => {
+    const session = { id: 'abc', source: 'claude', projectDir: dir };
+    const refused = resumeCommandLine(session);
+    assert.deepEqual([refused.ok, refused.error], [false, 'claude not installed']);
+    const res = resumeCommandLine(session, { requireBin: false });
+    assert.equal(res.ok, true);
+    assert.equal(res.binMissing, true);
+    assert.equal(res.cwd, dir);
+    assert.deepEqual(res.args, ['--resume', 'abc']);
+    // a directory that doesn't exist is still an error
+    assert.equal(resumeCommandLine({ ...session, projectDir: join(dir, 'nope'), cwd: null }, { requireBin: false }).ok, false);
+  });
+});
+
+test('a binary that IS on PATH carries no binMissing flag', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'mycelium-agents-'));
+  const res = resumeCommandLine({ id: 'abc', source: 'claude', projectDir: dir }, { requireBin: false });
+  if (res.binMissing === undefined) assert.equal('binMissing' in res, false);
+  else assert.equal(res.binMissing, true); // this machine has no claude on PATH; the other test covers that
 });

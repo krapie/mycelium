@@ -43,6 +43,7 @@ If the [Claude Code extension](https://marketplace.visualstudio.com/items?itemNa
 - **Resume** on a Claude session reopens that conversation in the Claude Code panel — in a window on the session's project directory, which is also where Claude Code looks the session up.
 - **Hand off** to Claude and **Start New Agent → Claude** open a new conversation there. A handoff prompt is put in the input box for you to read and send; nothing is sent for you.
 - **Resume in terminal** (right-click a session, or the *In terminal* button on its page) still gives you the terminal. Other agents (Codex, Kiro, OpenCode) always use a terminal.
+- The panel doesn't need a `claude` command on your `PATH` — the Claude Code extension ships its own. (A terminal does; with neither available you are told so. Needs `mycelium` CLI 0.5.1 or newer.)
 - `mycelium.claudeCode.openIn` decides: `auto` (default) follows Claude Code's own `claudeCode.useTerminal` setting, `panel` and `terminal` force one.
 
 What this doesn't do: Claude Code's own session list shows Claude's sessions, and there is no way for another extension to add Mycelium's folders or summaries to it — browsing and organizing stay in the Mycelium sidebar, which now hands off to the panel. It uses the same entry point as Claude Code's `vscode://anthropic.claude-code/open?session=…&prompt=…` link (checked against Claude Code 2.1.296); if that ever stops working, Mycelium falls back to a terminal and tells you.
@@ -79,6 +80,8 @@ This hand-off needs the Mycelium extension to be **installed**, because the new 
 **The "Unable to resolve your shell environment" message keeps appearing.** VS Code runs your shell as a login, interactive shell (`zsh -ilc …`) and gives up after about 10 seconds. Time it with `time zsh -ilc exit`; the usual culprits are version-manager and conda/pyenv init, prompt plugins, and anything in your rc files that asks a question.
 
 **"…too old for this extension".** The CLI is older than the extension needs (0.5.0+): `npm install -g @kevinprk/mycelium`, then `mycelium --version`. If you also have a Homebrew copy, check which one `which mycelium` finds.
+
+**"claude is not installed", though Claude Code is.** A terminal needs the `claude` command on `PATH`; the Claude Code *extension* has its own copy and doesn't. With the extension enabled and `mycelium` 0.5.1+, Claude sessions open in its panel without it. If `claude` is installed somewhere only your login shell knows, the extension asks the shell for its `PATH` once and sends those directories along with the request, so the CLI looks there too; *Mycelium: Show Log* records each step. Otherwise install the CLI (or start VS Code from a terminal with `code`, so it sees your `PATH`).
 
 **"Node.js was not found".** The CLI was found but `node` isn't on the `PATH` VS Code started with: install Node.js 22.16 or newer, or start VS Code from a terminal with `code`.
 

@@ -105,3 +105,71 @@ test('folders marks which carry a KNOWLEDGE.md; detail resolves lineage', async 
   assert.equal(d.lineage.continuationOf[0].id, 'bbbbbbbb-2222');
   assert.deepEqual(d.lineage.mergedFrom, []);
 });
+
+test('agents lists only what is on PATH by default, and every agent with onPath when asked', async () => {
+  const prev = process.env.PATH;
+  process.env.PATH = '';
+  try {
+    assert.deepEqual((await call('agents')).result, []);
+    const all = (await call('agents', { all: true })).result;
+    assert.ok(all.length >= 3);
+    assert.ok(all.every((a) => a.onPath === false && a.key && a.label && a.bin));
+    assert.ok(all.some((a) => a.key === 'claude'));
+  } finally {
+    process.env.PATH = prev;
+  }
+});
+
+test('resumeCommand and newCommand can be told to accept an agent that is not on PATH', async () => {
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bridge-bin-'));
+  const n = seed('eeeeeeee-0000', 'resume me');
+  n.projectDir = dir;
+  saveRaw(n);
+  reindex();
+  const prev = process.env.PATH;
+  process.env.PATH = '';
+  try {
+    // refused by default, as before
+    assert.equal((await call('newCommand', { agentKey: 'claude', dir })).error.message, 'claude not installed');
+    // accepted when the caller has another way to run it
+    const res = (await call('newCommand', { agentKey: 'claude', dir, allowMissingBin: true })).result;
+    assert.equal(res.binMissing, true);
+    assert.equal(res.cwd, dir);
+    // resumeCommand likewise (this seed's source has no adapter, so the "agent still has it" check passes)
+    assert.equal((await call('resumeCommand', { id: 'eeeeeeee-0000' })).error.message, 'claude not installed');
+    const resumed = (await call('resumeCommand', { id: 'eeeeeeee-0000', allowMissingBin: true })).result;
+    assert.deepEqual([resumed.binMissing, resumed.cwd, resumed.args], [true, dir, ['--resume', 'eeeeeeee-0000']]);
+  } finally {
+    process.env.PATH = prev;
+  }
+});
+
+test('extraPath lets agents, resumeCommand and newCommand look for an agent in directories the CLI was not started with', async () => {
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'bridge-extra-'));
+  fs.writeFileSync(path.join(bin, 'claude'), '#!/bin/sh\n', { mode: 0o755 });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bridge-extra-cwd-'));
+  const n = seed('eeeeeeee-1111', 'x');
+  n.projectDir = dir;
+  saveRaw(n);
+  reindex();
+  const prev = process.env.PATH;
+  process.env.PATH = '';
+  try {
+    assert.equal((await call('agents', { all: true })).result.find((a) => a.key === 'claude').onPath, false);
+    assert.equal((await call('agents', { all: true, extraPath: [bin] })).result.find((a) => a.key === 'claude').onPath, true);
+    assert.equal((await call('newCommand', { agentKey: 'claude', dir })).error.message, 'claude not installed');
+    assert.equal((await call('newCommand', { agentKey: 'claude', dir, extraPath: [bin] })).result.binMissing, undefined);
+    assert.equal((await call('resumeCommand', { id: 'eeeeeeee-1111', extraPath: [bin] })).result.cwd, dir);
+    // junk is ignored rather than trusted
+    assert.equal((await call('newCommand', { agentKey: 'claude', dir, extraPath: 'nope' })).error.message, 'claude not installed');
+    assert.equal((await call('newCommand', { agentKey: 'claude', dir, extraPath: [bin, 5] })).error.message, 'claude not installed');
+  } finally {
+    process.env.PATH = prev;
+  }
+});

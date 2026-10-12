@@ -2,7 +2,7 @@
   "name": "mycelium-vscode",
   "displayName": "Mycelium",
   "description": "Browse, resume and hand off your AI coding-agent sessions from the sidebar.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "krapie",
   "author": "krapie",
   "license": "MIT",

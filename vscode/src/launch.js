@@ -56,6 +56,8 @@ function claim(dir, folders, now = Date.now()) {
     // The program and its arguments, not a command line: only the window that
     // runs it knows which shell it has to quote for.
     if (!launch || typeof launch.cwd !== 'string' || typeof launch.bin !== 'string' || !Array.isArray(launch.args) || !launch.args.every((a) => typeof a === 'string')) continue;
+    // Optional: the program isn't on PATH, so a terminal can't run it (only the panel can).
+    if (launch.binMissing !== undefined && typeof launch.binMissing !== 'boolean') continue;
     // Optional: open in the Claude Code panel rather than a terminal. The
     // command line above stays mandatory — it is the fallback.
     if (launch.panel !== undefined) {

@@ -53,7 +53,11 @@ class Client {
     const seen = (this.seen = { json: false, text: false });
     this.proc = proc;
     this.buf = '';
-    proc.stdout.on('data', (d) => this.onData(String(d), seen));
+    // A child that has been replaced must not feed the shared line buffer: a
+    // partial line from it would corrupt the next response from its successor.
+    proc.stdout.on('data', (d) => {
+      if (this.proc === proc) this.onData(String(d), seen);
+    });
     // What the child said on stderr is the only explanation of a start-up
     // failure ("env: node: No such file or directory"); keep the tail of it.
     let stderrTail = '';
@@ -63,7 +67,11 @@ class Client {
     // 'error' (ENOENT: CLI not installed) and 'close' both end up here; the
     // pending calls fail with the reason instead of waiting for a timeout.
     const died = (err) => {
-      if (this.proc === proc) this.proc = null;
+      // Only the current child's end is news. A child we replaced (reset(), or one
+      // that already died) reports its exit late — after its successor may be
+      // answering requests — and must not fail those.
+      if (this.proc !== proc) return;
+      this.proc = null;
       this.failAll(err);
     };
     // The child can exit between a request being queued and written; the write

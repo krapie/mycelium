@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1
+
+- Fixed "Mycelium: claude is not installed" for people who have the Claude Code **extension** but no `claude` command on their PATH. The extension ships its own claude, so opening a Claude session in its panel no longer needs the CLI; Claude is also offered under Hand off and Start New Agent in that case. A terminal still needs the CLI, and if neither is available you are told so instead of getting a terminal that prints "command not found". Needs `mycelium` CLI 0.5.1 for this; with 0.5.0 everything else works as before.
+- When an agent still isn't found — it lives in a directory only your login shell knows, and VS Code never got your shell's `PATH` — the extension asks the login shell for its directories once and sends them along with the request, so the CLI looks there too (nothing is restarted, so a summarize or organize run in progress is not interrupted). The agent picker does the same whenever any agent is missing, not only when the list is empty.
+- A command that fails is now written to **Mycelium: Show Log** (it used to show only in a notification), including what was asked of the CLI.
+- A replaced CLI process can no longer fail, or feed output into, requests sent to its successor.
+
 ## 0.2.0
 
 - **Claude Code sessions open in the Claude Code panel.** With the Claude Code extension installed, **Resume** on a Claude session reopens that conversation in its own panel (in a window on the session's project), and **Hand off** to Claude or **Start New Agent** → Claude starts a new conversation there, with the handoff prompt in the input box. *Resume in terminal* (context menu, and a button on the session page) keeps the old behavior. `mycelium.claudeCode.openIn` (`auto` / `panel` / `terminal`) chooses; `auto` follows Claude Code's own `claudeCode.useTerminal`. If the panel can't be opened, it falls back to a terminal and says so.

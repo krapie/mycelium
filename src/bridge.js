@@ -16,7 +16,7 @@ import { dirsForFolder, injectAgentsMd, assembleContext } from './reuse.js';
 import { buildHandoff } from './handoff.js';
 import { AGENTS, which, resumeCommandLine, newCommandLine } from './agents.js';
 import { existsSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, delimiter } from 'node:path';
 import { isSafeFolderPath, HOME, TREE_DIR } from './paths.js';
 import * as data from './tui/data.js';
 
@@ -88,6 +88,16 @@ const currentKnowledge = (folder) => {
   }
 };
 
+// `extraPath` (directories) lets a client that knows more about the user's
+// PATH than this process was started with — the editor, which may never have
+// received the login shell's — have agents looked up there too. Only the
+// lookup changes: the command line still names the program, which runs in the
+// user's own terminal.
+const pathEnv = (extraPath) => {
+  if (!Array.isArray(extraPath) || !extraPath.length || !extraPath.every((d) => typeof d === 'string')) return undefined;
+  return { ...process.env, PATH: [...extraPath, process.env.PATH].filter(Boolean).join(delimiter) };
+};
+
 export const METHODS = {
   hello: () => ({ version: VERSION, protocol: PROTOCOL, home: HOME }),
 
@@ -136,15 +146,20 @@ export const METHODS = {
     return { ok: true };
   },
 
-  agents: () =>
-    Object.entries(AGENTS)
-      .filter(([, a]) => which(a.bin))
-      .map(([key, a]) => ({ key, label: a.label, bin: a.bin })),
+  // Only the agents whose program is on PATH, unless `all`: then every agent,
+  // each with `onPath`, so a client that has another way to run one (Claude
+  // Code's own panel runs Claude without a CLI) can still offer it.
+  agents: ({ all = false, extraPath } = {}) => {
+    const env = pathEnv(extraPath);
+    return Object.entries(AGENTS)
+      .map(([key, a]) => ({ key, label: a.label, bin: a.bin, onPath: which(a.bin, { env }) }))
+      .filter((a) => all || a.onPath);
+  },
 
   // Same refusals as `mycelium resume` (cli/reuse.js): a merge/split product
   // has no agent-native id to resume, and a pruned transcript would only make
   // the agent's own --resume fail once run. The caller offers handoff instead.
-  resumeCommand: ({ id, force = false }) => {
+  resumeCommand: ({ id, force = false, allowMissingBin = false, extraPath }) => {
     const { session } = ok(findSession(id));
     if (session.mergedFrom?.length || session.splitFrom) {
       throw new BridgeError('merged/split session — not resumable, use handoff');
@@ -152,10 +167,10 @@ export const METHODS = {
     if (!force && !sourceSessionExists(session.source, session.id)) {
       throw new BridgeError(`${AGENTS[session.source]?.label || session.source} no longer has this session on this machine — use handoff`);
     }
-    return ok(resumeCommandLine(session));
+    return ok(resumeCommandLine(session, { requireBin: !allowMissingBin, env: pathEnv(extraPath) }));
   },
 
-  newCommand: ({ agentKey, dir, seed }) => ok(newCommandLine({ agentKey, dir, seed })),
+  newCommand: ({ agentKey, dir, seed, allowMissingBin = false, extraPath }) => ok(newCommandLine({ agentKey, dir, seed }, { requireBin: !allowMissingBin, env: pathEnv(extraPath) })),
 
   handoff: ({ id }) => ok(buildHandoff(ok(findSession(id)).session.id)),
 
