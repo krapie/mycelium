@@ -37,6 +37,7 @@ async function openInClaudePanel({ sessionId, prompt }, log) {
 async function openLaunch(launch, log = { appendLine() {} }) {
   const ext = claudeExtension();
   log.appendLine(`launch: ${launch.key} in ${launch.cwd}; panel requested: ${launch.panel ? 'yes' : 'no'}; Claude Code: ${ext ? `${ext.packageJSON.version} (${ext.isActive ? 'active' : 'not yet active'})` : 'not installed/enabled here'}`);
+  let panelProblem = '';
   if (launch.panel) {
     if (panelWanted(launch.key)) {
       try {
@@ -44,7 +45,9 @@ async function openLaunch(launch, log = { appendLine() {} }) {
         return;
       } catch (err) {
         log.appendLine(`Claude Code panel failed: ${err.message}`);
-        vscode.window.showWarningMessage(`Mycelium: couldn't open it in the Claude Code panel (${err.message}); starting it in a terminal instead.`);
+        panelProblem = `the Claude Code panel failed: ${err.message}`;
+        // Only promise a terminal if there is one to fall back to
+        if (!launch.binMissing) vscode.window.showWarningMessage(`Mycelium: couldn't open it in the Claude Code panel (${err.message}); starting it in a terminal instead.`);
       }
     } else {
       log.appendLine(`panel not used: mycelium.claudeCode.openIn=${vscode.workspace.getConfiguration('mycelium').get('claudeCode.openIn')}, claudeCode.useTerminal=${vscode.workspace.getConfiguration('claudeCode').get('useTerminal')}`);
@@ -59,7 +62,7 @@ async function openLaunch(launch, log = { appendLine() {} }) {
     // The panel was the only way to run it (Claude Code ships its own claude),
     // and it isn't available here: a terminal would only print "command not found".
     log.appendLine(`not started: ${launch.bin} is not on PATH and the Claude Code panel is not available`);
-    vscode.window.showErrorMessage(`Mycelium: ${launch.bin} is not installed (it isn't on PATH) and the Claude Code panel isn't available in this window. Install the ${launch.bin} CLI, or enable the Claude Code extension.`);
+    vscode.window.showErrorMessage(`Mycelium: ${launch.bin} is not installed (it isn't on PATH) and the Claude Code panel isn't available in this window${panelProblem ? ` (${panelProblem})` : ''}. Install the ${launch.bin} CLI, or enable the Claude Code extension.`);
     return;
   }
   openTerminal(launch);

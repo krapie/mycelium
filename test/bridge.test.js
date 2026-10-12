@@ -146,3 +146,30 @@ test('resumeCommand and newCommand can be told to accept an agent that is not on
     process.env.PATH = prev;
   }
 });
+
+test('extraPath lets agents, resumeCommand and newCommand look for an agent in directories the CLI was not started with', async () => {
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'bridge-extra-'));
+  fs.writeFileSync(path.join(bin, 'claude'), '#!/bin/sh\n', { mode: 0o755 });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bridge-extra-cwd-'));
+  const n = seed('eeeeeeee-1111', 'x');
+  n.projectDir = dir;
+  saveRaw(n);
+  reindex();
+  const prev = process.env.PATH;
+  process.env.PATH = '';
+  try {
+    assert.equal((await call('agents', { all: true })).result.find((a) => a.key === 'claude').onPath, false);
+    assert.equal((await call('agents', { all: true, extraPath: [bin] })).result.find((a) => a.key === 'claude').onPath, true);
+    assert.equal((await call('newCommand', { agentKey: 'claude', dir })).error.message, 'claude not installed');
+    assert.equal((await call('newCommand', { agentKey: 'claude', dir, extraPath: [bin] })).result.binMissing, undefined);
+    assert.equal((await call('resumeCommand', { id: 'eeeeeeee-1111', extraPath: [bin] })).result.cwd, dir);
+    // junk is ignored rather than trusted
+    assert.equal((await call('newCommand', { agentKey: 'claude', dir, extraPath: 'nope' })).error.message, 'claude not installed');
+    assert.equal((await call('newCommand', { agentKey: 'claude', dir, extraPath: [bin, 5] })).error.message, 'claude not installed');
+  } finally {
+    process.env.PATH = prev;
+  }
+});

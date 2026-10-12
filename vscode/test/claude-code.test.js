@@ -179,3 +179,16 @@ test('a missing binary only matters when a terminal was the way to run it', asyn
   assert.equal(calls.terminals.length, 1);
   assert.equal(calls.errors.length, 0);
 });
+
+test('when the panel fails and there is no CLI to fall back to, no terminal is promised — one final error carries the reason', async () => {
+  reset(); state.execFails = new Error('boom');
+  await openLaunch(launch({ binMissing: true, panel: { sessionId: UUID } }));
+  assert.equal(calls.terminals.length, 0);
+  assert.equal(calls.warn.length, 0, 'the "starting it in a terminal instead" warning would be untrue');
+  assert.match(calls.errors.at(-1), /claude is not installed.*the Claude Code panel failed: boom/s);
+
+  reset(); state.execFails = new Error('boom');
+  await openLaunch(launch({ panel: { sessionId: UUID } })); // a CLI exists: the terminal fallback is real
+  assert.equal(calls.terminals.length, 1);
+  assert.match(calls.warn[0], /starting it in a terminal instead/);
+});

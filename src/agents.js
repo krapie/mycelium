@@ -53,13 +53,13 @@ const quoteArg = (s) => (/^[\w./-]+$/.test(s) ? s : `'${String(s).replace(/'/g, 
 
 /** Build a copy-pasteable `cd <dir> && <bin> <args>` line — shared by
  * `mycelium resume` (CLI) and the TUI's "copy command" resume option. */
-export function resumeCommandLine(session, { requireBin = true } = {}) {
+export function resumeCommandLine(session, { requireBin = true, env } = {}) {
   const bin = binFor(session.source);
   // `requireBin: false` is for a caller that doesn't need the program: the
   // VS Code extension opens a Claude session in Claude Code's own panel, which
   // ships its own claude binary, so a `claude` missing from PATH is no reason
   // to refuse. It gets `binMissing` and decides for itself.
-  const onPath = which(bin);
+  const onPath = which(bin, { env });
   if (!onPath && requireBin) return { ok: false, error: `${bin} not installed` };
   const cwd = workDirFor(session);
   if (!cwd) return { ok: false, error: 'no working directory found for this session' };
@@ -74,7 +74,7 @@ export function resumeCommandLine(session, { requireBin = true } = {}) {
  * alternative to launch.js's normal in-terminal foreground() handoff — see
  * launchAgent()'s `copyOnly` option. `agentKey` is one of AGENTS' own keys
  * (the same picker launch.js already uses to choose it). */
-export function newCommandLine({ agentKey, dir, seed }, { requireBin = true } = {}) {
+export function newCommandLine({ agentKey, dir, seed }, { requireBin = true, env } = {}) {
   const agent = AGENTS[agentKey];
   if (!agent) return { ok: false, error: 'unknown agent' };
   // MYCELIUM_DEMO_MODE (set for the tutorial's whole run, see tutorial.js's
@@ -83,7 +83,7 @@ export function newCommandLine({ agentKey, dir, seed }, { requireBin = true } = 
   // installed at all, which would otherwise make the tutorial's copy-only
   // `n` step fail with "<bin> not installed" instead of the intended
   // "copied to clipboard" confirmation.
-  const onPath = process.env.MYCELIUM_DEMO_MODE === '1' || which(agent.bin);
+  const onPath = process.env.MYCELIUM_DEMO_MODE === '1' || which(agent.bin, { env });
   if (!onPath && requireBin) return { ok: false, error: `${agent.bin} not installed` };
   if (!dir || !existsSync(dir)) return { ok: false, error: 'no working directory found' };
   const args = agent.newArgs(seed);

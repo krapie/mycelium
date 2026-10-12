@@ -61,8 +61,9 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
   };
 
   // The CLI looks for agents on the PATH it was started with; if one isn't
-  // found, widen that PATH from the login shell once and ask again.
-  const askCli = (method, params) => withWiderPath(() => client.request(method, params), () => client.widenPath(), (l) => log.appendLine(l));
+  // found, ask again with the login shell's directories sent along.
+  const askCli = (method, params) =>
+    withWiderPath((extra) => client.request(method, extra ? { ...params, extraPath: extra } : params), () => client.loginDirs(), (l) => log.appendLine(l));
 
   const pickDir = async (folder) => {
     const dirs = new Set(workspaceDirs());
@@ -77,8 +78,17 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
     // is still usable then, through Claude Code's panel. An older CLI ignores
     // `all` and sends only what is on PATH, as before.
     const usable = (all) => all.filter((a) => a.onPath !== false || (a.key === 'claude' && panelWanted('claude')));
-    let agents = usable(await client.request('agents', { all: true }));
-    if (!agents.length && (await client.widenPath())) agents = usable(await client.request('agents', { all: true }));
+    let all = await client.request('agents', { all: true });
+    // An agent that isn't on the CLI's PATH may be on the login shell's (once per
+    // window, cached) — whatever else is installed: Codex being found doesn't
+    // mean Claude was.
+    if (all.some((a) => a.onPath === false)) {
+      const lookup = client.loginDirs();
+      vscode.window.setStatusBarMessage('Mycelium: looking for your agents…', lookup); // shown until it resolves
+      const dirs = await lookup;
+      if (dirs.length) all = await client.request('agents', { all: true, extraPath: dirs });
+    }
+    const agents = usable(all);
     if (!agents.length && !extra.length) {
       vscode.window.showWarningMessage('Mycelium: no agent CLI found on PATH (install claude, codex, …)');
       return undefined;

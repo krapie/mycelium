@@ -54,17 +54,11 @@ function makeClient(ctx, log) {
     return { command: r.command, env: childEnv({ dir: r.dir, extraDirs: loginDirs }) };
   };
   const client = new Client({ resolver, log: (l) => log.appendLine(l), env: home ? { MYCELIUM_HOME: home } : {} });
-  /**
-   * An agent wasn't found on the PATH the CLI had: learn the login shell's
-   * directories (once) and restart the CLI with them. True if that added any.
-   */
-  client.widenPath = async () => {
-    const before = loginDirs.length;
-    const after = (await askLoginShell()).length;
-    if (after <= before) return false;
-    log.appendLine(`the login shell added ${after - before} PATH entr${after - before === 1 ? 'y' : 'ies'}; restarting the CLI with them`);
-    client.reset();
-    return true;
+  /** The directories on the login shell's PATH (asked once, cached): what the CLI is sent to look for agents in. */
+  client.loginDirs = async () => {
+    const dirs = await askLoginShell();
+    log.appendLine(dirs.length ? `login shell PATH: ${dirs.length} directories` : 'the login shell gave no PATH');
+    return dirs;
   };
   return client;
 }
@@ -78,7 +72,7 @@ async function activate(ctx) {
   const log = vscode.window.createOutputChannel('Mycelium');
   ctx.subscriptions.push(log);
   let client = makeClient(ctx, log);
-  const proxy = { request: (m, p, o) => client.request(m, p, o), widenPath: () => client.widenPath() };
+  const proxy = { request: (m, p, o) => client.request(m, p, o), loginDirs: () => client.loginDirs() };
 
   let foldersView;
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);

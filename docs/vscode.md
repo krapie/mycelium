@@ -81,7 +81,7 @@ This hand-off needs the Mycelium extension to be **installed**, because the new 
 
 **"…too old for this extension".** The CLI is older than the extension needs (0.5.0+): `npm install -g @kevinprk/mycelium`, then `mycelium --version`. If you also have a Homebrew copy, check which one `which mycelium` finds.
 
-**"claude is not installed", though Claude Code is.** A terminal needs the `claude` command on `PATH`; the Claude Code *extension* has its own copy and doesn't. With the extension enabled and `mycelium` 0.5.1+, Claude sessions open in its panel without it. If `claude` is installed somewhere only your login shell knows, the extension asks the shell for its `PATH` once and tries again; *Mycelium: Show Log* records each step. Otherwise install the CLI (or start VS Code from a terminal with `code`, so it sees your `PATH`).
+**"claude is not installed", though Claude Code is.** A terminal needs the `claude` command on `PATH`; the Claude Code *extension* has its own copy and doesn't. With the extension enabled and `mycelium` 0.5.1+, Claude sessions open in its panel without it. If `claude` is installed somewhere only your login shell knows, the extension asks the shell for its `PATH` once and sends those directories along with the request, so the CLI looks there too; *Mycelium: Show Log* records each step. Otherwise install the CLI (or start VS Code from a terminal with `code`, so it sees your `PATH`).
 
 **"Node.js was not found".** The CLI was found but `node` isn't on the `PATH` VS Code started with: install Node.js 22.16 or newer, or start VS Code from a terminal with `code`.
 
