@@ -47,6 +47,10 @@ There's no enforced prefix convention (no `feat:`/`fix:` etc.) — write a short
 
 No Prettier — the codebase already has a consistent hand-written style; `npm run lint` catches correctness issues (unused variables, etc.), not formatting. Match the surrounding code's style in whatever file you're editing.
 
+### License Headers
+
+Every `.js`/`.mjs`/`.cjs` file starts with the MIT header (copyright "The Mycelium Authors" plus an `SPDX-License-Identifier: MIT` line). `npm run lint` fails on a file without it; `npm run lint:headers:fix` adds it. On your first merged PR, add yourself to [`AUTHORS`](./AUTHORS).
+
 ### Adding a New AI Agent CLI
 
 Mycelium captures sessions from AI coding-agent CLIs (Claude Code, Codex, Kiro, OpenCode today) through a small adapter interface. The adapter itself — the part that makes scanning/resuming/launching/the picker work — is exactly two required files:
