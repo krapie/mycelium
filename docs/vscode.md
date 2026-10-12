@@ -94,12 +94,15 @@ The extension is versioned separately from the CLI, and its releases are tagged 
 
 ### Publishing to the registries (one-time setup)
 
-Each registry job does nothing until its token exists as a repository secret (*Settings → Secrets and variables → Actions*), so releases keep working without them.
+Each registry job does nothing until its token exists as a repository secret (*Settings → Secrets and variables → Actions*), so releases keep working without them — a registry you publish to by hand simply never gets a secret.
 
-**VS Code Marketplace** — secret `VSCE_PAT`
+**VS Code Marketplace** — the publisher needs only a Microsoft account; how the *publishing* is authenticated is the part that is changing.
 1. Sign in at <https://marketplace.visualstudio.com/manage> with a Microsoft account and create a publisher whose **ID is `krapie`** (it must match `publisher` in `vscode/package.json`).
-2. At <https://dev.azure.com> (create an organization if asked) → *User settings → Personal access tokens → New token*: *Organization* **All accessible organizations**, *Scopes* **Custom defined → Marketplace → Manage**. Copy it once; it expires (pick a long expiry and note the date).
-3. Add it as `VSCE_PAT`.
+2. Pick how releases reach it:
+   - **Upload by hand** (no token, no Azure): on the publisher page choose *New extension → Visual Studio Code* and upload the release's `.vsix`. Fine for a project that releases occasionally, and the right way to do the first one.
+   - **A Personal Access Token** → secret `VSCE_PAT`. Created at <https://dev.azure.com> (a free Azure DevOps organization, no Azure subscription or card): *User settings → Personal access tokens → New token*, *Organization* **All accessible organizations**, *Scopes* **Custom defined → Marketplace → Manage**. **Microsoft retires global Azure DevOps PATs on 1 December 2026**, so this only works until then; treat it as a stopgap.
+   - **Trusted publishing from GitHub Actions** — `vsce publish --oidc` (in the `@vscode/vsce` 4.x this workflow pins) needs no stored secret, but requires a trusted-publishing policy for this repository and workflow on the Marketplace side. Microsoft's publishing page doesn't document it, so check whether your publisher page offers it before relying on it; if it does, the job needs `id-token: write` and `--oidc` instead of `--pat`.
+   - **Microsoft Entra ID** (`--azure-credential`) is what Microsoft's docs recommend, but its documented setup is an Azure subscription, a managed identity and an Azure DevOps service connection — heavy for a GitHub-hosted project.
 
 **Open VSX** (Cursor, Windsurf, VSCodium) — secret `OVSX_PAT`
 1. Sign in at <https://open-vsx.org> with GitHub, link an Eclipse Foundation account and sign the Publisher Agreement.
