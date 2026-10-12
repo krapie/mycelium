@@ -2,16 +2,28 @@ name: Publish VS Code extension
 
 # Fires when a maintainer publishes a GitHub Release whose tag is
 # `vscode-v<version>` (the extension is versioned separately from the CLI, so
-# its tags don't collide with `v<version>`). Builds the .vsix and attaches it
-# to that release; there is no registry to publish to, people install the file
-# (docs/vscode.md). publish.yml and publish-homebrew.yml skip these tags.
+# its tags don't collide with `v<version>`). Builds the .vsix and attaches it to
+# that release, then publishes that same file to the VS Code Marketplace and to
+# Open VSX (Cursor, Windsurf, VSCodium). publish.yml and publish-homebrew.yml
+# skip these tags.
+#
+# The two registry jobs each take their token from a repo secret — VSCE_PAT and
+# OVSX_PAT (see docs/vscode.md → "Publishing to the registries") — and do nothing
+# until it exists. They also run from "Run workflow" with a tag, which publishes
+# an existing release's .vsix: that is how a release made before the tokens were
+# added reaches the registries, and how a failed registry run is retried.
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag whose .vsix to publish to the registries (e.g. vscode-v0.2.2)'
+        required: true
 
 jobs:
   vsix:
-    if: ${{ startsWith(github.event.release.tag_name, 'vscode-v') }}
+    if: ${{ github.event_name == 'release' && startsWith(github.event.release.tag_name, 'vscode-v') }}
     runs-on: ubuntu-latest
     permissions:
       contents: write # attach the file to the release
@@ -50,3 +62,48 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ github.event.release.tag_name }}
         run: gh release upload "$TAG" "vscode/mycelium-vscode-${VERSION}.vsix" --clobber
+
+  # The registries are separate jobs so one failing doesn't stop the other, and a
+  # failed one can be re-run alone. Both publish the file attached to the release,
+  # not a rebuild of it: what people download and what the registries serve are
+  # the same bytes.
+  marketplace:
+    needs: vsix
+    # `always()`: also run for workflow_dispatch, where `vsix` is skipped
+    if: ${{ always() && (needs.vsix.result == 'success' || needs.vsix.result == 'skipped') && (github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'vscode-v')) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Publish to the VS Code Marketplace
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          if [ -z "$VSCE_PAT" ]; then echo "VSCE_PAT is not set; skipping the Marketplace."; exit 0; fi
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p '*.vsix' -D dist
+          FLAGS=""
+          if [ "$PRERELEASE" = "true" ]; then FLAGS="--pre-release"; fi
+          npx --yes @vscode/vsce@4.0.0 publish $FLAGS --packagePath dist/*.vsix --pat "$VSCE_PAT"
+
+  openvsx:
+    needs: vsix
+    if: ${{ always() && (needs.vsix.result == 'success' || needs.vsix.result == 'skipped') && (github.event_name == 'workflow_dispatch' || startsWith(github.event.release.tag_name, 'vscode-v')) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Publish to Open VSX
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          if [ -z "$OVSX_PAT" ]; then echo "OVSX_PAT is not set; skipping Open VSX."; exit 0; fi
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" -p '*.vsix' -D dist
+          FLAGS=""
+          if [ "$PRERELEASE" = "true" ]; then FLAGS="--pre-release"; fi
+          npx --yes ovsx@1.2.0 publish $FLAGS dist/*.vsix -p "$OVSX_PAT"

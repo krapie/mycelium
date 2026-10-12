@@ -8,15 +8,14 @@ It needs the `mycelium` CLI (`npm i -g @kevinprk/mycelium`) — the extension ru
 
 ## Install
 
-Each computer needs the **CLI (0.5.0 or newer)** and the **extension**. The extension tells you if the CLI is missing or too old.
+Each computer needs the **CLI (0.5.1 or newer)** and the **extension**. The extension tells you if the CLI is missing or too old.
 
 ```sh
 npm install -g @kevinprk/mycelium            # or: brew install krapie/tap/mycelium   (Node ≥ 22.16)
-gh release download vscode-v0.1.0 -R krapie/mycelium -p '*.vsix'
-code --install-extension mycelium-vscode-0.1.0.vsix     # `cursor` / `windsurf` work the same way
+code --install-extension krapie.mycelium-vscode           # `cursor` / `windsurf` work the same way
 ```
 
-Or download the `.vsix` from the release page and use *Extensions → `…` → Install from VSIX…*. The extension is not on a marketplace yet, so there is no auto-update: install the newer `.vsix` to update. Each computer keeps its own `~/.mycelium`; the extension shows whatever store it finds on that machine.
+The Marketplace and Open VSX update it for you. To install a specific release instead, download its `.vsix` from the [releases page](https://github.com/krapie/mycelium/releases?q=vscode-v) and use *Extensions → `…` → Install from VSIX…* (or `code --install-extension <file>`). Each computer keeps its own `~/.mycelium`; the extension shows whatever store it finds on that machine.
 
 On Windows the terminal command is written for whichever shell the integrated terminal uses (PowerShell, cmd or bash). cmd has no safe way to quote an arbitrary handoff prompt, so when the terminal's shell is cmd and an argument isn't made of plain words, that one terminal opens in PowerShell instead.
 
@@ -90,8 +89,25 @@ This hand-off needs the Mycelium extension to be **installed**, because the new 
 The extension is versioned separately from the CLI, and its releases are tagged `vscode-v<version>` so they don't collide with the CLI's `v<version>`.
 
 1. Bump `version` in `vscode/package.json` and add a `vscode/CHANGELOG.md` entry. If the extension now needs newer CLI features, raise `MIN_CLI` in `vscode/src/version.js` — and that CLI has to be released first (`v<cli version>`, which publishes to npm and Homebrew).
-2. Publish a GitHub Release with tag `vscode-v<version>` and notes. [`publish-vscode.yml`](../.github/workflows/publish-vscode.yml) checks the tag against `vscode/package.json`, runs the tests, builds `mycelium-vscode-<version>.vsix` and attaches it to the release. `publish.yml` and `publish-homebrew.yml` skip `vscode-` tags.
+2. Publish a GitHub Release with tag `vscode-v<version>` and notes. [`publish-vscode.yml`](../.github/workflows/publish-vscode.yml) checks the tag against `vscode/package.json`, runs the tests, builds `mycelium-vscode-<version>.vsix` and attaches it to the release; then two separate jobs publish **that same file** to the VS Code Marketplace and to Open VSX. `publish.yml` and `publish-homebrew.yml` skip `vscode-` tags. A pre-release GitHub Release is published as a pre-release on both registries.
 3. To try the file before releasing: `cd vscode && npm run package`, then install it into a throwaway profile: `code --user-data-dir /tmp/u --extensions-dir /tmp/e --install-extension mycelium-vscode-<version>.vsix`.
+
+### Publishing to the registries (one-time setup)
+
+Each registry job does nothing until its token exists as a repository secret (*Settings → Secrets and variables → Actions*), so releases keep working without them.
+
+**VS Code Marketplace** — secret `VSCE_PAT`
+1. Sign in at <https://marketplace.visualstudio.com/manage> with a Microsoft account and create a publisher whose **ID is `krapie`** (it must match `publisher` in `vscode/package.json`).
+2. At <https://dev.azure.com> (create an organization if asked) → *User settings → Personal access tokens → New token*: *Organization* **All accessible organizations**, *Scopes* **Custom defined → Marketplace → Manage**. Copy it once; it expires (pick a long expiry and note the date).
+3. Add it as `VSCE_PAT`.
+
+**Open VSX** (Cursor, Windsurf, VSCodium) — secret `OVSX_PAT`
+1. Sign in at <https://open-vsx.org> with GitHub, link an Eclipse Foundation account and sign the Publisher Agreement.
+2. Create a token at <https://open-vsx.org/user-settings/tokens>.
+3. Claim the namespace once: `npx ovsx create-namespace krapie -p <token>`.
+4. Add the token as `OVSX_PAT`.
+
+**First publication, or a retry:** *Actions → Publish VS Code extension → Run workflow* with the tag of an existing release (e.g. `vscode-v0.2.2`) publishes that release's `.vsix` to both registries; the job for a registry whose token is missing says so and skips. After the first publication a listing takes a few minutes to appear (the Marketplace scans it first).
 
 ## Try it locally
 
