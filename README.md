@@ -9,7 +9,7 @@
 [![VS Code Marketplace](https://img.shields.io/open-vsx/v/krapie/mycelium-vscode?label=VS%20Code%20extension)](https://marketplace.visualstudio.com/items?itemName=krapie.mycelium-vscode)
 [![Ask DeepWiki](https://img.shields.io/badge/Ask-DeepWiki-blue)](https://deepwiki.com/krapie/mycelium)
 
-> [!NOTE]
+> [!TIP]
 > **Use VS Code? Try the [VS Code extension](#vs-code-extension).** It plugs into your IDE and is easier to use than the TUI.
 
 *[한국어 가이드](./README.ko.md)*

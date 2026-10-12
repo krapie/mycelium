@@ -9,7 +9,7 @@
 [![VS Code Marketplace](https://img.shields.io/open-vsx/v/krapie/mycelium-vscode?label=VS%20Code%20extension)](https://marketplace.visualstudio.com/items?itemName=krapie.mycelium-vscode)
 [![Ask DeepWiki](https://img.shields.io/badge/Ask-DeepWiki-blue)](https://deepwiki.com/krapie/mycelium)
 
-> [!NOTE]
+> [!TIP]
 > **VS Code를 쓰신다면 [VS Code 확장](#vs-code-확장)을 써 보세요.** IDE와 자연스럽게 통합되고 TUI보다 쓰기 쉽습니다.
 
 *[English guide](./README.md)*
