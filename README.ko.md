@@ -10,7 +10,7 @@
 [![Ask DeepWiki](https://img.shields.io/badge/Ask-DeepWiki-blue)](https://deepwiki.com/krapie/mycelium)
 
 > [!NOTE]
-> **[VS Code 확장](#vs-code-확장)으로 써 보세요** — 같은 세션·폴더·지식을 에디터 사이드바에서 보고, 클릭 한 번으로 세션을 재개하거나 핸드오프할 수 있습니다.
+> **[VS Code 확장](#vs-code-확장)으로 써 보세요** — Mycelium을 가장 쉽게 쓰는 방법입니다. 세션·폴더·지식이 에디터 사이드바에 있고, 재개와 핸드오프는 클릭 한 번이면 됩니다. 새로 외울 명령이나 단축키가 없습니다.
 
 *[English guide](./README.md)*
 

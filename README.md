@@ -10,7 +10,7 @@
 [![Ask DeepWiki](https://img.shields.io/badge/Ask-DeepWiki-blue)](https://deepwiki.com/krapie/mycelium)
 
 > [!NOTE]
-> **Try the [VS Code extension](#vs-code-extension)** — the same sessions, folders and knowledge in your editor's sidebar; resume or hand off a session in one click.
+> **Try the [VS Code extension](#vs-code-extension)** — the easiest way to use Mycelium: your sessions, folders, and knowledge in the editor's sidebar, with resume and hand-off one click away. No new commands or keys to learn.
 
 *[한국어 가이드](./README.ko.md)*
 
