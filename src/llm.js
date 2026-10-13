@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
 
 /**
  * Minimal LLM call via a headless coding-CLI subprocess. We reuse whatever
@@ -128,6 +130,17 @@ export async function complete(prompt, { timeoutMs = 240000 } = {}) {
   }
 }
 
+// A shared tmpdir() is writable by other users, who could plant a CLAUDE.md/
+// AGENTS.md there for the agent CLI to load. mkdtemp creates the directory
+// 0700, so one private empty dir per process is both neutral and safe.
+let _neutralCwd = null;
+function neutralCwd() {
+  if (_neutralCwd) return _neutralCwd;
+  _neutralCwd = mkdtempSync(join(tmpdir(), 'mycelium-llm-'));
+  process.on('exit', () => rmSync(_neutralCwd, { recursive: true, force: true }));
+  return _neutralCwd;
+}
+
 function runCli(cmd, args, timeoutMs) {
   return new Promise((resolve, reject) => {
     // windowsHide: on Windows, spawn() opens a real visible console window
@@ -139,7 +152,7 @@ function runCli(cmd, args, timeoutMs) {
     // that project's CLAUDE.md/AGENTS.md, hooks and MCP servers, which is
     // slower and lets the model start working on project instructions
     // instead of answering the one-shot prompt (pushing it into the timeout).
-    const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, cwd: tmpdir() });
+    const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, cwd: neutralCwd() });
     inFlight.add(child);
     const untrack = () => inFlight.delete(child);
     let out = '';

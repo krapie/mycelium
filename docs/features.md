@@ -136,7 +136,8 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   `cwd: os.tmpdir()` so it doesn't load the launch project's
   CLAUDE.md/hooks/MCP, and the daemon's organize/tag/digest/knowledge
   cycles run one tiny `llmPreflight()` call first and skip (logging once
-  per outage) when it fails. [tested]. Each function reports `stoppedEarly` so callers can distinguish
+  per outage) when it fails. [partial] (the organize gate is tested; the
+  other gates and the child's actual `cwd` are not). Each function reports `stoppedEarly` so callers can distinguish
   "ran out of quota, stop here" from "some unrelated one-off failures."
   Per-candidate/per-chunk progress is written to disk as it completes
   either way, so stopping early never loses prior work. `applyPlacements`

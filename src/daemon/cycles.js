@@ -34,6 +34,10 @@ const SUMMARIZE_CONCURRENCY = Number(process.env.MYCELIUM_SUMMARIZE_CONCURRENCY 
 // every call fail identically, each after up to 240s). Logs once per outage,
 // not every cycle.
 let lastPreflightError = null;
+// Set when a failed preflight skipped tagging: later scans may import
+// nothing, so without this the skipped sessions would stay untagged until the
+// next import.
+let tagPending = false;
 async function llmReady(log, label) {
   const err = await llmPreflight();
   if (!err) {
@@ -75,7 +79,9 @@ export async function scanCycle(log, { onScanned } = {}) {
       reindex();
     }
     if (onScanned) onScanned();
-    if (res.imported > 0 && (await llmReady(log, 'tag'))) {
+    const wantsTagging = res.imported > 0 || tagPending;
+    tagPending = wantsTagging && !(await llmReady(log, 'tag'));
+    if (wantsTagging && !tagPending) {
       // Tag freshly imported sessions (skips those already summarized).
       // Shares SUMMARIZE_CONCURRENCY with smartOrganizeCycle below — one
       // governing concurrency ceiling for every daemon-triggered batch of
