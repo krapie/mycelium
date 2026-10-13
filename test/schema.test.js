@@ -89,3 +89,16 @@ test('firstUserTurn skips underscore-tagged synthetic turns like <ide_selection>
   ];
   assert.equal(firstUserTurn(n).text, 'real prompt');
 });
+
+test('a fork previews from the turns after its fork point, falling back to everything when it has none', () => {
+  const n = emptyNeutral('f', 'claude');
+  n.turns = [
+    { role: 'user', text: 'shared opener' },
+    { role: 'assistant', text: 'shared reply' },
+    { role: 'user', text: 'fork-only question' },
+  ];
+  n.forkPoint = 2;
+  assert.equal(firstUserText(n), 'fork-only question');
+  n.forkPoint = 3;
+  assert.equal(firstUserText(n), 'shared opener');
+});

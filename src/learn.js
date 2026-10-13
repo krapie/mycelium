@@ -1,6 +1,6 @@
 import { complete, parseJsonReply, mapConcurrent, classifyLlmError } from './llm.js';
 import { loadRaw, saveRaw, allRaw } from './scanner.js';
-import { isBacklog } from './schema.js';
+import { isBacklog, ownTurns } from './schema.js';
 import { listTags } from './index-db.js';
 import { isArchive } from './organize/folders.js';
 import { contentLocale } from './config.js';
@@ -8,7 +8,7 @@ import { contentLocale } from './config.js';
 // Cap how much of a long session we send to the tagger. First + last slices
 // capture the intent and the outcome without paying for the whole transcript.
 function sessionExcerpt(neutral, locale, budget = 6000) {
-  const lines = neutral.turns.map((t) => `${t.role}: ${t.text}`);
+  const lines = ownTurns(neutral).map((t) => `${t.role}: ${t.text}`);
   const joined = lines.join('\n');
   if (joined.length <= budget) return joined;
   const head = joined.slice(0, Math.floor(budget * 0.6));

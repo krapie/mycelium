@@ -4,7 +4,7 @@ import { ensureDirs, RAW_DIR } from './paths.js';
 import { ADAPTERS, getAdapter } from './adapters/index.js';
 import { META_MARKER } from './llm.js';
 import { cleanUserText } from './adapters/claude-code.js';
-import { isBacklog, backlogSeedId } from './schema.js';
+import { isBacklog, backlogSeedId, firstRealUserTurn } from './schema.js';
 import { loadConfig } from './config.js';
 
 function rawPath(id) {
@@ -146,6 +146,7 @@ export function scan({ onImport } = {}) {
   let imported = 0;
   let skipped = 0;
   let failed = 0;
+  const importedClaude = new Set();
   // Backlog items consumed by a session that was just captured — their rows
   // are gone from raw/ and callers that reindex precisely (launch.js) have to
   // drop them from the index too, not just add the imported sessions.
@@ -242,6 +243,7 @@ export function scan({ onImport } = {}) {
         neutral.organizedBy = existing.organizedBy || neutral.organizedBy;
         neutral.continuationOf = existing.continuationOf ?? neutral.continuationOf;
         neutral.continuedTo = existing.continuedTo ?? neutral.continuedTo;
+        neutral.forkPoint = existing.forkPoint ?? neutral.forkPoint;
         neutral.mergedFrom = existing.mergedFrom?.length ? existing.mergedFrom : neutral.mergedFrom;
         neutral.splitFrom = existing.splitFrom ?? neutral.splitFrom;
         neutral.supersededBy = existing.supersededBy?.length ? existing.supersededBy : neutral.supersededBy;
@@ -284,11 +286,79 @@ export function scan({ onImport } = {}) {
         consumedBacklog.add(consumedId);
       }
       imported++;
+      if (neutral.source === 'claude') importedClaude.add(neutral.id);
       if (onImport) onImport(neutral);
     }
   }
 
+  // A new fork can arrive after its parent was stored (or the reverse), so
+  // this runs over stored records, not just the ones parsed in this pass.
+  if (importedClaude.size) {
+    for (const n of linkForks(importedClaude)) {
+      if (!importedClaude.has(n.id) && onImport) onImport(n);
+    }
+  }
+
   return { scanned, imported, skipped, failed, consumedBacklog: [...consumedBacklog], removed: [...removed] };
+}
+
+const forkSuffixes = (n) => n.forkDepth ?? 0;
+
+/**
+ * The Claude Code VS Code extension's "Fork conversation" writes a new
+ * transcript that copies the whole prior history (new message uuids, original
+ * timestamps) with nothing pointing back at the source, so it would be
+ * captured as an unrelated duplicate. Infer the link instead: same cwd, same
+ * startedAt and same first real user turn means same conversation. The parent
+ * is the member with the fewest " (fork)" title suffixes (earliest file
+ * birthtime on ties); every other member gets continuationOf → parent and a
+ * forkPoint = the length of the turn prefix it shares with the parent, so
+ * its preview/summary come from what it did after forking (schema.js's
+ * ownTurns). Only groups containing a record from `touchedIds` are examined.
+ * Returns the records it changed (already saved).
+ */
+function linkForks(touchedIds) {
+  const groups = new Map();
+  for (const n of allRaw()) {
+    if (n.source !== 'claude' || isBacklog(n) || !n.startedAt) continue;
+    const first = firstRealUserTurn(n.turns);
+    if (!first) continue;
+    const key = [n.cwd, n.startedAt, first.text.trim()].join('\0');
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(n);
+  }
+  const changed = new Map();
+  const touch = (n) => changed.set(n.id, n);
+  for (const group of groups.values()) {
+    if (group.length < 2 || !group.some((n) => touchedIds.has(n.id))) continue;
+    group.sort(
+      (a, b) =>
+        forkSuffixes(a) - forkSuffixes(b) ||
+        (a.fileBirthMs ?? Infinity) - (b.fileBirthMs ?? Infinity) ||
+        a.id.localeCompare(b.id),
+    );
+    const [parent, ...forks] = group;
+    for (const fork of forks) {
+      let shared = 0;
+      const max = Math.min(parent.turns.length, fork.turns.length);
+      while (shared < max && parent.turns[shared].role === fork.turns[shared].role && parent.turns[shared].text === fork.turns[shared].text) shared++;
+      // A human/handoff-set continuation outranks the inferred one.
+      if (!fork.continuationOf || fork.continuationOf === parent.id) {
+        if (fork.continuationOf !== parent.id || fork.forkPoint !== shared) {
+          fork.continuationOf = parent.id;
+          fork.forkPoint = shared;
+          saveRaw(fork);
+          touch(fork);
+        }
+        if (!parent.continuedTo?.includes(fork.id)) {
+          parent.continuedTo = [...(parent.continuedTo || []), fork.id];
+          saveRaw(parent);
+          touch(parent);
+        }
+      }
+    }
+  }
+  return [...changed.values()];
 }
 
 /**

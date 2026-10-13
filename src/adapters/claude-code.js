@@ -46,12 +46,13 @@ export function listSessions() {
       if (!f.endsWith('.jsonl')) continue;
       const path = join(full, f);
       let mtimeMs;
+      let birthtimeMs;
       try {
-        mtimeMs = statSync(path).mtimeMs;
+        ({ mtimeMs, birthtimeMs } = statSync(path));
       } catch {
         continue;
       }
-      refs.push({ id: f.replace(/\.jsonl$/, ''), path, mtimeMs });
+      refs.push({ id: f.replace(/\.jsonl$/, ''), path, mtimeMs, birthtimeMs });
     }
   }
   return refs;
@@ -92,6 +93,13 @@ export function cleanUserText(text) {
   return t;
 }
 
+// Trailing " (fork)" suffixes the extension appends to a forked
+// conversation's custom title (a fork of a fork has two).
+function forkDepthOf(title) {
+  const m = /(?: \(fork\))+$/.exec(title || '');
+  return m ? m[0].length / ' (fork)'.length : 0;
+}
+
 function toolActivityFromContent(content, sink) {
   if (!Array.isArray(content)) return;
   for (const block of content) {
@@ -109,6 +117,7 @@ export function parse(ref) {
   const neutral = emptyNeutral(ref.id, name);
   const raw = readFileSync(ref.path, 'utf8');
   const lines = raw.split('\n');
+  let customTitle = null;
 
   for (const line of lines) {
     if (!line.trim()) continue;
@@ -125,7 +134,10 @@ export function parse(ref) {
       neutral.endedAt = evt.timestamp;
     }
 
-    if (evt.type === 'user' && evt.message && !evt.isMeta) {
+    if (evt.type === 'custom-title') {
+      // Latest entry wins, as with a rename.
+      customTitle = evt.customTitle ?? evt.title ?? customTitle;
+    } else if (evt.type === 'user' && evt.message && !evt.isMeta) {
       const text = cleanUserText(textFromMessageContent(evt.message.content));
       if (text) neutral.turns.push({ role: 'user', text });
     } else if (evt.type === 'assistant' && evt.message) {
@@ -141,6 +153,11 @@ export function parse(ref) {
   // indistinguishable from '/' → '-' after encoding). Only fall back to
   // decoding the folder name for zero-message sessions.
   neutral.projectDir = neutral.cwd || decodeProjectDir(ref.path);
+
+  // Fork detection inputs (scanner.js's linkForks): the transcript has no
+  // pointer back to the source session, so the link is inferred from these.
+  neutral.forkDepth = forkDepthOf(customTitle);
+  neutral.fileBirthMs = ref.birthtimeMs ?? null;
 
   // Best-effort filesChanged from tool activity referencing paths.
   const files = new Set();
