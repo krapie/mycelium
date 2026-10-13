@@ -3,7 +3,7 @@ import { writeFileSync, readFileSync, existsSync, readdirSync, rmSync } from 'no
 import { ensureDirs, RAW_DIR } from './paths.js';
 import { ADAPTERS, getAdapter } from './adapters/index.js';
 import { META_MARKER } from './llm.js';
-import { isCommandNoise } from './adapters/claude-code.js';
+import { cleanUserText } from './adapters/claude-code.js';
 import { isBacklog, backlogSeedId } from './schema.js';
 import { loadConfig } from './config.js';
 
@@ -203,7 +203,7 @@ export function scan({ onImport } = {}) {
       // bookkeeping (<local-command-caveat> etc.) still carry it as turns —
       // reparse them once even though the transcript hasn't changed.
       const hasCommandNoise =
-        existing?.source === 'claude' && existing.turns?.some((t) => t.role === 'user' && isCommandNoise(t.text));
+        existing?.source === 'claude' && existing.turns?.some((t) => t.role === 'user' && cleanUserText(t.text) !== t.text.trim());
       // Skip if we already captured this session and the file hasn't changed.
       if (existing && existing._mtimeMs === ref.mtimeMs && !hasCommandNoise) {
         skipped++;

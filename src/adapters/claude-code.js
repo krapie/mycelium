@@ -78,6 +78,20 @@ export function isCommandNoise(text) {
   return !text.replace(COMMAND_NOISE, '').trim();
 }
 
+// The VS Code extension prepends context blocks to the user's message
+// (<ide_selection>…</ide_selection>\nreal prompt), and Claude Code can add
+// <system-reminder> blocks. The real prompt often follows in the same
+// message, so strip the blocks and keep the rest instead of dropping the turn.
+const INJECTED_BLOCK = /<(ide_selection|ide_opened_file|ide_diagnostics|system-reminder)>[\s\S]*?<\/\1>/g;
+const INTERRUPT_MARKER = /^\[Request interrupted by user(?: for tool use)?\]$/;
+
+/** The user's own words in a stored/raw user turn, or '' if it's all bookkeeping. */
+export function cleanUserText(text) {
+  const t = text.replace(INJECTED_BLOCK, '').trim();
+  if (INTERRUPT_MARKER.test(t) || isCommandNoise(t)) return '';
+  return t;
+}
+
 function toolActivityFromContent(content, sink) {
   if (!Array.isArray(content)) return;
   for (const block of content) {
@@ -112,8 +126,8 @@ export function parse(ref) {
     }
 
     if (evt.type === 'user' && evt.message && !evt.isMeta) {
-      const text = textFromMessageContent(evt.message.content);
-      if (text.trim() && !isCommandNoise(text)) neutral.turns.push({ role: 'user', text });
+      const text = cleanUserText(textFromMessageContent(evt.message.content));
+      if (text) neutral.turns.push({ role: 'user', text });
     } else if (evt.type === 'assistant' && evt.message) {
       const text = textFromMessageContent(evt.message.content);
       if (text.trim()) neutral.turns.push({ role: 'assistant', text });

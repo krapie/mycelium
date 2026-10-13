@@ -390,7 +390,7 @@ As a user, I can **write down something to work on later, before any agent has r
   merge/split product, and nothing is lost: the note's full text IS that
   session's first prompt. Every user turn is searched, not just the first
   (agents prepend synthetic user-role turns of their own, see `schema.js`'s
-  `SYNTHETIC_TURN`), and on every import rather than only the first, since
+  `SYNTHETIC_TURN`, which allows `_` so `<ide_selection>` counts), and on every import rather than only the first, since
   the item's own existence is the real gate. `scan()` returns
   `consumedBacklog` so callers that reindex precisely (`launch.js`) drop
   those rows from the index. The parent's own file is deleted only AFTER
@@ -808,6 +808,11 @@ As a user, I can **write down something to work on later, before any agent has r
   `spinner-toast-e2e.test.js` cases pass unchanged; manually re-verified
   via a real, non-mocked merge, the toast now stays visible continuously
   for the operation's whole real duration)
+- **Claude Code VS Code extension context blocks stay out of previews.** The
+  claude adapter strips `<ide_selection>`/`<ide_opened_file>`/
+  `<ide_diagnostics>`/`<system-reminder>` blocks from user turns (keeping the
+  prompt that follows) and drops `[Request interrupted by user…]` turns;
+  stored records holding them are re-parsed once. [tested]
 - **In-flight LLM subprocesses are killed on quit, not orphaned.**
   `llm.js`'s `complete()` had no `detached` flag and nothing tracked its
   spawned child beyond the local Promise closure. `app.js`'s `quit()`

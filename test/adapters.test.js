@@ -95,6 +95,28 @@ test('claude adapter drops slash-command bookkeeping (<local-command-caveat> etc
   assert.deepEqual(neutral.turns, [{ role: 'user', text: 'fix the login bug' }]);
 });
 
+test('claude adapter strips IDE context blocks but keeps the prompt that follows them', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'mycelium-claude-ide-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const path = join(dir, 'ide.jsonl');
+  const user = (content) => JSON.stringify({ type: 'user', cwd: '/tmp/proj', message: { role: 'user', content } });
+  writeFileSync(
+    path,
+    [
+      user('<ide_opened_file>The user opened the file /tmp/proj/a.md in the IDE.</ide_opened_file>'),
+      user('<ide_selection>The user selected the lines 27 to 27 from /tmp/proj/a.md:\nfoo</ide_selection>\nAccount id is 42'),
+      user([{ type: 'text', text: '<system-reminder>be brief</system-reminder>' }, { type: 'text', text: 'second prompt' }]),
+      user('[Request interrupted by user]'),
+      user('[Request interrupted by user for tool use]'),
+    ].join('\n'),
+  );
+  const neutral = getAdapter('claude').parse({ id: 'ide', path, mtimeMs: 0 });
+  assert.deepEqual(neutral.turns, [
+    { role: 'user', text: 'Account id is 42' },
+    { role: 'user', text: 'second prompt' },
+  ]);
+});
+
 test('codex adapter parses session_meta + event_msg lines into turns', () => {
   const codex = getAdapter('codex');
   const neutral = codex.parse({ id: 'test-codex', path: join(FIXTURES, 'codex-sample.jsonl'), mtimeMs: 0 });
