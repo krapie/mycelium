@@ -96,3 +96,30 @@ test('pending knowledge can be listed, promoted and dismissed', async () => {
   assert.equal((await call('knowledgePending')).result.some((p) => p.folder === 'KB/pending'), false);
   assert.equal((await call('knowledgePromote', { folder: 'KB/pending' })).error.code, -32000);
 });
+
+test('an LLM step fails fast with "<bin> not installed" when the agent is not on PATH, and extraPath finds it', { skip: process.platform === 'win32' }, async (t) => {
+  const { mkdtempSync, writeFileSync, chmodSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const dir = mkdtempSync(join(tmpdir(), 'mycelium-fake-agent-'));
+  const savedPath = process.env.PATH;
+  t.after(() => {
+    process.env.PATH = savedPath;
+    rmSync(dir, { recursive: true, force: true });
+  });
+  // Stub `claude` that answers every call with a valid summary.
+  const reply = JSON.stringify({ result: JSON.stringify({ title: 'Stub', tags: [], summary: 'from stub', decisions: [], todos: [] }) });
+  writeFileSync(join(dir, 'claude'), `#!/bin/sh\necho '${reply}'\n`);
+  chmodSync(join(dir, 'claude'), 0o755);
+  process.env.PATH = '/nonexistent-mycelium-dir';
+  seed('np-1');
+  __clearTestProvider();
+
+  const missing = await call('autotag', { ids: ['np-1'] });
+  assert.equal(missing.error.message, 'claude not installed');
+  assert.equal(loadRaw('np-1').extracted.summary, null, 'nothing was attempted');
+
+  const found = await call('autotag', { ids: ['np-1'], extraPath: [dir] });
+  assert.deepEqual(found.result, { tagged: 1, failed: 0 });
+  assert.equal(loadRaw('np-1').extracted.summary, 'from stub');
+});

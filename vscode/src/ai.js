@@ -19,7 +19,7 @@ const rowsOf = (el, sel) => (sel && sel.length ? sel : [el]).filter((e) => e && 
  * cancellable notification; the bridge reports progress, and cancel kills the
  * in-flight CLI children.
  */
-function registerAi(ctx, { client, refresh, run, pickFolder }) {
+function registerAi(ctx, { client, askCli, refresh, run, pickFolder }) {
   ctx.subscriptions.push(
     vscode.workspace.registerTextDocumentContentProvider(KNOWLEDGE_SCHEME, {
       provideTextDocumentContent: (uri) => docs.get(uri.toString()) ?? '',
@@ -30,7 +30,9 @@ function registerAi(ctx, { client, refresh, run, pickFolder }) {
     vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title, cancellable: true }, async (progress, token) => {
       token.onCancellationRequested(() => client.request('cancel').catch(() => {}));
       let shown = 0;
-      const result = await client.request(method, params, {
+      // askCli: the CLI looks for claude/codex on the PATH it was started with;
+      // when that lacks them, it is asked again with the login shell's.
+      const result = await askCli(method, params, {
         onProgress: (i) => {
           const message = i.total ? `${i.done ?? 0}/${i.total}` : i.done ? String(i.done) : i.message === 'classifying' ? 'classifying…' : i.message === 'summarizing' ? `summarizing ${i.total ?? ''}…` : '';
           // withProgress wants increments, not totals

@@ -1,7 +1,7 @@
 import { VERSION } from './version.js';
 import { scan, findSession, loadRaw, sourceSessionExists } from './scanner.js';
 import { autoTagSession, tagAll } from './learn.js';
-import { killInFlight } from './llm.js';
+import { killInFlight, providerBin, withAgentPath } from './llm.js';
 import { organizeLimit } from './config.js';
 import { listTreeDirs } from './organize.js';
 import {
@@ -93,9 +93,20 @@ const currentKnowledge = (folder) => {
 // received the login shell's — have agents looked up there too. Only the
 // lookup changes: the command line still names the program, which runs in the
 // user's own terminal.
+const extraDirs = (extraPath) => (Array.isArray(extraPath) && extraPath.length && extraPath.every((d) => typeof d === 'string') ? extraPath : null);
 const pathEnv = (extraPath) => {
-  if (!Array.isArray(extraPath) || !extraPath.length || !extraPath.every((d) => typeof d === 'string')) return undefined;
-  return { ...process.env, PATH: [...extraPath, process.env.PATH].filter(Boolean).join(delimiter) };
+  const dirs = extraDirs(extraPath);
+  return dirs ? { ...process.env, PATH: [...dirs, process.env.PATH].filter(Boolean).join(delimiter) } : undefined;
+};
+
+// The LLM steps spawn the user's agent CLI. Fail fast with the same
+// "<bin> not installed" the other methods give (the extension retries that
+// with the login shell's PATH sent as `extraPath`), instead of letting every
+// item fail on its own and be reported as a generic LLM failure.
+const llmStep = (fn) => (p, ctx) => {
+  const bin = providerBin();
+  if (bin && !which(bin, { env: pathEnv(p.extraPath) })) throw new BridgeError(`${bin} not installed`);
+  return withAgentPath(extraDirs(p.extraPath), () => fn(p, ctx));
 };
 
 export const METHODS = {
@@ -188,7 +199,7 @@ export const METHODS = {
   // ids → summarize those; otherwise whatever lacks an up-to-date summary,
   // oldest first, bounded by `limit` (tagAll()'s own ordering and circuit
   // breaker apply either way).
-  autotag: async (p, ctx) => {
+  autotag: llmStep(async (p, ctx) => {
     const report = reporter(ctx, p);
     let tagged = 0;
     let failed = 0;
@@ -213,9 +224,9 @@ export const METHODS = {
     });
     data.refresh();
     return { tagged: res.tagged, skipped: res.skipped, failed: res.failed, stoppedEarly: !!res.stoppedEarly };
-  },
+  }),
 
-  organizeSuggest: async (p, ctx) => {
+  organizeSuggest: llmStep(async (p, ctx) => {
     const report = reporter(ctx, p);
     const res = await reviewablePlacements({
       folder: p.folder || undefined,
@@ -244,7 +255,7 @@ export const METHODS = {
           newFolder: !existing.has(x.folder),
         };
       });
-  },
+  }),
 
   // accept: [{id, folder}] get filed; reject: [id] just stop being suggested.
   organizeApply: ({ accept = [], reject = [] }) => {
@@ -255,11 +266,11 @@ export const METHODS = {
     return { applied };
   },
 
-  knowledgeBuild: async ({ folder }) => {
+  knowledgeBuild: llmStep(async ({ folder }) => {
     safeFolder(folder);
     const gen = ok(await buildKnowledgeText(folder));
     return { folder, text: gen.text, count: gen.count, current: currentKnowledge(folder) };
-  },
+  }),
 
   knowledgeSave: ({ folder, text }) => {
     safeFolder(folder);

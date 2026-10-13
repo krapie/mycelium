@@ -282,3 +282,25 @@ test('llmPreflight() resolves null when the provider answers and the error text 
   assert.equal(await llmPreflight(), 'llm timeout');
   __clearTestProvider();
 });
+
+test('classifyLlmError() recognises a missing agent CLI', () => {
+  assert.equal(classifyLlmError('claude not installed'), 'missing');
+  assert.equal(classifyLlmError('LLM failed: spawn claude ENOENT'), 'missing');
+});
+
+test('complete() reports a missing agent CLI as "<bin> not installed", not a raw spawn error', async (t) => {
+  const saved = process.env.PATH;
+  t.after(() => (process.env.PATH = saved));
+  process.env.PATH = '/nonexistent-mycelium-dir';
+  await assert.rejects(complete('hi', { timeoutMs: 5000 }), (err) => err.message === 'claude not installed' && err.code === 'ENOENT');
+});
+
+test('mapConcurrent() stops at once on a fatal result, without needing the failure breaker', async () => {
+  let started = 0;
+  const { stoppedEarly } = await mapConcurrent([1, 2, 3, 4, 5, 6], 1, async () => {
+    started++;
+    return { ok: false, fatal: true };
+  });
+  assert.equal(stoppedEarly, true);
+  assert.equal(started, 1);
+});

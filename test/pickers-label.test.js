@@ -29,3 +29,8 @@ test('the summarize-stopped toast names the real cause instead of always blaming
   assert.match(other, /llm timeout/);
   assert.doesNotMatch(other, /usage limit/);
 });
+
+test('the summarize-stopped toast says when the agent CLI is missing', async () => {
+  const { t } = await import('../src/tui/i18n.js');
+  assert.match(t('smart.summarizeStoppedEarly', 0, 5, 'LLM failed: claude not installed'), /not found on PATH/);
+});

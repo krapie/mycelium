@@ -137,7 +137,12 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   CLAUDE.md/hooks/MCP, and the daemon's organize/tag/digest/knowledge
   cycles run one tiny `llmPreflight()` call first and skip (logging once
   per outage) when it fails. [partial] (the organize gate is tested; the
-  other gates and the child's actual `cwd` are not). Each function reports `stoppedEarly` so callers can distinguish
+  other gates and the child's actual `cwd` are not). A missing agent CLI
+  (`spawn claude ENOENT`) is reported as `claude not installed` and stops
+  the batch at once (`fatal` in `mapConcurrent()`); the bridge's LLM methods
+  (`autotag`, `organizeSuggest`, `knowledgeBuild`) fail fast with that same
+  message and accept `extraPath` (login-shell directories) so the VS Code
+  extension can retry and find the agent. [tested] Each function reports `stoppedEarly` so callers can distinguish
   "ran out of quota, stop here" from "some unrelated one-off failures."
   Per-candidate/per-chunk progress is written to disk as it completes
   either way, so stopping early never loses prior work. `applyPlacements`

@@ -62,8 +62,8 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
 
   // The CLI looks for agents on the PATH it was started with; if one isn't
   // found, ask again with the login shell's directories sent along.
-  const askCli = (method, params) =>
-    withWiderPath((extra) => client.request(method, extra ? { ...params, extraPath: extra } : params), () => client.loginDirs(), (l) => log.appendLine(l));
+  const askCli = (method, params, opts) =>
+    withWiderPath((extra) => client.request(method, extra ? { ...params, extraPath: extra } : params, opts), () => client.loginDirs(), (l) => log.appendLine(l));
 
   const pickDir = async (folder) => {
     const dirs = new Set(workspaceDirs());
@@ -318,7 +318,7 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
     if (pick) await vscode.commands.executeCommand(pick.cmd);
   });
 
-  registerAi(ctx, { client, refresh, run, pickFolder });
+  registerAi(ctx, { client, askCli, refresh, run, pickFolder });
 }
 
 module.exports = { register, GUIDE };

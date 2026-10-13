@@ -371,6 +371,7 @@ const en = {
     const head = `Stopped after summarizing ${done}/${total} — `;
     const tail = ' Your progress is saved; press o again later to continue.';
     const kind = classifyLlmError(lastError);
+    if (kind === 'missing') return `${head}the agent CLI (claude/codex) was not found on PATH. Install it or add its directory to PATH.${tail}`;
     if (kind === 'usage') return `${head}looks like your Claude/Codex usage limit was hit.${tail}`;
     if (kind === 'auth') return `${head}the agent CLI needs re-authentication; run it interactively once (e.g. claude), then try again.${tail}`;
     return `${head}the last call failed${lastError ? `: ${String(lastError).slice(0, 200)}` : ''}.${tail}`;
@@ -692,6 +693,7 @@ const ko = {
     const head = `${done}/${total}개 요약 후 중단됨 — `;
     const tail = ' 지금까지의 진행 상황은 저장되어 있으니, 나중에 다시 o를 눌러 이어서 진행하세요.';
     const kind = classifyLlmError(lastError);
+    if (kind === 'missing') return `${head}에이전트 CLI(claude/codex)를 PATH에서 찾을 수 없습니다. 설치하거나 PATH에 추가하세요.${tail}`;
     if (kind === 'usage') return `${head}Claude/Codex 사용량 한도에 도달한 것 같습니다.${tail}`;
     if (kind === 'auth') return `${head}에이전트 CLI 재인증이 필요합니다. 터미널에서 한 번 직접 실행(예: claude)해 로그인한 뒤 다시 시도하세요.${tail}`;
     return `${head}마지막 호출이 실패했습니다${lastError ? `: ${String(lastError).slice(0, 200)}` : ''}.${tail}`;

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Summarize, organize and knowledge extraction now find `claude`/`codex` through the login shell's `PATH` when VS Code never received it, like opening a session already did. If the agent really isn't found, the error says `claude not installed` instead of a generic LLM failure. Needs a `mycelium` CLI with this change.
+
 ## 0.2.2
 
 First release on the VS Code Marketplace and Open VSX.
