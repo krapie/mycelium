@@ -159,7 +159,7 @@ async function runSmartOrganize(ctx) {
     // safe (each one is written to disk as it completes), so this is
     // "stop here, not everything is lost," not a hard failure.
     if (summarizeRes.stoppedEarly) {
-      return app.notify(t('smart.summarizeStoppedEarly', summarizeRes.done, summarizeRes.total), 8);
+      return app.notify(t('smart.summarizeStoppedEarly', summarizeRes.done, summarizeRes.total, summarizeRes.lastError), 8);
     }
     const placeSpin = app.startProgressBar(t('smart.running'));
     const res = await suggestPlacements({

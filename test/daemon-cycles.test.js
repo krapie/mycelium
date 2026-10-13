@@ -10,7 +10,7 @@ const { emptyNeutral } = await import('../src/schema.js');
 const { saveRaw } = await import('../src/scanner.js');
 const { __setTestProvider, __clearTestProvider } = await import('../src/llm.js');
 const { DIGEST_DIR } = await import('../src/paths.js');
-const { digestCycle, knowledgeReviewCycle, runDaemon } = await import('../src/daemon/cycles.js');
+const { digestCycle, knowledgeReviewCycle, smartOrganizeCycle, runDaemon } = await import('../src/daemon/cycles.js');
 const { pendingKnowledgeReviews } = await import('../src/insight.js');
 const adaptersIndex = await import('../src/adapters/index.js');
 
@@ -128,6 +128,48 @@ test('runDaemon() fires onFirstScanDone right after scan()+reindex(), before the
     assert.equal(firedWhileLLMPending, true, 'onScanned already fired while tagAll()\'s LLM call is still pending');
     resolveLLM(JSON.stringify({ title: 'x', tags: [], summary: 'onscanned test summary', decisions: [], todos: [] }));
     await daemonPromise;
+  } finally {
+    adaptersIndex.ADAPTERS.splice(0, adaptersIndex.ADAPTERS.length, ...real);
+  }
+});
+
+test('smartOrganizeCycle() skips a cycle when the LLM preflight fails and logs the failure once per outage', async () => {
+  let calls = 0;
+  __setTestProvider(async () => {
+    calls++;
+    throw new Error('credentials expired; stdin is not a terminal');
+  });
+  const log = fakeLog();
+  await smartOrganizeCycle(log);
+  await smartOrganizeCycle(log);
+  assert.equal(calls, 2, 'one tiny preflight call per cycle, no real work spawned');
+  assert.equal(log.lines.filter((l) => l.includes('preflight failed')).length, 1);
+});
+
+test('scanCycle() retries tagging on a later scan with no imports after a failed preflight', async () => {
+  const { scanCycle } = await import('../src/daemon/cycles.js');
+  const fakeAdapter = {
+    name: 'fake-source',
+    listSessions: () => [{ id: 'retry-tag-1', mtimeMs: 1 }],
+    parse: (ref) => {
+      const n = emptyNeutral(ref.id, 'fake-source');
+      n.turns = [{ role: 'user', text: 'tag me later' }];
+      return n;
+    },
+  };
+  const real = adaptersIndex.ADAPTERS.splice(0, adaptersIndex.ADAPTERS.length, fakeAdapter);
+  try {
+    __setTestProvider(async () => {
+      throw new Error('offline');
+    });
+    await scanCycle(fakeLog()); // imports the session, preflight fails, tagging skipped
+    const prompts = [];
+    __setTestProvider(async (p) => {
+      prompts.push(p);
+      return JSON.stringify({ title: 't', tags: [], summary: 'retried summary', decisions: [], todos: [] });
+    });
+    await scanCycle(fakeLog()); // nothing new imported, but tagging was pending
+    assert.ok(prompts.length >= 2, 'preflight plus the tagging call');
   } finally {
     adaptersIndex.ADAPTERS.splice(0, adaptersIndex.ADAPTERS.length, ...real);
   }

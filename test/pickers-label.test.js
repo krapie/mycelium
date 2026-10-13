@@ -20,3 +20,12 @@ test('the checklist key hint follows the UI locale (#148)', () => {
   assert.match(multiSelectLabel('Review', { defaultAll: true, preview: true }), /all checked, space to uncheck, p preview, enter apply, esc cancel/);
   assert.match(multiSelectLabel('Pick'), /space select, \* all, enter apply/);
 });
+
+test('the summarize-stopped toast names the real cause instead of always blaming the usage limit', async () => {
+  const { t } = await import('../src/tui/i18n.js');
+  assert.match(t('smart.summarizeStoppedEarly', 2, 9, 'usage limit reached'), /usage limit/);
+  assert.match(t('smart.summarizeStoppedEarly', 2, 9, 'stdin is not a terminal'), /re-authentication/);
+  const other = t('smart.summarizeStoppedEarly', 2, 9, 'llm timeout');
+  assert.match(other, /llm timeout/);
+  assert.doesNotMatch(other, /usage limit/);
+});

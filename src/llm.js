@@ -1,4 +1,7 @@
 import { spawn } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
 
 /**
  * Minimal LLM call via a headless coding-CLI subprocess. We reuse whatever
@@ -83,6 +86,35 @@ export function isUnknownNoPersistenceFlag(stderr) {
   return /unknown option/i.test(stderr) && /no-session-persistence/.test(stderr);
 }
 
+/**
+ * Rough cause of a failed complete(), from its error text. Deliberately
+ * lenient pattern-matching used only to pick which message to SHOW — never
+ * to decide control flow (mapConcurrent's breaker still trips on any run of
+ * failures). 'usage' wins over 'auth' when both match.
+ */
+export function classifyLlmError(message) {
+  const m = String(message || '');
+  if (/rate.?limit|usage.?limit|limit reached|quota|too many requests|\b429\b|overloaded|credit balance/i.test(m)) return 'usage';
+  if (/credential|log ?in\b|logged out|unauthori[sz]ed|authenticat|\btoken\b|not a terminal|not a tty|api key|\b401\b|\b403\b/i.test(m)) return 'auth';
+  if (/llm timeout/i.test(m)) return 'timeout';
+  return 'other';
+}
+
+/**
+ * One tiny call to find out whether the agent CLI can answer right now, so
+ * a background cycle can skip itself instead of spawning calls that are
+ * bound to fail (each can block for the full 240s timeout). Resolves to
+ * null when healthy, else the error message.
+ */
+export async function llmPreflight({ timeoutMs = 45000 } = {}) {
+  try {
+    await complete('Reply with the single word: ok', { timeoutMs });
+    return null;
+  } catch (err) {
+    return err.message || String(err);
+  }
+}
+
 export async function complete(prompt, { timeoutMs = 240000 } = {}) {
   if (_testProvider) return _testProvider(prompt, { timeoutMs });
   const fullPrompt = `${META_MARKER}\n${prompt}`;
@@ -98,6 +130,17 @@ export async function complete(prompt, { timeoutMs = 240000 } = {}) {
   }
 }
 
+// A shared tmpdir() is writable by other users, who could plant a CLAUDE.md/
+// AGENTS.md there for the agent CLI to load. mkdtemp creates the directory
+// 0700, so one private empty dir per process is both neutral and safe.
+let _neutralCwd = null;
+function neutralCwd() {
+  if (_neutralCwd) return _neutralCwd;
+  _neutralCwd = mkdtempSync(join(tmpdir(), 'mycelium-llm-'));
+  process.on('exit', () => rmSync(_neutralCwd, { recursive: true, force: true }));
+  return _neutralCwd;
+}
+
 function runCli(cmd, args, timeoutMs) {
   return new Promise((resolve, reject) => {
     // windowsHide: on Windows, spawn() opens a real visible console window
@@ -105,7 +148,11 @@ function runCli(cmd, args, timeoutMs) {
     // default is false) — with dozens of these calls firing in the
     // background, that's what looked like "Claude DOS windows keep
     // appearing" in practice (issue #3). No-op on macOS/Linux.
-    const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+    // cwd: a neutral dir, not the launch dir — otherwise the agent CLI loads
+    // that project's CLAUDE.md/AGENTS.md, hooks and MCP servers, which is
+    // slower and lets the model start working on project instructions
+    // instead of answering the one-shot prompt (pushing it into the timeout).
+    const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, cwd: neutralCwd() });
     inFlight.add(child);
     const untrack = () => inFlight.delete(child);
     let out = '';
