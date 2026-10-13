@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { TREE_DIR } from '../paths.js';
 import { loadRaw, saveRaw, allRaw } from '../scanner.js';
 import { listTags } from '../index-db.js';
-import { complete, parseJsonReply, mapConcurrent } from '../llm.js';
+import { complete, parseJsonReply, mapConcurrent, classifyLlmError } from '../llm.js';
 import { autoTagSession } from '../learn.js';
 import { contentLocale } from '../config.js';
 import { isArchive, isSuperseded, listTreeDirs, isInSubtree } from './folders.js';
@@ -151,12 +151,12 @@ export async function summarizeCandidates({ onProgress, concurrency = 3, folder,
         failed++;
         lastError = res.error;
         if (onProgress) onProgress(null, new Error(res.error));
-        return { ok: false };
+        return { ok: false, fatal: classifyLlmError(res.error) === 'missing' };
       } catch (err) {
         failed++;
         lastError = err.message;
         if (onProgress) onProgress(null, err);
-        return { ok: false };
+        return { ok: false, fatal: classifyLlmError(err.message) === 'missing' };
       }
     },
     { stopAfterConsecutiveFailures },

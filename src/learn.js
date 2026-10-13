@@ -1,4 +1,4 @@
-import { complete, parseJsonReply, mapConcurrent } from './llm.js';
+import { complete, parseJsonReply, mapConcurrent, classifyLlmError } from './llm.js';
 import { loadRaw, saveRaw, allRaw } from './scanner.js';
 import { isBacklog } from './schema.js';
 import { listTags } from './index-db.js';
@@ -217,11 +217,11 @@ export async function tagAll({ force = false, onProgress, limit, concurrency = 1
           return { ok: true };
         }
         failed++;
-        return { ok: false };
+        return { ok: false, fatal: classifyLlmError(res.error) === 'missing' };
       } catch (err) {
         failed++;
         if (onProgress) onProgress(null, err);
-        return { ok: false };
+        return { ok: false, fatal: classifyLlmError(err.message) === 'missing' };
       }
     },
     { stopAfterConsecutiveFailures },

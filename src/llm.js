@@ -1,7 +1,8 @@
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { mkdtempSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, delimiter } from 'node:path';
+import { AsyncLocalStorage } from 'node:async_hooks';
 
 /**
  * Minimal LLM call via a headless coding-CLI subprocess. We reuse whatever
@@ -35,6 +36,28 @@ export function __setTestProvider(fn) {
 }
 export function __clearTestProvider() {
   _testProvider = null;
+}
+
+// Directories a caller (the editor, via the bridge's `extraPath`) knows the
+// agent CLI may live in although this process was started without them.
+// AsyncLocalStorage so concurrent requests each see their own, without
+// threading an option through every learn/organize/insight function.
+const agentPath = new AsyncLocalStorage();
+export function withAgentPath(dirs, fn) {
+  return Array.isArray(dirs) && dirs.length ? agentPath.run(dirs, fn) : fn();
+}
+
+function spawnEnv() {
+  const dirs = agentPath.getStore();
+  if (!dirs) return process.env;
+  // Windows env keys are case-insensitive ('Path'); reuse whichever spelling exists.
+  const key = Object.keys(process.env).find((k) => k.toUpperCase() === 'PATH') || 'PATH';
+  return { ...process.env, [key]: [...dirs, process.env[key]].filter(Boolean).join(delimiter) };
+}
+
+/** The program complete() will spawn, or null under the test provider (nothing is spawned). */
+export function providerBin() {
+  return _testProvider ? null : PROVIDER === 'codex' ? 'codex' : 'claude';
 }
 
 // Every in-flight complete() child, tracked so killInFlight() (app.js's
@@ -88,12 +111,14 @@ export function isUnknownNoPersistenceFlag(stderr) {
 
 /**
  * Rough cause of a failed complete(), from its error text. Deliberately
- * lenient pattern-matching used only to pick which message to SHOW — never
- * to decide control flow (mapConcurrent's breaker still trips on any run of
- * failures). 'usage' wins over 'auth' when both match.
+ * lenient pattern-matching used only to pick which message to SHOW — and to
+ * stop a batch early on 'missing' (agent CLI not installed), where retrying
+ * can't help. Otherwise never control flow: mapConcurrent's breaker still
+ * trips on any run of failures. 'usage' wins over 'auth' when both match.
  */
 export function classifyLlmError(message) {
   const m = String(message || '');
+  if (/\bnot installed\b|\bENOENT\b/.test(m)) return 'missing';
   if (/rate.?limit|usage.?limit|limit reached|quota|too many requests|\b429\b|overloaded|credit balance/i.test(m)) return 'usage';
   if (/credential|log ?in\b|logged out|unauthori[sz]ed|authenticat|\btoken\b|not a terminal|not a tty|api key|\b401\b|\b403\b/i.test(m)) return 'auth';
   if (/llm timeout/i.test(m)) return 'timeout';
@@ -152,7 +177,7 @@ function runCli(cmd, args, timeoutMs) {
     // that project's CLAUDE.md/AGENTS.md, hooks and MCP servers, which is
     // slower and lets the model start working on project instructions
     // instead of answering the one-shot prompt (pushing it into the timeout).
-    const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, cwd: neutralCwd() });
+    const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, cwd: neutralCwd(), env: spawnEnv() });
     inFlight.add(child);
     const untrack = () => inFlight.delete(child);
     let out = '';
@@ -167,7 +192,9 @@ function runCli(cmd, args, timeoutMs) {
     child.on('error', (e) => {
       clearTimeout(timer);
       untrack();
-      reject(e);
+      // Same wording as agents.js's "<bin> not installed", which the VS Code
+      // extension already retries with the login shell's PATH.
+      reject(e.code === 'ENOENT' ? Object.assign(new Error(`${cmd} not installed`), { code: 'ENOENT' }) : e);
     });
     child.on('close', (code) => {
       clearTimeout(timer);
@@ -240,6 +267,9 @@ export async function mapConcurrent(items, concurrency, worker, { stopAfterConse
       const idx = i++;
       const r = await worker(items[idx], idx);
       results[idx] = r;
+      // A failure no retry can fix (the agent CLI isn't installed): stop now,
+      // not after N doomed calls.
+      if (r && r.fatal) stoppedEarly = true;
       if (!stopAfterConsecutiveFailures) continue;
       if (r && r.ok === false) {
         consecutiveFailures++;
