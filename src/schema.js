@@ -97,7 +97,8 @@ export function emptyNeutral(id, source) {
 // (slash-command echoes, bash tool output, <system-reminder>, etc.) — all
 // start with an XML-ish tag, which a real person's first message essentially
 // never does, so skip past them when picking a turn for the preview.
-const SYNTHETIC_TURN = /^<[a-z][a-z-]*>/i;
+// `\w` (not just letters and '-') so underscore tags like <ide_selection> count.
+const SYNTHETIC_TURN = /^<[a-z][\w-]*>/i;
 
 /**
  * The first real (non-synthetic) user turn, or null if there isn't one.

@@ -80,3 +80,12 @@ test('firstUserText() and firstUserTurn() agree on which turn is the first real 
   assert.equal(firstUserText(n), 'fix the login bug');
   assert.equal(firstUserTurn(n).text, 'fix the login bug');
 });
+
+test('firstUserTurn skips underscore-tagged synthetic turns like <ide_selection>', () => {
+  const n = emptyNeutral('s', 'claude');
+  n.turns = [
+    { role: 'user', text: '<ide_selection>The user selected lines</ide_selection>' },
+    { role: 'user', text: 'real prompt' },
+  ];
+  assert.equal(firstUserTurn(n).text, 'real prompt');
+});
