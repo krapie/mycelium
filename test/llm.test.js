@@ -13,6 +13,8 @@ import {
   __clearInFlightForTest,
   claudeArgs,
   isUnknownNoPersistenceFlag,
+  classifyLlmError,
+  llmPreflight,
 } from '../src/llm.js';
 
 // Pure functions + the test-provider seam — no subprocess, no MYCELIUM_HOME
@@ -259,4 +261,24 @@ test('headless claude calls ask Claude Code not to save them as sessions (#149)'
 test('an older CLI rejecting the flag is recognized, so complete() retries without it', () => {
   assert.equal(isUnknownNoPersistenceFlag("error: unknown option '--no-session-persistence'"), true);
   assert.equal(isUnknownNoPersistenceFlag('Error: rate limited'), false);
+});
+
+test('classifyLlmError() tells usage limits from auth problems, timeouts and the rest', () => {
+  assert.equal(classifyLlmError('Claude usage limit reached'), 'usage');
+  assert.equal(classifyLlmError('429 Too Many Requests'), 'usage');
+  assert.equal(classifyLlmError('Warning: stdin is not a terminal, skipping credential refresh'), 'auth');
+  assert.equal(classifyLlmError('Please log in'), 'auth');
+  assert.equal(classifyLlmError('llm timeout'), 'timeout');
+  assert.equal(classifyLlmError('segfault'), 'other');
+  assert.equal(classifyLlmError(undefined), 'other');
+});
+
+test('llmPreflight() resolves null when the provider answers and the error text when it fails', async () => {
+  __setTestProvider(async () => 'ok');
+  assert.equal(await llmPreflight(), null);
+  __setTestProvider(async () => {
+    throw new Error('llm timeout');
+  });
+  assert.equal(await llmPreflight(), 'llm timeout');
+  __clearTestProvider();
 });

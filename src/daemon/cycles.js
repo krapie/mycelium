@@ -4,6 +4,7 @@ import { summarizeCandidates, suggestPlacements, applyPlacements, queueSuggestio
 import { tagAll } from '../learn.js';
 import { generateDigest, proposeKnowledgeRefreshes } from '../insight.js';
 import { loadConfig } from '../config.js';
+import { llmPreflight } from '../llm.js';
 
 // The cadence/policy layer: what runs, how often, and in what order — kept
 // separate from process.js's OS-level concerns (spawning/detaching/pidfiles).
@@ -27,6 +28,22 @@ const TAG_BATCH_LIMIT = Number(process.env.MYCELIUM_TAG_BATCH_LIMIT || 20);
 // issue #3 (looked like runaway Claude console windows on Windows; the real
 // cause was many of these piling up concurrently).
 const SUMMARIZE_CONCURRENCY = Number(process.env.MYCELIUM_SUMMARIZE_CONCURRENCY || 3);
+
+// Before any cycle that spawns LLM calls: one tiny call to check the agent
+// CLI can answer (expired credentials and a sleeping/offline machine both make
+// every call fail identically, each after up to 240s). Logs once per outage,
+// not every cycle.
+let lastPreflightError = null;
+async function llmReady(log, label) {
+  const err = await llmPreflight();
+  if (!err) {
+    lastPreflightError = null;
+    return true;
+  }
+  if (err !== lastPreflightError) log.error(`[${label}] skipped — LLM preflight failed: ${err}`);
+  lastPreflightError = err;
+  return false;
+}
 
 // setInterval doesn't wait for a previous async callback to finish before
 // scheduling the next one — on a large backlog, a single scanCycle()/
@@ -58,7 +75,7 @@ export async function scanCycle(log, { onScanned } = {}) {
       reindex();
     }
     if (onScanned) onScanned();
-    if (res.imported > 0) {
+    if (res.imported > 0 && (await llmReady(log, 'tag'))) {
       // Tag freshly imported sessions (skips those already summarized).
       // Shares SUMMARIZE_CONCURRENCY with smartOrganizeCycle below — one
       // governing concurrency ceiling for every daemon-triggered batch of
@@ -89,6 +106,7 @@ export async function smartOrganizeCycle(log) {
   if (organizeRunning) return log.log('[organize] skip — previous cycle still running');
   organizeRunning = true;
   try {
+    if (!(await llmReady(log, 'organize'))) return;
     await summarizeCandidates({ concurrency: SUMMARIZE_CONCURRENCY });
     const res = await suggestPlacements({
       batchSize: 25,
@@ -121,6 +139,7 @@ export async function digestCycle(log) {
   const today = new Date().toISOString().slice(0, 10);
   // Once per local day, generate yesterday's digest (the day is complete).
   if (lastDigestDay === today) return;
+  if (!(await llmReady(log, 'digest'))) return;
   lastDigestDay = today;
   const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
   try {
@@ -148,6 +167,7 @@ let lastKnowledgeReviewDay = null;
 export async function knowledgeReviewCycle(log) {
   const today = new Date().toISOString().slice(0, 10);
   if (lastKnowledgeReviewDay === today) return;
+  if (!(await llmReady(log, 'knowledge'))) return;
   lastKnowledgeReviewDay = today;
   const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
   const res = await proposeKnowledgeRefreshes(yesterday);

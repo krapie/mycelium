@@ -10,7 +10,7 @@ const { emptyNeutral } = await import('../src/schema.js');
 const { saveRaw } = await import('../src/scanner.js');
 const { __setTestProvider, __clearTestProvider } = await import('../src/llm.js');
 const { DIGEST_DIR } = await import('../src/paths.js');
-const { digestCycle, knowledgeReviewCycle, runDaemon } = await import('../src/daemon/cycles.js');
+const { digestCycle, knowledgeReviewCycle, smartOrganizeCycle, runDaemon } = await import('../src/daemon/cycles.js');
 const { pendingKnowledgeReviews } = await import('../src/insight.js');
 const adaptersIndex = await import('../src/adapters/index.js');
 
@@ -131,4 +131,17 @@ test('runDaemon() fires onFirstScanDone right after scan()+reindex(), before the
   } finally {
     adaptersIndex.ADAPTERS.splice(0, adaptersIndex.ADAPTERS.length, ...real);
   }
+});
+
+test('smartOrganizeCycle() skips a cycle when the LLM preflight fails and logs the failure once per outage', async () => {
+  let calls = 0;
+  __setTestProvider(async () => {
+    calls++;
+    throw new Error('credentials expired; stdin is not a terminal');
+  });
+  const log = fakeLog();
+  await smartOrganizeCycle(log);
+  await smartOrganizeCycle(log);
+  assert.equal(calls, 2, 'one tiny preflight call per cycle, no real work spawned');
+  assert.equal(log.lines.filter((l) => l.includes('preflight failed')).length, 1);
 });

@@ -1,4 +1,5 @@
 import { loadConfig, saveConfig } from '../config.js';
+import { classifyLlmError } from '../llm.js';
 
 // TUI display language. Read once at process start (the TUI is a fresh
 // process per launch — no in-session toggle key, only `mycelium lang <en|ko>`
@@ -366,8 +367,14 @@ const en = {
   'picker.multiHintAllChecked': (preview) => `all checked, space to uncheck, ${preview ? 'p preview, ' : ''}enter apply, esc cancel`,
   'picker.multiHintPick': (preview) => `space select, * all, ${preview ? 'p preview, ' : ''}enter apply, esc cancel`,
   'smart.pendingOnOpen': (n) => `${n} suggestion${n === 1 ? '' : 's'} waiting — press o to review`,
-  'smart.summarizeStoppedEarly': (done, total) =>
-    `Stopped after summarizing ${done}/${total} — looks like your Claude/Codex usage limit was hit. Your progress is saved; press o again later to continue.`,
+  'smart.summarizeStoppedEarly': (done, total, lastError) => {
+    const head = `Stopped after summarizing ${done}/${total} — `;
+    const tail = ' Your progress is saved; press o again later to continue.';
+    const kind = classifyLlmError(lastError);
+    if (kind === 'usage') return `${head}looks like your Claude/Codex usage limit was hit.${tail}`;
+    if (kind === 'auth') return `${head}the agent CLI needs re-authentication; run it interactively once (e.g. claude), then try again.${tail}`;
+    return `${head}the last call failed${lastError ? `: ${String(lastError).slice(0, 200)}` : ''}.${tail}`;
+  },
   'smart.placementsStoppedEarly': (err) => `Some placements failed (${err}) — showing what did come back. Press o again later for the rest.`,
 
   // calendar.js — Calendar tab (v key toggles Sessions ↔ Calendar)
@@ -681,8 +688,14 @@ const ko = {
   'picker.multiHintAllChecked': (preview) => `모두 선택됨 · Space 해제 · ${preview ? 'p 미리보기 · ' : ''}Enter 적용 · Esc 취소`,
   'picker.multiHintPick': (preview) => `Space 선택 · * 전체 · ${preview ? 'p 미리보기 · ' : ''}Enter 적용 · Esc 취소`,
   'smart.pendingOnOpen': (n) => `${n}개 정리 제안 대기 중 — o로 확인`,
-  'smart.summarizeStoppedEarly': (done, total) =>
-    `${done}/${total}개 요약 후 중단됨 — Claude/Codex 사용량 한도에 도달한 것 같습니다. 지금까지의 진행 상황은 저장되어 있으니, 나중에 다시 o를 눌러 이어서 진행하세요.`,
+  'smart.summarizeStoppedEarly': (done, total, lastError) => {
+    const head = `${done}/${total}개 요약 후 중단됨 — `;
+    const tail = ' 지금까지의 진행 상황은 저장되어 있으니, 나중에 다시 o를 눌러 이어서 진행하세요.';
+    const kind = classifyLlmError(lastError);
+    if (kind === 'usage') return `${head}Claude/Codex 사용량 한도에 도달한 것 같습니다.${tail}`;
+    if (kind === 'auth') return `${head}에이전트 CLI 재인증이 필요합니다. 터미널에서 한 번 직접 실행(예: claude)해 로그인한 뒤 다시 시도하세요.${tail}`;
+    return `${head}마지막 호출이 실패했습니다${lastError ? `: ${String(lastError).slice(0, 200)}` : ''}.${tail}`;
+  },
   'smart.placementsStoppedEarly': (err) => `일부 배치 제안이 실패했습니다 (${err}) — 성공한 것만 표시합니다. 나머지는 나중에 다시 o를 눌러주세요.`,
 
   // calendar.js — 캘린더 탭 (v 키로 세션 ↔ 캘린더 전환)

@@ -134,6 +134,7 @@ export async function summarizeCandidates({ onProgress, concurrency = 3, folder,
   const vocab = new Set(listTags().map((t) => t.name));
   let done = 0;
   let failed = 0;
+  let lastError = null;
 
   const { stoppedEarly } = await mapConcurrent(
     targets,
@@ -148,17 +149,19 @@ export async function summarizeCandidates({ onProgress, concurrency = 3, folder,
           return { ok: true };
         }
         failed++;
+        lastError = res.error;
         if (onProgress) onProgress(null, new Error(res.error));
         return { ok: false };
       } catch (err) {
         failed++;
+        lastError = err.message;
         if (onProgress) onProgress(null, err);
         return { ok: false };
       }
     },
     { stopAfterConsecutiveFailures },
   );
-  return { done, failed, total: targets.length, stoppedEarly };
+  return { done, failed, total: targets.length, stoppedEarly, lastError };
 }
 
 /**

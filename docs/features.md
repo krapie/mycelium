@@ -129,7 +129,14 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   scheduling new work once that many calls fail in a row (real usage
   exhaustion makes every subsequent call fail identically) instead of
   burning through the rest of a large backlog one doomed subprocess at a
-  time. Each function reports `stoppedEarly` so callers can distinguish
+  time. `summarizeCandidates` also returns `lastError`, and the TUI's
+  "stopped early" toast names the cause (`llm.js`'s `classifyLlmError`:
+  usage limit, needs re-authentication, or the raw last error) rather than
+  always blaming the usage limit. Every `complete()` child runs with
+  `cwd: os.tmpdir()` so it doesn't load the launch project's
+  CLAUDE.md/hooks/MCP, and the daemon's organize/tag/digest/knowledge
+  cycles run one tiny `llmPreflight()` call first and skip (logging once
+  per outage) when it fails. [tested]. Each function reports `stoppedEarly` so callers can distinguish
   "ran out of quota, stop here" from "some unrelated one-off failures."
   Per-candidate/per-chunk progress is written to disk as it completes
   either way, so stopping early never loses prior work. `applyPlacements`
