@@ -117,6 +117,23 @@ test('claude adapter strips IDE context blocks but keeps the prompt that follows
   ]);
 });
 
+test('claude adapter reads the fork depth from the latest custom-title and the file birthtime from the ref', (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'mycelium-claude-fork-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const path = join(dir, 'f.jsonl');
+  writeFileSync(
+    path,
+    [
+      JSON.stringify({ type: 'custom-title', customTitle: 'Plan' }),
+      JSON.stringify({ type: 'custom-title', customTitle: 'Plan (fork) (fork)' }),
+      JSON.stringify({ type: 'user', cwd: '/tmp/proj', message: { role: 'user', content: 'hi' } }),
+    ].join('\n'),
+  );
+  const neutral = getAdapter('claude').parse({ id: 'f', path, mtimeMs: 0, birthtimeMs: 123 });
+  assert.equal(neutral.forkDepth, 2);
+  assert.equal(neutral.fileBirthMs, 123);
+});
+
 test('codex adapter parses session_meta + event_msg lines into turns', () => {
   const codex = getAdapter('codex');
   const neutral = codex.parse({ id: 'test-codex', path: join(FIXTURES, 'codex-sample.jsonl'), mtimeMs: 0 });

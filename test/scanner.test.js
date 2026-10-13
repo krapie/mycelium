@@ -4,7 +4,7 @@ import { useTempHome } from './helpers.js';
 
 useTempHome();
 
-const { emptyNeutral } = await import('../src/schema.js');
+const { emptyNeutral, firstUserText } = await import('../src/schema.js');
 const { loadRaw, saveRaw, deleteRaw, allRaw, findSession, purgeMeta, scan, reevaluateArchive, sourceSessionExists } = await import('../src/scanner.js');
 const { META_MARKER } = await import('../src/llm.js');
 const adaptersIndex = await import('../src/adapters/index.js');
@@ -434,3 +434,37 @@ test('sourceSessionExists() skips the real check under MYCELIUM_DEMO_MODE, defau
     else process.env.MYCELIUM_DEMO_MODE = prev;
   }
 });
+
+test('scan() links forked Claude conversations to their parent and records the fork point', () => {
+  const mk = (id, title, birth, extra = []) => ({
+    ref: { id, mtimeMs: 1, birthtimeMs: birth },
+    parse() {
+      const n = emptyNeutral(id, 'claude');
+      n.cwd = '/proj/forks';
+      n.startedAt = '2025-01-01T00:00:00.000Z';
+      n.turns = [{ role: 'user', text: 'opening question' }, { role: 'assistant', text: 'answer' }, ...extra];
+      n.forkDepth = title;
+      n.fileBirthMs = birth;
+      return n;
+    },
+  });
+  const orig = mk('fork-orig', 0, 300);
+  const fork1 = mk('fork-1', 1, 100, [{ role: 'user', text: 'new direction' }]);
+  const fork2 = mk('fork-2', 2, 200, [{ role: 'user', text: 'another direction' }]);
+  const all = [orig, fork1, fork2];
+  const fake = { name: 'claude', listSessions: () => all.map((x) => x.ref), parse: (ref) => all.find((x) => x.ref.id === ref.id).parse() };
+  withOnlyAdapters([fake], () => scan());
+
+  // Fewest "(fork)" suffixes wins even though it has the latest birthtime.
+  const parent = loadRaw('fork-orig');
+  assert.equal(parent.continuationOf, null);
+  assert.deepEqual([...parent.continuedTo].sort(), ['fork-1', 'fork-2']);
+  assert.equal(loadRaw('fork-1').continuationOf, 'fork-orig');
+  assert.equal(loadRaw('fork-1').forkPoint, 2);
+  assert.equal(loadRaw('fork-2').forkPoint, 2);
+  assert.equal(firstUserTextOf('fork-1'), 'new direction');
+});
+
+function firstUserTextOf(id) {
+  return firstUserText(loadRaw(id));
+}

@@ -813,6 +813,14 @@ As a user, I can **write down something to work on later, before any agent has r
   `<ide_diagnostics>`/`<system-reminder>` blocks from user turns (keeping the
   prompt that follows) and drops `[Request interrupted by user…]` turns;
   stored records holding them are re-parsed once. [tested]
+- **Forked Claude Code conversations link to their parent.** The VS Code
+  extension's "Fork conversation" copies a transcript with no pointer back, so
+  `scan()` (`linkForks`) groups claude records by cwd + startedAt + first real
+  user turn, picks the parent (fewest " (fork)" title suffixes, then earliest
+  file birthtime), and sets `continuationOf` plus `forkPoint` (shared-prefix
+  turn count) on the rest; previews and summarizer excerpts use only the turns
+  after `forkPoint` (`schema.js`'s `ownTurns`). The `custom-title` entry shape
+  is assumed (`customTitle`), not verified against a real fork. [tested]
 - **In-flight LLM subprocesses are killed on quit, not orphaned.**
   `llm.js`'s `complete()` had no `detached` flag and nothing tracked its
   spawned child beyond the local Promise closure. `app.js`'s `quit()`
