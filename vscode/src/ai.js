@@ -104,15 +104,17 @@ function registerAi(ctx, { client, askCli, refresh, run, pickFolder }) {
     vscode.window.showInformationMessage(`Mycelium: filed ${applied} session${applied === 1 ? '' : 's'}`);
   });
 
-  // Diff current vs proposed knowledge and ask. Resolves 'save' | 'discard' | undefined (left for later).
-  const reviewDiff = async (folder, current, proposed, { saveLabel = 'Save', discardLabel = 'Discard' } = {}) => {
+  // Diff current vs proposed knowledge and ask. Resolves 'save' | 'discard' | 'all' | undefined (left for later).
+  // `allLabel` adds a third button that accepts this one and everything still queued.
+  const reviewDiff = async (folder, current, proposed, { saveLabel = 'Save', discardLabel = 'Discard', allLabel } = {}) => {
     const cur = docUri('current', folder);
     const prop = docUri('proposed', folder);
     docs.set(cur.toString(), current || '');
     docs.set(prop.toString(), proposed);
     await vscode.commands.executeCommand('vscode.diff', cur, prop, `KNOWLEDGE.md — ${folder}${current ? '' : ' (new)'}`);
-    const pick = await vscode.window.showInformationMessage(`Update the knowledge for “${folder}”? It is injected into AGENTS.md for future sessions.`, saveLabel, discardLabel);
-    return pick === saveLabel ? 'save' : pick === discardLabel ? 'discard' : undefined;
+    const buttons = allLabel ? [saveLabel, allLabel, discardLabel] : [saveLabel, discardLabel];
+    const pick = await vscode.window.showInformationMessage(`Update the knowledge for “${folder}”? It is injected into AGENTS.md for future sessions.`, ...buttons);
+    return pick === saveLabel ? 'save' : pick === discardLabel ? 'discard' : pick === allLabel && allLabel ? 'all' : undefined;
   };
 
   runLlm('mycelium.extractKnowledge', async (el) => {
@@ -132,9 +134,19 @@ function registerAi(ctx, { client, askCli, refresh, run, pickFolder }) {
     const pending = await client.request('knowledgePending');
     if (!pending.length) return vscode.window.showInformationMessage('Mycelium: no knowledge updates waiting for review');
     let promoted = 0;
-    for (const p of pending) {
-      const choice = await reviewDiff(p.folder, p.current, p.text, { saveLabel: 'Accept', discardLabel: 'Reject' });
-      if (choice === 'save') {
+    let acceptAll = false;
+    // With several waiting, offer to take them all without opening each diff.
+    if (pending.length > 1) {
+      const first = await vscode.window.showInformationMessage(`Mycelium: ${pending.length} knowledge updates are waiting.`, 'Accept all', 'Review one by one');
+      if (!first) return;
+      acceptAll = first === 'Accept all';
+    }
+    for (const [i, p] of pending.entries()) {
+      const choice = acceptAll
+        ? 'save'
+        : await reviewDiff(p.folder, p.current, p.text, { saveLabel: 'Accept', discardLabel: 'Reject', allLabel: i < pending.length - 1 ? 'Accept all remaining' : undefined });
+      if (choice === 'all') acceptAll = true;
+      if (choice === 'save' || choice === 'all') {
         await client.request('knowledgePromote', { folder: p.folder });
         promoted++;
       } else if (choice === 'discard') await client.request('knowledgeDismiss', { folder: p.folder });
