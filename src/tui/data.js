@@ -18,7 +18,10 @@ import {
   folderCounts,
   listSessions,
   sessionCountsByDay as dbSessionCountsByDay,
+  backlogCount,
 } from '../index-db.js';
+
+export { backlogCount };
 import { listTreeDirs, isArchive } from '../organize.js';
 
 // Thin data layer the TUI views read from. Folder tree and non-search session

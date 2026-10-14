@@ -22,17 +22,39 @@ import {
 } from '../../organize.js';
 import { pickFolder, editTags, menu } from '../widgets/pickers.js';
 import { createCalendarTab } from './calendar.js';
-import { formatSessionDetail, truncateCells } from '../render.js';
+import { formatSessionDetail, formatClipDetail, truncateCells } from '../render.js';
 import { basename } from 'node:path';
 import { autoTagSession } from '../../learn.js';
 import { mapConcurrent } from '../../llm.js';
 import { assembleContext, injectAgentsMd } from '../../reuse.js';
 import { textView, digestReader, confirmText, helpModal, welcomeModal } from '../widgets/viewers.js';
-import { textPrompt } from '../widgets/pickers.js';
+import { textPrompt, multiSelectList } from '../widgets/pickers.js';
+import { createClip, listClips, clipFolder, clipText, deleteClip } from '../../clip.js';
 import { copyToClipboard } from '../clipboard.js';
 import { t } from '../i18n.js';
 import { createResumeHandoff } from '../resume-handoff.js';
 import * as actions from './sessions-actions.js';
+
+// Folders-panel keys for the two collections pinned under New. Symbols, not
+// strings: any string could also be a real folder name.
+const BACKLOG_KEY = Symbol('backlog');
+const CLIPS_KEY = Symbol('clips');
+
+// A clip shaped like a session row, so the list's own sort/render code can
+// show it. `kind: 'clip'` is what keeps it out of currentRow().
+function clipRow(c) {
+  return {
+    id: c.id,
+    kind: 'clip',
+    clip: c,
+    source: c.source,
+    folder: clipFolder(c),
+    title: c.note || c.sessionTitle,
+    preview: clipText(c),
+    startedAt: c.createdAt,
+    range: c.from === c.to ? `#${c.from}` : `#${c.from}-${c.to}`,
+  };
+}
 
 // Plain-text rendering of a session for the clipboard (title, summary, and the
 // full transcript — everything you'd want to paste elsewhere).
@@ -61,7 +83,13 @@ export function sessionsView(opts = {}) {
   // translation anywhere they're used: undefined = Root (everything), null =
   // the New pseudo-folder (genuinely unfiled only), a path = that folder's
   // subtree.
-  const state = { folder: undefined, query: '', tags: [], selected: new Set(), sortBy: 'recent' };
+  // `view` picks what the middle column lists: the sessions of state.folder
+  // (default), or one of the two collections pinned under New in the folders
+  // panel — backlog items and clips, store-wide. Kept separate from
+  // state.folder on purpose: every folder-scoped action (b/w/c/i, a/e/m/x on
+  // folders) reads state.folder, and none of them should ever see a fake
+  // folder value for these.
+  const state = { folder: undefined, view: 'sessions', query: '', tags: [], selected: new Set(), sortBy: 'recent' };
   const SORT_CYCLE = ['recent', 'title', 'agent'];
   let app;
   let foldersBox, listBox, detailBox;
@@ -94,16 +122,21 @@ export function sessionsView(opts = {}) {
     // only" behavior moved to, so nothing that used to be visible at Root is
     // hidden, it's just one level down under an explicit, countable name
     // instead of silently being what Root happened to show.
-    const items = [`{${state.folder === undefined ? C.fox : C.dim}-fg}${t('folders.root')} (${total}){/}`];
+    const inSessions = state.view === 'sessions';
+    const items = [`{${inSessions && state.folder === undefined ? C.fox : C.dim}-fg}${t('folders.root')} (${total}){/}`];
     const keys = [undefined];
-    items.push(`  {${state.folder === null ? C.fox : C.dim}-fg}${t('folders.new')} (${inbox}){/}`);
+    items.push(`  {${inSessions && state.folder === null ? C.fox : C.dim}-fg}${t('folders.new')} (${inbox}){/}`);
     keys.push(null);
+    items.push(`  {${state.view === 'backlog' ? C.fox : C.dim}-fg}${t('folders.backlog')} (${data.backlogCount()}){/}`);
+    keys.push(BACKLOG_KEY);
+    items.push(`  {${state.view === 'clips' ? C.fox : C.dim}-fg}${t('folders.clips')} (${listClips().length}){/}`);
+    keys.push(CLIPS_KEY);
     for (const f of list) {
       // +1: every real folder nests visually under Root, not flush with it.
       const depth = Math.min(f.split('/').length - 1, 4) + 1;
       const indent = '  '.repeat(depth);
       const leaf = f.split('/').pop();
-      const on = state.folder === f;
+      const on = inSessions && state.folder === f;
       items.push(`${indent}{${on ? C.fox : C.dim}-fg}${leaf} (${counts.get(f)}){/}`);
       keys.push(f);
     }
@@ -157,7 +190,16 @@ export function sessionsView(opts = {}) {
     // is immune to setItems()'s text-matching heuristic.
     const wantId = rows[listBox.selected]?.id;
     const prevIndex = listBox.selected;
-    rows = sortRows(data.sessions({ folder: state.folder, query: state.query, tags: state.tags }));
+    if (state.view === 'clips') {
+      // Clips aren't in the FTS index — `/` matches their text/note directly.
+      const q = state.query.toLowerCase();
+      const hit = (c) => !q || `${c.note || ''}\n${clipText(c)}`.toLowerCase().includes(q);
+      rows = sortRows(listClips().filter(hit).map(clipRow));
+    }
+    else {
+      rows = sortRows(data.sessions({ folder: state.folder, query: state.query, tags: state.tags }));
+      if (state.view === 'backlog') rows = rows.filter((r) => r.kind === 'backlog');
+    }
     renderRows();
     if (rows.length) {
       const idx = wantId ? rows.findIndex((r) => r.id === wantId) : -1;
@@ -179,6 +221,7 @@ export function sessionsView(opts = {}) {
       // and now trails the title instead of leading it, so the title (the
       // thing you're actually scanning for) reads first on the line.
       const src = r.kind === 'backlog' ? '' : `{${sourceColor(r.source)}-fg}#${sourceLabel(r.source)}{/}`;
+      const clip = r.kind === 'clip' ? `{${C.fox}-fg}[${t('sessions.clipBadge')} ${r.range}]{/}` : '';
       // No reserved gutter — the checkmark only takes space on rows you've
       // actually selected, so the title starts flush-left the rest of the
       // time instead of every row paying for a feature most rows don't use.
@@ -214,7 +257,7 @@ export function sessionsView(opts = {}) {
         r.kind === 'backlog'
           ? `{${r.doneAt ? C.faint : C.fox}-fg}[${t(r.doneAt ? 'sessions.backlogOpenedBadge' : 'sessions.backlogBadge')}]{/}`
           : '';
-      const isNew = !r.folder ? `{${C.spore}-fg}[${t('sessions.newBadge')}]{/}` : '';
+      const isNew = !r.folder && r.kind !== 'clip' ? `{${C.spore}-fg}[${t('sessions.newBadge')}]{/}` : '';
       // Under active search, lead with the FTS snippet — the row's row-reason.
       // The default preview (first user message) hides matches deep in the
       // conversation, which looked like false positives.
@@ -223,7 +266,7 @@ export function sessionsView(opts = {}) {
         : r.title || r.summary || r.preview || t('common.noContent');
       // Built before the title so the title gets what's left of the row:
       // a title that overflows pushes the badges off the right edge.
-      const meta = [lineage.trim(), link.trim(), backlog, src, isNew].filter(Boolean).join(' ');
+      const meta = [lineage.trim(), link.trim(), backlog, clip, src, isNew].filter(Boolean).join(' ');
       // +3: two cells of gap, plus one for blessed's {|} pivot, which pads
       // a row of wide characters one cell further than strWidth predicts.
       const reserved = pkg.unicode.strWidth(pkg.helpers.stripTags(`${mark}${meta}`)) + 3;
@@ -241,13 +284,27 @@ export function sessionsView(opts = {}) {
     // state.folder is falsy for both Root (undefined) and New (null) — the
     // generic `|| t('folders.root')` fallback below would label New as Root
     // too, so catch it explicitly first.
-    const crumb = state.folder === null ? t('folders.new') : state.folder || t('folders.root');
+    const crumb =
+      state.view === 'backlog'
+        ? t('folders.backlog')
+        : state.view === 'clips'
+          ? t('folders.clips')
+          : state.folder === null
+            ? t('folders.new')
+            : state.folder || t('folders.root');
     const filt = [state.query && `/${state.query}`, ...state.tags.map((tg) => `#${tg}`)].filter(Boolean).join(' ');
     const sortSuffix = state.sortBy === 'recent' ? '' : `  {${C.dim}-fg}${t('sessions.sortLabel_' + state.sortBy)}{/}`;
     app.setHeader(`${crumb}${filt ? '  {' + C.spore + '-fg}' + filt + '{/}' : ''}`, `${rows.length} sessions${sortSuffix}`);
   }
 
   function showDetail(id) {
+    const clipRowHit = state.view === 'clips' && rows.find((r) => r.id === id);
+    if (clipRowHit) {
+      detailBox.setContent(formatClipDetail(clipRowHit.clip).join('\n'));
+      detailBox.setScroll(0);
+      app.render();
+      return;
+    }
     const n = data.detail(id);
     if (!n) return;
     detailBox.setContent(formatSessionDetail(n).join('\n'));
@@ -263,8 +320,18 @@ export function sessionsView(opts = {}) {
     detailBox.setScroll(0);
   }
 
-  function currentRow() {
+  // Any row under the cursor, clip or session — for previewing it.
+  function selectedRow() {
     return rows[listBox.selected];
+  }
+
+  // The session under the cursor. A clip row is deliberately NOT one: every
+  // session action (r/h/a/e/m/t/x/y/p/Shift+M/...) reaches its row through
+  // this, and none of them means anything on a clip — clip rows get their
+  // own Enter/y/x below instead.
+  function currentRow() {
+    const r = rows[listBox.selected];
+    return r && r.kind !== 'clip' ? r : undefined;
   }
 
   return {
@@ -414,7 +481,10 @@ export function sessionsView(opts = {}) {
 
       // Live-preview the highlighted folder's sessions as you move (no drill yet).
       const previewFolder = () => {
-        state.folder = foldersBox._keys[foldersBox.selected];
+        const key = foldersBox._keys[foldersBox.selected];
+        state.view = key === BACKLOG_KEY ? 'backlog' : key === CLIPS_KEY ? 'clips' : 'sessions';
+        // The two collections are store-wide, so they browse as Root would.
+        state.folder = state.view === 'sessions' ? key : undefined;
         reloadFolders();
         reloadList();
         if (rows[0]) showDetail(rows[0].id);
@@ -444,7 +514,8 @@ export function sessionsView(opts = {}) {
       // the New pseudo-folder (key: null) — both falsy, so this one check
       // already keeps rename/move/delete/knowledge-extract off both without
       // needing to know about either sentinel specifically.
-      const isRealFolder = (f) => !!f;
+      // Backlog/Clips entries are Symbols, so typeof keeps them out too.
+      const isRealFolder = (f) => typeof f === 'string' && !!f;
       // `affectedIds`: only rename/move/delete-folder actually touch session
       // records (rewriting `folder`) — pass the exact ids so this stays O(k)
       // instead of reindex()'s full raw/ rebuild. Plain folder creation
@@ -529,7 +600,7 @@ export function sessionsView(opts = {}) {
       listBox.on('keypress', (ch, key) => {
         if (key && ['up', 'down', 'k', 'j', 'pageup', 'pagedown', 'home', 'end', 'g'].includes(key.name)) {
           setImmediate(() => {
-            const r = currentRow();
+            const r = selectedRow();
             if (r) showDetail(r.id);
           });
         }
@@ -704,6 +775,7 @@ export function sessionsView(opts = {}) {
             sessionItems.push({ label: `${t('actions.handoff')}${hint('h')}`, value: () => doHandoff() });
             sessionItems.push({ label: `${t('actions.lineage')}${hint('Enter')}`, value: drillIntoDetail });
             sessionItems.push({ label: `${t('actions.split')}${hint('Shift+S')}`, value: doSplit });
+            sessionItems.push({ label: `${t('actions.clip')}${hint('p')}`, value: doClip });
           }
           if (multi) sessionItems.push({ label: `${t('actions.merge')}${hint('Shift+M')}`, value: doMerge });
           if (sessionItems.length) {
@@ -937,6 +1009,109 @@ export function sessionsView(opts = {}) {
       };
       listBox.key('y', doCopy);
       detailBox.key('y', doCopy);
+
+      // p: pin part of the conversation as a clip (clip.js) — the detail
+      // panel shows no transcript to point at, so the turns are picked from
+      // a list instead. A contiguous run of picked turns becomes ONE clip
+      // (an answer usually only makes sense with the question before it);
+      // gaps start a new one.
+      const doClip = () => {
+        const r = currentRow();
+        if (!r) return;
+        const refocus = () => (state.level === 'detail' ? detailBox : listBox).focus();
+        const n = data.detail(r.id);
+        if (!n?.turns?.length) return app.notify(t('clip.noTurns'), 3);
+        const items = n.turns.map((turn, i) => ({
+          label: `{${C.dim}-fg}${String(i + 1).padStart(3)} ${turn.role === 'user' ? 'user' : 'ai  '}{/} ${blessed.escape(truncateCells(turn.text.replace(/\s+/g, ' '), 90))}`,
+          value: i + 1,
+        }));
+        multiSelectList(app, t('clip.pickTitle'), items, (picked) => {
+          if (!picked?.length) return refocus();
+          const runs = [];
+          for (const k of [...picked].sort((a, b) => a - b)) {
+            const last = runs[runs.length - 1];
+            if (last && k === last.to + 1) last.to = k;
+            else runs.push({ from: k, to: k });
+          }
+          textPrompt(app, t('clip.notePrompt'), '', (note) => {
+            if (note === null) return refocus(); // Esc — cancelled, nothing pinned
+            let saved = 0;
+            for (const run of runs) if (createClip({ sessionId: r.id, ...run, note }).ok) saved++;
+            app.notify(t('clip.saved', saved), 3);
+            reloadFolders(); // the Clips count under New
+            showDetail(r.id);
+            refocus();
+          });
+        }, {
+          pickCurrentIfNone: true,
+          previewText: (k) => {
+            const turn = n.turns[k - 1];
+            return `[${turn.role}]\n\n${turn.text}`; // textView renders tags: false — no escaping needed
+          },
+        });
+      };
+      listBox.key('p', doClip);
+      detailBox.key('p', doClip);
+
+      // Clip rows (the Clips entry under New). currentRow() skips them, so
+      // the session handlers bound to these same keys are already no-ops on
+      // a clip — these are the clip's own meaning for them.
+      const clipUnderCursor = () => (state.view === 'clips' && selectedRow()?.kind === 'clip' ? selectedRow() : null);
+      // Enter (from detail): open the session the clip came from, in its
+      // folder, the way you'd have found it by hand.
+      const jumpToClipSource = () => {
+        const r = clipUnderCursor();
+        if (!r) return;
+        const sid = r.clip.sessionId;
+        if (!data.detail(sid)) return app.notify(t('clip.sourceGone'), 3);
+        // An _archive'd session's folder isn't in the panel — fall back to Root.
+        const idx = foldersBox._keys.indexOf(clipFolder(r.clip));
+        foldersBox.select(idx >= 0 ? idx : 0);
+        previewFolder();
+        const i = rows.findIndex((x) => x.id === sid);
+        if (i >= 0) listBox.select(i);
+        showDetail(sid);
+        listBox.focus();
+        setLevel('sessions');
+        app.render();
+      };
+      detailBox.key('enter', jumpToClipSource);
+      const copyClip = () => {
+        const r = clipUnderCursor();
+        if (!r) return;
+        const ok = copyToClipboard(clipText(r.clip));
+        app.notify(ok ? t('clip.copied') : t('sessions.copyFailed'), ok ? 2 : 3);
+      };
+      listBox.key('y', copyClip);
+      detailBox.key('y', copyClip);
+      const removeClip = () => {
+        const r = clipUnderCursor();
+        if (!r) return;
+        const refocus = () => (state.level === 'detail' ? detailBox : listBox).focus();
+        menu(
+          app,
+          t('clip.deleteConfirmTitle'),
+          [
+            { label: t('common.delete'), value: 'yes' },
+            { label: t('common.cancel'), value: 'no' },
+          ],
+          (ans) => {
+            if (ans === 'yes') {
+              deleteClip(r.id);
+              app.notify(t('clip.deleted'), 2);
+              reloadFolders();
+              reloadList();
+              const next = selectedRow();
+              if (next) showDetail(next.id);
+              else clearDetail();
+            }
+            refocus();
+            app.render();
+          },
+        );
+      };
+      listBox.key('x', removeClip);
+      detailBox.key('x', removeClip);
 
       // w: extract KNOWLEDGE.md for the current folder — generate, show the
       // human what it's about to write, and only save on explicit confirm.

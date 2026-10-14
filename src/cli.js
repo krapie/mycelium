@@ -16,6 +16,7 @@ import { autotagCmd, digestCmd, knowledgeCmd } from './cli/learn.js';
 import { contextCmd, injectCmd, handoffCmd, resumeCmd } from './cli/reuse.js';
 import { searchCmd, listCmd, tagsCmd } from './cli/find.js';
 import { backlogCmd } from './cli/backlog.js';
+import { clipCmd } from './cli/clip.js';
 import { cleanupCmd } from './cli/cleanup.js';
 import { daemonCmd, demoCmd, langCmd } from './cli/run.js';
 import { serveCmd } from './cli/serve.js';
@@ -36,6 +37,7 @@ const COMMANDS = {
   unmerge: unmergeCmd,
   unsplit: unsplitCmd,
   backlog: backlogCmd,
+  clip: clipCmd,
   autotag: autotagCmd,
   digest: digestCmd,
   knowledge: knowledgeCmd,

@@ -20,6 +20,12 @@ mycelium backlog add "Fix the flaky scan test" --desc "starts failing above ~200
 mycelium backlog list [--folder f]             # items still waiting (an item disappears when the session it started is captured)
 mycelium backlog open <session|prefix> [--agent a] [--dir D] [--copy]  # print the command that starts it, seeded with your notes (that session replaces the item on the next scan)
 
+# Clip (pin part of a conversation verbatim — same as TUI p)
+mycelium clip add <session>                    # no --turn: print the session's turns, numbered
+mycelium clip add <session> --turn 12-13 --note "prompt caching layout"
+mycelium clip list [--folder f] [--session s]
+mycelium clip show <clip> / rm <clip>
+
 # Learn
 mycelium autotag                               # retroactively summarize/tag past sessions in bulk
 mycelium digest [week] [--date YYYY-MM-DD]
