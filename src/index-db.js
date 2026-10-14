@@ -43,7 +43,10 @@ let db = null;
 export function openDb() {
   if (db) return db;
   ensureDirs();
-  db = new DatabaseSync(DB_PATH);
+  // The daemon, TUI, CLI and the editor's `serve` process all write this file;
+  // without a timeout a second writer fails instantly with SQLITE_BUSY. Set in
+  // the constructor so it also covers the journal_mode switch just below.
+  db = new DatabaseSync(DB_PATH, { timeout: 5000 });
   db.exec('PRAGMA journal_mode = WAL;');
   db.exec(SCHEMA);
   // Migrate older index DBs that predate the title column (index is derived,
@@ -72,6 +75,25 @@ export function openDb() {
     if (!String(err.message).includes('duplicate column')) throw err;
   }
   return db;
+}
+
+/** Run `fn` as one atomic write. WAL readers in other processes (the editor's
+ * `serve`) then see either the old index or the new one, never the empty gap
+ * between a DELETE and its re-INSERTs — that gap showed up as every session
+ * and folder disappearing until the next refresh. */
+function inTransaction(d, fn) {
+  d.exec('BEGIN IMMEDIATE');
+  try {
+    fn();
+    d.exec('COMMIT');
+  } catch (err) {
+    try {
+      d.exec('ROLLBACK');
+    } catch {
+      // SQLite already rolled back (e.g. SQLITE_FULL/IOERR); keep the original error.
+    }
+    throw err;
+  }
 }
 
 function prepareWriters(d) {
@@ -123,10 +145,13 @@ function writeSessionRow(w, n) {
  * which gets slow once the store has hundreds/thousands of sessions. */
 export function reindex() {
   const d = openDb();
-  d.exec('DELETE FROM sessions; DELETE FROM session_fts; DELETE FROM session_tags;');
-  const w = prepareWriters(d);
+  // Parse raw/ before taking the write lock: that's the slow part.
   const raws = allRaw();
-  for (const n of raws) writeSessionRow(w, n);
+  const w = prepareWriters(d);
+  inTransaction(d, () => {
+    d.exec('DELETE FROM sessions; DELETE FROM session_fts; DELETE FROM session_tags;');
+    for (const n of raws) writeSessionRow(w, n);
+  });
   return raws.length;
 }
 
@@ -134,25 +159,39 @@ export function reindex() {
  * O(total sessions), for the common case where exactly one session changed. */
 export function reindexOne(n) {
   const d = openDb();
-  d.prepare('DELETE FROM sessions WHERE id = ?').run(n.id);
-  d.prepare('DELETE FROM session_fts WHERE id = ?').run(n.id);
-  d.prepare('DELETE FROM session_tags WHERE session_id = ?').run(n.id);
-  writeSessionRow(prepareWriters(d), n);
+  const w = prepareWriters(d);
+  inTransaction(d, () => {
+    d.prepare('DELETE FROM sessions WHERE id = ?').run(n.id);
+    d.prepare('DELETE FROM session_fts WHERE id = ?').run(n.id);
+    d.prepare('DELETE FROM session_tags WHERE session_id = ?').run(n.id);
+    writeSessionRow(w, n);
+  });
 }
 
 /** Same as reindexOne, batched over a handful of sessions (one still-cheap
  * statement round-trip per session, not a full-store rebuild). */
 export function reindexMany(sessions) {
-  for (const n of sessions) reindexOne(n);
+  const d = openDb();
+  const w = prepareWriters(d);
+  inTransaction(d, () => {
+    for (const n of sessions) {
+      d.prepare('DELETE FROM sessions WHERE id = ?').run(n.id);
+      d.prepare('DELETE FROM session_fts WHERE id = ?').run(n.id);
+      d.prepare('DELETE FROM session_tags WHERE session_id = ?').run(n.id);
+      writeSessionRow(w, n);
+    }
+  });
 }
 
 /** Remove one session from the index (after a delete — there's no raw file
  * left to reindexOne() from). */
 export function removeFromIndex(id) {
   const d = openDb();
-  d.prepare('DELETE FROM sessions WHERE id = ?').run(id);
-  d.prepare('DELETE FROM session_fts WHERE id = ?').run(id);
-  d.prepare('DELETE FROM session_tags WHERE session_id = ?').run(id);
+  inTransaction(d, () => {
+    d.prepare('DELETE FROM sessions WHERE id = ?').run(id);
+    d.prepare('DELETE FROM session_fts WHERE id = ?').run(id);
+    d.prepare('DELETE FROM session_tags WHERE session_id = ?').run(id);
+  });
 }
 
 /** Session counts grouped by folder — for the TUI folder tree, without reading raw/. */
