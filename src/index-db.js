@@ -43,11 +43,11 @@ let db = null;
 export function openDb() {
   if (db) return db;
   ensureDirs();
-  db = new DatabaseSync(DB_PATH);
-  db.exec('PRAGMA journal_mode = WAL;');
   // The daemon, TUI, CLI and the editor's `serve` process all write this file;
-  // without a timeout a second writer fails instantly with SQLITE_BUSY.
-  db.exec('PRAGMA busy_timeout = 5000;');
+  // without a timeout a second writer fails instantly with SQLITE_BUSY. Set in
+  // the constructor so it also covers the journal_mode switch just below.
+  db = new DatabaseSync(DB_PATH, { timeout: 5000 });
+  db.exec('PRAGMA journal_mode = WAL;');
   db.exec(SCHEMA);
   // Migrate older index DBs that predate the title column (index is derived,
   // but we ALTER rather than drop to keep it simple).
@@ -87,7 +87,11 @@ function inTransaction(d, fn) {
     fn();
     d.exec('COMMIT');
   } catch (err) {
-    d.exec('ROLLBACK');
+    try {
+      d.exec('ROLLBACK');
+    } catch {
+      // SQLite already rolled back (e.g. SQLITE_FULL/IOERR); keep the original error.
+    }
     throw err;
   }
 }
