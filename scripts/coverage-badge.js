@@ -1,3 +1,12 @@
+/*
+ * Copyright 2026 The Mycelium Authors. All rights reserved.
+ *
+ * Use of this source code is governed by the MIT License
+ * that can be found in the LICENSE file.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Reads an lcov file (produced by `npm run test:coverage`'s built-in Node
 // `lcov` test reporter — see package.json) and prints GITHUB_OUTPUT-format
 // `message=`/`color=` lines summarizing the aggregate line coverage, for

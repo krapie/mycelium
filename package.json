@@ -7,7 +7,8 @@
     "mycelium": "src/cli.js"
   },
   "scripts": {
-    "lint": "eslint .",
+    "lint": "eslint . && node scripts/check-license-headers.js",
+    "lint:headers:fix": "node scripts/check-license-headers.js --fix",
     "test": "node --test",
     "test:unit": "node --test test/*.test.js",
     "test:e2e": "node --test test/e2e/*.test.js",

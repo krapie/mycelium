@@ -1,3 +1,12 @@
+/*
+ * Copyright 2026 The Mycelium Authors. All rights reserved.
+ *
+ * Use of this source code is governed by the MIT License
+ * that can be found in the LICENSE file.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 import { existsSync } from 'node:fs';
 import { win32, posix } from 'node:path';
 import { ADAPTERS, getAdapter } from './adapters/index.js';
