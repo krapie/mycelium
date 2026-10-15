@@ -82,11 +82,6 @@ function renderPanel(d, { nonce, language = 'en', now = Date.now() } = {}) {
     ? list(t.summary, sentences(x.summary))
     : `<section><h2>${esc(t.summary)}</h2><p class="empty">${esc(t.noSummary)}</p></section>`;
 
-  const files = (d.artifacts && d.artifacts.filesChanged) || [];
-  const filesHtml = files.length
-    ? `<section><h2>${esc(t.files)}</h2><div class="files">${files.slice(0, 30).map((f) => `<button class="file" data-action="file" data-path="${esc(f)}">${esc(f)}</button>`).join('')}</div></section>`
-    : '';
-
   const lin = d.lineage || {};
   const rows = [
     [t.continuationOf, lin.continuationOf],
@@ -123,7 +118,6 @@ ${hint ? `<p class="hint">${esc(hint)}</p>` : ''}
 ${summary}
 ${list(t.decisions, x.decisions)}
 ${list(t.todos, x.todos, 'todos')}
-${filesHtml}
 ${lineage}
 <footer>
 <button class="link" data-action="copyId" title="${esc(t.copyId)}"><code>${esc(d.id)}</code></button>

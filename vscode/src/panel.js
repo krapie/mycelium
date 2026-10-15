@@ -9,8 +9,6 @@
 
 'use strict';
 const vscode = require('vscode');
-const path = require('node:path');
-const { existsSync } = require('node:fs');
 const { randomBytes } = require('node:crypto');
 const { renderPanel } = require('./panel-html.js');
 
@@ -85,20 +83,7 @@ class SessionPanel {
         return run('mycelium.revealFolder', m.folder);
       case 'transcript':
         return run('mycelium.viewTranscript', this.detail.id);
-      case 'file':
-        return this.openFile(m.path);
     }
-  }
-
-  // The path comes out of a transcript, so it is only opened when it resolves
-  // to a real file inside the directory the session ran in.
-  async openFile(p) {
-    const root = this.detail.projectDir || this.detail.cwd;
-    if (!root || typeof p !== 'string') return;
-    const abs = path.resolve(root, p);
-    const rel = path.relative(root, abs);
-    if (rel.startsWith('..') || path.isAbsolute(rel) || !existsSync(abs)) return;
-    await vscode.window.showTextDocument(vscode.Uri.file(abs));
   }
 }
 

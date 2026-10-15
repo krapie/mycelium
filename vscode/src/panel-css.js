@@ -56,11 +56,6 @@ ul.todos li { display: flex; gap: 9px; margin: 0 0 6px; }
 ul.todos .box { flex: none; width: 13px; height: 13px; margin-top: 4px; border: 1px solid var(--vscode-checkbox-border, var(--vscode-descriptionForeground)); border-radius: 3px; }
 .empty { color: var(--vscode-descriptionForeground); font-style: italic; }
 
-.files { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 12px; }
-.file { padding: 1px 8px; border-radius: 3px; border: 1px solid var(--vscode-panel-border, transparent); background: var(--vscode-textCodeBlock-background);
-  color: var(--vscode-textPreformat-foreground); font-family: var(--vscode-editor-font-family); font-size: 0.88em; }
-.file:hover { border-color: var(--vscode-focusBorder); }
-
 .lineage-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0 0 8px; }
 .lineage-row .label { min-width: 110px; color: var(--vscode-descriptionForeground); font-size: 0.92em; }
 .ref { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 2px 10px; border-radius: 999px;
