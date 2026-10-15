@@ -219,6 +219,11 @@
         "category": "Mycelium"
       },
       {
+        "command": "mycelium.delete",
+        "title": "%cmd.delete%",
+        "category": "Mycelium"
+      },
+      {
         "command": "mycelium.mkdir",
         "title": "%cmd.mkdir%",
         "category": "Mycelium",
@@ -318,6 +323,10 @@
         },
         {
           "command": "mycelium.tag",
+          "when": "false"
+        },
+        {
+          "command": "mycelium.delete",
           "when": "false"
         },
         {
@@ -428,6 +437,11 @@
           "command": "mycelium.copyId",
           "when": "view =~ /^mycelium\\./ && viewItem =~ /^(session|product|backlog)$/",
           "group": "3_misc@1"
+        },
+        {
+          "command": "mycelium.delete",
+          "when": "view =~ /^mycelium\\./ && viewItem =~ /^(session|product|backlog)$/",
+          "group": "4_danger@1"
         },
         {
           "command": "mycelium.newAgent",

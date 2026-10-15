@@ -277,6 +277,16 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
     await refresh();
   });
 
+  run('mycelium.delete', async (el, sel) => {
+    const rows = rowsOf(el, sel);
+    if (!rows.length) return;
+    const what = rows.length === 1 ? `“${rows[0].title || rows[0].id.slice(0, 8)}”` : `${rows.length} sessions`;
+    const yes = await vscode.window.showWarningMessage(`Delete ${what} from Mycelium?`, { modal: true, detail: 'Only Mycelium’s record is removed; the agent’s own log is kept and the session won’t be captured again.' }, 'Delete');
+    if (yes !== 'Delete') return;
+    await client.request('delete', { ids: rows.map((r) => r.id) });
+    await refresh();
+  });
+
   run('mycelium.tag', async (el, sel) => {
     const rows = rowsOf(el, sel);
     if (!rows.length) return;

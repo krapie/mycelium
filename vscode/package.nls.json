@@ -13,6 +13,7 @@
   "cmd.inject": "Inject Folder Knowledge into AGENTS.md",
   "cmd.move": "Move to Folder",
   "cmd.tag": "Edit Tags",
+  "cmd.delete": "Delete Session",
   "cmd.mkdir": "New Subfolder",
   "cmd.copyId": "Copy Session ID",
   "cmd.autotag": "Summarize Session (AI)",

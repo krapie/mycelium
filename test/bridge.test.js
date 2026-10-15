@@ -59,6 +59,29 @@ test('move and tag write through and refresh the index', async () => {
   assert.equal(f.counts['Projects/x'], 1);
 });
 
+test('delete removes the record, keeps it excluded from rescans, and fixes lineage links', async () => {
+  const { loadRaw } = await import('../src/scanner.js');
+  const { loadConfig } = await import('../src/config.js');
+  seed('cccccccc-3333', 'first half');
+  const next = seed('dddddddd-4444', 'second half');
+  next.continuationOf = 'cccccccc-3333';
+  const prev = loadRaw('cccccccc-3333');
+  prev.continuedTo = ['dddddddd-4444'];
+  saveRaw(prev);
+  saveRaw(next);
+  reindex();
+
+  assert.equal((await call('delete', { ids: ['dddddddd-4444'] })).result.deleted, 1);
+  assert.equal(loadRaw('dddddddd-4444'), null);
+  assert.ok(loadConfig().excludedSessionIds.includes('dddddddd-4444'));
+  assert.deepEqual(loadRaw('cccccccc-3333').continuedTo, []);
+  assert.ok(!(await call('sessions', {})).result.some((s) => s.id === 'dddddddd-4444'), 'gone from the index too');
+
+  assert.equal((await call('delete', { ids: ['dddddddd-4444'] })).error.code, -32000, 'already gone');
+  assert.equal((await call('delete', { ids: [] })).error.code, -32000);
+  await call('delete', { ids: ['cccccccc-3333'] });
+});
+
 test('failures come back as JSON-RPC errors, not throws', async () => {
   assert.equal((await call('detail', { id: 'nope' })).error.code, -32000);
   assert.equal((await call('mkdir', { folder: '../escape' })).error.code, -32000);

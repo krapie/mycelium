@@ -33,6 +33,8 @@ On Windows the terminal command is written for whichever shell the integrated te
 
 Smart organize and knowledge extraction call your own `claude` or `codex` login (the same one the TUI uses); Mycelium never asks for an API key. Each runs as a cancellable notification; cancelling stops the in-flight CLI processes. Pressing Esc in the organize list leaves the suggestions queued, so running it again shows them instantly. A session you place by hand is never moved by a later smart organize.
 
+To remove a session, right-click it (or use *Delete* on its page) → *Delete Session*, after a confirmation. Only Mycelium's record goes; the agent's own log stays and the session isn't captured again. Needs a CLI with `delete` support.
+
 Knowledge updates the daemon staged overnight show as a count in the status bar; **Review Knowledge Updates** walks through them one diff at a time.
 
 ## Claude Code panel
@@ -53,7 +55,7 @@ What this doesn't do: Claude Code's own session list shows Claude's sessions, an
 - **This Workspace**: sessions that ran in (or below) the folder(s) open in this window, found by the directory each session recorded; open a different folder and it changes. Not related to how you filed things.
 - **Folders**: your folder tree, then **New** (not filed yet). A book icon marks folders that already have a `KNOWLEDGE.md`; the view badge counts what's still unfiled.
 - **Recent**: the last 14 days, grouped Today / Yesterday / This week / Earlier. Hidden by default (it mostly repeats the two above); turn it on from the `…` menu of the Mycelium sidebar header.
-- **Session page**: click any session. Summary, decisions, to-dos, changed files, and links to the sessions it continues, was merged from, or was split into. Buttons: Resume, Hand off, Copy handoff prompt, Move, Tags, Summarize. Merged/split sessions and backlog items can't be resumed; the page says why. *View transcript* opens the raw conversation.
+- **Session page**: click any session. Summary, decisions, to-dos, changed files, and links to the sessions it continues, was merged from, or was split into. Buttons: Resume, Hand off, Copy handoff prompt, Move, Tags, Summarize, Delete. Merged/split sessions and backlog items can't be resumed; the page says why. *View transcript* opens the raw conversation.
 - **Status bar**: `N here · M new`; click for a quick menu.
 
 Agent colors (Claude, Codex, Kiro, OpenCode, merged, backlog) follow the theme and can be changed with `workbench.colorCustomizations` (`mycelium.agent.*`).

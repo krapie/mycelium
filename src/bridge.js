@@ -20,7 +20,7 @@ import {
   promoteKnowledge,
   dismissPendingKnowledge,
 } from './insight.js';
-import { mkdir, move, tag, reviewablePlacements, applyPlacements, clearSuggestions } from './organize.js';
+import { mkdir, move, tag, deleteSession, reviewablePlacements, applyPlacements, clearSuggestions } from './organize.js';
 import { dirsForFolder, injectAgentsMd, assembleContext } from './reuse.js';
 import { buildHandoff } from './handoff.js';
 import { AGENTS, which, resumeCommandLine, newCommandLine } from './agents.js';
@@ -157,6 +157,21 @@ export const METHODS = {
     for (const id of ids) ok(move(id, folder || null));
     data.refreshMany(ids);
     return { ok: true, moved: ids.length };
+  },
+
+  // Mycelium's own record only (the agent's log stays); deleteSession() puts
+  // the id on the exclude list so a rescan won't bring it back. Sessions that
+  // pointed at a deleted one had their lineage links cleared, so those are
+  // refreshed too. A failure part-way still refreshes what was already gone.
+  delete: ({ ids }) => {
+    need(Array.isArray(ids) && ids.length, 'no sessions given');
+    const touched = new Set(ids);
+    try {
+      for (const id of ids) for (const other of ok(deleteSession(id)).touchedIds || []) touched.add(other);
+    } finally {
+      data.refreshMany([...touched]);
+    }
+    return { ok: true, deleted: ids.length };
   },
 
   tag: ({ ids, add = [], remove = [] }) => {
