@@ -72,6 +72,7 @@ class SessionPanel {
       case 'handoff':
       case 'move':
       case 'tag':
+      case 'delete':
       case 'copyId':
       case 'autotag':
         return run(`mycelium.${m.action}`, this.element());

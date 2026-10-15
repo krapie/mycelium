@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **Delete Session**: right-click a session (or use *Delete* on its page) to remove it from Mycelium. The agent's own log is kept and the session isn't captured again. Needs a `mycelium` CLI with this change.
 - **Review Knowledge Updates** can accept everything at once: with more than one update waiting it first offers *Accept all* or *Review one by one*, and each diff has an *Accept all remaining* button.
 
 ## 0.2.3

@@ -277,6 +277,21 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
     await refresh();
   });
 
+  run('mycelium.delete', async (el, sel) => {
+    const rows = rowsOf(el, sel);
+    if (!rows.length) return;
+    const what = rows.length === 1 ? `“${rows[0].title || rows[0].id.slice(0, 8)}”` : `${rows.length} sessions`;
+    const yes = await vscode.window.showWarningMessage(`Delete ${what} from Mycelium?`, { modal: true, detail: 'Only Mycelium’s record is removed; the agent’s own log is kept and the session won’t be captured again.' }, 'Delete');
+    if (yes !== 'Delete') return;
+    // A batch that fails part-way has still deleted the earlier ids, so the
+    // tree is refreshed either way; a refresh error must not hide the real one.
+    try {
+      await client.request('delete', { ids: rows.map((r) => r.id) });
+    } finally {
+      await refresh().catch(() => {});
+    }
+  });
+
   run('mycelium.tag', async (el, sel) => {
     const rows = rowsOf(el, sel);
     if (!rows.length) return;

@@ -117,6 +117,7 @@ ${button({ action: 'copyPrompt', label: t.copyPrompt, icon: ICON.copy, disabled:
 ${button({ action: 'move', label: t.move, icon: ICON.folder })}
 ${button({ action: 'tag', label: t.tag, icon: ICON.tag })}
 ${button({ action: 'autotag', label: t.summarize, icon: ICON.spark, disabled: backlog })}
+${button({ action: 'delete', label: t.delete })}
 ${hint ? `<p class="hint">${esc(hint)}</p>` : ''}
 </div>
 ${summary}

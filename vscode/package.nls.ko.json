@@ -13,6 +13,7 @@
   "cmd.inject": "폴더 지식을 AGENTS.md에 주입",
   "cmd.move": "폴더로 이동",
   "cmd.tag": "태그 편집",
+  "cmd.delete": "세션 삭제",
   "cmd.mkdir": "새 하위 폴더",
   "cmd.copyId": "세션 ID 복사",
   "cmd.autotag": "세션 요약 (AI)",

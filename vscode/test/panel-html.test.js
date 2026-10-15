@@ -34,6 +34,11 @@ test('renders the session: title, crumbs, summary bullets, decisions, todos, fil
   assert.match(h, /agent-codex/); // the lineage chip takes its own agent's color
 });
 
+test('the page has a Delete button, in the display language', () => {
+  assert.match(render(base), /data-action="delete"[^>]*>Delete<\/button>/);
+  assert.match(render(base, { language: 'ko' }), /data-action="delete"[^>]*>삭제<\/button>/);
+});
+
 test('locks scripts to the nonce and denies everything else', () => {
   const h = render(base);
   assert.match(h, /default-src 'none'; style-src 'nonce-N0NCE'; script-src 'nonce-N0NCE'/);
