@@ -43,7 +43,6 @@ function sessionToText(n) {
   if (n.extracted.summary) L.push(t('export.summary'), n.extracted.summary, '');
   if (n.extracted.decisions?.length) L.push(t('export.decisions'), ...n.extracted.decisions.map((d) => `- ${d}`), '');
   if (n.extracted.todos?.length) L.push(t('export.todos'), ...n.extracted.todos.map((td) => `- ${td}`), '');
-  if (n.artifacts.filesChanged?.length) L.push(t('export.files'), ...n.artifacts.filesChanged.map((f) => `- ${f}`), '');
   L.push(t('export.conversation'));
   for (const turn of n.turns) L.push(`[${turn.role}] ${turn.text}`, '');
   return L.join('\n');

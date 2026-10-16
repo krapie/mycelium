@@ -157,7 +157,6 @@ const en = {
   'export.summary': '## Summary',
   'export.decisions': '## Decisions',
   'export.todos': '## To-dos',
-  'export.files': '## Files',
   'export.conversation': '## Conversation',
 
   // viewers.js
@@ -513,7 +512,6 @@ const ko = {
   'export.summary': '## 요약',
   'export.decisions': '## 결정',
   'export.todos': '## 할 일',
-  'export.files': '## 파일',
   'export.conversation': '## 대화',
 
   'viewer.textViewLabel': (title) => ` ${title} (↑↓ 스크롤, y 복사, Esc 닫기) `,

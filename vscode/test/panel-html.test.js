@@ -21,7 +21,7 @@ const base = {
 };
 const render = (d, o = {}) => renderPanel(d, { nonce: 'N0NCE', now: Date.parse('2026-01-04T03:04:05Z'), ...o });
 
-test('renders the session: title, crumbs, summary bullets, decisions, todos, files, lineage', () => {
+test('renders the session: title, crumbs, summary bullets, decisions, todos, lineage', () => {
   const h = render(base);
   assert.match(h, /<h1>Fix login<\/h1>/);
   assert.match(h, /data-folder="Work"[^>]*>Work<\/button>.*data-folder="Work\/api"/s);
@@ -29,7 +29,7 @@ test('renders the session: title, crumbs, summary bullets, decisions, todos, fil
   assert.match(h, /<li>Found it\.<\/li><li>Fixed it\.<\/li>/);
   assert.match(h, /<h2>Decisions<\/h2>/);
   assert.match(h, /class="box"/);
-  assert.match(h, /data-action="file" data-path="src\/auth.js"/);
+  assert.doesNotMatch(h, /data-action="file"/);
   assert.match(h, /data-action="open" data-id="prev-1"/);
   assert.match(h, /agent-codex/); // the lineage chip takes its own agent's color
 });
@@ -52,7 +52,6 @@ test('session text can not inject markup', () => {
   const h = render({
     ...base, id: 'id"><b>', host: evil, folder: evil, projectDir: evil,
     extracted: { title: evil, tags: [evil], summary: evil, decisions: [evil], todos: [evil] },
-    artifacts: { filesChanged: [evil] },
     lineage: { ...base.lineage, continuedTo: [{ id: evil, title: evil, source: 'claude' }] },
   });
   assert.doesNotMatch(h, /<img/);
