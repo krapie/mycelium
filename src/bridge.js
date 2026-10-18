@@ -8,6 +8,7 @@
  */
 
 import { VERSION } from './version.js';
+import { collectDiagnostics } from './doctor.js';
 import { scan, findSession, loadRaw, sourceSessionExists } from './scanner.js';
 import { autoTagSession, tagAll } from './learn.js';
 import { killInFlight, providerBin, withAgentPath } from './llm.js';
@@ -120,6 +121,9 @@ const llmStep = (fn) => (p, ctx) => {
 
 export const METHODS = {
   hello: () => ({ version: VERSION, protocol: PROTOCOL, home: HOME }),
+
+  // Same report as `mycelium doctor --json`; the extension adds its own side (CLI it resolved, VS Code version) before copying it.
+  doctor: ({ extraPath } = {}) => collectDiagnostics({ extraPath: extraDirs(extraPath) ?? undefined }),
 
   folders: () => {
     const f = data.folders();

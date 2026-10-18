@@ -29,7 +29,12 @@ export const AGENTS = Object.fromEntries(ADAPTERS.map((a) => [a.name, a]));
  * shim, so each PATHEXT suffix is tried too. `platform`/`env`/`exists` are
  * injectable so that behavior is tested on any host.
  */
-export function which(cmd, { platform = process.platform, env = process.env, exists = existsSync } = {}) {
+export function which(cmd, opts = {}) {
+  return whichPath(cmd, opts) !== null;
+}
+
+/** Same lookup as which(), but returns where the program was found (or null) — for `mycelium doctor`. */
+export function whichPath(cmd, { platform = process.platform, env = process.env, exists = existsSync } = {}) {
   const win = platform === 'win32';
   const pathKey = (win && Object.keys(env).find((k) => k.toUpperCase() === 'PATH')) || 'PATH';
   const dirs = (env[pathKey] || '')
@@ -38,7 +43,8 @@ export function which(cmd, { platform = process.platform, env = process.env, exi
     .filter(Boolean);
   const exts = win ? ['', ...(env.PATHEXT || '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean)] : [''];
   const join = win ? win32.join : posix.join;
-  return dirs.some((d) => exts.some((e) => exists(join(d, cmd + e))));
+  for (const d of dirs) for (const e of exts) if (exists(join(d, cmd + e))) return join(d, cmd + e);
+  return null;
 }
 
 export function binFor(source) {

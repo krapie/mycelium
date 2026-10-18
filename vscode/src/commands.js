@@ -18,6 +18,10 @@ const { withWiderPath } = require('./retry.js');
 const { launchDir, relatedTo, enqueue, pending, withdraw } = require('./launch.js');
 const { workspaceDirs } = require('./views.js');
 const { registerAi } = require('./ai.js');
+const { formatDiagnostics } = require('./diagnostics.js');
+const { resolveCli } = require('./cli-path.js');
+const os = require('os');
+const path = require('path');
 
 const TRANSCRIPT_SCHEME = 'mycelium-transcript';
 const GUIDE = 'krapie.mycelium-vscode#mycelium.start';
@@ -129,6 +133,43 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
 
   run('mycelium.refresh', refresh);
   run('mycelium.showLog', () => log.show(true));
+
+  // Works without a CLI on purpose: a machine where nothing loads is exactly
+  // where the user needs something to paste into an issue.
+  run('mycelium.copyDiagnostics', async () => {
+    const cfg = vscode.workspace.getConfiguration('mycelium');
+    const configured = cfg.get('path') || 'mycelium';
+    const loginDirs = await client.loginDirs().catch(() => []);
+    let cli;
+    let cliError;
+    try {
+      cli = await withWiderPath((extra) => client.request('doctor', extra ? { extraPath: extra } : {}), () => client.loginDirs(), (l) => log.appendLine(l));
+    } catch (err) {
+      cliError = (err && err.message) || String(err);
+    }
+    const text = formatDiagnostics({
+      editor: {
+        extensionVersion: ctx.extension.packageJSON.version,
+        appName: vscode.env.appName,
+        vscodeVersion: vscode.version,
+        platform: `${process.platform} ${process.arch}`,
+        remoteName: vscode.env.remoteName,
+        language: vscode.env.language,
+        claudeCodeInstalled: !!vscode.extensions.getExtension('anthropic.claude-code'),
+        configuredPath: cfg.get('path'),
+        configuredHome: cfg.get('home'),
+        hostPath: (process.env.PATH || '').split(path.delimiter).filter(Boolean),
+      },
+      resolved: resolveCli({ configured, extraDirs: loginDirs }),
+      loginDirs,
+      cli,
+      cliError,
+      home: os.homedir(),
+    });
+    await vscode.env.clipboard.writeText(text);
+    log.appendLine('diagnostics copied to the clipboard');
+    vscode.window.showInformationMessage(t.diagnosticsCopied || 'Mycelium: diagnostics copied to the clipboard. Paste them into your bug report.');
+  });
 
   run('mycelium.scan', () =>
     vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Mycelium: scanning…' }, async () => {

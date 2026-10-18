@@ -294,6 +294,11 @@
         "category": "Mycelium"
       },
       {
+        "command": "mycelium.copyDiagnostics",
+        "title": "%cmd.copyDiagnostics%",
+        "category": "Mycelium"
+      },
+      {
         "command": "mycelium.resumeInTerminal",
         "title": "%cmd.resumeTerminal%",
         "category": "Mycelium"
