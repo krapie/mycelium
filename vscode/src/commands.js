@@ -143,7 +143,8 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
     let cli;
     let cliError;
     try {
-      cli = await withWiderPath((extra) => client.request('doctor', extra ? { extraPath: extra } : {}), () => client.loginDirs(), (l) => log.appendLine(l));
+      // doctor reports missing programs instead of failing, so withWiderPath's retry would never fire: send the login-shell dirs up front.
+      cli = await client.request('doctor', loginDirs.length ? { extraPath: loginDirs } : {});
     } catch (err) {
       cliError = (err && err.message) || String(err);
     }

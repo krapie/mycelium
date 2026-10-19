@@ -47,3 +47,15 @@ test('mycelium doctor --json runs end-to-end and prints parseable JSON', () => {
   const out = execFileSync(process.execPath, [cliPath, 'doctor', '--json'], { env: { ...process.env, MYCELIUM_HOME: homeDir }, encoding: 'utf8' });
   assert.equal(typeof JSON.parse(out).version, 'string');
 });
+
+test('collectDiagnostics widens the Windows Path key instead of adding a second PATH', () => {
+  const d = collectDiagnostics({ env: { Path: '/a' }, platform: 'win32', extraPath: ['/extra'] });
+  assert.deepEqual(d.path, ['/extra', '/a']);
+});
+
+test('credentials in the sync remote never reach the report', async () => {
+  const { saveConfig, loadConfig } = await import('../src/config.js');
+  saveConfig({ ...loadConfig(), sync: { remote: 'https://me:s3cret@github.com/me/store.git', mode: 'push' } });
+  const d = collectDiagnostics({ env: { PATH: '/x' }, platform: 'linux' });
+  assert.equal(d.sync.remote, 'https://***@github.com/me/store.git');
+});

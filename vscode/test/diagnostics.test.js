@@ -27,3 +27,8 @@ test('includes the CLI report and hides the home directory', () => {
   assert.match(text, /"home": "~\/\.mycelium"/);
   assert.doesNotMatch(text, /\/Users\/me/);
 });
+
+test('hides the home directory in mycelium.path too', () => {
+  const text = formatDiagnostics({ editor: { ...editor, configuredPath: '/Users/me/bin/mycelium' }, resolved: { command: 'mycelium', from: null, searched: [] }, home: '/Users/me' });
+  assert.doesNotMatch(text, /\/Users\/me/);
+});

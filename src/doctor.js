@@ -16,6 +16,9 @@ import { loadConfig, contentLocale } from './config.js';
 import { AGENTS, whichPath } from './agents.js';
 import { providerBin } from './llm.js';
 
+// The report is pasted into public issues; an https remote may carry user:token@.
+const redactUrl = (s) => String(s).replace(/(\/\/)[^/@\s]+@/, '$1***@');
+
 const lastLine = (file) => {
   try {
     const lines = readFileSync(file, 'utf8').trimEnd().split('\n');
@@ -42,11 +45,19 @@ const pidAlive = (file) => {
  * it; `extraPath` mirrors the bridge's login-shell PATH hint.
  */
 export function collectDiagnostics({ extraPath, env = process.env, platform = process.platform } = {}) {
-  const lookupEnv = Array.isArray(extraPath) && extraPath.length ? { ...env, PATH: [...extraPath, env.PATH].filter(Boolean).join(delimiter) } : env;
+  // Windows spells it `Path`; widen that key, or whichPath() would read the original and ignore extraPath.
+  const pathKey = (platform === 'win32' && Object.keys(env).find((k) => k.toUpperCase() === 'PATH')) || 'PATH';
+  const lookupEnv = Array.isArray(extraPath) && extraPath.length ? { ...env, [pathKey]: [...extraPath, env[pathKey]].filter(Boolean).join(delimiter) } : env;
   const find = (bin) => whichPath(bin, { env: lookupEnv, platform });
   const llmBin = providerBin();
   const cfg = loadConfig();
-  const raw = existsSync(RAW_DIR) ? readdirSync(RAW_DIR).filter((f) => f.endsWith('.json')).length : 0;
+  // A store that cannot be read is exactly when this report is needed, so it must not throw.
+  let raw;
+  try {
+    raw = existsSync(RAW_DIR) ? readdirSync(RAW_DIR).filter((f) => f.endsWith('.json')).length : 0;
+  } catch {
+    raw = null;
+  }
   return {
     version: VERSION,
     node: process.version,
@@ -65,7 +76,7 @@ export function collectDiagnostics({ extraPath, env = process.env, platform = pr
       daemon: existsSync(DAEMON_PID_PATH) ? (pidAlive(DAEMON_PID_PATH) ? 'running' : 'stale pid file') : 'not running',
       lastLog: lastLine(DAEMON_LOG_PATH),
     },
-    sync: cfg.sync?.remote ? { remote: cfg.sync.remote, mode: cfg.sync.mode } : null,
+    sync: cfg.sync?.remote ? { remote: redactUrl(cfg.sync.remote), mode: cfg.sync.mode } : null,
   };
 }
 
@@ -76,7 +87,7 @@ export function formatDiagnostics(d, { home = homedir() } = {}) {
   const lines = [
     `mycelium ${d.version}  node ${d.node}  ${d.platform}`,
     `shell: ${d.shell || '(unknown)'}   locale: ${d.locale}`,
-    `store: ${hide(d.home)}  (${d.store.sessions} sessions, index ${d.store.index ? 'present' : 'missing'}, daemon ${d.store.daemon})`,
+    `store: ${hide(d.home)}  (${d.store.sessions ?? 'unreadable'} sessions, index ${d.store.index ? 'present' : 'missing'}, daemon ${d.store.daemon})`,
   ];
   if (d.store.lastLog) lines.push(`last daemon log: ${hide(d.store.lastLog)}`);
   lines.push('', 'agent CLIs:');
