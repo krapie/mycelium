@@ -12,11 +12,12 @@ Everything is stored locally under `~/.mycelium/` by default; set `MYCELIUM_HOME
   tree/<folder>/         user folder structure = real directories
     KNOWLEDGE.md          per-folder project knowledge (the unit of inheritance)
   digests/YYYY-Wnn.md    narrative digests
+  clips/<id>.json        human-pinned excerpts, copied out of a session (see Clip in features.md)
   db/index.db            sqlite FTS5 search index (rebuildable)
   config.json            deletion list, display language (locale), etc.
 ```
 
-To move sessions between machines, copy `raw/` and `tree/`, then run `mycelium reindex` on the destination.
+To move sessions between machines, copy `raw/`, `tree/` and `clips/`, then run `mycelium reindex` on the destination. `clips/` has to come along explicitly: a clip holds its own copy of the turns so it outlives the session it came from, which also means nothing can regenerate it from `raw/` the way `reindex` rebuilds `db/`.
 
 ## Design Principles
 

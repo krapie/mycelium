@@ -217,6 +217,12 @@ export function folderCounts() {
     .all();
 }
 
+/** Backlog items in the index — the folders panel's Backlog count, read on
+ * every reloadFolders(), so from here rather than backlog.js's allRaw() walk. */
+export function backlogCount() {
+  return openDb().prepare("SELECT COUNT(*) AS n FROM sessions WHERE kind = 'backlog'").get().n;
+}
+
 /** Session counts per day-of-month (also grouped by folder, so callers can
  * exclude _archive the same way folderCounts()'s callers do) — for one
  * calendar month's grid. Grouped by `ended_at` (falls back to `started_at`

@@ -18,6 +18,7 @@ export const HOME = process.env.MYCELIUM_HOME || join(homedir(), '.mycelium');
 export const RAW_DIR = join(HOME, 'raw'); // normalized neutral-schema sessions
 export const TREE_DIR = join(HOME, 'tree'); // user folder structure = real dirs
 export const DIGEST_DIR = join(HOME, 'digests');
+export const CLIPS_DIR = join(HOME, 'clips'); // human-pinned excerpts of captured sessions (clip.js)
 export const DB_DIR = join(HOME, 'db');
 export const DB_PATH = join(DB_DIR, 'index.db');
 export const CONFIG_PATH = join(HOME, 'config.json');
@@ -26,7 +27,7 @@ export const DAEMON_PID_PATH = join(HOME, 'daemon.pid'); // same file scripts/ru
 export const DAEMON_LOG_PATH = join(HOME, 'daemon.log');
 
 export function ensureDirs() {
-  for (const d of [HOME, RAW_DIR, TREE_DIR, DIGEST_DIR, DB_DIR, INBOX]) {
+  for (const d of [HOME, RAW_DIR, TREE_DIR, DIGEST_DIR, CLIPS_DIR, DB_DIR, INBOX]) {
     if (!existsSync(d)) mkdirSync(d, { recursive: true });
   }
 }
