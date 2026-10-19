@@ -205,3 +205,10 @@ test('extraPath lets agents, resumeCommand and newCommand look for an agent in d
     process.env.PATH = prev;
   }
 });
+
+test('doctor returns the environment report', async () => {
+  const { result } = await call('doctor');
+  assert.equal(typeof result.version, 'string');
+  assert.ok(Array.isArray(result.agents));
+  assert.ok(Array.isArray(result.path));
+});

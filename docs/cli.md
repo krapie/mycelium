@@ -91,6 +91,15 @@ mycelium cleanup reset --yes # full reset: delete ~/.mycelium entirely → re-sc
 
 For a clean start: `mycelium cleanup reset --yes && mycelium scan`.
 
+## Diagnose
+
+```sh
+mycelium doctor            # environment report to paste into a bug report
+mycelium doctor --json     # same data as JSON
+```
+
+Prints the Mycelium and Node versions, platform and shell, the PATH this process actually has, where each agent CLI (`claude`, `codex`, ...), `git` and `ssh` resolve to (or `NOT FOUND`), and the store state (session count, index, daemon). Your home directory is shown as `~`.
+
 ## Editor integration
 
 ```sh
