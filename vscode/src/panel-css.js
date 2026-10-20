@@ -54,6 +54,7 @@ ul.bullets li { position: relative; padding-left: 16px; margin: 0 0 6px; }
 ul.bullets li::before { content: ''; position: absolute; left: 2px; top: 0.68em; width: 5px; height: 5px; border-radius: 50%; background: var(--agent); opacity: .85; }
 ul.todos li { display: flex; gap: 9px; margin: 0 0 6px; }
 ul.todos .box { flex: none; width: 13px; height: 13px; margin-top: 4px; border: 1px solid var(--vscode-checkbox-border, var(--vscode-descriptionForeground)); border-radius: 3px; }
+.notes { white-space: pre-wrap; margin: 0; }
 .empty { color: var(--vscode-descriptionForeground); font-style: italic; }
 
 .lineage-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: 0 0 8px; }

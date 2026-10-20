@@ -73,6 +73,8 @@ class SessionPanel {
       case 'delete':
       case 'copyId':
       case 'autotag':
+      case 'backlogStart':
+      case 'backlogEdit':
         return run(`mycelium.${m.action}`, this.element());
       case 'copyPrompt':
         return run('mycelium.copyHandoffPrompt', this.element());

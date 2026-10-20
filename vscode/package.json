@@ -235,6 +235,24 @@
         "category": "Mycelium"
       },
       {
+        "command": "mycelium.backlogAdd",
+        "title": "%cmd.backlogAdd%",
+        "category": "Mycelium",
+        "icon": "$(checklist)"
+      },
+      {
+        "command": "mycelium.backlogStart",
+        "title": "%cmd.backlogStart%",
+        "category": "Mycelium",
+        "icon": "$(play)"
+      },
+      {
+        "command": "mycelium.backlogEdit",
+        "title": "%cmd.backlogEdit%",
+        "category": "Mycelium",
+        "icon": "$(edit)"
+      },
+      {
         "command": "mycelium.autotag",
         "title": "%cmd.autotag%",
         "category": "Mycelium",
@@ -343,6 +361,14 @@
           "when": "false"
         },
         {
+          "command": "mycelium.backlogStart",
+          "when": "false"
+        },
+        {
+          "command": "mycelium.backlogEdit",
+          "when": "false"
+        },
+        {
           "command": "mycelium.revealFolder",
           "when": "false"
         },
@@ -397,6 +423,26 @@
           "command": "mycelium.handoff",
           "when": "view =~ /^mycelium\\./ && viewItem =~ /^(session|product)$/",
           "group": "inline@2"
+        },
+        {
+          "command": "mycelium.backlogStart",
+          "when": "view =~ /^mycelium\\./ && viewItem == backlog",
+          "group": "inline@1"
+        },
+        {
+          "command": "mycelium.backlogStart",
+          "when": "view =~ /^mycelium\\./ && viewItem == backlog",
+          "group": "1_use@1"
+        },
+        {
+          "command": "mycelium.backlogEdit",
+          "when": "view =~ /^mycelium\\./ && viewItem == backlog",
+          "group": "1_use@2"
+        },
+        {
+          "command": "mycelium.backlogAdd",
+          "when": "view =~ /^mycelium\\./ && viewItem == folder",
+          "group": "3_organize@2"
         },
         {
           "command": "mycelium.newAgent",
