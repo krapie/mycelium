@@ -251,6 +251,13 @@
         "title": "%cmd.backlogEdit%",
         "category": "Mycelium",
         "icon": "$(edit)"
+        },
+        {
+        "command": "mycelium.calendar",
+        "title": "%cmd.calendar%",
+        "category": "Mycelium",
+        "icon": "$(calendar)",
+        "enablement": "config.mycelium.experimental.calendar"
       },
       {
         "command": "mycelium.autotag",
@@ -367,6 +374,10 @@
         {
           "command": "mycelium.backlogEdit",
           "when": "false"
+        },
+        {
+          "command": "mycelium.calendar",
+          "when": "config.mycelium.experimental.calendar"
         },
         {
           "command": "mycelium.revealFolder",
@@ -764,6 +775,11 @@
             "%config.openIn.this%"
           ],
           "description": "%config.openIn%"
+        },
+        "mycelium.experimental.calendar": {
+          "type": "boolean",
+          "default": false,
+          "description": "%config.calendar%"
         },
         "mycelium.claudeCode.openIn": {
           "type": "string",

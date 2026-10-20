@@ -28,7 +28,7 @@ const GUIDE = 'krapie.mycelium-vscode#mycelium.start';
 
 const rowsOf = (el, sel) => (sel && sel.length ? sel : [el]).filter((e) => e && e.type === 'session').map((e) => e.row);
 
-function register(ctx, { client, panel, refresh, foldersView, language, log }) {
+function register(ctx, { client, panel, calendar, refresh, foldersView, language, log }) {
   const t = strings(language);
 
   const run = (id, fn) =>
@@ -132,6 +132,7 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
   );
 
   run('mycelium.refresh', refresh);
+  run('mycelium.calendar', () => calendar.show());
   run('mycelium.showLog', () => log.show(true));
 
   // Works without a CLI on purpose: a machine where nothing loads is exactly
@@ -442,6 +443,7 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
       { label: `$(sync) ${t.menuScan}`, cmd: 'mycelium.scan' },
       { label: `$(sparkle) ${t.menuOrganize}`, cmd: 'mycelium.organize' },
       { label: `$(search) ${t.menuSearch}`, cmd: 'mycelium.search' },
+      ...(vscode.workspace.getConfiguration('mycelium').get('experimental.calendar') ? [{ label: `$(calendar) ${t.menuCalendar}`, cmd: 'mycelium.calendar' }] : []),
       { label: `$(add) ${t.menuNewAgent}`, cmd: 'mycelium.newAgent' },
       { label: `$(checklist) ${t.menuBacklog}`, cmd: 'mycelium.backlogAdd' },
       { label: `$(book) ${t.menuGuide}`, cmd: 'mycelium.openGuide' },

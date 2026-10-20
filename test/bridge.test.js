@@ -243,3 +243,19 @@ test('backlogAdd, backlogUpdate and backlogOpen write a note, edit it, and hand 
   assert.ok((await call('detail', { id })).result.doneAt);
   assert.match((await call('backlogOpen', { id: 'aaaaaaaa-1111', agentKey: 'claude', dir, allowMissingBin: true })).error.message, /not a backlog item/);
 });
+
+test('calendar counts sessions per day of a month and rejects a bad month', async () => {
+  const n = seed('cccccccc-1111', 'x');
+  n.startedAt = n.endedAt = '2026-03-05T10:00:00Z';
+  saveRaw(n);
+  const m = seed('cccccccc-2222', 'y');
+  m.startedAt = m.endedAt = '2026-03-05T12:00:00Z';
+  saveRaw(m);
+  reindex();
+  const res = (await call('calendar', { year: 2026, month: 3 })).result;
+  assert.deepEqual(res, { year: 2026, month: 3, counts: { 5: 2 } });
+  assert.deepEqual((await call('calendar', { year: 2026, month: 4 })).result.counts, {});
+  assert.equal((await call('sessions', { date: '2026-03-05' })).result.length, 2);
+  assert.match((await call('calendar', { year: 2026, month: 13 })).error.message, /invalid month/);
+  assert.match((await call('calendar', { year: '2026', month: 3 })).error.message, /invalid year/);
+});

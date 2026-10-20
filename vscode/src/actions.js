@@ -19,6 +19,7 @@ const ACTIONS = [
   ['organize', 'wand', 'mycelium.organize'],
   ['knowledge', 'book', 'mycelium.extractKnowledge'],
   ['search', 'search', 'mycelium.search'],
+  ['calendar', 'calendar', 'mycelium.calendar'],
   ['newAgent', 'add', 'mycelium.newAgent'],
   ['backlog', 'checklist', 'mycelium.backlogAdd'],
   ['review', 'bell-dot', 'mycelium.reviewKnowledge'],
@@ -63,7 +64,8 @@ class ActionsView {
   getChildren(el) {
     if (el) return [];
     // "Review" only means something while there is something to review.
-    return ACTIONS.map(([id]) => id).filter((id) => id !== 'review' || this.stats.pending > 0);
+    const calendarOn = vscode.workspace.getConfiguration('mycelium').get('experimental.calendar');
+    return ACTIONS.map(([id]) => id).filter((id) => (id !== 'review' || this.stats.pending > 0) && (id !== 'calendar' || calendarOn));
   }
 }
 
