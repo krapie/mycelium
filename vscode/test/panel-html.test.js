@@ -62,15 +62,31 @@ test('session text can not inject markup', () => {
   assert.ok(h.includes(esc(evil)));
 });
 
-test('merged/split sessions and backlog items can not be resumed, with the reason shown', () => {
+test('merged/split sessions can not be resumed, with the reason shown', () => {
   const merged = render({ ...base, mergedFrom: ['a', 'b'] });
   assert.match(merged, /data-action="resume" disabled/);
   assert.match(merged, /class="hint">Merged or split/);
-  const backlog = render({ ...base, kind: 'backlog' });
-  assert.match(backlog, /data-action="resume" disabled/);
-  assert.match(backlog, /data-action="handoff" disabled/);
-  assert.doesNotMatch(backlog, /data-action="transcript"/);
   assert.doesNotMatch(render(base), /data-action="resume" disabled/);
+});
+
+test('a backlog item offers Start and Edit instead of Resume and Hand off, and shows its notes as written', () => {
+  const item = { ...base, kind: 'backlog', source: null, extracted: { title: 'Add rate limiter', summary: 'per-IP.\nSecond line.' } };
+  const h = render(item);
+  assert.match(h, /data-action="backlogStart"[^>]*>.*Start<\/button>/s);
+  assert.match(h, /data-action="backlogEdit"/);
+  for (const gone of ['resume', 'handoff', 'copyPrompt', 'autotag', 'transcript']) assert.doesNotMatch(h, new RegExp(`data-action="${gone}"`));
+  assert.match(h, /data-action="move"/);
+  assert.match(h, /data-action="delete"/);
+  assert.match(h, /<h2>Notes<\/h2><p class="notes">per-IP\.\nSecond line\.<\/p>/);
+  assert.match(h, /class="hint">A note for later/);
+  assert.match(render({ ...item, doneAt: '2026-01-03T00:00:00Z' }), /class="hint">Started\./);
+  assert.match(render({ ...item, extracted: { title: 'x' } }), /No notes yet/);
+  assert.match(render(item, { language: 'ko' }), /data-action="backlogStart"[^>]*>.*시작<\/button>/s);
+});
+
+test('backlog notes can not inject markup', () => {
+  const h = render({ ...base, kind: 'backlog', extracted: { title: 'x', summary: '<img src=x onerror=alert(1)>' } });
+  assert.doesNotMatch(h, /<img/);
 });
 
 test('an unsummarized session says how to get a summary; Korean follows the language', () => {

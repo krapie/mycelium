@@ -65,7 +65,7 @@ function renderPanel(d, { nonce, language = 'en', now = Date.now() } = {}) {
   const key = agentKey(d);
   const backlog = d.kind === 'backlog';
   const product = !!((d.mergedFrom && d.mergedFrom.length) || d.splitFrom);
-  const hint = backlog ? t.backlogNotResumable : product ? t.notResumable : '';
+  const hint = backlog ? (d.doneAt ? t.backlogStarted : t.backlogIntro) : product ? t.notResumable : '';
   const started = (d.startedAt || '').slice(0, 16).replace('T', ' ');
 
   const meta = [
@@ -78,7 +78,9 @@ function renderPanel(d, { nonce, language = 'en', now = Date.now() } = {}) {
   const list = (heading, items, cls = 'bullets') =>
     items && items.length ? `<section><h2>${esc(heading)}</h2><ul class="${cls}">${items.map((i) => `<li>${cls === 'todos' ? '<span class="box"></span><span>' : ''}${esc(i)}${cls === 'todos' ? '</span>' : ''}</li>`).join('')}</ul></section>` : '';
 
-  const summary = x.summary
+  const summary = backlog
+    ? `<section><h2>${esc(t.notes)}</h2>${x.summary ? `<p class="notes">${esc(x.summary)}</p>` : `<p class="empty">${esc(t.noNotes)}</p>`}</section>`
+    : x.summary
     ? list(t.summary, sentences(x.summary))
     : `<section><h2>${esc(t.summary)}</h2><p class="empty">${esc(t.noSummary)}</p></section>`;
 
@@ -105,13 +107,15 @@ function renderPanel(d, { nonce, language = 'en', now = Date.now() } = {}) {
 <h1>${esc(x.title || t.untitled)}</h1>
 ${x.tags && x.tags.length ? `<div class="tags">${x.tags.map((g) => `<span class="tag">#${esc(g)}</span>`).join('')}</div>` : ''}
 <div class="actions">
-${button({ action: 'resume', label: t.resume, icon: ICON.play, primary: true, disabled: !!hint, title: hint })}
+${backlog
+  ? button({ action: 'backlogStart', label: t.backlogStart, icon: ICON.play, primary: true }) + button({ action: 'backlogEdit', label: t.backlogEdit })
+  : `${button({ action: 'resume', label: t.resume, icon: ICON.play, primary: true, disabled: !!hint, title: hint })}
 ${isClaudeSession(d) ? button({ action: 'resumeInTerminal', label: t.resumeTerminal, icon: ICON.play, title: t.resumeTerminalTip }) : ''}
-${button({ action: 'handoff', label: t.handoff, icon: ICON.swap, disabled: backlog, title: backlog ? t.backlogNotResumable : '' })}
-${button({ action: 'copyPrompt', label: t.copyPrompt, icon: ICON.copy, disabled: backlog })}
+${button({ action: 'handoff', label: t.handoff, icon: ICON.swap })}
+${button({ action: 'copyPrompt', label: t.copyPrompt, icon: ICON.copy })}`}
 ${button({ action: 'move', label: t.move, icon: ICON.folder })}
 ${button({ action: 'tag', label: t.tag, icon: ICON.tag })}
-${button({ action: 'autotag', label: t.summarize, icon: ICON.spark, disabled: backlog })}
+${backlog ? '' : button({ action: 'autotag', label: t.summarize, icon: ICON.spark })}
 ${button({ action: 'delete', label: t.delete })}
 ${hint ? `<p class="hint">${esc(hint)}</p>` : ''}
 </div>

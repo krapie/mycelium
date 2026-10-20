@@ -21,7 +21,9 @@ import {
   promoteKnowledge,
   dismissPendingKnowledge,
 } from './insight.js';
-import { mkdir, move, tag, deleteSession, reviewablePlacements, applyPlacements, clearSuggestions } from './organize.js';
+import { mkdir, move, tag, deleteSession, setContent, reviewablePlacements, applyPlacements, clearSuggestions } from './organize.js';
+import { createBacklog, buildBacklogSeed, markBacklogEntered } from './backlog.js';
+import { isBacklog } from './schema.js';
 import { dirsForFolder, injectAgentsMd, assembleContext } from './reuse.js';
 import { buildHandoff } from './handoff.js';
 import { AGENTS, which, resumeCommandLine, newCommandLine } from './agents.js';
@@ -220,6 +222,46 @@ export const METHODS = {
   inject: ({ dir, folder }) => {
     need(dir && folder, 'dir and folder are required');
     return ok(injectAgentsMd(dir, folder));
+  },
+
+  // --- Backlog: a note written before any agent has run ---
+
+  backlogAdd: ({ title, description = '', folder = null }) => {
+    if (folder) safeFolder(folder);
+    const res = ok(createBacklog({ title, description, folder: folder || null }));
+    data.refreshMany([res.session.id]);
+    return { id: res.session.id };
+  },
+
+  backlogUpdate: ({ id, title, description }) => {
+    const { session } = ok(findSession(id));
+    need(isBacklog(session), `not a backlog item: ${id}`);
+    need(typeof title !== 'string' || title.trim(), 'backlog needs a title');
+    ok(setContent(session.id, { title, summary: description }));
+    data.refreshMany([session.id]);
+    return { ok: true };
+  },
+
+  // Same steps as `mycelium backlog open`: seed the folder's knowledge into
+  // the project's AGENTS.md (best effort), compose the seed, stamp the item as
+  // started. The seed carries the item's marker, so whichever terminal runs
+  // it, the next scan swaps the item for the session it became. `prompt` is
+  // returned too, for a client that puts it somewhere other than argv.
+  backlogOpen: ({ id, agentKey, dir, allowMissingBin = false, extraPath }) => {
+    const { session } = ok(findSession(id));
+    need(isBacklog(session), `not a backlog item: ${id}`);
+    const seed = ok(buildBacklogSeed(session.id));
+    const cmd = ok(newCommandLine({ agentKey, dir, seed: seed.prompt }, { requireBin: !allowMissingBin, env: pathEnv(extraPath) }));
+    if (session.folder) {
+      try {
+        injectAgentsMd(dir, session.folder);
+      } catch {
+        /* no KNOWLEDGE yet: the agent just starts fresh */
+      }
+    }
+    ok(markBacklogEntered(session.id));
+    data.refreshMany([session.id]);
+    return { ...cmd, prompt: seed.prompt };
   },
 
   // --- LLM steps (auto-summarize, smart organize, folder knowledge) ---

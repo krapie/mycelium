@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- **Backlog**: *Add Backlog Item* writes a note to start later; *Start* hands it to an agent as the first prompt, and *Edit* changes it. Backlog pages now show the notes with Start and Edit instead of disabled Resume buttons. Needs a `mycelium` CLI newer than 0.5.4.
+
 ## 0.2.4
 
 - **Delete Session**: right-click a session (or use *Delete* on its page) to remove it from Mycelium. The agent's own log is kept and the session isn't captured again. Needs `mycelium` CLI 0.5.4.

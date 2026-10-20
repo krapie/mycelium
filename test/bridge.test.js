@@ -212,3 +212,34 @@ test('doctor returns the environment report', async () => {
   assert.ok(Array.isArray(result.agents));
   assert.ok(Array.isArray(result.path));
 });
+
+test('backlogAdd, backlogUpdate and backlogOpen write a note, edit it, and hand back a seeded start command', async () => {
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'bridge-backlog-'));
+
+  assert.match((await call('backlogAdd', { title: '  ' })).error.message, /needs a title/);
+  assert.match((await call('backlogAdd', { title: 'x', folder: '../escape' })).error.message, /invalid folder/);
+
+  const { id } = (await call('backlogAdd', { title: 'Add rate limiting', description: 'per-IP, 100/min' })).result;
+  const row = (await call('sessions', {})).result.find((r) => r.id === id);
+  assert.equal(row.kind, 'backlog');
+  assert.equal(row.title, 'Add rate limiting');
+
+  assert.equal((await call('backlogUpdate', { id, title: 'Add rate limiter', description: 'per-IP, 50/min' })).result.ok, true);
+  const d = (await call('detail', { id })).result;
+  assert.equal(d.extracted.title, 'Add rate limiter');
+  assert.equal(d.extracted.summary, 'per-IP, 50/min');
+  assert.match((await call('backlogUpdate', { id, title: '' })).error.message, /needs a title/);
+  assert.match((await call('backlogUpdate', { id: 'aaaaaaaa-1111', title: 'nope' })).error.message, /not a backlog item/);
+
+  const cmd = (await call('backlogOpen', { id, agentKey: 'claude', dir, allowMissingBin: true })).result;
+  assert.equal(cmd.cwd, dir);
+  // The seed is built from the edited text and carries the marker scan() redeems.
+  assert.match(cmd.prompt, /Add rate limiter/);
+  assert.match(cmd.prompt, /per-IP, 50\/min/);
+  assert.ok(cmd.args.some((a) => a === cmd.prompt));
+  assert.ok((await call('detail', { id })).result.doneAt);
+  assert.match((await call('backlogOpen', { id: 'aaaaaaaa-1111', agentKey: 'claude', dir, allowMissingBin: true })).error.message, /not a backlog item/);
+});

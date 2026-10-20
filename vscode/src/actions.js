@@ -20,6 +20,7 @@ const ACTIONS = [
   ['knowledge', 'book', 'mycelium.extractKnowledge'],
   ['search', 'search', 'mycelium.search'],
   ['newAgent', 'add', 'mycelium.newAgent'],
+  ['backlog', 'checklist', 'mycelium.backlogAdd'],
   ['review', 'bell-dot', 'mycelium.reviewKnowledge'],
   ['guide', 'question', 'mycelium.openGuide'],
 ];

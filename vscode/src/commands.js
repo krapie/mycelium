@@ -301,6 +301,71 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
     await startSession({ name: agent.label, cwd: cmd.cwd, bin: cmd.bin, args: cmd.args, key: agent.key, panel, binMissing: cmd.binMissing });
   });
 
+  // A CLI from before these methods answers "unknown method"; say what to do
+  // about it instead of showing that.
+  const backlogRequest = async (method, params, viaCli = false) => {
+    try {
+      return await (viaCli ? askCli(method, params) : client.request(method, params));
+    } catch (err) {
+      if (/unknown method/.test(err.message)) throw new Error(t.backlogUpdateOld, { cause: err });
+      throw err;
+    }
+  };
+
+  // The note's title is its identity in every list; the notes are what the
+  // agent is told. Esc at either prompt cancels, an empty notes box is fine.
+  const askBacklogText = async (title = '', notes = '') => {
+    const newTitle = await vscode.window.showInputBox({ prompt: t.backlogAddPrompt, value: title, validateInput: (v) => (v.trim() ? undefined : t.backlogAddPrompt) });
+    if (newTitle === undefined) return undefined;
+    const newNotes = await vscode.window.showInputBox({ prompt: t.backlogNotesPrompt, value: notes });
+    if (newNotes === undefined) return undefined;
+    return { title: newTitle.trim(), description: newNotes.trim() };
+  };
+
+  run('mycelium.backlogAdd', async (el) => {
+    const inFolder = el && el.type === 'folder';
+    const folder = inFolder ? el.path : await pickFolder({ allowRoot: true });
+    if (folder === undefined) return;
+    const text = await askBacklogText();
+    if (!text) return;
+    const { id } = await backlogRequest('backlogAdd', { ...text, folder: folder || null });
+    await refresh();
+    await panel.show(id);
+  });
+
+  run('mycelium.backlogEdit', async (el) => {
+    const [row] = rowsOf(el);
+    if (!row) return;
+    const d = await client.request('detail', { id: row.id });
+    const text = await askBacklogText((d.extracted && d.extracted.title) || '', (d.extracted && d.extracted.summary) || '');
+    if (!text) return;
+    await backlogRequest('backlogUpdate', { id: row.id, ...text });
+    await refresh();
+    await panel.reload();
+  });
+
+  run('mycelium.backlogStart', async (el) => {
+    const [row] = rowsOf(el);
+    if (!row) return;
+    const d = await client.request('detail', { id: row.id });
+    // Started but never captured stays listed on purpose (a lost clipboard, a
+    // closed terminal), so a second start is allowed, after asking.
+    if (d.doneAt) {
+      const yes = await vscode.window.showWarningMessage(t.backlogRestart, { modal: true }, t.backlogStart);
+      if (yes !== t.backlogStart) return;
+    }
+    const agent = await pickAgent('Start which agent?');
+    if (!agent) return;
+    const dir = (await pickDir(row.folder || d.folder)) || undefined;
+    if (!dir) return vscode.window.showWarningMessage('Mycelium: open a folder first, so there is somewhere to start the agent');
+    const panelLaunch = agent.key === 'claude';
+    const cmd = await backlogRequest('backlogOpen', { id: row.id, agentKey: agent.key, dir, allowMissingBin: panelLaunch }, true);
+    // Into Claude Code's panel the note is put in the input box, ready to send
+    await startSession({ name: `${agent.label} ← ${row.title || row.id.slice(0, 8)}`, cwd: cmd.cwd, bin: cmd.bin, args: cmd.args, key: agent.key, panel: panelLaunch ? { prompt: cmd.prompt } : undefined, binMissing: cmd.binMissing });
+    await refresh();
+    await panel.reload();
+  });
+
   run('mycelium.injectAgentsMd', async (el) => {
     const folder = el && el.type === 'folder' ? el.path : await pickFolder();
     if (!folder) return;
@@ -377,6 +442,7 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
       { label: `$(sparkle) ${t.menuOrganize}`, cmd: 'mycelium.organize' },
       { label: `$(search) ${t.menuSearch}`, cmd: 'mycelium.search' },
       { label: `$(add) ${t.menuNewAgent}`, cmd: 'mycelium.newAgent' },
+      { label: `$(checklist) ${t.menuBacklog}`, cmd: 'mycelium.backlogAdd' },
       { label: `$(book) ${t.menuGuide}`, cmd: 'mycelium.openGuide' },
       { label: `$(list-tree) ${t.menuOpen}`, cmd: 'workbench.view.extension.mycelium' },
     ];
