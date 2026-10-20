@@ -195,10 +195,10 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
     qp.matchOnDescription = qp.matchOnDetail = true;
     let timer;
     let seq = 0;
-    const buttons = [
-      { iconPath: new vscode.ThemeIcon('play'), tooltip: t.resume },
-      { iconPath: new vscode.ThemeIcon('arrow-swap'), tooltip: t.handoff },
-    ];
+    const resumeButton = { iconPath: new vscode.ThemeIcon('play'), tooltip: t.resume };
+    const handoffButton = { iconPath: new vscode.ThemeIcon('arrow-swap'), tooltip: t.handoff };
+    // A backlog note has no agent session to resume or hand off; it only starts.
+    const startButton = { iconPath: new vscode.ThemeIcon('play'), tooltip: t.backlogStart };
     const load = async (q) => {
       const mine = ++seq;
       qp.busy = true;
@@ -210,7 +210,7 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
           description: [relativeTime(r.startedAt, Date.now(), language), r.folder || t.unfiled].filter(Boolean).join(' · '),
           detail: r.snippet || r.summary || undefined,
           iconPath: new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor(`mycelium.agent.${agentKey(r)}`)),
-          buttons,
+          buttons: r.kind === 'backlog' ? [startButton] : [resumeButton, handoffButton],
           row: r,
         }));
       } finally {
@@ -228,7 +228,8 @@ function register(ctx, { client, panel, refresh, foldersView, language, log }) {
     });
     qp.onDidTriggerItemButton((e) => {
       qp.hide();
-      vscode.commands.executeCommand(e.button === buttons[0] ? 'mycelium.resume' : 'mycelium.handoff', { type: 'session', row: e.item.row });
+      const command = e.item.row.kind === 'backlog' ? 'mycelium.backlogStart' : e.button === resumeButton ? 'mycelium.resume' : 'mycelium.handoff';
+      vscode.commands.executeCommand(command, { type: 'session', row: e.item.row });
     });
     qp.onDidHide(() => qp.dispose());
     qp.show();
