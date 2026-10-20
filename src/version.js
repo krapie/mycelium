@@ -15,3 +15,18 @@ import { readFileSync } from 'node:fs';
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url)));
 
 export const VERSION = pkg.version;
+
+/**
+ * The version currently on disk, which differs from VERSION once the package
+ * is reinstalled underneath a running process (#203). A reinstall can leave
+ * package.json briefly missing or half-written, so any failure returns null
+ * ("unknown"), never a version.
+ */
+export function installedVersion() {
+  try {
+    const v = JSON.parse(readFileSync(new URL('../package.json', import.meta.url))).version;
+    return typeof v === 'string' ? v : null;
+  } catch {
+    return null;
+  }
+}

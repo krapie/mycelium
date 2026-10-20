@@ -546,7 +546,18 @@ As a user, I can **pin part of a captured conversation — one answer, or a shor
   `MYCELIUM_NO_AUTOSTART`. [untested]
 - **Explicit detached daemon** (`mycelium daemon --detach`/`--stop`).
   `spawnDetachedDaemon()`/`stopDetachedDaemon()`. Idempotent via pidfile
-  and liveness check. [untested]
+  and liveness check. The started version is recorded in `daemon.version`;
+  `--detach` replaces a daemon on a different (or untracked) version
+  instead of reporting "already running". [partial]
+  (`test/daemon-process.test.js`; the real spawn is faked via a `kill` seam)
+- **A detached daemon survives a CLI update (#203).** `runDaemon()`'s
+  `onUpgrade` checks `package.json` on disk every minute (two consecutive polls must agree); on a version
+  change the standalone daemon starts a replacement
+  (`handOverToFreshDaemon()`) and exits. A daemon that doesn't own the
+  pidfile (launchd/systemd) just exits for its supervisor to restart. An
+  unreadable `package.json` mid-reinstall counts as "no change". `mycelium
+  doctor` shows a stale daemon. [partial] (`test/daemon-process.test.js`,
+  `test/doctor.test.js`; the timer wiring itself is untested)
 
 ## Agents / Adapters (`src/agents.js`, `src/adapters/*`)
 

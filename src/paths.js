@@ -24,6 +24,7 @@ export const DB_PATH = join(DB_DIR, 'index.db');
 export const CONFIG_PATH = join(HOME, 'config.json');
 export const INBOX = join(TREE_DIR, '_inbox');
 export const DAEMON_PID_PATH = join(HOME, 'daemon.pid'); // same file scripts/run.sh writes
+export const DAEMON_VERSION_PATH = join(HOME, 'daemon.version'); // version the detached daemon was started with (#203)
 export const DAEMON_LOG_PATH = join(HOME, 'daemon.log');
 
 export function ensureDirs() {
