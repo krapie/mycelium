@@ -11,7 +11,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { delimiter } from 'node:path';
 import { VERSION } from './version.js';
-import { HOME, RAW_DIR, DB_PATH, DAEMON_PID_PATH, DAEMON_LOG_PATH } from './paths.js';
+import { HOME, RAW_DIR, DB_PATH, DAEMON_PID_PATH, DAEMON_VERSION_PATH, DAEMON_LOG_PATH } from './paths.js';
 import { loadConfig, contentLocale } from './config.js';
 import { AGENTS, whichPath } from './agents.js';
 import { providerBin } from './llm.js';
@@ -26,6 +26,21 @@ const lastLine = (file) => {
   } catch {
     return null;
   }
+};
+
+// A detached daemon keeps the code it started with, so one older than the
+// installed CLI is the cause of "fixed bug still happens" reports (#203).
+const daemonState = () => {
+  if (!existsSync(DAEMON_PID_PATH)) return 'not running';
+  if (!pidAlive(DAEMON_PID_PATH)) return 'stale pid file';
+  let started = null;
+  try {
+    started = readFileSync(DAEMON_VERSION_PATH, 'utf8').trim() || null;
+  } catch {
+    // daemon predates version tracking
+  }
+  if (started === VERSION) return `running (v${started})`;
+  return `running (v${started ?? 'unknown'}, installed ${VERSION}: stale, run mycelium daemon --detach)`;
 };
 
 const pidAlive = (file) => {
@@ -73,7 +88,7 @@ export function collectDiagnostics({ extraPath, env = process.env, platform = pr
     store: {
       sessions: raw,
       index: existsSync(DB_PATH),
-      daemon: existsSync(DAEMON_PID_PATH) ? (pidAlive(DAEMON_PID_PATH) ? 'running' : 'stale pid file') : 'not running',
+      daemon: daemonState(),
       lastLog: lastLine(DAEMON_LOG_PATH),
     },
     sync: cfg.sync?.remote ? { remote: redactUrl(cfg.sync.remote), mode: cfg.sync.mode } : null,

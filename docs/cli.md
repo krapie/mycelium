@@ -111,10 +111,10 @@ Not meant to be run by hand. The VS Code extension (see [VS Code](./vscode.md)) 
 
 If you want scanning, organizing, and digests to keep running without the TUI open (headless use, always on a server), start a detached daemon process explicitly:
 ```sh
-mycelium daemon --detach    # no-op if already running (idempotent); logs to ~/.mycelium/daemon.log
+mycelium daemon --detach    # no-op if already running the current version (idempotent); logs to ~/.mycelium/daemon.log
 mycelium daemon --stop      # stops it if running, no-op otherwise
 ```
-Works the same way whether you installed with `npm install -g` or via `git clone` (use `node src/cli.js daemon --detach` in the latter case if you skipped `npm link`). There's no auto-start on reboot; wire `mycelium daemon --detach` into launchd, systemd, or cron yourself if you want that. **A daemon started this way keeps running whatever code was current when it started.** After updating mycelium, run `mycelium daemon --stop` then `--detach` again to pick up the new code.
+Works the same way whether you installed with `npm install -g` or via `git clone` (use `node src/cli.js daemon --detach` in the latter case if you skipped `npm link`). There's no auto-start on reboot; wire `mycelium daemon --detach` into launchd, systemd, or cron yourself if you want that. After you update mycelium, the running daemon notices within a minute and restarts itself on the new code. `mycelium daemon --detach` also replaces a daemon that is on a different version, and `mycelium doctor` flags a stale one. If you run `mycelium daemon` under launchd or systemd, the daemon exits after an update so your supervisor restarts it.
 
 Background upkeep's intervals and limits are all environment variable tunable. The defaults are conservative on purpose, so a large backlog doesn't pile up LLM processes all at once. That pile-up is exactly what caused Claude's console window to keep popping up on Windows, [#3](https://github.com/krapie/mycelium/issues/3):
 

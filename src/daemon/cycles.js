@@ -14,6 +14,7 @@ import { tagAll } from '../learn.js';
 import { generateDigest, proposeKnowledgeRefreshes } from '../insight.js';
 import { loadConfig } from '../config.js';
 import { llmPreflight } from '../llm.js';
+import { VERSION, installedVersion } from '../version.js';
 
 // The cadence/policy layer: what runs, how often, and in what order — kept
 // separate from process.js's OS-level concerns (spawning/detaching/pidfiles).
@@ -210,12 +211,41 @@ export async function knowledgeReviewCycle(log) {
  * exists, without blocking the initial paint on a full scan (see
  * tui/index.js).
  */
-export async function runDaemon({ log = console, onFirstScanDone } = {}) {
+// Interval between checks that the installed package is still the version this
+// process loaded. Cheap (one small file read), so it is not tied to a cycle.
+const VERSION_CHECK_MS = Number(process.env.MYCELIUM_VERSION_CHECK_MS || 60 * 1000);
+
+/**
+ * True when the installed package is a different version than the one this
+ * process loaded. An unreadable package.json (mid-reinstall) is "no change".
+ */
+export function upgradedOnDisk(running = VERSION, onDisk = installedVersion()) {
+  return onDisk !== null && onDisk !== running;
+}
+
+/**
+ * `onUpgrade(from, to)`, if passed, fires once when a CLI update lands under
+ * this running process (#203): the in-memory code is stale from then on, so
+ * the standalone daemon uses it to hand over to a fresh process. The TUI's
+ * in-process upkeep omits it, since quitting the TUI already picks up new code.
+ */
+export async function runDaemon({ log = console, onFirstScanDone, onUpgrade } = {}) {
   log.log('Mycelium daemon starting (background upkeep: scan + digest + knowledge review + smart organize).');
   log.log(`  scan interval: ${SCAN_INTERVAL_MS}ms (tag batch limit ${TAG_BATCH_LIMIT})`);
   log.log(
     `  smart organize interval: ${SMART_ORGANIZE_INTERVAL_MS}ms (batch limit ${SMART_ORGANIZE_BATCH_LIMIT}, cooldown ${SMART_ORGANIZE_COOLDOWN_MS}ms, concurrency ${SUMMARIZE_CONCURRENCY})`,
   );
+
+  // Armed before the first cycles: those can run for a long time on a big backlog.
+  if (onUpgrade) {
+    const timer = setInterval(() => {
+      const to = installedVersion();
+      if (!upgradedOnDisk(VERSION, to)) return;
+      clearInterval(timer);
+      log.log(`[upgrade] installed version changed ${VERSION} -> ${to}; handing over to a fresh daemon`);
+      onUpgrade(VERSION, to);
+    }, VERSION_CHECK_MS);
+  }
 
   await scanCycle(log, { onScanned: onFirstScanDone });
   await digestCycle(log);

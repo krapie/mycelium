@@ -59,3 +59,20 @@ test('credentials in the sync remote never reach the report', async () => {
   const d = collectDiagnostics({ env: { PATH: '/x' }, platform: 'linux' });
   assert.equal(d.sync.remote, 'https://***@github.com/me/store.git');
 });
+
+test('collectDiagnostics flags a daemon running a different version than the installed CLI (#203)', async () => {
+  const { writeFileSync, rmSync } = await import('node:fs');
+  const { DAEMON_PID_PATH, DAEMON_VERSION_PATH } = await import('../src/paths.js');
+  const { VERSION } = await import('../src/version.js');
+  try {
+    writeFileSync(DAEMON_PID_PATH, String(process.pid));
+    assert.match(collectDiagnostics().store.daemon, /^running \(vunknown, installed .*stale/);
+    writeFileSync(DAEMON_VERSION_PATH, '0.0.1');
+    assert.match(collectDiagnostics().store.daemon, /v0\.0\.1, installed .*stale/);
+    writeFileSync(DAEMON_VERSION_PATH, VERSION);
+    assert.equal(collectDiagnostics().store.daemon, `running (v${VERSION})`);
+  } finally {
+    rmSync(DAEMON_PID_PATH, { force: true });
+    rmSync(DAEMON_VERSION_PATH, { force: true });
+  }
+});
