@@ -551,7 +551,7 @@ As a user, I can **pin part of a captured conversation — one answer, or a shor
   instead of reporting "already running". [partial]
   (`test/daemon-process.test.js`; the real spawn is faked via a `kill` seam)
 - **A detached daemon survives a CLI update (#203).** `runDaemon()`'s
-  `onUpgrade` checks `package.json` on disk every minute; on a version
+  `onUpgrade` checks `package.json` on disk every minute (two consecutive polls must agree); on a version
   change the standalone daemon starts a replacement
   (`handOverToFreshDaemon()`) and exits. A daemon that doesn't own the
   pidfile (launchd/systemd) just exits for its supervisor to restart. An

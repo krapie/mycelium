@@ -238,9 +238,19 @@ export async function runDaemon({ log = console, onFirstScanDone, onUpgrade } = 
 
   // Armed before the first cycles: those can run for a long time on a big backlog.
   if (onUpgrade) {
+    let pending = null;
     const timer = setInterval(() => {
       const to = installedVersion();
-      if (!upgradedOnDisk(VERSION, to)) return;
+      if (!upgradedOnDisk(VERSION, to)) {
+        pending = null;
+        return;
+      }
+      // npm can write package.json before the rest of the install; wait one
+      // more interval so a half-finished reinstall isn't launched against.
+      if (pending !== to) {
+        pending = to;
+        return;
+      }
       clearInterval(timer);
       log.log(`[upgrade] installed version changed ${VERSION} -> ${to}; handing over to a fresh daemon`);
       onUpgrade(VERSION, to);
