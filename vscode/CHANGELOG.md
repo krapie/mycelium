@@ -1,9 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 
-- **Backlog**: *Add Backlog Item* writes a note to start later; *Start* hands it to an agent as the first prompt, and *Edit* changes it. Backlog pages now show the notes with Start and Edit instead of disabled Resume buttons. Needs a `mycelium` CLI newer than 0.5.4.
-- **Calendar (experimental)**: a month grid of sessions by day, with the chosen day's sessions underneath (open, resume, hand off). Off by default; enable `mycelium.experimental.calendar`. Needs a `mycelium` CLI newer than 0.5.4.
+- **Backlog**: *Add Backlog Item* writes a note to start later; *Start* hands it to an agent as the first prompt, and *Edit* changes it. Backlog pages now show the notes with Start and Edit instead of disabled Resume buttons. Needs `mycelium` CLI 0.5.5.
+- **Calendar (experimental)**: a month grid of sessions by day, with the chosen day's sessions underneath (open, resume, hand off). Off by default; enable `mycelium.experimental.calendar`. Needs `mycelium` CLI 0.5.5.
+- **Copy Diagnostics**: *Mycelium: Copy Diagnostics* puts the extension's and the CLI's environment report on the clipboard, for bug reports. It also works when the CLI can't be found; the CLI side of the report needs `mycelium` CLI 0.5.5.
 
 ## 0.2.4
 
