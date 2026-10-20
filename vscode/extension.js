@@ -17,6 +17,7 @@ const { FoldersTree } = require('./src/tree.js');
 const { workspaceView, recentView, workspaceGroups } = require('./src/views.js');
 const { dndController } = require('./src/dnd.js');
 const { SessionPanel } = require('./src/panel.js');
+const { CalendarPanel } = require('./src/calendar-panel.js');
 const { ActionsView } = require('./src/actions.js');
 const { register, GUIDE } = require('./src/commands.js');
 const { launchDir, claim } = require('./src/launch.js');
@@ -114,12 +115,13 @@ async function activate(ctx) {
   const workspace = workspaceView(proxy, language);
   const recent = recentView(proxy, language);
   const panel = new SessionPanel(ctx, proxy, { language });
+  const calendar = new CalendarPanel(ctx, proxy, { language, sessionPanel: panel });
 
   const refresh = async () => {
     folders.refresh();
     workspace.refresh();
     recent.refresh();
-    await Promise.all([panel.reload(), updateStatus()]);
+    await Promise.all([panel.reload(), calendar.reload(), updateStatus()]);
   };
 
   const actionsView = vscode.window.createTreeView('mycelium.actions', { treeDataProvider: actions });
@@ -186,7 +188,7 @@ async function activate(ctx) {
     { dispose: () => { clearTimeout(debounce); watcher?.dispose(); client.dispose(); } },
   );
 
-  register(ctx, { client: proxy, panel, refresh, foldersView, language, log });
+  register(ctx, { client: proxy, panel, calendar, refresh, foldersView, language, log });
 
   // Sessions another window asked this one to start (see launch.js): any that
   // belong to a folder open here. Checked now — a window opened just for this

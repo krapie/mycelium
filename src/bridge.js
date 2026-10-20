@@ -146,6 +146,14 @@ export const METHODS = {
 
   tags: () => data.tags(),
 
+  // Sessions per day of one month ({ "20": 3, … }), by each session's last
+  // activity; a day's sessions come from `sessions({ date: 'YYYY-MM-DD' })`.
+  calendar: ({ year, month }) => {
+    need(Number.isInteger(year) && year >= 1970 && year <= 9999, `invalid year: ${year}`);
+    need(Number.isInteger(month) && month >= 1 && month <= 12, `invalid month: ${month}`);
+    return { year, month, counts: Object.fromEntries(data.sessionCountsByDay(year, month)) };
+  },
+
   scan: () => {
     const summary = scan();
     data.refresh();
