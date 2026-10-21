@@ -21,6 +21,18 @@ export const resumeArgs = (sessionId) => ['resume', sessionId];
 // in codex 0.162's exec_command environment list, not yet observed at
 // runtime: if it isn't set, `--here` just fails and asks for the id.
 export const sessionEnv = 'CODEX_THREAD_ID';
+// `$clip`. Codex 0.163 has skills (a directory per skill holding SKILL.md)
+// and no ~/.codex/prompts, so this is the only shape available here.
+export const commandInstall = {
+  dir: process.env.CODEX_SKILLS_DIR || join(homedir(), '.codex', 'skills'),
+  files: [{ from: 'codex/clip/SKILL.md', to: 'clip/SKILL.md' }],
+  // Codex's sandbox denies writes outside the workspace, so the skill can't
+  // reach the store until this is added. `mycelium setup` only ever PRINTS
+  // it: widening writable_roots moves a security boundary, which is the
+  // user's call, not a tool's. Nothing else here needs confirming, so this
+  // is the one adapter with a note.
+  note: (home) => ['Codex sandboxes writes. Add this to ~/.codex/config.toml so $clip can reach the store:', '', '  [sandbox_workspace_write]', `  writable_roots = ["${home}"]`].join('\n'),
+};
 
 // Codex stores rollouts under ~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl.
 // Verified against the real on-disk format (session_meta + event_msg lines).

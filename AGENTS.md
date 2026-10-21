@@ -38,7 +38,9 @@ src/
   llm.js              headless LLM calls via the user's own claude/codex CLI subscription
   bridge.js           method table behind `mycelium serve --stdio` (JSON-RPC for editor integrations; docs/vscode.md)
   agents.js           derives binFor/resumeArgsFor from the adapter registry
+  setup.js            installs agent-commands/ per adapter commandInstall; marker-stamped so a re-run never clobbers a user edit
   adapters/           one file per agent CLI (claude-code.js, codex.js, kiro.js) + index.js registry
+  agent-commands/     the /clip command shipped per agent (claude/, kiro/, codex/), installed by setup.js
   tui/                the neo-blessed interface — app.js (shell), views/ (sessions.js, calendar.js),
                        widgets/ (pickers.js, viewers.js), data.js (thin read layer over scanner+index-db),
                        tutorial.js + tutorial-data.js + tutorial-mock-llm.js + personas.js (first-run tour / `mycelium demo`)
