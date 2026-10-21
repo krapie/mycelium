@@ -335,3 +335,50 @@ test('opencode adapter never echoes a tool\'s raw command/query into toolActivit
   assert.ok(!joined.includes('API_KEY'), 'raw bash command must never be persisted');
   assert.ok(!joined.includes('roadmap'), 'raw search query must never be persisted');
 });
+
+test('kiro adapter lists and parses the kiro-cli 2.3x session store', () => {
+  const kiro = getAdapter('kiro');
+  const refs = kiro.listStoreSessions(join(FIXTURES, 'kiro-store'));
+  assert.deepEqual(refs.map((r) => r.id).sort(), ['cli_fixture-2_x', 'sess_fixture-1']);
+
+  const neutral = kiro.parse(refs.find((r) => r.id === 'sess_fixture-1'));
+  assert.equal(neutral.cwd, '/work/proj');
+  assert.equal(neutral.startedAt, '2026-10-20T07:00:00.000Z');
+  assert.equal(neutral.endedAt, '2026-10-20T07:05:00.000Z');
+  // Reasoning and bookkeeping events are not turns; only what was said is
+  assert.deepEqual(neutral.turns, [
+    { role: 'user', text: 'What does Glacier Instant Retrieval optimize for?' },
+    { role: 'assistant', text: 'Rarely accessed data that still needs millisecond retrieval.' },
+  ]);
+  assert.deepEqual(neutral.toolActivity, ['execute_bash: aws s3 ls']);
+
+  // no session.json: id from the directory name, still parsed
+  const bare = kiro.parse(refs.find((r) => r.id === 'cli_fixture-2_x'));
+  assert.equal(bare.turns.length, 1);
+  assert.equal(bare.cwd, null);
+});
+
+test('kiro adapter declares the session env var kiro-cli sets in its shell', () => {
+  assert.equal(getAdapter('kiro').sessionEnv, 'KIRO_SESSION_ID');
+});
+
+test('codex adapter declares the thread id env var it reads for --here', () => {
+  assert.equal(getAdapter('codex').sessionEnv, 'CODEX_THREAD_ID');
+});
+
+test('codex adapter reads Codex 0.16x item_completed messages, not bookkeeping', () => {
+  const neutral = getAdapter('codex').parse({ id: 'x', path: join(FIXTURES, 'codex-items-sample.jsonl') });
+  assert.equal(neutral.id, '01a0aaaa-0000-7000-8000-000000000001');
+  assert.equal(neutral.cwd, '/work/proj');
+  assert.deepEqual(neutral.turns, [
+    { role: 'user', text: 'How should I lay out the CDK stacks?' },
+    { role: 'assistant', text: 'One stack per lifecycle: network, data, app.' },
+    { role: 'user', text: '$clip' },
+  ]);
+  assert.deepEqual(neutral.toolActivity, ['exec_command: {"cmd":"ls"}']);
+});
+
+test('codex adapter leaves a subagent rollout (the auto_review guardian) empty, so it is never captured', () => {
+  const neutral = getAdapter('codex').parse({ id: 'g', path: join(FIXTURES, 'codex-guardian-sample.jsonl') });
+  assert.equal(neutral.turns.length, 0);
+});

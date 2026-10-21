@@ -66,6 +66,69 @@ export function createClip({ sessionId, from, to = from, note = '' } = {}) {
   return { ok: true, clip };
 }
 
+/**
+ * Where "the conversation so far" ends: one past the newest assistant turn.
+ * Trailing user turns are left out — a pin requested mid-conversation is
+ * itself the newest user turn whenever the agent records it as one, and it
+ * is never what's being pinned.
+ *
+ * `skipRequest` says the newest user turn IS that request, so this ends
+ * before it rather than merely at the newest assistant turn: an agent that
+ * runs the command itself (Kiro's prompts, Codex's skills; no pre-reply
+ * expansion like Claude Code's `!`) may say something first, and that
+ * sentence must not become "the last answer". Claude Code's command must not
+ * pass it: there the request isn't recorded as a turn at all, so the newest
+ * user turn is the question that was just answered.
+ */
+function answersEnd(turns, skipRequest) {
+  let to = turns.length;
+  if (skipRequest) {
+    const lastUser = turns.findLastIndex((t) => t.role === 'user');
+    if (lastUser >= 0) to = lastUser;
+  }
+  while (to > 0 && turns[to - 1].role !== 'assistant') to--;
+  return to;
+}
+
+/** The 1-based range of the last `n` turns ending at the newest answer — "the answer I just got". */
+export function lastTurnsRange(turns, n = 1, { skipRequest = false } = {}) {
+  if (!Number.isInteger(n) || n < 1) return { ok: false, error: '--last must be a positive integer' };
+  const to = answersEnd(turns, skipRequest);
+  if (!to) return { ok: false, error: 'no assistant turn to clip yet' };
+  return { ok: true, from: Math.max(1, to - n + 1), to };
+}
+
+/**
+ * The newest `count` answers up to that same end, oldest first, each with the
+ * question it followed — what an agent shows so the user can say which one
+ * to pin. `turn` is the 1-based number `--turn` takes.
+ *
+ * One per question: only the last assistant turn before the next user turn.
+ * An agent working through tool calls narrates between them ("Now the CLI…"),
+ * and listed as answers those fragments crowd out the ones worth pinning.
+ */
+export function recentAnswers(turns, count = 10, { skipRequest = false } = {}) {
+  const out = [];
+  const end = answersEnd(turns, skipRequest);
+  for (let i = end - 1; i >= 0 && out.length < count; i--) {
+    if (turns[i].role !== 'assistant') continue;
+    if (i < end - 1 && turns[i + 1].role === 'assistant') continue;
+    const q = turns.slice(0, i).findLast((t) => t.role === 'user');
+    out.unshift({ turn: i + 1, question: q ? q.text : '', answer: turns[i].text });
+  }
+  return out;
+}
+
+/** Replace a clip's note (empty clears it). */
+export function setClipNote(id, note) {
+  const p = clipPath(id);
+  if (!existsSync(p)) return { ok: false, error: `no clip ${id}` };
+  const clip = JSON.parse(readFileSync(p, 'utf8'));
+  clip.note = (note || '').trim() || null;
+  writeFileSync(p, JSON.stringify(clip, null, 2));
+  return { ok: true, clip };
+}
+
 /** The source session's CURRENT folder if it still exists, else the folder
  * it had when pinned — so moving a session (`m`) carries its clips along. */
 export function clipFolder(c) {

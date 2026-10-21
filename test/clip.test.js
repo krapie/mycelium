@@ -15,7 +15,7 @@ import { useTempHome } from './helpers.js';
 
 const home = useTempHome();
 
-const { createClip, listClips, findClip, deleteClip, clipFolder } = await import('../src/clip.js');
+const { createClip, listClips, findClip, deleteClip, clipFolder, lastTurnsRange, recentAnswers, setClipNote } = await import('../src/clip.js');
 const { saveRaw, loadRaw } = await import('../src/scanner.js');
 const { emptyNeutral } = await import('../src/schema.js');
 const { createBacklog } = await import('../src/backlog.js');
@@ -26,7 +26,16 @@ const { __setTestProvider, __clearTestProvider } = await import('../src/llm.js')
 test.afterEach(() => __clearTestProvider());
 
 const CLI_PATH = fileURLToPath(new URL('../src/cli.js', import.meta.url));
-const runCli = (args) => spawnSync(process.execPath, [CLI_PATH, ...args], { encoding: 'utf8', env: { ...process.env, MYCELIUM_HOME: home } });
+const runCli = (args, extraEnv = {}) => spawnSync(process.execPath, [CLI_PATH, ...args], { encoding: 'utf8', env: { ...process.env, MYCELIUM_HOME: home, ...extraEnv } });
+// --here scans first; MYCELIUM_DEMO_MODE keeps that scan off the real
+// ~/.claude etc. And CLAUDE_CODE_SESSION_ID is set explicitly either way:
+// run from inside Claude Code, the test process inherits the real one.
+const runHere = (args, sessionId) => {
+  const env = { ...process.env, MYCELIUM_HOME: home, MYCELIUM_DEMO_MODE: '1' };
+  delete env.CLAUDE_CODE_SESSION_ID;
+  if (sessionId) env.CLAUDE_CODE_SESSION_ID = sessionId;
+  return spawnSync(process.execPath, [CLI_PATH, ...args], { encoding: 'utf8', env });
+};
 
 function seed(id, folder, texts) {
   const n = emptyNeutral(id, 'claude');
@@ -127,4 +136,100 @@ test('mycelium clip add rejects a malformed --turn', () => {
   const res = runCli(['clip', 'add', 'clip-cli-bad', '--turn', 'two']);
   assert.equal(res.status, 1);
   assert.match(res.stderr, /Usage: mycelium clip/);
+});
+
+test('lastTurnsRange() ends at the newest assistant turn, skipping trailing user turns', () => {
+  const turns = ['q1', 'a1', 'q2', 'a2', '/clip keep this'].map((text, i) => ({ role: i % 2 ? 'assistant' : 'user', text }));
+  assert.deepEqual(lastTurnsRange(turns, 1), { ok: true, from: 4, to: 4 });
+  assert.deepEqual(lastTurnsRange(turns, 3), { ok: true, from: 2, to: 4 });
+  assert.deepEqual(lastTurnsRange(turns, 99), { ok: true, from: 1, to: 4 });
+  assert.equal(lastTurnsRange([{ role: 'user', text: 'q' }], 1).ok, false);
+  assert.equal(lastTurnsRange(turns, 0).ok, false);
+});
+
+test('setClipNote() replaces and clears a note', () => {
+  seed('clip-note', 'proj', ['q', 'a']);
+  const { id } = createClip({ sessionId: 'clip-note', from: 2 }).clip;
+  assert.equal(setClipNote(id, '  later  ').clip.note, 'later');
+  assert.equal(findClip(id).clip.note, 'later');
+  assert.equal(setClipNote(id, '').clip.note, null);
+  assert.equal(setClipNote('no-such-clip', 'x').ok, false);
+});
+
+test('mycelium clip add --here pins the last answer of the session the agent names', () => {
+  seed('clip-here-session', 'here', ['how do I cache?', 'Put cachePoint at each layer boundary.']);
+  const res = runHere(['clip', 'add', '--here'], 'clip-here-session');
+  assert.equal(res.status, 0, res.stderr);
+  const id = res.stdout.match(/^clipped (\w{8}) {2}clip-her turn 2 {2}here/)[1];
+  assert.match(res.stdout, /\[assistant\] Put cachePoint/);
+
+  assert.equal(runCli(['clip', 'note', id, 'caching', 'rule']).status, 0);
+  assert.equal(findClip(id).clip.note, 'caching rule');
+
+  const two = runHere(['clip', 'add', '--here', '--last', '2'], 'clip-here-session');
+  assert.match(two.stdout, /turns 1-2/);
+});
+
+test('mycelium clip add --here fails instead of guessing when the agent gives no session id', () => {
+  const none = runHere(['clip', 'add', '--here']);
+  assert.equal(none.status, 1);
+  assert.match(none.stderr, /pass the session id/);
+  const missing = runHere(['clip', 'add', '--here'], 'not-captured-anywhere');
+  assert.equal(missing.status, 1);
+  assert.match(missing.stderr, /not in the store/);
+  assert.equal(runHere(['clip', 'add', 'clip-here-session', '--here'], 'clip-here-session').status, 1);
+});
+
+test('lastTurnsRange() with skipRequest ends before the request turn, so what the agent says after it is never pinned', () => {
+  const turns = [
+    { role: 'user', text: 'q' },
+    { role: 'assistant', text: 'the answer' },
+    { role: 'user', text: '$clip keep this' },
+    { role: 'assistant', text: 'Sure, pinning it now.' },
+  ];
+  assert.deepEqual(lastTurnsRange(turns, 1, { skipRequest: true }), { ok: true, from: 2, to: 2 });
+  assert.deepEqual(lastTurnsRange(turns, 2, { skipRequest: true }), { ok: true, from: 1, to: 2 });
+  // without it (Claude Code: the request isn't a turn) the newest answer is it
+  assert.deepEqual(lastTurnsRange(turns, 1), { ok: true, from: 4, to: 4 });
+});
+
+test('mycelium clip add --here --skip-request pins the answer before the request turn', () => {
+  seed('clip-skip-session', 'here', ['q', 'the answer', '$clip', 'Pinning now.']);
+  const res = runHere(['clip', 'add', '--here', '--last', '1', '--skip-request'], 'clip-skip-session');
+  assert.equal(res.status, 0, res.stderr);
+  assert.match(res.stdout, /turn 2 /);
+  assert.match(res.stdout, /\[assistant\] the answer/);
+});
+
+test('recentAnswers() lists answers oldest first with the question each followed, up to the same end as --last', () => {
+  const turns = ['q1', 'a1', 'q2', 'a2', '$clip pick', 'Listing them now.'].map((text, i) => ({ role: i % 2 ? 'assistant' : 'user', text }));
+  assert.deepEqual(recentAnswers(turns, 10, { skipRequest: true }), [
+    { turn: 2, question: 'q1', answer: 'a1' },
+    { turn: 4, question: 'q2', answer: 'a2' },
+  ]);
+  assert.deepEqual(recentAnswers(turns, 1, { skipRequest: true }).map((a) => a.turn), [4]);
+  assert.deepEqual(recentAnswers(turns).map((a) => a.turn), [2, 4, 6]);
+  // narration between tool calls isn't listed, only each question's last answer
+  const narrated = [
+    { role: 'user', text: 'do it' },
+    { role: 'assistant', text: 'Core first.' },
+    { role: 'assistant', text: 'Now the CLI.' },
+    { role: 'assistant', text: 'Done: all tests pass.' },
+  ];
+  assert.deepEqual(recentAnswers(narrated), [{ turn: 4, question: 'do it', answer: 'Done: all tests pass.' }]);
+});
+
+test('mycelium clip add --here --list prints numbered answers; --here --turn pins one with its note', () => {
+  seed('clip-pick-session', 'here', ['first q', 'first answer', 'second q', 'second answer']);
+  const list = runHere(['clip', 'add', '--here', '--list'], 'clip-pick-session');
+  assert.equal(list.status, 0, list.stderr);
+  assert.match(list.stdout, /^ {4}2 {2}Q: first q\n {7}A: first answer$/m);
+  assert.match(list.stdout, /newest answer: --turn 4 .* --turn <5-N>-4/);
+  assert.equal(listClips({ sessionId: 'clip-pick-session' }).length, 0, '--list pins nothing');
+
+  const pin = runHere(['clip', 'add', '--here', '--turn', '2', '--note', "the first one's answer"], 'clip-pick-session');
+  assert.equal(pin.status, 0, pin.stderr);
+  assert.match(pin.stdout, /turn 2 .*\n {2}\[assistant\] first answer/);
+  assert.equal(listClips({ sessionId: 'clip-pick-session' })[0].note, "the first one's answer");
+  assert.match(runHere(['clip', 'add', '--here', '--turn', '1-4'], 'clip-pick-session').stdout, /turns 1-4/);
 });

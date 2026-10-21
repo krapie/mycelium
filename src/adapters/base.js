@@ -20,6 +20,10 @@
  *   resumeArgs(sessionId): string[]     — args to resume an EXISTING session
  *   listSessions(): SessionRef[]        — { id, path, mtimeMs } for every session on disk
  *   parse(ref): Neutral                 — parse ONE session file into the neutral schema
+ *   sessionEnv?: string                 — optional: the env var the CLI sets
+ *                                          in its tool shells to the current
+ *                                          session id (what `--here` reads,
+ *                                          see here.js). Omit if it has none.
  *
  * Adapters only ever READ the CLI's own session files — never write them,
  * never touch auth tokens. A parse failure must throw so the scanner can skip
