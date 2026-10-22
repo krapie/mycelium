@@ -22,18 +22,24 @@ const { createBacklog } = await import('../src/backlog.js');
 const { deleteSession, move } = await import('../src/organize.js');
 const { buildKnowledgeText } = await import('../src/insight.js');
 const { __setTestProvider, __clearTestProvider } = await import('../src/llm.js');
+const { ADAPTERS } = await import('../src/adapters/index.js');
 
 test.afterEach(() => __clearTestProvider());
 
 const CLI_PATH = fileURLToPath(new URL('../src/cli.js', import.meta.url));
 const runCli = (args, extraEnv = {}) => spawnSync(process.execPath, [CLI_PATH, ...args], { encoding: 'utf8', env: { ...process.env, MYCELIUM_HOME: home, ...extraEnv } });
 // --here scans first; MYCELIUM_DEMO_MODE keeps that scan off the real
-// ~/.claude etc. And CLAUDE_CODE_SESSION_ID is set explicitly either way:
-// run from inside Claude Code, the test process inherits the real one.
-const runHere = (args, sessionId) => {
+// ~/.claude etc. Every adapter's sessionEnv is cleared, not just Claude
+// Code's: run from inside any agent whose CLI exports one, the test process
+// inherits the real id, and resolveHere() prefers whichever transcript is
+// newest — so an inherited KIRO_SESSION_ID would quietly win over the id a
+// test passes. Derived from ADAPTERS so adding an agent can't leave this
+// list behind.
+const SESSION_ENVS = ADAPTERS.map((a) => a.sessionEnv).filter(Boolean);
+const runHere = (args, sessionId, envName = 'CLAUDE_CODE_SESSION_ID') => {
   const env = { ...process.env, MYCELIUM_HOME: home, MYCELIUM_DEMO_MODE: '1' };
-  delete env.CLAUDE_CODE_SESSION_ID;
-  if (sessionId) env.CLAUDE_CODE_SESSION_ID = sessionId;
+  for (const k of SESSION_ENVS) delete env[k];
+  if (sessionId) env[envName] = sessionId;
   return spawnSync(process.execPath, [CLI_PATH, ...args], { encoding: 'utf8', env });
 };
 
@@ -156,6 +162,23 @@ test('setClipNote() replaces and clears a note', () => {
   assert.equal(setClipNote('no-such-clip', 'x').ok, false);
 });
 
+test('setClipNote() leaves no temp file behind, and a stray one is never read as a clip', async () => {
+  const { readdirSync, writeFileSync: write } = await import('node:fs');
+  const { CLIPS_DIR } = await import('../src/paths.js');
+  seed('clip-note-atomic', 'proj', ['q', 'a']);
+  const { id } = createClip({ sessionId: 'clip-note-atomic', from: 2 }).clip;
+
+  setClipNote(id, 'renamed into place');
+  assert.deepEqual(readdirSync(CLIPS_DIR).filter((f) => f.endsWith('.tmp')), [], 'the rename should have consumed it');
+
+  // A temp file left by a killed process must not surface as a clip, nor
+  // break the ones that are fine — it isn't *.json, so it never gets read.
+  const before = listClips({ sessionId: 'clip-note-atomic' }).length;
+  write(`${CLIPS_DIR}/${id}.json.99999.tmp`, '{ truncated');
+  assert.equal(listClips({ sessionId: 'clip-note-atomic' }).length, before);
+  assert.equal(findClip(id).clip.note, 'renamed into place');
+});
+
 test('mycelium clip add --here pins the last answer of the session the agent names', () => {
   seed('clip-here-session', 'here', ['how do I cache?', 'Put cachePoint at each layer boundary.']);
   const res = runHere(['clip', 'add', '--here'], 'clip-here-session');
@@ -178,6 +201,26 @@ test('mycelium clip add --here fails instead of guessing when the agent gives no
   assert.equal(missing.status, 1);
   assert.match(missing.stderr, /not in the store/);
   assert.equal(runHere(['clip', 'add', 'clip-here-session', '--here'], 'clip-here-session').status, 1);
+});
+
+test('every adapter sessionEnv is cleared, so running the suite inside one agent cannot leak into another', () => {
+  // The defect this guards: the helper used to clear only Claude Code's var,
+  // so `npm test` inside kiro-cli or Codex ran with a real id inherited and
+  // --here resolved that session instead of the one a test names.
+  assert.deepEqual(SESSION_ENVS.slice().sort(), ADAPTERS.filter((a) => a.sessionEnv).map((a) => a.sessionEnv).sort());
+
+  // Any adapter's var is a real input, not just Claude Code's: an id passed
+  // through Kiro's must be *read* ("not in the store"), not ignored ("pass
+  // the session id"). Those two errors are how we tell the difference.
+  const viaKiro = runHere(['clip', 'add', '--here'], 'no-such-session-anywhere', 'KIRO_SESSION_ID');
+  assert.equal(viaKiro.status, 1);
+  assert.match(viaKiro.stderr, /not in the store/, 'KIRO_SESSION_ID must be read, not dropped');
+
+  // And with nothing set at all, the suite must not pick up an id inherited
+  // from whichever agent a contributor happens to be running it inside.
+  const none = runHere(['clip', 'add', '--here']);
+  assert.equal(none.status, 1);
+  assert.match(none.stderr, /pass the session id/);
 });
 
 test('lastTurnsRange() with skipRequest ends before the request turn, so what the agent says after it is never pinned', () => {

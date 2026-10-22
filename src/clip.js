@@ -8,7 +8,7 @@
  */
 
 import { randomUUID } from 'node:crypto';
-import { existsSync, readdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync, renameSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { CLIPS_DIR, ensureDirs } from './paths.js';
 import { loadRaw } from './scanner.js';
@@ -119,13 +119,26 @@ export function recentAnswers(turns, count = 10, { skipRequest = false } = {}) {
   return out;
 }
 
-/** Replace a clip's note (empty clears it). */
+/**
+ * Replace a clip's note (empty clears it).
+ *
+ * Written to a sibling temp file and renamed, unlike createClip() above and
+ * the rest of the store, because this is the one read-modify-write over a
+ * file that already holds data worth keeping: interrupted halfway, a plain
+ * truncating write leaves a clip that listClips() then skips as unparseable,
+ * and a clip whose source session is gone has no other copy. rename(2) within
+ * one directory is atomic, so a reader sees either the old clip or the new
+ * one. (The same applies to raw/<id>.json's in-place updates — tracked
+ * separately, not worth changing the whole store layer from here.)
+ */
 export function setClipNote(id, note) {
   const p = clipPath(id);
   if (!existsSync(p)) return { ok: false, error: `no clip ${id}` };
   const clip = JSON.parse(readFileSync(p, 'utf8'));
   clip.note = (note || '').trim() || null;
-  writeFileSync(p, JSON.stringify(clip, null, 2));
+  const tmp = `${p}.${process.pid}.tmp`;
+  writeFileSync(tmp, JSON.stringify(clip, null, 2));
+  renameSync(tmp, p);
   return { ok: true, clip };
 }
 
