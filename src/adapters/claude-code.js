@@ -35,6 +35,9 @@ export const label = 'Claude Code';
 export const bin = 'claude';
 export const newArgs = (seed) => (seed ? [seed] : []);
 export const resumeArgs = (sessionId) => ['--resume', sessionId];
+// Set in the Bash tool's environment (and `!` command expansions) to the id
+// of the transcript file below — checked against Claude Code 2.1.303.
+export const sessionEnv = 'CLAUDE_CODE_SESSION_ID';
 
 // Claude Code stores one dir per encoded cwd under ~/.claude/projects/, each
 // containing <sessionId>.jsonl transcripts. Verified against the real layout.

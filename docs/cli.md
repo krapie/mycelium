@@ -25,6 +25,13 @@ mycelium clip add <session>                    # no --turn: print the session's 
 mycelium clip add <session> --turn 12-13 --note "prompt caching layout"
 mycelium clip list [--folder f] [--session s]
 mycelium clip show <clip> / rm <clip>
+mycelium clip note <clip> "new note"           # replace (or, with nothing after the id, clear) a clip's note
+mycelium clip add --here [--last N]            # from inside an agent: the session it's in, its last N turns ending at the newest answer (default 1)
+                                               # --skip-request: the newest user turn is the pin request itself, end before it
+mycelium clip add --here --list [N]            # the N (default 10) newest answers, one per question, with the turn numbers --turn takes
+                                               # Claude Code: copy src/agent-commands/claude/clip.md to ~/.claude/commands/ and type /clip [note]
+                                               # Kiro CLI: copy src/agent-commands/kiro/clip.md to ~/.kiro/prompts/ and type @clip [note]
+                                               # Codex: copy the src/agent-commands/codex/clip/ directory to ~/.codex/skills/ and type $clip [note] (not yet verified end to end)
 
 # Learn
 mycelium autotag                               # retroactively summarize/tag past sessions in bulk
