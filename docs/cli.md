@@ -153,6 +153,7 @@ Background upkeep's intervals and limits are all environment variable tunable. T
 |---|---|---|
 | `MYCELIUM_SCAN_MS` | 5 min | Scan (capture) interval |
 | `MYCELIUM_SYNC_MS` | 2 min | Sync interval, once `mycelium sync init` has run (see [Sync](./sync.md)) |
+| `MYCELIUM_SYNC_TIMEOUT_MS` | 2 min | Deadline for one sync `fetch`/`push` before it is given up on (a stalled one would otherwise hold the sync lock forever); raise it for a very large first push |
 | `MYCELIUM_TAG_BATCH_LIMIT` | 20 | Max sessions auto-summarized/tagged per scan cycle (oldest first, rest next cycle) |
 | `MYCELIUM_SMART_ORGANIZE_MS` | 30 min | Smart-organize auto-compute interval |
 | `MYCELIUM_SMART_ORGANIZE_LIMIT` | 100 | Max sessions classified per smart-organize cycle |

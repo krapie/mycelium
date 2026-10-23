@@ -13,7 +13,7 @@ import { HOME, SYNC_LOCK_PATH } from '../paths.js';
 import { machineName } from '../config.js';
 import { loadRaw } from '../scanner.js';
 import { reindex, reindexOne, removeFromIndex } from '../index-db.js';
-import { git, syncSettings, syncMode, machineBranch, updateSyncSettings, registerMergeDrivers, BRANCH } from './git.js';
+import { git, syncSettings, syncMode, machineBranch, updateSyncSettings, registerMergeDrivers, BRANCH, NET_TIMEOUT_MS } from './git.js';
 import { mergeSession } from './merge.js';
 
 // Both the TUI's in-process upkeep and a detached `mycelium daemon` can run on
@@ -96,32 +96,47 @@ async function head() {
 }
 
 // Commits are authored by the machine, not whoever's global git identity
-// happens to be configured (a home server often has none at all).
+// happens to be configured (a home server often has none at all), and never
+// signed: a global commit.gpgsign=true would make every unattended commit
+// fail or wait on a passphrase.
 function asMachine() {
   const me = machineName();
-  return ['-c', `user.name=${me}`, '-c', `user.email=${me}@mycelium.local`];
+  return ['-c', `user.name=${me}`, '-c', `user.email=${me}@mycelium.local`, '-c', 'commit.gpgsign=false'];
 }
 
+/**
+ * Commit whatever changed. `{ ok: true }` when that worked or there was
+ * nothing to commit. A failure is returned, not swallowed: pushing the old
+ * HEAD and reporting "sent" would silently leave new sessions behind.
+ * --no-verify so a user's own pre-commit hook can't block the daemon.
+ */
 async function commitAll(message) {
-  await git(['add', '-A']);
-  if ((await git(['diff', '--cached', '--quiet'])).ok) return false;
-  return (await git([...asMachine(), 'commit', '-q', '-m', message])).ok;
+  const a = await git(['add', '-A']);
+  if (!a.ok) return { ok: false, error: `git add failed: ${a.stderr}` };
+  if ((await git(['diff', '--cached', '--quiet'])).ok) return { ok: true };
+  const c = await git([...asMachine(), 'commit', '-q', '--no-verify', '-m', message]);
+  return c.ok ? { ok: true } : { ok: false, error: `commit failed: ${c.stderr}` };
 }
 
 /**
  * A file one machine deleted and the other edited: the deletion wins. A
  * delete is a deliberate act (deleteSession() also records the id in
  * excluded.txt), and a consumed backlog item is deleted on purpose too.
- * `keepTheirEdits` is for merging a pushing machine into the central store
+ * `keepOurs` is for merging a pushing machine into the central store
  * (collect): a deletion THERE doesn't reach this store, so a file they
  * deleted and we edited stays.
+ *
+ * -z because the default porcelain output quotes (and octal-escapes) any
+ * path with a space or non-ASCII character, e.g. a Korean folder name, and
+ * the quoted form isn't a path `git rm`/`git add` accept.
  */
 async function resolveDeleteConflicts({ keepOurs = false } = {}) {
-  const st = await git(['status', '--porcelain']);
-  for (const line of st.stdout.split('\n')) {
-    const code = line.slice(0, 2);
-    if (code === 'UD' && keepOurs) await git(['add', '--', line.slice(3)]); // deleted by them
-    else if (code === 'DU' || code === 'UD') await git(['rm', '-q', '--', line.slice(3)]);
+  const st = await git(['status', '--porcelain', '-z']);
+  for (const entry of st.stdout.split('\0')) {
+    const code = entry.slice(0, 2);
+    const path = entry.slice(3);
+    if (code === 'UD' && keepOurs) await git(['add', '--', path]); // deleted by them
+    else if (code === 'DU' || code === 'UD') await git(['rm', '-q', '--', path]);
   }
   return !(await git(['diff', '--name-only', '--diff-filter=U'])).stdout;
 }
@@ -131,7 +146,7 @@ async function mergeRef(ref, { keepOurs = false } = {}) {
   if (m.ok) return { ok: true };
   if (!existsSync(join(HOME, '.git', 'MERGE_HEAD'))) return { ok: false, error: m.stderr || m.stdout };
   if (await resolveDeleteConflicts({ keepOurs })) {
-    const c = await git([...asMachine(), 'commit', '-q', '--no-edit']);
+    const c = await git([...asMachine(), 'commit', '-q', '--no-edit', '--no-verify']);
     if (c.ok) return { ok: true };
   }
   await git(['merge', '--abort']);
@@ -168,7 +183,8 @@ async function collectPushed() {
       .filter(Boolean);
     if (!gone.length) continue;
     await git(['checkout', pre, '--', ...gone]);
-    await commitAll(`sync: keep sessions deleted on ${ref.replace('origin/machines/', '')}`);
+    const kept = await commitAll(`sync: keep sessions deleted on ${ref.replace('origin/machines/', '')}`);
+    if (!kept.ok) return kept;
   }
   return { ok: true };
 }
@@ -206,7 +222,7 @@ async function deleteStaleBranches() {
   const stale = syncSettings()?.staleBranches || [];
   const left = [];
   for (const b of stale) {
-    const d = await git(['push', '-q', 'origin', '--delete', `refs/heads/${b}`]);
+    const d = await git(['push', '-q', 'origin', '--delete', `refs/heads/${b}`], { timeout: NET_TIMEOUT_MS });
     if (!d.ok && !/does not exist|not exist/.test(d.stderr)) left.push(b);
   }
   if (left.length !== stale.length) updateSyncSettings({ staleBranches: left });
@@ -219,8 +235,9 @@ async function deleteStaleBranches() {
  * repo was re-created).
  */
 async function pushOnly() {
-  await commitAll(`sync: ${machineName()}`);
-  const p = await git(['push', '-q', '--force', 'origin', `HEAD:refs/heads/${machineBranch()}`]);
+  const c = await commitAll(`sync: ${machineName()}`);
+  if (!c.ok) return c;
+  const p = await git(['push', '-q', '--force', 'origin', `HEAD:refs/heads/${machineBranch()}`], { timeout: NET_TIMEOUT_MS });
   if (p.missing) return { ok: false, error: p.stderr };
   if (!p.ok) return { ok: false, error: `push failed: ${p.stderr}` };
   await deleteStaleBranches();
@@ -244,10 +261,11 @@ export async function syncOnce() {
   try {
     await registerMergeDrivers();
     if (syncMode() === 'push') return await pushOnly();
-    await commitAll(`sync: ${machineName()}`);
+    const committed = await commitAll(`sync: ${machineName()}`);
+    if (!committed.ok) return committed;
     const before = await head();
     // --prune: a pushing machine that was renamed deletes its old branch.
-    const f = await git(['fetch', '-q', '--prune', 'origin']);
+    const f = await git(['fetch', '-q', '--prune', 'origin'], { timeout: NET_TIMEOUT_MS });
     if (f.missing) return { ok: false, error: f.stderr };
     if (!f.ok) return { ok: false, error: `fetch failed: ${f.stderr}` };
     const m = await mergeRemote();
@@ -257,14 +275,16 @@ export async function syncOnce() {
       if (!c.ok) return c;
     }
     unparkKnowledge();
-    await commitAll(`sync: ${machineName()} (knowledge proposals)`);
-    let p = await git(['push', '-q', 'origin', `HEAD:${BRANCH}`]);
-    if (!p.ok) {
-      // Another machine pushed between our fetch and push.
-      await git(['fetch', '-q', 'origin']);
-      const again = await mergeRemote();
-      if (!again.ok) return again;
-      p = await git(['push', '-q', 'origin', `HEAD:${BRANCH}`]);
+    const proposals = await commitAll(`sync: ${machineName()} (knowledge proposals)`);
+    if (!proposals.ok) return proposals;
+    let p = await git(['push', '-q', 'origin', `HEAD:${BRANCH}`], { timeout: NET_TIMEOUT_MS });
+    if (!p.ok && !p.timedOut) {
+      // Rejected: another machine pushed between our fetch and push.
+      const again = await git(['fetch', '-q', 'origin'], { timeout: NET_TIMEOUT_MS });
+      if (!again.ok) return { ok: false, error: `fetch failed: ${again.stderr}` };
+      const merged = await mergeRemote();
+      if (!merged.ok) return merged;
+      p = await git(['push', '-q', 'origin', `HEAD:${BRANCH}`], { timeout: NET_TIMEOUT_MS });
     }
     const changed = await reindexChanged(before, await head());
     if (!p.ok) return { ok: false, changed, error: `push failed: ${p.stderr}` };

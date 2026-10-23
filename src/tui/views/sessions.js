@@ -701,6 +701,9 @@ export function sessionsView(opts = {}) {
           listBox.focus();
           if (val === undefined) return; // Escape — no change
           state.host = val === '*' ? null : val;
+          // Selected ids are store-wide, so ones the new filter hides would
+          // still be what x/m/t act on.
+          state.selected.clear();
           reloadList();
           app.render();
         });

@@ -37,18 +37,27 @@ const GITATTRIBUTES = [
   '',
 ].join('\n');
 
+// A fetch/push that stalls would otherwise never return: it holds sync.lock
+// and the daemon's syncRunning flag, and since the first sync runs before the
+// first scan, nothing else in the daemon would ever start. Merges are never
+// given a deadline: killing one leaves MERGE_HEAD behind.
+export const NET_TIMEOUT_MS = Number(process.env.MYCELIUM_SYNC_TIMEOUT_MS || 2 * 60 * 1000);
+
 /**
  * Run git in the store. Never throws for a non-zero exit — callers decide
  * what a failure means. `batch` keeps ssh from prompting: the daemon runs
  * inside the TUI, where a password prompt would corrupt the screen and hang
- * the sync forever.
+ * the sync forever. For the same reason askpass helpers are emptied: VS
+ * Code's terminal exports its own GIT_ASKPASS, which would pop a credential
+ * dialog for an https remote. `timeout` (ms, 0 = none) kills a stalled call.
  */
-export function git(args, { batch = true } = {}) {
-  const env = { ...process.env, GIT_TERMINAL_PROMPT: '0' };
+export function git(args, { batch = true, timeout = 0 } = {}) {
+  const env = { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '', SSH_ASKPASS: '' };
   if (batch && !process.env.GIT_SSH_COMMAND) env.GIT_SSH_COMMAND = 'ssh -o BatchMode=yes';
   return new Promise((resolve) => {
-    execFile('git', args, { cwd: HOME, env, maxBuffer: 64 * 1024 * 1024 }, (err, stdout, stderr) => {
+    execFile('git', args, { cwd: HOME, env, timeout, maxBuffer: 64 * 1024 * 1024 }, (err, stdout, stderr) => {
       if (err?.code === 'ENOENT') return resolve({ ok: false, missing: true, stdout: '', stderr: 'git is not installed' });
+      if (err?.killed) return resolve({ ok: false, timedOut: true, stdout: '', stderr: `timed out after ${Math.round(timeout / 1000)}s` });
       resolve({ ok: !err, stdout: String(stdout).trim(), stderr: String(stderr).trim() });
     });
   });

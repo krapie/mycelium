@@ -10,7 +10,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, existsSync, readFileSync, writeFileSync, rmSync, chmodSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -290,4 +290,92 @@ test('renaming a one-way machine moves its remote branch, and the collecting mac
   phone.cli('sync', 'init', remote, '--name', 'phone');
   assert.equal(phone.raw('rn-4').host, 'phone');
   assert.match(branches(), /machines\/phone/);
+});
+
+test('a delete-vs-edit conflict in a folder with spaces and Korean letters in its name still resolves', { skip: !hasGit }, () => {
+  const root = mkdtempSync(join(tmpdir(), 'mycelium-quote-'));
+  const remote = join(root, 'remote.git');
+  const a = machine(join(root, 'a'));
+  const b = machine(join(root, 'b'));
+  a.cli('sync', 'host', remote);
+  seedSession(a, 'q-a', 'a');
+  seedSession(b, 'q-b', 'b');
+  a.cli('sync', 'init', remote, '--two-way');
+  b.cli('sync', 'init', remote, '--two-way');
+  const folder = '프로젝트/내 폴더';
+  const knowledge = (m) => join(m.home, 'tree', ...folder.split('/'), 'KNOWLEDGE.md');
+  mkdirSync(join(a.home, 'tree', ...folder.split('/')), { recursive: true });
+  writeFileSync(knowledge(a), '# v1\n');
+  a.cli('sync');
+  b.cli('sync');
+  assert.ok(existsSync(knowledge(b)));
+
+  // One machine deletes the file, the other edits it.
+  rmSync(knowledge(a));
+  a.cli('sync');
+  writeFileSync(knowledge(b), '# v2, edited elsewhere\n');
+  // git quotes a path like this in `status --porcelain`, so an unparsed one used to leave the merge stuck.
+  b.cli('sync');
+  assert.equal(existsSync(knowledge(b)), false, 'the deletion wins');
+  a.cli('sync');
+  assert.equal(existsSync(knowledge(a)), false);
+});
+
+test('a commit that cannot be made is reported, not silently skipped', { skip: !hasGit }, () => {
+  const root = mkdtempSync(join(tmpdir(), 'mycelium-commit-'));
+  const remote = join(root, 'remote.git');
+  const m = machine(join(root, 'm'));
+  m.cli('sync', 'host', remote);
+  seedSession(m, 'c-1', 'laptop');
+  m.cli('sync', 'init', remote);
+
+  // A stuck index (a crashed git, a second process) makes `git add` fail.
+  seedSession(m, 'c-2', 'laptop');
+  writeFileSync(join(m.home, '.git', 'index.lock'), '');
+  assert.throws(() => m.cli('sync'), (err) => /git add failed/.test(err.stderr) && !/sent/.test(err.stdout));
+  rmSync(join(m.home, '.git', 'index.lock'));
+  assert.match(m.cli('sync'), /sent/);
+});
+
+test('a user\'s commit signing and pre-commit hook cannot block the unattended commits', { skip: !hasGit || process.platform === 'win32' }, () => {
+  const root = mkdtempSync(join(tmpdir(), 'mycelium-hooks-'));
+  const remote = join(root, 'remote.git');
+  const m = machine(join(root, 'm'));
+  m.cli('sync', 'host', remote);
+  seedSession(m, 'h-1', 'laptop');
+  m.cli('sync', 'init', remote);
+
+  // What a developer's global git config can do: sign every commit with a
+  // signer that fails, and run a hook that rejects.
+  writeFileSync(join(m.home, '.git', 'config'), readFileSync(join(m.home, '.git', 'config'), 'utf8') + '[commit]\n\tgpgsign = true\n[gpg]\n\tprogram = false\n');
+  const hook = join(m.home, '.git', 'hooks', 'pre-commit');
+  mkdirSync(join(m.home, '.git', 'hooks'), { recursive: true });
+  writeFileSync(hook, '#!/bin/sh\nexit 1\n');
+  chmodSync(hook, 0o755);
+
+  seedSession(m, 'h-2', 'laptop');
+  assert.match(m.cli('sync'), /sent/);
+  execFileSync('git', ['--git-dir', remote, 'cat-file', '-e', 'machines/laptop:raw/h-2.json']);
+});
+
+test('git() runs without askpass helpers and gives a stalled network call a deadline', { skip: process.platform === 'win32' }, async () => {
+  const { git } = await import('../src/sync.js');
+  const saved = { ...process.env };
+  try {
+    // VS Code's terminal exports its own GIT_ASKPASS; it must not reach git.
+    process.env.GIT_ASKPASS = '/bin/true';
+    process.env.SSH_ASKPASS = '/bin/true';
+    const env = await git(['-c', 'alias.probe=!printf "[%s][%s]" "$GIT_ASKPASS" "$SSH_ASKPASS"', 'probe']);
+    assert.equal(env.stdout, '[][]');
+
+    // git appends ssh's own arguments, so the stand-in has to ignore them.
+    process.env.GIT_SSH_COMMAND = 'sh -c "sleep 30" ssh';
+    const t0 = Date.now();
+    const r = await git(['ls-remote', 'ssh://nobody@localhost/none'], { timeout: 400 });
+    assert.equal(r.ok, false);
+    assert.equal(r.timedOut, true);
+    assert.ok(Date.now() - t0 < 10000, 'returned near the deadline, not after the 30s hang');
+  } finally {
+    process.env = saved;
+  }
 });

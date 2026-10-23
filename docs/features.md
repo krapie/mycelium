@@ -607,10 +607,15 @@ As a user, I can **use one store from several machines** (a laptop and a home se
   reindex exactly the `raw/` files the merge changed
   (`reindexOne`/`removeFromIndex`). Guarded by `sync.lock` (stale after
   10 min) since the TUI and a detached daemon can both run. Delete-vs-edit
-  conflicts resolve to the deletion; anything else left unresolved aborts
-  the merge and keeps this machine's copy for the next pass. ssh runs in
-  batch mode so background sync never prompts. [tested]
-  (`test/sync.test.js`)
+  conflicts resolve to the deletion (paths read with `status -z`, since a
+  folder name with a space or Korean letters is quoted otherwise); anything
+  else left unresolved aborts the merge and keeps this machine's copy for
+  the next pass. A commit that can't be made is returned as the pass's
+  error rather than skipped: sync commits ignore the user's signing config
+  and pre-commit hooks. ssh runs in batch mode and askpass helpers are
+  emptied, so background sync never prompts; `fetch`/`push` get a deadline
+  (`MYCELIUM_SYNC_TIMEOUT_MS`, 2 min) so a stalled one can't hold the lock.
+  [tested] (`test/sync.test.js`)
 - **Field-level merge of session records.** `mergeSession(base, ours,
   theirs)`, invoked by git as `mycelium sync merge-driver session`: a
   field only one side changed comes from that side; when both changed,
@@ -641,11 +646,13 @@ As a user, I can **use one store from several machines** (a laptop and a home se
   no machine UI appears. Then: an `@machine` badge on Sessions rows and
   Calendar day-list rows (dim for this machine, highlighted for others),
   a `Machine:` line in `formatSessionDetail()`, `Shift+H` to filter the
-  Sessions list to one machine (client-side, like sorting), and `mycelium
+  Sessions list to one machine (client-side, like sorting; changing it
+  drops the multi-selection, which is store-wide), and `mycelium
   list [--host m]`. An index built before the `host` column existed is
   rebuilt once when the column is first added. [partial]
-  (`test/index-host.test.js`, `test/render.test.js`, `test/sync.test.js`; the
-  TUI badge and `Shift+H` picker are untested)
+  (`test/index-host.test.js`, `test/render.test.js`, `test/sync.test.js`,
+  `test/e2e/machines-e2e.test.js` for the Sessions badge, `Shift+H` and the
+  selection; the Calendar badge is untested)
 - **Continue another machine's session here.** `localDirFor(session)` and
   `isFromOtherMachine(session)` (`src/agents.js`): `r` on a session whose
   `host` is another machine says where it was started and offers handoff;
