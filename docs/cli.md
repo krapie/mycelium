@@ -51,7 +51,7 @@ mycelium daemon                 # run in the foreground
 mycelium daemon --detach        # run detached in the background (idempotent)
 mycelium daemon --stop          # stop it
 
-# Sync one store across machines (see docs/sync.md)
+# Sync one store across machines (experimental, see docs/sync.md)
 mycelium sync host ~/mycelium.git                  # on the central machine: create the shared repo
 mycelium sync init ~/mycelium.git --collect --worker  # on the central machine: gather every machine's sessions here
 mycelium sync init <git-url>                       # on another machine: send its sessions, take nothing back (default)

@@ -1,6 +1,8 @@
 **[← Back to README](../README.md)**
 
-# Sync Across Machines
+# Sync Across Machines (experimental)
+
+> **Experimental.** Sync is new and has had little real-world use. The commands, the mode names and the layout of the synced repo may change between versions, and a problem can leave a store that needs repair. Back up `~/.mycelium` on every machine before `sync init` (the steps below do), keep the central repo private, and report anything odd. Mycelium works the same as before for anyone who never runs `sync init`.
 
 Mycelium keeps its store on one machine by default. Sync lets a laptop and an always-on home server, for example, share sessions: what the laptop captures ends up on the server, a backlog written on one can be started on the other, and a session started on one can be continued on the other through a handoff.
 

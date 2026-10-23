@@ -812,7 +812,7 @@ Day to day, it's a simple loop: {${fg}-fg}s{/} capture → {${fg}-fg}o{/} organi
   {${fg}-fg}Shift+S{/} Split (LLM-suggested topic boundaries, review before applying — pieces land in the same folder, original stays visible; mycelium unsplit undoes it)
   {${fg}-fg}Shift+O{/} Cycle sort order — recent (default) → title A-Z → agent
   {${fg}-fg}Shift+T{/} Pick a sort order directly — newest/oldest first, title A-Z/Z-A
-  {${fg}-fg}Shift+H{/} Show sessions from one machine only (store synced across machines — see docs/sync.md)
+  {${fg}-fg}Shift+H{/} Show sessions from one machine only (experimental; store synced across machines, see docs/sync.md)
 
 {bold}Detail panel{/}
 
@@ -893,7 +893,7 @@ ko['help.text'] = (fg, spore) => `{bold}Context Flywheel{/}
   {${fg}-fg}Shift+S{/} 분할 (LLM이 세션을 나눌 지점 제안, 검토 후 적용 — 조각은 원본과 같은 폴더에 생성, 원본은 그대로 목록에 남음; mycelium unsplit로 되돌리기)
   {${fg}-fg}Shift+O{/} 정렬 순서 전환 — 최신순(기본) → 제목순(A-Z) → 에이전트순
   {${fg}-fg}Shift+T{/} 정렬 방식 직접 선택 — 최신순/오래된순, 제목 A-Z/Z-A
-  {${fg}-fg}Shift+H{/} 한 컴퓨터의 세션만 보기 (여러 컴퓨터로 동기화한 저장소용 — docs/sync.md)
+  {${fg}-fg}Shift+H{/} 한 컴퓨터의 세션만 보기 (실험적 기능, 여러 컴퓨터로 동기화한 저장소용, docs/sync.md)
 
 {bold}상세 패널{/}
 

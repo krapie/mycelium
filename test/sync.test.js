@@ -214,7 +214,7 @@ test('a pushing machine runs LLM upkeep itself; modes and flags are validated', 
   const m = machine(join(root, 'm'));
   m.cli('sync', 'host', remote);
   seedSession(m, 'mode-1', 'laptop');
-  m.cli('sync', 'init', remote);
+  assert.match(m.cli('sync', 'init', remote), /experimental/, 'setup says so');
   assert.match(m.cli('sync', 'worker'), /on/, 'nobody else summarizes a pushing machine\'s sessions');
   assert.throws(() => m.cli('sync', 'mode', 'sideways'), /mode must be one of/);
   assert.throws(() => m.cli('sync', 'init', remote, '--collect', '--two-way'), /pick one/);

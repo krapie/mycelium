@@ -576,7 +576,7 @@ As a user, I can **install the `/clip` command into whichever agent CLIs I actua
 
 ## Sync (`src/sync.js`, `src/sync/{git,merge,cycle}.js`, `src/cli/sync.js`)
 
-As a user, I can **use one store from several machines** (a laptop and a home server), so sessions, backlog items, folders and knowledge captured on either show up on both. See [`docs/sync.md`](./sync.md).
+**Experimental.** As a user, I can **use one store from several machines** (a laptop and a home server), so sessions, backlog items, folders and knowledge captured on either show up on both. See [`docs/sync.md`](./sync.md).
 
 - **Three modes, one-way by default.** `syncMode()`: `push` (the default
   for `sync init`) sends this machine's store to its own branch

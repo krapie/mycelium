@@ -62,6 +62,7 @@ export async function syncCmd(args) {
     const r = await sync.initRepo(rest[0], { worker: !!flags.worker, mode, propagateDeletes: !!flags['propagate-deletes'] });
     if (!r.ok) fail(r.error);
     console.log(`sync set up → ${rest[0]} (${MODE_TEXT[mode]})`);
+    console.log('note: sync is experimental. Keep a backup of ~/.mycelium and see docs/sync.md.');
     return report(await sync.syncOnce());
   }
 
