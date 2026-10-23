@@ -336,9 +336,42 @@ test('opencode adapter never echoes a tool\'s raw command/query into toolActivit
   assert.ok(!joined.includes('roadmap'), 'raw search query must never be persisted');
 });
 
-test('kiro adapter lists and parses the kiro-cli 2.3x session store', () => {
+test('kiro adapter lists and parses the kiro-cli 2.3x session store', (t) => {
+  // <root>/<workspace hash>/<session id>/{session.json,messages.jsonl}
+  const root = mkdtempSync(join(tmpdir(), 'mycelium-kiro-store-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const ws = join(root, '0373b1e75392a856');
+  const event = (id, sec, payload) => JSON.stringify({ id, timestamp: `2026-10-20T07:00:0${sec}.000Z`, payload });
+  mkdirSync(join(ws, '.index'), { recursive: true });
+  writeFileSync(join(ws, '.index', 'entries.jsonl'), '{"op":"add"}\n');
+  mkdirSync(join(ws, 'sess_fixture-1'));
+  writeFileSync(
+    join(ws, 'sess_fixture-1', 'session.json'),
+    JSON.stringify({
+      schemaVersion: '1.0.0',
+      id: 'sess_fixture-1',
+      title: 'Glacier question',
+      workspacePaths: ['/work/proj'],
+      createdAt: '2026-10-20T07:00:00.000Z',
+      lastModifiedAt: '2026-10-20T07:05:00.000Z',
+    }),
+  );
+  writeFileSync(
+    join(ws, 'sess_fixture-1', 'messages.jsonl'),
+    [
+      event('n1', 0, { type: 'agent_note', content: '<session_context>model</session_context>' }),
+      event('u1', 1, { type: 'user', content: 'What does Glacier Instant Retrieval optimize for?', documents: [], images: [] }),
+      event('r1', 2, { type: 'assistant', operationType: 'Reasoning', content: 'The user asks about S3 storage classes.', reasoningSignature: 'sig' }),
+      event('c1', 3, { type: 'tool_call', toolCallId: 't1', toolName: 'execute_bash', args: { command: 'aws s3 ls' }, status: 'completed' }),
+      event('c1r', 4, { type: 'tool_result', toolCallId: 't1', content: 'ok', success: true }),
+      event('a1', 5, { type: 'assistant', operationType: 'Say', content: 'Rarely accessed data that still needs millisecond retrieval.' }),
+    ].join('\n') + '\n',
+  );
+  mkdirSync(join(ws, 'cli_fixture-2_x'));
+  writeFileSync(join(ws, 'cli_fixture-2_x', 'messages.jsonl'), event('u1', 0, { type: 'user', content: 'hello' }) + '\n');
+
   const kiro = getAdapter('kiro');
-  const refs = kiro.listStoreSessions(join(FIXTURES, 'kiro-store'));
+  const refs = kiro.listStoreSessions(root);
   assert.deepEqual(refs.map((r) => r.id).sort(), ['cli_fixture-2_x', 'sess_fixture-1']);
 
   const neutral = kiro.parse(refs.find((r) => r.id === 'sess_fixture-1'));
