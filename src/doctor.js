@@ -9,12 +9,40 @@
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { delimiter } from 'node:path';
+import { delimiter, join } from 'node:path';
 import { VERSION } from './version.js';
 import { HOME, RAW_DIR, DB_PATH, DAEMON_PID_PATH, DAEMON_VERSION_PATH, DAEMON_LOG_PATH } from './paths.js';
 import { loadConfig, contentLocale } from './config.js';
 import { AGENTS, whichPath } from './agents.js';
 import { providerBin } from './llm.js';
+import { planSetup } from './setup.js';
+
+/**
+ * Does Codex's sandbox allow writes into the store? Not a TOML parse (no
+ * dependency for one diagnostic): it reads the `[sandbox_workspace_write]`
+ * table only, skips comment lines, and compares whole paths, so a commented-out
+ * line or a sibling like `<store>-old` doesn't count. Anything fancier (dotted
+ * keys, inline tables) reads as "not configured", which only costs the user a
+ * glance at `mycelium setup`'s note. Reported, never acted on — widening
+ * writable_roots is the user's call.
+ */
+export const codexSandbox = (home = HOME, path = join(homedir(), '.codex', 'config.toml')) => {
+  if (!existsSync(path)) return { path, configured: false };
+  try {
+    const lines = readFileSync(path, 'utf8').split('\n').filter((l) => !/^\s*#/.test(l));
+    const start = lines.findIndex((l) => /^\s*\[sandbox_workspace_write\]\s*$/.test(l));
+    if (start === -1) return { path, configured: false };
+    const next = lines.findIndex((l, i) => i > start && /^\s*\[/.test(l) && !/^\s*\[\s*["']/.test(l));
+    const table = lines.slice(start + 1, next === -1 ? undefined : next).join('\n');
+    const roots = table.match(/writable_roots\s*=\s*\[([^\]]*)\]/);
+    if (!roots) return { path, configured: false };
+    const clean = (p) => p.replace(/[\\/]+$/, '');
+    const entries = [...roots[1].matchAll(/"((?:[^"\\]|\\.)*)"|'([^']*)'/g)].map((m) => (m[2] !== undefined ? m[2] : JSON.parse(`"${m[1]}"`)));
+    return { path, configured: entries.some((e) => clean(e) === clean(home)) };
+  } catch {
+    return { path, configured: null };
+  }
+};
 
 // The report is pasted into public issues; an https remote may carry user:token@.
 const redactUrl = (s) => String(s).replace(/(\/\/)[^/@\s]+@/, '$1***@');
@@ -73,6 +101,12 @@ export function collectDiagnostics({ extraPath, env = process.env, platform = pr
   } catch {
     raw = null;
   }
+  let commands;
+  try {
+    commands = planSetup({ isInstalled: (bin) => !!find(bin) }).map((e) => ({ agent: e.agent, installed: e.installed, dir: e.dir, files: e.files.map((f) => ({ to: f.to, status: f.status })) }));
+  } catch {
+    commands = null;
+  }
   return {
     version: VERSION,
     node: process.version,
@@ -82,6 +116,12 @@ export function collectDiagnostics({ extraPath, env = process.env, platform = pr
     locale: contentLocale(),
     path: (lookupEnv.PATH || lookupEnv.Path || '').split(delimiter).filter(Boolean),
     agents: Object.entries(AGENTS).map(([key, a]) => ({ key, bin: a.bin, path: find(a.bin) })),
+    // Reuses the same find() as the agent rows above, so "installed" means
+    // the same thing in both — including any extraPath the bridge passed in.
+    // Reads shipped files, so it gets the same can't-throw treatment as the
+    // store count above: a broken install is exactly when this report matters.
+    commands,
+    codexSandbox: codexSandbox(),
     llm: { provider: process.env.MYCELIUM_LLM || 'auto', bin: llmBin, path: llmBin ? find(llmBin) : null },
     git: find('git'),
     ssh: find('ssh'),
@@ -107,6 +147,19 @@ export function formatDiagnostics(d, { home = homedir() } = {}) {
   if (d.store.lastLog) lines.push(`last daemon log: ${hide(d.store.lastLog)}`);
   lines.push('', 'agent CLIs:');
   for (const a of d.agents) lines.push(`  ${a.key.padEnd(12)} ${a.bin.padEnd(10)} ${found(a.path)}`);
+  if (d.commands?.length) {
+    lines.push('', 'agent commands (mycelium setup):');
+    for (const c of d.commands) {
+      if (!c.installed) lines.push(`  ${c.agent.padEnd(12)} agent CLI not installed`);
+      else for (const f of c.files) lines.push(`  ${c.agent.padEnd(12)} ${f.to.padEnd(14)} ${f.status}   ${hide(c.dir)}`);
+    }
+    // Only for a Codex that is actually there: another agent having a command
+    // entry says nothing about Codex's config.
+    if (d.commands.some((c) => c.agent === 'codex' && c.installed) && d.codexSandbox) {
+      if (d.codexSandbox.configured === false) lines.push(`  codex sandbox: ${hide(d.home)} not in writable_roots — see mycelium setup`);
+      else if (d.codexSandbox.configured === null) lines.push(`  codex sandbox: could not read ${hide(d.codexSandbox.path)}`);
+    }
+  }
   lines.push('', `LLM provider: ${d.llm.provider}${d.llm.bin ? ` -> ${d.llm.bin}: ${found(d.llm.path)}` : ''}`);
   lines.push(`git: ${found(d.git)}   ssh: ${found(d.ssh)}`);
   if (d.sync) lines.push(`sync: ${d.sync.remote} (${d.sync.mode || 'push'})`);

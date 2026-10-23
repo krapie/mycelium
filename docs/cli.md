@@ -98,6 +98,17 @@ mycelium cleanup reset --yes # full reset: delete ~/.mycelium entirely → re-sc
 
 For a clean start: `mycelium cleanup reset --yes && mycelium scan`.
 
+## Setup
+
+```sh
+mycelium setup             # install /clip into every agent CLI that's on PATH
+mycelium setup --dry-run   # print the same table without writing anything
+```
+
+Copies this version's command files to where each agent looks for them — `~/.claude/commands/clip.md`, `~/.kiro/prompts/clip.md`, `~/.codex/skills/clip/SKILL.md` — skipping any agent whose CLI isn't installed. Each file gets a marker line recording the hash of what was written, so a later run can tell the three cases apart and report one of: `installed`, `updated` (ours, and this version ships a newer copy), `already current`, `edited since install` or `not installed by Mycelium`. Only the first two write; a file you edited, or one that was never Mycelium's, is left exactly as it is. Re-running after a `mycelium` upgrade is the intended way to refresh them.
+
+Codex is the one agent needing a step this command won't take for you: its sandbox denies writes outside the workspace, so `$clip` can't reach the store until `~/.mycelium` is in `writable_roots`. `setup` prints the lines to paste on every run; widening a sandbox is a security decision, so it is never applied automatically. `mycelium doctor` reports whether it's still missing.
+
 ## Diagnose
 
 ```sh
@@ -105,7 +116,7 @@ mycelium doctor            # environment report to paste into a bug report
 mycelium doctor --json     # same data as JSON
 ```
 
-Prints the Mycelium and Node versions, platform and shell, the PATH this process actually has, where each agent CLI (`claude`, `codex`, ...), `git` and `ssh` resolve to (or `NOT FOUND`), and the store state (session count, index, daemon). Your home directory is shown as `~`.
+Prints the Mycelium and Node versions, platform and shell, the PATH this process actually has, where each agent CLI (`claude`, `codex`, ...), `git` and `ssh` resolve to (or `NOT FOUND`), the state of each agent command `mycelium setup` manages (plus whether Codex's sandbox still blocks the store), and the store state (session count, index, daemon). Your home directory is shown as `~`.
 
 ## Editor integration
 

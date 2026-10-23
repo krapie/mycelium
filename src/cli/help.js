@@ -45,6 +45,7 @@ Clean     cleanup [tidy]                Remove meta-sessions + empty folders, re
           cleanup folders|archive|index Partial cleanup
           cleanup reset --yes           Wipe all data (~/.mycelium)
 Diagnose  doctor [--json]                Environment report for bug reports: versions, PATH, where each agent CLI resolves, store state
+Setup     setup [--dry-run]              Install /clip into each agent CLI that's on PATH (Claude commands, Kiro prompts, Codex skills). Safe to re-run: files you edited are left alone
 Editor    serve --stdio                 JSON-RPC over stdin/stdout for editor integrations (the VS Code extension runs this)
 Other     --version / -v / -V           Print the installed version
 `,
@@ -83,6 +84,7 @@ Clean     cleanup [tidy]                메타세션 제거 + 빈 폴더 정리 
           cleanup folders|archive|index 부분 정리
           cleanup reset --yes           전체 데이터(~/.mycelium) 초기화
 Diagnose  doctor [--json]                환경 진단 리포트(버그 제보용): 버전, PATH, 에이전트 CLI 위치, 저장소 상태
+Setup     setup [--dry-run]              PATH에 있는 각 에이전트 CLI에 /clip 설치 (Claude commands, Kiro prompts, Codex skills). 다시 실행해도 안전 — 직접 고친 파일은 그대로 둠
 Editor    serve --stdio                 에디터 연동용 JSON-RPC (stdin/stdout) — VS Code 확장이 이 명령을 실행
 Other     --version / -v / -V           설치된 버전 출력
 `,

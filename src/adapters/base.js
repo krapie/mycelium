@@ -24,6 +24,17 @@
  *                                          in its tool shells to the current
  *                                          session id (what `--here` reads,
  *                                          see here.js). Omit if it has none.
+ *   commandInstall?: {                  — optional: where `mycelium setup`
+ *     dir: string,                         copies this agent's command files
+ *     files: { from, to }[],               (`src/agent-commands/<from>` →
+ *     note?: (home) => string,             `<dir>/<to>`). Omit if the agent
+ *   }                                      has no command/prompt/skill format.
+ *                                          `dir` reads an env override first,
+ *                                          like the session roots above, so
+ *                                          tests never write to a real
+ *                                          ~/.claude. `note` is printed after
+ *                                          install for a step Mycelium must
+ *                                          not take itself (see codex.js).
  *
  * Adapters only ever READ the CLI's own session files — never write them,
  * never touch auth tokens. A parse failure must throw so the scanner can skip

@@ -21,6 +21,7 @@ import { cleanupCmd } from './cli/cleanup.js';
 import { daemonCmd, demoCmd, langCmd } from './cli/run.js';
 import { serveCmd } from './cli/serve.js';
 import { doctorCmd } from './cli/doctor.js';
+import { setupCmd } from './cli/setup.js';
 import { printHelp } from './cli/help.js';
 
 // Dispatch table — barrel-adjacent to organize.js/daemon.js's own
@@ -53,6 +54,7 @@ const COMMANDS = {
   daemon: daemonCmd,
   serve: serveCmd,
   doctor: doctorCmd,
+  setup: setupCmd,
   demo: demoCmd,
   lang: langCmd,
 };

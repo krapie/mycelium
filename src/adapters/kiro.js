@@ -21,6 +21,11 @@ export const resumeArgs = (sessionId) => ['chat', '--resume-id', sessionId];
 // Set in the shell tool's environment to session.json's `id` (sess_<uuid>,
 // the store format below) — checked against kiro-cli 2.32.0.
 export const sessionEnv = 'KIRO_SESSION_ID';
+// `@clip`. Kiro calls these prompts; same one-.md-per-name shape as Claude's.
+export const commandInstall = {
+  dir: process.env.KIRO_PROMPTS_DIR || join(homedir(), '.kiro', 'prompts'),
+  files: [{ from: 'kiro/clip.md', to: 'clip.md' }],
+};
 
 // Kiro CLI has three on-disk formats, verified against a real installed
 // kiro-cli (v2.13.0):
