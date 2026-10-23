@@ -24,7 +24,9 @@ const VERB = {
 /** `mycelium setup [--dry-run]` — install each installed agent's `/clip` command. */
 export function setupCmd(args = []) {
   const { flags } = parseFlags(args);
-  const dry = flags['dry-run'] === true;
+  // parseFlags() hands a following bare word to the flag as its value, so
+  // `--dry-run extra` must still be a preview, never a real install.
+  const dry = flags['dry-run'] !== undefined;
   const i = dry ? 1 : 0;
   const home = homedir();
   const hide = (p) => (home ? String(p).split(home).join('~') : p);

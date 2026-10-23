@@ -31,7 +31,7 @@ export const commandInstall = {
   // it: widening writable_roots moves a security boundary, which is the
   // user's call, not a tool's. Nothing else here needs confirming, so this
   // is the one adapter with a note.
-  note: (home) => ['Codex sandboxes writes. Add this to ~/.codex/config.toml so $clip can reach the store:', '', '  [sandbox_workspace_write]', `  writable_roots = ["${home}"]`].join('\n'),
+  note: (home) => ['Codex sandboxes writes. Add this to ~/.codex/config.toml so $clip can reach the store:', '', '  [sandbox_workspace_write]', `  writable_roots = [${JSON.stringify(home)}]`].join('\n'),
 };
 
 // Codex stores rollouts under ~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl.

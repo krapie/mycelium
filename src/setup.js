@@ -8,7 +8,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ADAPTERS } from './adapters/index.js';
@@ -51,6 +51,14 @@ function splitMarker(text) {
   return { command: m[1], recorded: m[2], body, intact: sha(body) === m[2] };
 }
 
+function classify(dest, shipped) {
+  if (!existsSync(dest)) return 'install';
+  const found = splitMarker(readFileSync(dest, 'utf8'));
+  if (!found) return 'foreign';
+  if (!found.intact) return 'modified';
+  return found.body === shipped ? 'current' : 'update';
+}
+
 /**
  * What a `mycelium setup` run would do, per file, without touching anything.
  *
@@ -71,15 +79,7 @@ export function planSetup({ adapters = ADAPTERS, isInstalled = (bin) => !!which(
       const dest = join(entry.dir, f.to);
       const command = f.to.replace(/\.md$/, '').replace(/\/SKILL$/, '');
       const shipped = readFileSync(src, 'utf8');
-      const file = { to: f.to, dest, command, wanted: withMarker(shipped, command) };
-      if (!existsSync(dest)) file.status = 'install';
-      else {
-        const found = splitMarker(readFileSync(dest, 'utf8'));
-        if (!found) file.status = 'foreign';
-        else if (!found.intact) file.status = 'modified';
-        else file.status = found.body === shipped ? 'current' : 'update';
-      }
-      entry.files.push(file);
+      entry.files.push({ to: f.to, dest, command, shipped, wanted: withMarker(shipped, command), status: classify(dest, shipped) });
     }
     plan.push(entry);
   }
@@ -91,22 +91,43 @@ export function planSetup({ adapters = ADAPTERS, isInstalled = (bin) => !!which(
  * exist so a re-run is a no-op and an edited file is never clobbered.
  * Agents whose CLI isn't on PATH are skipped entirely — installing a command
  * for an agent that isn't there would just be litter.
+ *
+ * Each file is classified again right before its write: the plan may be
+ * seconds old, and a command the user created or edited in between must not
+ * be overwritten. A changed status is written back onto the plan so the
+ * report says what actually happened. The write goes to a sibling temp file
+ * and is renamed over the destination, so an agent reading commands
+ * concurrently never sees half a file, and a failed write can't leave one
+ * behind that the next run would classify as `modified` and never repair.
  */
 export function applySetup(plan) {
   for (const entry of plan) {
     if (!entry.installed) continue;
     for (const f of entry.files) {
       if (f.status !== 'install' && f.status !== 'update') continue;
+      f.status = classify(f.dest, f.shipped);
+      if (f.status !== 'install' && f.status !== 'update') continue;
       mkdirSync(dirname(f.dest), { recursive: true });
-      writeFileSync(f.dest, f.wanted);
+      const tmp = `${f.dest}.${process.pid}.tmp`;
+      try {
+        writeFileSync(tmp, f.wanted);
+        renameSync(tmp, f.dest);
+      } catch (e) {
+        rmSync(tmp, { force: true });
+        throw e;
+      }
     }
   }
   return plan;
 }
 
-/** Notes worth printing after a run: only for agents that are installed and got files. */
+/**
+ * Notes for every installed agent that has one, whether or not this run wrote
+ * anything: the note covers a step setup can't take for the user, so a re-run
+ * (which `mycelium doctor` points at) has to be able to show it again.
+ */
 export function setupNotes(plan, { home = HOME } = {}) {
-  return plan.filter((e) => e.installed && e.note && e.files.some((f) => f.status === 'install' || f.status === 'update')).map((e) => ({ agent: e.agent, label: e.label, text: e.note(home) }));
+  return plan.filter((e) => e.installed && e.note).map((e) => ({ agent: e.agent, label: e.label, text: e.note(home) }));
 }
 
 /** Command names Mycelium ships, for `mycelium doctor`'s report. */

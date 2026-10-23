@@ -18,18 +18,27 @@ import { providerBin } from './llm.js';
 import { planSetup } from './setup.js';
 
 /**
- * Does Codex's sandbox allow writes into the store? Checked by substring, not
- * by parsing TOML (no dependency for one diagnostic): a false "missing" here
- * only ever costs the user a glance at `mycelium setup`'s note, and it is
- * reported, never acted on — widening writable_roots is the user's call.
+ * Does Codex's sandbox allow writes into the store? Not a TOML parse (no
+ * dependency for one diagnostic): it reads the `[sandbox_workspace_write]`
+ * table only, skips comment lines, and compares whole paths, so a commented-out
+ * line or a sibling like `<store>-old` doesn't count. Anything fancier (dotted
+ * keys, inline tables) reads as "not configured", which only costs the user a
+ * glance at `mycelium setup`'s note. Reported, never acted on — widening
+ * writable_roots is the user's call.
  */
-const codexSandbox = (home = HOME) => {
-  const path = join(homedir(), '.codex', 'config.toml');
+export const codexSandbox = (home = HOME, path = join(homedir(), '.codex', 'config.toml')) => {
   if (!existsSync(path)) return { path, configured: false };
   try {
-    const toml = readFileSync(path, 'utf8');
-    const roots = toml.match(/writable_roots\s*=\s*\[([^\]]*)\]/);
-    return { path, configured: !!roots && roots[1].includes(home) };
+    const lines = readFileSync(path, 'utf8').split('\n').filter((l) => !/^\s*#/.test(l));
+    const start = lines.findIndex((l) => /^\s*\[sandbox_workspace_write\]\s*$/.test(l));
+    if (start === -1) return { path, configured: false };
+    const next = lines.findIndex((l, i) => i > start && /^\s*\[/.test(l) && !/^\s*\[\s*["']/.test(l));
+    const table = lines.slice(start + 1, next === -1 ? undefined : next).join('\n');
+    const roots = table.match(/writable_roots\s*=\s*\[([^\]]*)\]/);
+    if (!roots) return { path, configured: false };
+    const clean = (p) => p.replace(/[\\/]+$/, '');
+    const entries = [...roots[1].matchAll(/"((?:[^"\\]|\\.)*)"|'([^']*)'/g)].map((m) => (m[2] !== undefined ? m[2] : JSON.parse(`"${m[1]}"`)));
+    return { path, configured: entries.some((e) => clean(e) === clean(home)) };
   } catch {
     return { path, configured: null };
   }
@@ -144,7 +153,12 @@ export function formatDiagnostics(d, { home = homedir() } = {}) {
       if (!c.installed) lines.push(`  ${c.agent.padEnd(12)} agent CLI not installed`);
       else for (const f of c.files) lines.push(`  ${c.agent.padEnd(12)} ${f.to.padEnd(14)} ${f.status}   ${hide(c.dir)}`);
     }
-    if (d.codexSandbox && !d.codexSandbox.configured) lines.push(`  codex sandbox: ${hide(d.home)} not in writable_roots — see mycelium setup`);
+    // Only for a Codex that is actually there: another agent having a command
+    // entry says nothing about Codex's config.
+    if (d.commands.some((c) => c.agent === 'codex' && c.installed) && d.codexSandbox) {
+      if (d.codexSandbox.configured === false) lines.push(`  codex sandbox: ${hide(d.home)} not in writable_roots — see mycelium setup`);
+      else if (d.codexSandbox.configured === null) lines.push(`  codex sandbox: could not read ${hide(d.codexSandbox.path)}`);
+    }
   }
   lines.push('', `LLM provider: ${d.llm.provider}${d.llm.bin ? ` -> ${d.llm.bin}: ${found(d.llm.path)}` : ''}`);
   lines.push(`git: ${found(d.git)}   ssh: ${found(d.ssh)}`);

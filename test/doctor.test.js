@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { useTempHome } from './helpers.js';
 
 const homeDir = useTempHome();
-const { collectDiagnostics, formatDiagnostics } = await import('../src/doctor.js');
+const { collectDiagnostics, formatDiagnostics, codexSandbox } = await import('../src/doctor.js');
 const { whichPath, which } = await import('../src/agents.js');
 const cliPath = fileURLToPath(new URL('../src/cli.js', import.meta.url));
 
@@ -75,4 +75,31 @@ test('collectDiagnostics flags a daemon running a different version than the ins
     rmSync(DAEMON_PID_PATH, { force: true });
     rmSync(DAEMON_VERSION_PATH, { force: true });
   }
+});
+
+test('codexSandbox counts only an active, exact writable root', async () => {
+  const { writeFileSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const cfg = join(homeDir, 'codex-config.toml');
+  const check = (toml, store = '/home/u/.mycelium') => {
+    writeFileSync(cfg, toml);
+    return codexSandbox(store, cfg).configured;
+  };
+  assert.equal(check('[sandbox_workspace_write]\nwritable_roots = ["/home/u/.mycelium"]\n'), true);
+  assert.equal(check('[sandbox_workspace_write]\nwritable_roots = ["/a", "/home/u/.mycelium/"]\n'), true, 'trailing slash is the same root');
+  assert.equal(check('[sandbox_workspace_write]\n# writable_roots = ["/home/u/.mycelium"]\n'), false, 'a commented-out line is ignored');
+  assert.equal(check('[sandbox_workspace_write]\nwritable_roots = ["/home/u/.mycelium-old"]\n'), false, 'a prefix match is not the store');
+  assert.equal(check('[other]\nwritable_roots = ["/home/u/.mycelium"]\n'), false, 'only the sandbox table counts');
+  assert.equal(check('[sandbox_workspace_write]\nwritable_roots = ["C:\\\\Users\\\\u\\\\.mycelium"]\n', 'C:\\Users\\u\\.mycelium'), true, 'escaped backslashes are decoded');
+  assert.equal(codexSandbox('/x', join(homeDir, 'nope.toml')).configured, false);
+});
+
+test('the sandbox warning needs Codex installed, and an unreadable config is reported separately', () => {
+  const base = { version: '0', node: 'v', platform: 'p', shell: null, locale: 'en', home: '/s', store: {}, agents: [], path: [], llm: {}, git: null, ssh: null };
+  const files = [{ to: 'clip/SKILL.md', status: 'current' }];
+  const missing = { path: '/c.toml', configured: false };
+  const out = (commands, codexSandbox) => formatDiagnostics({ ...base, commands, codexSandbox }, { home: '/h' });
+  assert.match(out([{ agent: 'codex', installed: true, dir: '/d', files }], missing), /not in writable_roots/);
+  assert.doesNotMatch(out([{ agent: 'codex', installed: false, dir: '/d', files: [] }, { agent: 'claude', installed: true, dir: '/d', files }], missing), /writable_roots/);
+  assert.match(out([{ agent: 'codex', installed: true, dir: '/d', files }], { path: '/c.toml', configured: null }), /could not read/);
 });

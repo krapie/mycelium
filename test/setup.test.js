@@ -10,9 +10,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { delimiter, join } from 'node:path';
 
 // Every adapter's install dir reads an env override (see base.js's contract),
 // which is what keeps this file out of the real ~/.claude, ~/.kiro and
@@ -116,7 +118,7 @@ test('a nested destination (Codex skills/<name>/SKILL.md) gets its directory cre
   assert.ok(existsSync(join(process.env.CODEX_SKILLS_DIR, 'clip', 'SKILL.md')));
 });
 
-test('the Codex note carries the store path and is dropped once there is nothing to install', () => {
+test('the Codex note carries the store path, and a re-run still shows it', () => {
   rmSync(join(process.env.CODEX_SKILLS_DIR, 'clip', 'SKILL.md'), { force: true });
   const plan = planSetup({ adapters: only('codex'), isInstalled: () => true });
   const notes = setupNotes(plan, { home: '/tmp/store-xyz' });
@@ -124,9 +126,29 @@ test('the Codex note carries the store path and is dropped once there is nothing
   assert.match(notes[0].text, /\[sandbox_workspace_write\]/);
   assert.match(notes[0].text, /writable_roots = \["\/tmp\/store-xyz"\]/);
 
+  // The note is the only place the user is told about writable_roots, so it
+  // must survive the skill becoming current.
   applySetup(plan);
-  const after = setupNotes(planSetup({ adapters: only('codex'), isInstalled: () => true }));
-  assert.equal(after.length, 0, 'a no-op run has nothing to tell the user about');
+  const after = planSetup({ adapters: only('codex'), isInstalled: () => true });
+  assert.equal(after[0].files[0].status, 'current');
+  assert.equal(setupNotes(after).length, 1);
+  assert.equal(setupNotes(planSetup({ adapters: only('codex'), isInstalled: () => false })).length, 0, 'no note for an agent that is not installed');
+});
+
+test('the Codex note escapes backslashes, so a Windows store path stays valid TOML', () => {
+  const [n] = setupNotes(planSetup({ adapters: only('codex'), isInstalled: () => true }), { home: 'C:\\Users\\me\\.mycelium' });
+  assert.ok(n.text.includes('writable_roots = ["C:\\\\Users\\\\me\\\\.mycelium"]'), n.text);
+});
+
+test('a file that appeared or was edited after planning is not overwritten by applySetup', () => {
+  rmSync(dest(), { force: true });
+  const planned = run();
+  assert.equal(planned[0].files[0].status, 'install');
+  writeFileSync(dest(), 'my own /clip\n');
+  applySetup(planned);
+  assert.equal(readFileSync(dest(), 'utf8'), 'my own /clip\n');
+  assert.equal(planned[0].files[0].status, 'foreign', 'the report should say it was left alone');
+  assert.deepEqual(readdirSync(process.env.CLAUDE_COMMANDS_DIR).filter((f) => f.endsWith('.tmp')), []);
 });
 
 test('only Codex carries a note — the other agents need no out-of-band step', () => {
@@ -155,4 +177,20 @@ test('shipped files are resolved from the module, not the cwd', () => {
   } finally {
     process.chdir(prev);
   }
+});
+
+test('`setup --dry-run extra` is still a preview: a stray word after the flag never turns it into an install', () => {
+  rmSync(dest(), { force: true });
+  const bin = join(root, 'bin');
+  mkdirSync(bin, { recursive: true });
+  writeFileSync(join(bin, 'claude'), '#!/bin/sh\n');
+  chmodSync(join(bin, 'claude'), 0o755);
+  const cli = fileURLToPath(new URL('../src/cli.js', import.meta.url));
+  const r = spawnSync(process.execPath, [cli, 'setup', '--dry-run', 'extra'], {
+    encoding: 'utf8',
+    env: { ...process.env, MYCELIUM_HOME: join(root, 'home'), PATH: `${bin}${delimiter}${process.env.PATH}` },
+  });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /would install/);
+  assert.equal(existsSync(dest()), false, 'a dry run must not write');
 });
