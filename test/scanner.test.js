@@ -444,6 +444,34 @@ test('sourceSessionExists() skips the real check under MYCELIUM_DEMO_MODE, defau
   }
 });
 
+test('saveRaw() stamps updatedAt but never invents a host: only capture/creation knows where a record came from', async () => {
+  const noHost = emptyNeutral('host-none', 'claude');
+  saveRaw(noHost);
+  assert.equal(loadRaw('host-none').host, null);
+  assert.ok(Date.parse(loadRaw('host-none').updatedAt));
+
+  const synced = { ...emptyNeutral('host-other', 'claude'), host: 'homeserver' };
+  saveRaw(synced);
+  assert.equal(loadRaw('host-other').host, 'homeserver');
+});
+
+test('scan() stamps this machine on what it captures, and on a local record that lost its host', async () => {
+  const { machineName } = await import('../src/config.js');
+  const ref = { id: 'host-scan', mtimeMs: 1 };
+  const adapter = {
+    name: 'fake-host',
+    listSessions: () => [ref],
+    parse: (r) => ({ ...emptyNeutral(r.id, 'fake-host'), turns: [{ role: 'user', text: 'hi' }] }),
+  };
+  withOnlyAdapters([adapter], () => scan());
+  assert.equal(loadRaw('host-scan').host, machineName());
+
+  // An older build rewrote it without a host; the next scan on this machine puts it back.
+  saveRaw({ ...loadRaw('host-scan'), host: null });
+  withOnlyAdapters([adapter], () => scan());
+  assert.equal(loadRaw('host-scan').host, machineName());
+});
+
 test('scan() links forked Claude conversations to their parent and records the fork point', () => {
   const mk = (id, title, birth, extra = []) => ({
     ref: { id, mtimeMs: 1, birthtimeMs: birth },

@@ -53,7 +53,10 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
 
 ## Organize: Folder tree (`src/organize.js`)
 
-- **Create a folder.** `mkdir(folderPath)`. [tested]
+- **Create a folder.** `mkdir(folderPath)`. An empty folder gets a `.keep`
+  marker so git sync (which doesn't track empty dirs) carries it to other
+  machines; `keepEmptyFolders()` backfills older folders at `sync init`.
+  [tested]
 - **List the full tree** (including empty folders). `listTreeDirs()`.
   `_inbox` excluded (virtual); `_archive` present but hidden from
   default views. [untested]
@@ -82,8 +85,9 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   unlocks it again so auto-tag refills it. Summary always refreshes
   regardless. [tested]
 - **Delete a session (Mycelium-only, original log untouched).**
-  `deleteSession(sessionId)`. Adds to `config.excludedSessionIds`
-  (persistent tombstone); sweeps every other session's
+  `deleteSession(sessionId)`. Adds the id to `excluded.txt` (persistent
+  tombstone, synced so another machine's scan doesn't re-import it; see
+  `excludedIds()` below); sweeps every other session's
   `continuedTo`/`mergedFrom`/`supersededBy`/`splitInto` to remove
   dangling backlinks; returns `touchedIds` for reindexing. [tested]
 
@@ -570,6 +574,93 @@ As a user, I can **install the `/clip` command into whichever agent CLIs I actua
   doctor` shows a stale daemon. [partial] (`test/daemon-process.test.js`,
   `test/doctor.test.js`; the timer wiring itself is untested)
 
+## Sync (`src/sync.js`, `src/sync/{git,merge,cycle}.js`, `src/cli/sync.js`)
+
+**Experimental.** As a user, I can **use one store from several machines** (a laptop and a home server), so sessions, backlog items, folders and knowledge captured on either show up on both. See [`docs/sync.md`](./sync.md).
+
+- **Three modes, one-way by default.** `syncMode()`: `push` (the default
+  for `sync init`) sends this machine's store to its own branch
+  `machines/<name>` on the remote and never fetches, so it holds only what
+  it captured and can't conflict; `collect` (`--collect`, the central
+  machine) does the two-way pass and also merges every `machines/*` branch
+  (`collectPushed()`); `two-way` (`--two-way`, and what setups from before
+  modes existed are treated as) merges `main` both ways. `mycelium sync
+  mode [m]` shows/changes it. A pushing machine always runs its own LLM
+  upkeep (`isLlmWorker()`) since nothing else will summarize it. [tested]
+  (`test/sync.test.js`)
+- **Sessions deleted on a pushing machine are kept on the collecting one.**
+  `collectPushed()` restores any `raw/` file a pusher's merge would delete
+  and keeps a file the pusher deleted but the collector edited; only
+  `raw/`; folder renames and removals still follow the pusher. `mycelium sync
+  deletes propagate` (`config.sync.propagateDeletes`) turns this off; two-way
+  machines always propagate deletes. [tested] (`test/sync.test.js`)
+- **Set up.** `mycelium sync host <path>` (`createHostRepo()`: a bare git
+  repo) and `mycelium sync init <git-url> [--collect|--two-way] [--worker]` (`initRepo()`: turns
+  `HOME` into a working copy, writes `.gitignore` for machine-local files
+  (`db/`, `config.json`, daemon files) and `.gitattributes` routing each
+  file kind to a merge driver, stamps `host` on pre-existing records, then
+  runs the first sync, which for a two-way/collect machine merges the two
+  existing stores with `--allow-unrelated-histories`). [tested]
+  (`test/sync.test.js`)
+- **One sync pass.** `syncOnce()`: commit local changes as this machine →
+  fetch → merge → push (one retry if another machine pushed in between) →
+  reindex exactly the `raw/` files the merge changed
+  (`reindexOne`/`removeFromIndex`). Guarded by `sync.lock` (stale after
+  10 min) since the TUI and a detached daemon can both run. Delete-vs-edit
+  conflicts resolve to the deletion (paths read with `status -z`, since a
+  folder name with a space or Korean letters is quoted otherwise); anything
+  else left unresolved aborts the merge and keeps this machine's copy for
+  the next pass. A commit that can't be made is returned as the pass's
+  error rather than skipped: sync commits ignore the user's signing config
+  and pre-commit hooks. ssh runs in batch mode and askpass helpers are
+  emptied, so background sync never prompts; `fetch`/`push` get a deadline
+  (`MYCELIUM_SYNC_TIMEOUT_MS`, 2 min) so a stalled one can't hold the lock.
+  [tested] (`test/sync.test.js`)
+- **Field-level merge of session records.** `mergeSession(base, ours,
+  theirs)`, invoked by git as `mycelium sync merge-driver session`: a
+  field only one side changed comes from that side; when both changed,
+  capture fields come from the longer transcript, `extracted` from the
+  summary covering more turns, placement from a human over automation
+  (else newer `updatedAt`), lineage/hand-edited tag arrays are unioned,
+  and a locked human title always survives. Drivers are re-registered
+  before every pass because they embed absolute node/cli paths. [tested]
+  (`test/sync-merge.test.js`)
+- **Knowledge conflicts become review proposals.** The `knowledge` driver
+  keeps this machine's `KNOWLEDGE.md` and parks the other one, written as
+  `KNOWLEDGE.pending.md` after the merge so it shows up in `k`. Digests and
+  pending files take the other side's version. [tested] (`test/sync.test.js`)
+- **One machine per shared store runs LLM upkeep.** `isLlmWorker()`: on a
+  two-way/collect machine, `smartOrganizeCycle`/`digestCycle`/
+  `knowledgeReviewCycle` and scan-time tagging run only where `--worker`
+  (or `mycelium sync worker on`) is set; the worker also tags sessions that
+  arrive through sync. Manual keys work everywhere. [tested]
+  (`test/sync.test.js`)
+- **Background sync.** `syncCycle()` in `daemon/cycles.js`: at start
+  (before the first scan) and every `MYCELIUM_SYNC_MS` (2 min); the TUI
+  reloads its view when sessions arrive (`startTuiRoutine()`'s
+  `onSynced`). Off until `sync init`, and under `MYCELIUM_DEMO_MODE`.
+  [untested]
+- **Tell the machines apart.** `data.machines()` (`src/tui/data.js`) is
+  `{ thisMachine, hosts }` only when sync is on *and* the index holds more
+  than one `host` (`listHosts()`, from the index's `host` column), otherwise
+  no machine UI appears. Then: an `@machine` badge on Sessions rows and
+  Calendar day-list rows (dim for this machine, highlighted for others),
+  a `Machine:` line in `formatSessionDetail()`, `Shift+H` to filter the
+  Sessions list to one machine (client-side, like sorting; changing it
+  drops the multi-selection, which is store-wide), and `mycelium
+  list [--host m]`. An index built before the `host` column existed is
+  rebuilt once when the column is first added. [partial]
+  (`test/index-host.test.js`, `test/render.test.js`, `test/sync.test.js`,
+  `test/e2e/machines-e2e.test.js` for the Sessions badge, `Shift+H` and the
+  selection; the Calendar badge is untested)
+- **Continue another machine's session here.** `localDirFor(session)` and
+  `isFromOtherMachine(session)` (`src/agents.js`): `r` on a session whose
+  `host` is another machine says where it was started and offers handoff;
+  handoff's default dir goes through `config.pathMap` (`mycelium sync
+  map <from> <to>`) and is dropped if it still doesn't exist here, instead
+  of offering to create the other machine's path. [partial]
+  (`localDirFor` tested in `test/sync.test.js`; the TUI prompt is not)
+
 ## Agents / Adapters (`src/agents.js`, `src/adapters/*`)
 
 - **See which agent CLIs are installed.** `which(cmd)`. PATH scan. [untested]
@@ -626,6 +717,30 @@ As a user, I can **install the `/clip` command into whichever agent CLIs I actua
   Merges `{...DEFAULTS, ...parsed}` (new defaults auto-backfill old
   files); corrupt JSON falls back to pure `DEFAULTS`, never throws. [tested]
 - **One overridable data home.** `HOME`/`RAW_DIR`/etc., `ensureDirs()`. [tested]
+- **A stable name for this machine.** `machineName()`. Short hostname,
+  persisted to `config.json` on first use so it doesn't drift when the
+  network renames the host. `scan()` stamps it as `host` on what it captures
+  (and on a local record that lost it), backlog/merge/split creation does
+  too; `saveRaw()` only stamps `updatedAt`, since a later editor can't know
+  where a record came from. Sync's merge never changes a record's host.
+  [tested] (`test/config.test.js`,
+  `test/scanner.test.js`)
+- **Rename a machine.** `mycelium sync name <name>` / `sync init --name`
+  (`renameMachine()`, `src/sync/machine.js`): relabels this machine's
+  sessions (`host`), writes the config, reindexes, then syncs. A one-way
+  machine's remote branch moves with the name: the old one is recorded in
+  `config.sync.staleBranches` and deleted after the new push succeeds
+  (retried until it does), and the sync fetch prunes it. The collecting
+  machine and two-way machines take the new name through a normal 3-way
+  merge (the pusher's branch history is unchanged, so the old name is the
+  common ancestor). Refuses an invalid name or one another machine's
+  sessions already carry; idempotent, relabeling before and after the
+  config write so an interrupted run or a racing daemon is mended by
+  rerunning. [tested] (`test/sync.test.js`)
+- **Deleted-session list that syncs.** `excludedIds()`/`addExcludedId()`.
+  One id per line in `excluded.txt` (merged by git's `union` driver), not
+  `config.json`, which is machine-local. An older `config.excludedSessionIds`
+  list moves over on first read. [tested] (`test/config.test.js`)
 
 ## Index / Search (`src/index-db.js`)
 
@@ -718,7 +833,7 @@ As a user, I can **install the `/clip` command into whichever agent CLIs I actua
 - **Run on Windows.** `which()` splits PATH on `;` and tries PATHEXT there; the client spawns the CLI through a shell on win32; terminals get `bin`/`args`/`cwd` (never a POSIX command line) and the receiving window quotes them for its own shell (bash/zsh, PowerShell; a `cmd` terminal gets only harmless words, anything else, such as a handoff prompt, runs that terminal in PowerShell instead, since cmd has no safe quoting and PowerShell's typographic quotes are doubled too). [partial] (every rule is unit-tested with an injected platform; the CI vscode job also runs on a Windows runner, but no one has driven a real Windows editor yet)
 - **Open Claude sessions in the Claude Code panel.** With the Claude Code extension installed, Resume on a Claude session (an id Claude Code recorded, not a merge/split product or backlog note), Hand off to Claude and Start New Agent → Claude run `claude-vscode.primaryEditor.open(sessionId?, prompt?)` instead of starting a terminal: the same entry point as its `vscode://anthropic.claude-code/open` URI, after activating that extension. The prompt is put in the input box, not sent. It needs no `claude` on PATH, Claude Code ships its own binary, so `resumeCommand`/`newCommand` take `allowMissingBin` (answering with `binMissing` instead of refusing) and `agents` takes `all` (every agent with `onPath`); a launch that has neither a usable panel nor the CLI says so instead of opening a terminal that can't run it (the terminal fallback after a failed panel exists only when the CLI's binary does). When the CLI says an agent "is not installed", or the agent picker finds any agent off PATH, the extension asks the login shell for its PATH once (cached) and repeats the request with those directories as `extraPath`, the bridge's `agents`, `resumeCommand` and `newCommand` look there too, without restarting the CLI, so requests in flight are untouched; every failed command is written to the Mycelium output channel. A launch always carries its command line too, so a failure (no extension, command missing, bad id) falls back to a terminal with a notice. `mycelium.claudeCode.openIn` (`auto` follows `claudeCode.useTerminal`); the panel finds a session only through its project, so it opens in the project's window like terminals do, and in any other window (`thisWindow`, or no answer from the project's window) a terminal is used instead. The sending window always attaches the request for an eligible session; the window that runs it applies its own extension and settings checks, and says so if `panel` was asked for by name but the extension isn't there. [partial] (decisions, request format and the open/fallback sequence are tested against a stand-in editor; not driven in a real editor with Claude Code)
 - **Publish the extension to the VS Code Marketplace and Open VSX.** A `vscode-v<version>` GitHub Release builds the `.vsix`, attaches it, and two independent jobs publish that same file to each registry using the `VSCE_PAT` / `OVSX_PAT` repo secrets; a registry whose token isn't set is skipped, and *Run workflow* with a tag publishes (or retries) an existing release. Pre-releases stay pre-releases. [untested] (workflow YAML is validated and the `.vsix` builds with the icon and banner; a real publish needs the accounts and tokens, so the first one is the test)
-- **Delete a session from the editor.** Right-click a session (multi-select works) → *Delete Session*, or *Delete* on its page, after a modal confirmation. The bridge's `delete` calls `deleteSession()`: only Mycelium's record is removed, the agent's own log stays, and the id goes on `excludedSessionIds` so a rescan won't re-capture it. Neighbours' lineage links to a deleted session are cleared and re-indexed with it, and a batch that fails part-way still refreshes what was already deleted (bridge and tree). An open session page for a deleted session closes. A CLI from before `delete` answers "method not found", shown as an error. [partial] (`test/bridge.test.js` covers the method, the exclude list, lineage cleanup, the index and the error cases; `vscode/test/panel-html.test.js` covers the button; the confirmation and tree refresh need a running editor and are verified manually)
+- **Delete a session from the editor.** Right-click a session (multi-select works) → *Delete Session*, or *Delete* on its page, after a modal confirmation. The bridge's `delete` calls `deleteSession()`: only Mycelium's record is removed, the agent's own log stays, and the id goes on the shared exclude list (`excluded.txt`) so a rescan won't re-capture it. Neighbours' lineage links to a deleted session are cleared and re-indexed with it, and a batch that fails part-way still refreshes what was already deleted (bridge and tree). An open session page for a deleted session closes. A CLI from before `delete` answers "method not found", shown as an error. [partial] (`test/bridge.test.js` covers the method, the exclude list, lineage cleanup, the index and the error cases; `vscode/test/panel-html.test.js` covers the button; the confirmation and tree refresh need a running editor and are verified manually)
 - **Write, edit and start a backlog item from the editor.** Bridge `backlogAdd` (title required, optional notes and folder), `backlogUpdate` (title/notes of a backlog item only) and `backlogOpen` (the `mycelium backlog open` steps: best-effort AGENTS.md injection for the item's folder, the seed with its marker, `doneAt` stamped; returns the command plus the `prompt`). In the editor: *Add Backlog Item* (Actions, quick menu, folder menu), then *Start* / *Edit* on the item's page or tree row; Claude gets the note in the Claude Code panel's input box, other agents get it as argv in a terminal. A second start of an item that already has `doneAt` asks first. A CLI from before these methods answers "unknown method", shown as an update hint. [partial] (`test/bridge.test.js` covers the three methods; `vscode/test/panel-html.test.js` covers the page; the prompts, picker and terminal need a running editor and are verified manually)
 - **Browse sessions by day in the editor (experimental).** Bridge `calendar({year, month})` returns `{ year, month, counts }` (day of month → sessions, by last activity, `_archive` excluded; same `sessionCountsByDay()` the TUI's Calendar tab uses; a bad month/year is an error). With `mycelium.experimental.calendar` on, *Open Calendar* shows a webview with a Sunday-first month grid (shade by count: 1-2, 3-5, 6+), the selected day's sessions under it (`sessions({date})`) and Open / Resume / Hand off per row (merged/split rows can only be handed off, backlog rows only opened). Previous/next month and *Today* buttons; arrow keys move the selected day, with one tab stop in the grid (roving tabindex). Counts redraw on every refresh. The page follows the theme; strings are English/Korean. [partial] (`test/bridge.test.js` covers `calendar`; `vscode/test/calendar-html.test.js` covers the grid, shading, selection, rows, language and markup-escaping; the panel's messaging and keyboard focus need a running editor and are verified manually)
 - **Browse and reuse from the editor sidebar.** Four views (Actions, This Workspace, Folders, and a hidden-by-default Recent), a themed session page with Resume / Hand off / Move / Tags / Summarize, drag-and-drop filing, smart organize with a tick-list review, folder knowledge extraction with a diff before saving, search, injecting into AGENTS.md, and a Get Started walkthrough. Refreshes when files under `raw/` change. [partial] (`vscode/test/` covers the RPC client, progress matching, the session-page HTML, including that session text can't inject markup, and the time/grouping helpers; the views and commands need a running editor and are verified manually)

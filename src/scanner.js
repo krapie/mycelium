@@ -14,7 +14,7 @@ import { ADAPTERS, getAdapter } from './adapters/index.js';
 import { META_MARKER } from './llm.js';
 import { cleanUserText } from './adapters/claude-code.js';
 import { isBacklog, backlogSeedId, firstRealUserTurn } from './schema.js';
-import { loadConfig } from './config.js';
+import { loadConfig, excludedIds, machineName } from './config.js';
 
 function rawPath(id) {
   // session ids are uuids / safe filenames already, but guard anyway
@@ -109,6 +109,11 @@ export function loadRaw(id) {
 
 export function saveRaw(neutral) {
   ensureDirs();
+  // `host` is stamped by whoever CAPTURES or CREATES a record (scan(),
+  // backlog/merge/split creation) and never here: a later editor can't know
+  // where a record came from, and stamping the editor's name on one that
+  // arrived without a host (from a machine on older code) mislabels it.
+  neutral.updatedAt = new Date().toISOString();
   writeFileSync(rawPath(neutral.id), JSON.stringify(neutral, null, 2));
 }
 
@@ -148,7 +153,7 @@ export function scan({ onImport } = {}) {
   ensureDirs();
   purgeMeta();
   const cfg = loadConfig();
-  const excluded = new Set(cfg.excludedSessionIds || []);
+  const excluded = excludedIds();
   const archiveDays = Number(cfg.archiveOlderThanDays) || 0;
   const archiveCutoff = Date.now() - archiveDays * 86400000;
   let scanned = 0;
@@ -189,6 +194,10 @@ export function scan({ onImport } = {}) {
         continue;
       }
       const existing = loadRaw(ref.id);
+      if (existing && !existing.host) {
+        existing.host = machineName();
+        saveRaw(existing);
+      }
       // One-time migration: the claude-code adapter's `name` (and every
       // session's `source`) used to be 'claude-code', renamed to 'claude' to
       // match what AGENTS/binFor/sourceColor always keyed on. Sessions
@@ -198,7 +207,7 @@ export function scan({ onImport } = {}) {
       // a re-parse, and a no-op after the first pass on a given session.
       if (existing?.source === 'claude-code') {
         existing.source = 'claude';
-        writeFileSync(rawPath(existing.id), JSON.stringify(existing, null, 2));
+        saveRaw(existing);
       }
       // 0.3.5 decoded Claude Code's project folder name into projectDir, which
       // turns a real '-' into '/' (`/a/my-project` → `/a/my/project`). #124
@@ -207,7 +216,7 @@ export function scan({ onImport } = {}) {
       // own cwd was already stored alongside it, so repair from that (#138).
       if (existing?.source === 'claude' && existing.cwd && existing.projectDir !== existing.cwd) {
         existing.projectDir = existing.cwd;
-        writeFileSync(rawPath(existing.id), JSON.stringify(existing, null, 2));
+        saveRaw(existing);
       }
       // Records captured before the claude adapter dropped its slash-command
       // bookkeeping (<local-command-caveat> etc.) still carry it as turns —
@@ -270,10 +279,14 @@ export function scan({ onImport } = {}) {
         // tagAll() treat an already-tracked session as never-tracked again
         // (harmless — see tagAll()'s doc comment — but still wrong state).
         neutral.titleLocked = existing.titleLocked ?? neutral.titleLocked;
+        neutral.host = existing.host ?? neutral.host;
         neutral.humanTags = existing.humanTags ?? neutral.humanTags;
         neutral.humanRemovedTags = existing.humanRemovedTags ?? neutral.humanRemovedTags;
         neutral.summarizedTurnCount = existing.summarizedTurnCount ?? neutral.summarizedTurnCount;
       }
+      // This session came from one of THIS machine's agent stores, so it is
+      // this machine's — including a record that lost its host elsewhere.
+      neutral.host = existing?.host ?? machineName();
       // First-time capture of an already-old session: file it straight into
       // _archive instead of New, keeping a large historical backlog out of
       // triage while still capturing it losslessly. Gated on `!existing`
@@ -287,7 +300,7 @@ export function scan({ onImport } = {}) {
       }
       neutral._mtimeMs = ref.mtimeMs;
 
-      writeFileSync(rawPath(neutral.id), JSON.stringify(neutral, null, 2));
+      saveRaw(neutral);
       // Only delete the item's own record once the session that replaces it
       // is durably on disk — see consumeBacklogItem()'s doc comment.
       if (consumedId) {

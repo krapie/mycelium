@@ -17,12 +17,15 @@ import {
   listTags,
   folderCounts,
   listSessions,
+  listHosts,
   sessionCountsByDay as dbSessionCountsByDay,
   backlogCount,
 } from '../index-db.js';
 
 export { backlogCount };
 import { listTreeDirs, isArchive } from '../organize.js';
+import { machineName } from '../config.js';
+import { syncSettings } from '../sync.js';
 
 // Thin data layer the TUI views read from. Folder tree and non-search session
 // list are served from the sqlite index (5000+ raw files no longer re-read on
@@ -86,6 +89,7 @@ function mapRow(r) {
     splitFrom: r.split_from,
     supersededBy: parseJsonArray(r.superseded_by),
     splitInto: parseJsonArray(r.split_into),
+    host: r.host || null,
     workDir: r.work_dir || null,
     snippet: r.snippet || null,
   };
@@ -122,6 +126,19 @@ export function sessionCountsByDay(year, month) {
 
 export function detail(id) {
   return loadRaw(id);
+}
+
+/**
+ * Which machine each session came from only means something once the store is
+ * shared between machines. `{ thisMachine, hosts }` when sync is on and the
+ * store holds sessions from more than one machine, else null — callers show
+ * no machine UI at all in that case instead of labelling every row with the
+ * only name there is.
+ */
+export function machines() {
+  if (!syncSettings()) return null;
+  const hosts = listHosts();
+  return hosts.length > 1 ? { thisMachine: machineName(), hosts } : null;
 }
 
 export function tags() {

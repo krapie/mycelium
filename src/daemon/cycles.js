@@ -13,12 +13,15 @@ import { summarizeCandidates, suggestPlacements, applyPlacements, queueSuggestio
 import { tagAll } from '../learn.js';
 import { generateDigest, proposeKnowledgeRefreshes } from '../insight.js';
 import { loadConfig } from '../config.js';
+import { syncOnce, syncSettings, syncMode, isLlmWorker } from '../sync.js';
 import { llmPreflight } from '../llm.js';
 import { VERSION, installedVersion } from '../version.js';
 
 // The cadence/policy layer: what runs, how often, and in what order — kept
 // separate from process.js's OS-level concerns (spawning/detaching/pidfiles).
 const SCAN_INTERVAL_MS = Number(process.env.MYCELIUM_SCAN_MS || 5 * 60 * 1000);
+// Only matters once `mycelium sync init` has run — see syncCycle().
+const SYNC_INTERVAL_MS = Number(process.env.MYCELIUM_SYNC_MS || 2 * 60 * 1000);
 // Content-based classification is heavier (LLM calls) and less urgent than
 // capture, so it runs on its own slower cadence rather than every scan cycle.
 const SMART_ORGANIZE_INTERVAL_MS = Number(process.env.MYCELIUM_SMART_ORGANIZE_MS || 30 * 60 * 1000);
@@ -89,7 +92,9 @@ export async function scanCycle(log, { onScanned } = {}) {
       reindex();
     }
     if (onScanned) onScanned();
-    const wantsTagging = res.imported > 0 || tagPending;
+    // Tagging is LLM work, so only the machine that runs LLM upkeep does it
+    // (sync/git.js's isLlmWorker()); the others get summaries through sync.
+    const wantsTagging = isLlmWorker() && (res.imported > 0 || tagPending);
     tagPending = wantsTagging && !(await llmReady(log, 'tag'));
     if (wantsTagging && !tagPending) {
       // Tag freshly imported sessions (skips those already summarized).
@@ -118,6 +123,7 @@ export async function scanCycle(log, { onScanned } = {}) {
  * config.json's `autoApproveSmartOrganize`.
  */
 export async function smartOrganizeCycle(log) {
+  if (!isLlmWorker()) return;
   if (pendingSuggestions().length) return;
   if (organizeRunning) return log.log('[organize] skip — previous cycle still running');
   organizeRunning = true;
@@ -152,6 +158,7 @@ export async function smartOrganizeCycle(log) {
 
 let lastDigestDay = null;
 export async function digestCycle(log) {
+  if (!isLlmWorker()) return;
   const today = new Date().toISOString().slice(0, 10);
   // Once per local day, generate yesterday's digest (the day is complete).
   if (lastDigestDay === today) return;
@@ -181,6 +188,7 @@ export async function digestCycle(log) {
  */
 let lastKnowledgeReviewDay = null;
 export async function knowledgeReviewCycle(log) {
+  if (!isLlmWorker()) return;
   const today = new Date().toISOString().slice(0, 10);
   if (lastKnowledgeReviewDay === today) return;
   if (!(await llmReady(log, 'knowledge'))) return;
@@ -189,6 +197,38 @@ export async function knowledgeReviewCycle(log) {
   const res = await proposeKnowledgeRefreshes(yesterday);
   if (res.proposed) log.log(`[knowledge] ${res.proposed} folder(s) have knowledge ready for review`);
   for (const f of res.failed) log.error(`[knowledge] proposal failed for ${f.folder}: ${f.error}`);
+}
+
+/**
+ * Pull other machines' changes into this store and push ours (sync/cycle.js).
+ * A no-op until `mycelium sync init` has run. Sessions captured on other
+ * machines arrive here rather than through scan(), so the worker machine
+ * tags them here too — otherwise only its own captures would ever get
+ * summarized. `onSynced(changedIds)` lets the TUI refresh what it shows.
+ */
+let syncRunning = false;
+export async function syncCycle(log, { onSynced } = {}) {
+  if (!syncSettings() || syncRunning) return;
+  syncRunning = true;
+  try {
+    const res = await syncOnce();
+    if (res.skipped) return;
+    if (!res.ok) return log.error(`[sync] ${res.error}`);
+    const pulled = res.changed === null ? 'all' : res.changed.length;
+    if (pulled) log.log(`[sync] pulled ${pulled} session change(s)`);
+    if (pulled && onSynced) onSynced(res.changed);
+    if (pulled && isLlmWorker() && (await llmReady(log, 'tag'))) {
+      const t = await tagAll({ limit: TAG_BATCH_LIMIT, concurrency: SUMMARIZE_CONCURRENCY });
+      if (t.tagged > 0) {
+        reindex();
+        log.log(`[tag] +${t.tagged} (synced in)`);
+      }
+    }
+  } catch (err) {
+    log.error(`[sync] ${err.message}`);
+  } finally {
+    syncRunning = false;
+  }
 }
 
 /**
@@ -229,7 +269,7 @@ export function upgradedOnDisk(running = VERSION, onDisk = installedVersion()) {
  * the standalone daemon uses it to hand over to a fresh process. The TUI's
  * in-process upkeep omits it, since quitting the TUI already picks up new code.
  */
-export async function runDaemon({ log = console, onFirstScanDone, onUpgrade } = {}) {
+export async function runDaemon({ log = console, onFirstScanDone, onSynced, onUpgrade } = {}) {
   log.log('Mycelium daemon starting (background upkeep: scan + digest + knowledge review + smart organize).');
   log.log(`  scan interval: ${SCAN_INTERVAL_MS}ms (tag batch limit ${TAG_BATCH_LIMIT})`);
   log.log(
@@ -257,12 +297,20 @@ export async function runDaemon({ log = console, onFirstScanDone, onUpgrade } = 
     }, VERSION_CHECK_MS);
   }
 
+  const sync = syncSettings();
+  if (sync) log.log(`  sync: ${syncMode()} → ${sync.remote} every ${SYNC_INTERVAL_MS}ms (this machine runs LLM upkeep: ${isLlmWorker() ? 'yes' : 'no'})`);
+
+  // Pull first, so this machine's first scan and LLM passes see what the
+  // others already did. Only awaited when sync is on: without it the first
+  // scan must still start synchronously (onFirstScanDone's timing, above).
+  if (sync) await syncCycle(log, { onSynced });
   await scanCycle(log, { onScanned: onFirstScanDone });
   await digestCycle(log);
   await knowledgeReviewCycle(log);
   await smartOrganizeCycle(log);
 
   setInterval(() => scanCycle(log), SCAN_INTERVAL_MS);
+  setInterval(() => syncCycle(log, { onSynced }), SYNC_INTERVAL_MS);
   setInterval(() => digestCycle(log), 60 * 60 * 1000); // hourly check; fires once/day
   setInterval(() => knowledgeReviewCycle(log), 60 * 60 * 1000); // same cadence, independent gate
   setInterval(() => smartOrganizeCycle(log), SMART_ORGANIZE_INTERVAL_MS);

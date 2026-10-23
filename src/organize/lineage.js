@@ -9,7 +9,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { loadRaw, saveRaw, allRaw, deleteRaw } from '../scanner.js';
-import { loadConfig, saveConfig } from '../config.js';
+import { addExcludedId, machineName } from '../config.js';
 import { emptyNeutral, isBacklog } from '../schema.js';
 import { mkdir } from './folders.js';
 
@@ -98,17 +98,14 @@ export function setContent(sessionId, { title, summary } = {}) {
  * ~/.claude or ~/.codex session log, same boundary as setContent() above.
  * That source file staying on disk means a plain rescan would just re-import
  * the "deleted" session right back, so its id also goes on a persistent
- * exclude list in config.json that scan() checks before re-capturing.
+ * exclude list (excluded.txt, see config.js's excludedIds()) that scan()
+ * checks before re-capturing.
  */
 export function deleteSession(sessionId) {
   const n = loadRaw(sessionId);
   if (!n) return { ok: false, error: `no session ${sessionId}` };
   deleteRaw(sessionId);
-  const cfg = loadConfig();
-  const excluded = new Set(cfg.excludedSessionIds || []);
-  excluded.add(sessionId);
-  cfg.excludedSessionIds = [...excluded];
-  saveConfig(cfg);
+  addExcludedId(sessionId);
   // Sweep other sessions' backlinks to the now-gone id — continuation/merge/
   // split arrays render.js reads for the "Continues:"/"Merged from:"/etc.
   // markers and detail links.
@@ -211,6 +208,7 @@ export function mergeSessions(ids, { title } = {}) {
   originals.sort((a, b) => (a.startedAt || '').localeCompare(b.startedAt || ''));
 
   const merged = emptyNeutral(randomUUID(), 'merged');
+  merged.host = machineName();
   merged.startedAt = originals[0].startedAt;
   merged.endedAt = originals[originals.length - 1].endedAt;
   merged.mergedFrom = originals.map((n) => n.id);

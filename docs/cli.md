@@ -44,12 +44,25 @@ mycelium inject --dir <project> --folder <folder> # inject knowledge into AGENTS
 mycelium handoff <session>                     # print a handoff prompt
 mycelium resume <session|prefix> [--copy|--exec] [--force] # print/copy/immediately run the resume command (points to handoff if the agent no longer has the session; --force skips that check)
 mycelium search "query" --tag infra --folder company
-mycelium list / tags / reindex
+mycelium list [--host <machine>] / tags / reindex   # --host: one machine's sessions, on a store synced across machines
 
 # (optional) keep background upkeep running without the TUI
 mycelium daemon                 # run in the foreground
 mycelium daemon --detach        # run detached in the background (idempotent)
 mycelium daemon --stop          # stop it
+
+# Sync one store across machines (experimental, see docs/sync.md)
+mycelium sync host ~/mycelium.git                  # on the central machine: create the shared repo
+mycelium sync init ~/mycelium.git --collect --worker  # on the central machine: gather every machine's sessions here
+mycelium sync init <git-url>                       # on another machine: send its sessions, take nothing back (default)
+mycelium sync init <git-url> --two-way             # ...or exchange everything both ways
+mycelium sync                                      # sync now (the TUI/daemon also sync every 2 min)
+mycelium sync status                               # remote, mode, machine name, unsynced changes
+mycelium sync name [macbook]                       # show/rename this machine (the @label on its sessions); init also takes --name
+mycelium sync mode [push|two-way|collect]          # show/change how this machine syncs
+mycelium sync deletes [keep|propagate]             # central machine: keep (default) or follow deletions made on a sending machine
+mycelium sync worker [on|off]                      # automatic LLM upkeep on this machine (always on for a one-way machine)
+mycelium sync map /Users/you/code /home/you/code   # map another machine's paths to this one's, for handoffs
 
 # interactive tutorial with fake sessions, the full lifecycle (organize, learn,
 # reuse, merge/split), LLM calls mocked so it's fast and deterministic.
@@ -139,6 +152,8 @@ Background upkeep's intervals and limits are all environment variable tunable. T
 | Env var | Default | Meaning |
 |---|---|---|
 | `MYCELIUM_SCAN_MS` | 5 min | Scan (capture) interval |
+| `MYCELIUM_SYNC_MS` | 2 min | Sync interval, once `mycelium sync init` has run (see [Sync](./sync.md)) |
+| `MYCELIUM_SYNC_TIMEOUT_MS` | 2 min | Deadline for one sync `fetch`/`push` before it is given up on (a stalled one would otherwise hold the sync lock forever); raise it for a very large first push |
 | `MYCELIUM_TAG_BATCH_LIMIT` | 20 | Max sessions auto-summarized/tagged per scan cycle (oldest first, rest next cycle) |
 | `MYCELIUM_SMART_ORGANIZE_MS` | 30 min | Smart-organize auto-compute interval |
 | `MYCELIUM_SMART_ORGANIZE_LIMIT` | 100 | Max sessions classified per smart-organize cycle |

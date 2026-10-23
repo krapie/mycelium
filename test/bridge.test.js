@@ -61,7 +61,7 @@ test('move and tag write through and refresh the index', async () => {
 
 test('delete removes the record, keeps it excluded from rescans, and fixes lineage links', async () => {
   const { loadRaw } = await import('../src/scanner.js');
-  const { loadConfig } = await import('../src/config.js');
+  const { excludedIds } = await import('../src/config.js');
   seed('cccccccc-3333', 'first half');
   const next = seed('dddddddd-4444', 'second half');
   next.continuationOf = 'cccccccc-3333';
@@ -73,7 +73,7 @@ test('delete removes the record, keeps it excluded from rescans, and fixes linea
 
   assert.equal((await call('delete', { ids: ['dddddddd-4444'] })).result.deleted, 1);
   assert.equal(loadRaw('dddddddd-4444'), null);
-  assert.ok(loadConfig().excludedSessionIds.includes('dddddddd-4444'));
+  assert.ok(excludedIds().has('dddddddd-4444'));
   assert.deepEqual(loadRaw('cccccccc-3333').continuedTo, []);
   assert.ok(!(await call('sessions', {})).result.some((s) => s.id === 'dddddddd-4444'), 'gone from the index too');
 

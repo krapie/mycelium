@@ -72,17 +72,22 @@ export function openDb() {
       if (!String(err.message).includes('duplicate column')) throw err;
     }
   }
-  // `work_dir` (the directory a session ran in, for an editor's "this
-  // workspace" view) arrived after the index did: an index built before it has
-  // every row's work_dir empty until rebuilt. Rebuilding is cheap and the
-  // index is derived, so do it once, right when the column first appears on a
-  // non-empty index.
-  try {
-    db.exec('ALTER TABLE sessions ADD COLUMN work_dir TEXT');
-    if (db.prepare('SELECT COUNT(*) AS n FROM sessions').get().n > 0) reindex();
-  } catch (err) {
-    if (!String(err.message).includes('duplicate column')) throw err;
+  // `host` (which machine a session came from) and `work_dir` (the directory
+  // a session ran in, for an editor's "this workspace" view) arrived after the
+  // index did: an index built before them has those columns empty until
+  // rebuilt. Rebuilding is cheap and the index is derived, so do it once,
+  // right when a column first appears on a non-empty index. Both columns are
+  // added before the rebuild, which writes both.
+  let added = false;
+  for (const col of ['host TEXT', 'work_dir TEXT']) {
+    try {
+      db.exec(`ALTER TABLE sessions ADD COLUMN ${col}`);
+      added = true;
+    } catch (err) {
+      if (!String(err.message).includes('duplicate column')) throw err;
+    }
   }
+  if (added && db.prepare('SELECT COUNT(*) AS n FROM sessions').get().n > 0) reindex();
   return db;
 }
 
@@ -108,7 +113,7 @@ function inTransaction(d, fn) {
 function prepareWriters(d) {
   return {
     insSession: d.prepare(
-      'INSERT OR REPLACE INTO sessions (id, source, folder, started_at, ended_at, preview, title, summary, organized_by, kind, done_at, continuation_of, continued_to, tags, merged_from, split_from, superseded_by, split_into, work_dir) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT OR REPLACE INTO sessions (id, source, folder, started_at, ended_at, preview, title, summary, organized_by, kind, done_at, continuation_of, continued_to, tags, merged_from, split_from, superseded_by, split_into, host, work_dir) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     ),
     insFts: d.prepare('INSERT INTO session_fts (id, body) VALUES (?, ?)'),
     upsertTag: d.prepare('INSERT OR IGNORE INTO tags (name) VALUES (?)'),
@@ -137,6 +142,7 @@ function writeSessionRow(w, n) {
     n.splitFrom ?? null,
     JSON.stringify(n.supersededBy || []),
     JSON.stringify(n.splitInto || []),
+    n.host ?? null,
     n.projectDir || n.cwd || null,
   );
   w.insFts.run(n.id, searchableText(n));
@@ -204,6 +210,15 @@ export function removeFromIndex(id) {
 }
 
 /** Session counts grouped by folder — for the TUI folder tree, without reading raw/. */
+/** Machines that sessions in the index came from (sorted). More than one only
+ * once a store is synced across machines. */
+export function listHosts() {
+  return openDb()
+    .prepare('SELECT DISTINCT host FROM sessions WHERE host IS NOT NULL ORDER BY host')
+    .all()
+    .map((r) => r.host);
+}
+
 export function folderCounts() {
   const d = openDb();
   // Sessions folded into a merge/split product don't count toward the

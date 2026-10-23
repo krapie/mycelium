@@ -34,7 +34,8 @@ src/
   backlog.js          user-written intent notes (kind: 'backlog'), opened as a seeded handoff
   split.js            LLM-suggested session splitting
   index-db.js         sqlite (FTS5) index — derived, rebuildable from raw/
-  config.js           config.json read/write (locale, excluded ids, etc.)
+  config.js           config.json read/write (locale, machine name, etc.) + excluded.txt (deleted ids)
+  sync.js             barrel — see src/sync/{git,merge,cycle}.js (store sync across machines via git, docs/sync.md)
   llm.js              headless LLM calls via the user's own claude/codex CLI subscription
   bridge.js           method table behind `mycelium serve --stdio` (JSON-RPC for editor integrations; docs/vscode.md)
   agents.js           derives binFor/resumeArgsFor from the adapter registry
@@ -103,7 +104,7 @@ Full reference: [`docs/tui.md`](./docs/tui.md). Quick map, since a change to any
 | Backlog | `b` write an item to start later · `r`/detail-`Enter` start it (seeded handoff) · `e` edit its title + notes |
 | Clip | `p` pin turns of a session verbatim (its own `Clips` collection under `New`, alongside `Backlog`; counts as must-reflect material next time `w`/`k` drafts knowledge) |
 | Navigation | `Enter`/`→` drill in · `Esc`/`←` back · `Space` multi-select · `/` search · `v` Calendar tab |
-| Other | `Shift+M` merge · `Shift+S` split · `Shift+O` cycle sort · `y` copy · `d` digests · `g` re-show onboarding · `l` switch language (confirm, then restarts) · `?` full shortcut list · `q` quit |
+| Other | `Shift+M` merge · `Shift+S` split · `Shift+O` cycle sort · `Shift+H` filter by machine (synced stores) · `y` copy · `d` digests · `g` re-show onboarding · `l` switch language (confirm, then restarts) · `?` full shortcut list · `q` quit |
 
 `src/tui/resume-handoff.js`'s `createResumeHandoff()` is the shared implementation behind `r`/`h`/detail-`Enter` in **both** the Sessions panel and the Calendar tab — if you're changing resume/handoff behavior, change it there once, not in both views.
 

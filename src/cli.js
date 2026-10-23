@@ -19,6 +19,7 @@ import { backlogCmd } from './cli/backlog.js';
 import { clipCmd } from './cli/clip.js';
 import { cleanupCmd } from './cli/cleanup.js';
 import { daemonCmd, demoCmd, langCmd } from './cli/run.js';
+import { syncCmd } from './cli/sync.js';
 import { serveCmd } from './cli/serve.js';
 import { doctorCmd } from './cli/doctor.js';
 import { setupCmd } from './cli/setup.js';
@@ -52,6 +53,7 @@ const COMMANDS = {
   tags: tagsCmd,
   cleanup: cleanupCmd,
   daemon: daemonCmd,
+  sync: syncCmd,
   serve: serveCmd,
   doctor: doctorCmd,
   setup: setupCmd,
