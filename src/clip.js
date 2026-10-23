@@ -137,8 +137,14 @@ export function setClipNote(id, note) {
   const clip = JSON.parse(readFileSync(p, 'utf8'));
   clip.note = (note || '').trim() || null;
   const tmp = `${p}.${process.pid}.tmp`;
-  writeFileSync(tmp, JSON.stringify(clip, null, 2));
-  renameSync(tmp, p);
+  try {
+    writeFileSync(tmp, JSON.stringify(clip, null, 2));
+    renameSync(tmp, p);
+  } catch (e) {
+    // listClips() ignores *.tmp, so a leftover would be an unnoticed full copy.
+    rmSync(tmp, { force: true });
+    throw e;
+  }
   return { ok: true, clip };
 }
 

@@ -218,9 +218,16 @@ test('every adapter sessionEnv is cleared, so running the suite inside one agent
 
   // And with nothing set at all, the suite must not pick up an id inherited
   // from whichever agent a contributor happens to be running it inside.
-  const none = runHere(['clip', 'add', '--here']);
-  assert.equal(none.status, 1);
-  assert.match(none.stderr, /pass the session id/);
+  const previous = process.env.CLAUDE_CODE_SESSION_ID;
+  try {
+    process.env.CLAUDE_CODE_SESSION_ID = 'inherited-session';
+    const none = runHere(['clip', 'add', '--here']);
+    assert.equal(none.status, 1);
+    assert.match(none.stderr, /pass the session id/);
+  } finally {
+    if (previous === undefined) delete process.env.CLAUDE_CODE_SESSION_ID;
+    else process.env.CLAUDE_CODE_SESSION_ID = previous;
+  }
 });
 
 test('lastTurnsRange() with skipRequest ends before the request turn, so what the agent says after it is never pinned', () => {
