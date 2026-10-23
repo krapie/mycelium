@@ -1,3 +1,12 @@
+/*
+ * Copyright 2026 The Mycelium Authors. All rights reserved.
+ *
+ * Use of this source code is governed by the MIT License
+ * that can be found in the LICENSE file.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { emptyNeutral, firstUserText, firstUserTurn, searchableText } from '../src/schema.js';
@@ -79,4 +88,26 @@ test('firstUserText() and firstUserTurn() agree on which turn is the first real 
   ];
   assert.equal(firstUserText(n), 'fix the login bug');
   assert.equal(firstUserTurn(n).text, 'fix the login bug');
+});
+
+test('firstUserTurn skips underscore-tagged synthetic turns like <ide_selection>', () => {
+  const n = emptyNeutral('s', 'claude');
+  n.turns = [
+    { role: 'user', text: '<ide_selection>The user selected lines</ide_selection>' },
+    { role: 'user', text: 'real prompt' },
+  ];
+  assert.equal(firstUserTurn(n).text, 'real prompt');
+});
+
+test('a fork previews from the turns after its fork point, falling back to everything when it has none', () => {
+  const n = emptyNeutral('f', 'claude');
+  n.turns = [
+    { role: 'user', text: 'shared opener' },
+    { role: 'assistant', text: 'shared reply' },
+    { role: 'user', text: 'fork-only question' },
+  ];
+  n.forkPoint = 2;
+  assert.equal(firstUserText(n), 'fork-only question');
+  n.forkPoint = 3;
+  assert.equal(firstUserText(n), 'shared opener');
 });

@@ -15,6 +15,9 @@ on:
 
 jobs:
   publish:
+    # The extension has its own releases (publish-vscode.yml, tags `vscode-v*`);
+    # they must not publish the CLI to npm / bump the formula.
+    if: ${{ !startsWith(github.event.release.tag_name, 'vscode-') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

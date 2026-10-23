@@ -1,3 +1,12 @@
+/*
+ * Copyright 2026 The Mycelium Authors. All rights reserved.
+ *
+ * Use of this source code is governed by the MIT License
+ * that can be found in the LICENSE file.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { useTempHome } from './helpers.js';
@@ -178,4 +187,21 @@ test('listTags() returns tag names with usage counts, most-used first', () => {
   assert.equal(popular.n, 2);
   assert.equal(rare.n, 1);
   assert.ok(tags.indexOf(popular) < tags.indexOf(rare));
+});
+
+test('reindex() is atomic: a failure mid-rebuild leaves the previous index intact', async () => {
+  const { deleteRaw } = await import('../src/scanner.js');
+  seed('atomic-ok', { folder: 'atomic', startedAt: '2026-02-01T00:00:00.000Z' });
+  reindex();
+  assert.deepEqual(listSessions({ folder: 'atomic' }).map((r) => r.id), ['atomic-ok']);
+
+  // Parses as JSON (so allRaw() keeps it) but writeSessionRow() throws on it.
+  seed('atomic-bad', { folder: 'atomic', extracted: null });
+  try {
+    assert.throws(() => reindex());
+    assert.deepEqual(listSessions({ folder: 'atomic' }).map((r) => r.id), ['atomic-ok']);
+  } finally {
+    deleteRaw('atomic-bad');
+    reindex();
+  }
 });

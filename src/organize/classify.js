@@ -1,9 +1,18 @@
+/*
+ * Copyright 2026 The Mycelium Authors. All rights reserved.
+ *
+ * Use of this source code is governed by the MIT License
+ * that can be found in the LICENSE file.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 import { join } from 'node:path';
 import { existsSync, readFileSync } from 'node:fs';
 import { TREE_DIR } from '../paths.js';
 import { loadRaw, saveRaw, allRaw } from '../scanner.js';
 import { listTags } from '../index-db.js';
-import { complete, parseJsonReply, mapConcurrent } from '../llm.js';
+import { complete, parseJsonReply, mapConcurrent, classifyLlmError } from '../llm.js';
 import { autoTagSession } from '../learn.js';
 import { contentLocale } from '../config.js';
 import { isArchive, isSuperseded, listTreeDirs, isInSubtree } from './folders.js';
@@ -134,6 +143,7 @@ export async function summarizeCandidates({ onProgress, concurrency = 3, folder,
   const vocab = new Set(listTags().map((t) => t.name));
   let done = 0;
   let failed = 0;
+  let lastError = null;
 
   const { stoppedEarly } = await mapConcurrent(
     targets,
@@ -148,17 +158,19 @@ export async function summarizeCandidates({ onProgress, concurrency = 3, folder,
           return { ok: true };
         }
         failed++;
+        lastError = res.error;
         if (onProgress) onProgress(null, new Error(res.error));
-        return { ok: false };
+        return { ok: false, fatal: classifyLlmError(res.error) === 'missing' };
       } catch (err) {
         failed++;
+        lastError = err.message;
         if (onProgress) onProgress(null, err);
-        return { ok: false };
+        return { ok: false, fatal: classifyLlmError(err.message) === 'missing' };
       }
     },
     { stopAfterConsecutiveFailures },
   );
-  return { done, failed, total: targets.length, stoppedEarly };
+  return { done, failed, total: targets.length, stoppedEarly, lastError };
 }
 
 /**
@@ -348,10 +360,16 @@ export async function suggestPlacements({
       // Stamp every candidate the LLM actually saw this round, matched or
       // not — "already asked" is what the cooldown needs, independent of the
       // outcome.
+      //
+      // Re-read each record: `chunk` is what was loaded before the LLM call,
+      // and saving it would undo a move/tag made in the meantime (and bring
+      // back a session deleted meanwhile).
       const now = new Date().toISOString();
       for (const n of chunk) {
-        n.lastClassifiedAt = now;
-        saveRaw(n);
+        const cur = loadRaw(n.id);
+        if (!cur) continue;
+        cur.lastClassifiedAt = now;
+        saveRaw(cur);
       }
       completedChunks++;
       if (onProgress) onProgress(completedChunks, chunks.length);
@@ -428,4 +446,47 @@ export function applyPlacements(placements) {
     if (res.ok) applied++;
   }
   return applied;
+}
+
+/**
+ * The review list for "organize": suggestions the daemon already queued, or
+ * — when there are none — a fresh run (summarize what lacks a summary, then
+ * classify, then queue the result). Shared by `mycelium organize` and the
+ * editor bridge so both bound and order the work identically; progress goes
+ * out as plain events, and each caller decides how to show them.
+ *
+ * Doesn't reindex: it can't import index-db.js (which imports this barrel),
+ * and the summaries it writes only reach the index when the caller does.
+ */
+export async function reviewablePlacements({ folder, limit, onEvent = () => {} } = {}) {
+  // The limit bounds the reused queue too, not just a fresh computation —
+  // otherwise a small --limit after a background cycle queued everything
+  // would show (and apply) the whole queue (#135).
+  const queued = pendingSuggestions({ folder });
+  const reused = queued.slice(0, limit);
+  if (queued.length > limit) onEvent({ type: 'queue-limited', shown: limit, queued: queued.length });
+  if (reused.length) return { ok: true, placements: reused, fresh: false };
+
+  // cooldownMs: 0 bypasses the daemon's "don't re-ask too soon" throttle,
+  // since a human explicitly asked for this right now.
+  const batch = organizeBatch({ folder, limit });
+  if (batch.total > limit) onEvent({ type: 'batch-limited', limit, total: batch.total });
+  // Summarizing is the expensive step (one LLM call per session), so it only
+  // covers this run's batch, not the whole backlog.
+  if (batch.unsummarized) onEvent({ type: 'summarizing', count: batch.unsummarized });
+  await summarizeCandidates({
+    folder,
+    ids: batch.ids,
+    onProgress: (s, err) => onEvent(err ? { type: 'summarize-error', error: err } : { type: 'summarized', id: s.id }),
+  });
+  onEvent({ type: 'classifying' });
+  const res = await suggestPlacements({
+    cooldownMs: 0,
+    folder,
+    ids: batch.ids,
+    onProgress: (done, total) => onEvent({ type: 'batch', done, total }),
+  });
+  if (!res.ok) return res;
+  queueSuggestions(res.placements); // persists even if the caller never applies
+  return { ok: true, placements: res.placements, fresh: true };
 }

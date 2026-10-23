@@ -1,3 +1,12 @@
+/*
+ * Copyright 2026 The Mycelium Authors. All rights reserved.
+ *
+ * Use of this source code is governed by the MIT License
+ * that can be found in the LICENSE file.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -13,6 +22,8 @@ import {
   __clearInFlightForTest,
   claudeArgs,
   isUnknownNoPersistenceFlag,
+  classifyLlmError,
+  llmPreflight,
 } from '../src/llm.js';
 
 // Pure functions + the test-provider seam — no subprocess, no MYCELIUM_HOME
@@ -259,4 +270,46 @@ test('headless claude calls ask Claude Code not to save them as sessions (#149)'
 test('an older CLI rejecting the flag is recognized, so complete() retries without it', () => {
   assert.equal(isUnknownNoPersistenceFlag("error: unknown option '--no-session-persistence'"), true);
   assert.equal(isUnknownNoPersistenceFlag('Error: rate limited'), false);
+});
+
+test('classifyLlmError() tells usage limits from auth problems, timeouts and the rest', () => {
+  assert.equal(classifyLlmError('Claude usage limit reached'), 'usage');
+  assert.equal(classifyLlmError('429 Too Many Requests'), 'usage');
+  assert.equal(classifyLlmError('Warning: stdin is not a terminal, skipping credential refresh'), 'auth');
+  assert.equal(classifyLlmError('Please log in'), 'auth');
+  assert.equal(classifyLlmError('llm timeout'), 'timeout');
+  assert.equal(classifyLlmError('segfault'), 'other');
+  assert.equal(classifyLlmError(undefined), 'other');
+});
+
+test('llmPreflight() resolves null when the provider answers and the error text when it fails', async () => {
+  __setTestProvider(async () => 'ok');
+  assert.equal(await llmPreflight(), null);
+  __setTestProvider(async () => {
+    throw new Error('llm timeout');
+  });
+  assert.equal(await llmPreflight(), 'llm timeout');
+  __clearTestProvider();
+});
+
+test('classifyLlmError() recognises a missing agent CLI', () => {
+  assert.equal(classifyLlmError('claude not installed'), 'missing');
+  assert.equal(classifyLlmError('LLM failed: spawn claude ENOENT'), 'missing');
+});
+
+test('complete() reports a missing agent CLI as "<bin> not installed", not a raw spawn error', async (t) => {
+  const saved = process.env.PATH;
+  t.after(() => (process.env.PATH = saved));
+  process.env.PATH = '/nonexistent-mycelium-dir';
+  await assert.rejects(complete('hi', { timeoutMs: 5000 }), (err) => err.message === 'claude not installed' && err.code === 'ENOENT');
+});
+
+test('mapConcurrent() stops at once on a fatal result, without needing the failure breaker', async () => {
+  let started = 0;
+  const { stoppedEarly } = await mapConcurrent([1, 2, 3, 4, 5, 6], 1, async () => {
+    started++;
+    return { ok: false, fatal: true };
+  });
+  assert.equal(stoppedEarly, true);
+  assert.equal(started, 1);
 });

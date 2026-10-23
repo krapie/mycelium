@@ -1,9 +1,19 @@
+/*
+ * Copyright 2026 The Mycelium Authors. All rights reserved.
+ *
+ * Use of this source code is governed by the MIT License
+ * that can be found in the LICENSE file.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, rmSync, openSync, appendFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { runDaemon } from './cycles.js';
 import { killInFlight } from '../llm.js';
-import { ensureDirs, DAEMON_PID_PATH, DAEMON_LOG_PATH } from '../paths.js';
+import { ensureDirs, DAEMON_PID_PATH, DAEMON_LOG_PATH, DAEMON_VERSION_PATH } from '../paths.js';
+import { VERSION, installedVersion } from '../version.js';
 
 // OS process-lifecycle concerns (spawning/detaching/pidfiles) — kept
 // separate from cycles.js's cadence/policy layer.
@@ -67,13 +77,35 @@ export function startTuiRoutine(onFirstScanDone, onSynced) {
  * idempotent) — for anyone who explicitly wants background upkeep to keep
  * running even while the TUI itself is closed (`mycelium daemon --detach`).
  * Not used by the TUI itself anymore — see startTuiRoutine() above.
+ * A daemon from an older version is replaced instead of reported as running.
  */
-export function spawnDetachedDaemon() {
+export function spawnDetachedDaemon({ kill = stopDetachedDaemon } = {}) {
   ensureDirs();
+  let restartedFrom;
   if (existsSync(DAEMON_PID_PATH)) {
     const pid = Number(readFileSync(DAEMON_PID_PATH, 'utf8').trim());
-    if (pid && isAlive(pid)) return { started: false, pid };
+    if (pid && isAlive(pid)) {
+      // A daemon keeps the code it loaded, so one that outlived a CLI update
+      // (#203) must be replaced. No version file means it predates this check.
+      const running = readRecordedVersion();
+      if (running === VERSION) return { started: false, pid };
+      kill();
+      restartedFrom = running ?? 'unknown';
+    }
   }
+  const child = launchDaemon();
+  return { started: true, pid: child.pid, ...(restartedFrom && { restarted: true, from: restartedFrom, to: VERSION }) };
+}
+
+function readRecordedVersion() {
+  try {
+    return readFileSync(DAEMON_VERSION_PATH, 'utf8').trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function launchDaemon() {
   const cliPath = fileURLToPath(new URL('../cli.js', import.meta.url));
   const log = openSync(DAEMON_LOG_PATH, 'a');
   const child = spawn(process.execPath, [cliPath, 'daemon'], {
@@ -82,7 +114,28 @@ export function spawnDetachedDaemon() {
   });
   child.unref();
   writeFileSync(DAEMON_PID_PATH, String(child.pid));
-  return { started: true, pid: child.pid };
+  // The child resolves its own VERSION from the (new) package.json on disk.
+  writeFileSync(DAEMON_VERSION_PATH, installedVersion() ?? VERSION);
+  return child;
+}
+
+/**
+ * Called by a standalone daemon that notices the package was updated under it
+ * (#203): start a replacement running the new code, then exit. Only a daemon
+ * that owns the pidfile replaces itself; a foreground one (launchd, systemd)
+ * just exits so its supervisor restarts it, rather than leaking a detached
+ * duplicate next to the supervised one.
+ */
+export function handOverToFreshDaemon(proc = process, { launch = launchDaemon } = {}) {
+  let owned = false;
+  try {
+    owned = Number(readFileSync(DAEMON_PID_PATH, 'utf8').trim()) === proc.pid;
+  } catch {
+    // no pidfile: not a --detach daemon
+  }
+  killInFlight();
+  if (owned) launch();
+  proc.exit(0);
 }
 
 /** Stop a daemon started via spawnDetachedDaemon(), if running. */
@@ -92,5 +145,6 @@ export function stopDetachedDaemon() {
   const stopped = pid && isAlive(pid);
   if (stopped) process.kill(pid);
   rmSync(DAEMON_PID_PATH, { force: true });
+  rmSync(DAEMON_VERSION_PATH, { force: true });
   return { stopped, pid };
 }

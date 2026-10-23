@@ -1,3 +1,12 @@
+/*
+ * Copyright 2026 The Mycelium Authors. All rights reserved.
+ *
+ * Use of this source code is governed by the MIT License
+ * that can be found in the LICENSE file.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { useTempHome } from '../helpers.js';
@@ -61,11 +70,11 @@ async function mountWithSameLeafFolders() {
 test('navigating onto a folder whose sibling shares its leaf name lands on the CORRECT one', async () => {
   const { app, input, foldersBox } = await mountWithSameLeafFolders();
   try {
-    // Rows: 0 Root, 1 New, 2 cases, 3 cases/CW, 4 projects, 5 projects/CW.
-    // The critical step is 2 (on "cases", both CW rows still dim+identical)
-    // -> 3 (lands on cases/CW) — before the fix this silently relocated the
-    // real cursor to row 5 (projects/CW) instead.
-    await sendKeys(input, ['down', 'down', 'down'], 60);
+    // Rows: 0 Root, 1 New, 2 Backlog, 3 Clips, 4 cases, 5 cases/CW, 6 projects, 7 projects/CW.
+    // The critical step is 4 (on "cases", both CW rows still dim+identical)
+    // -> 5 (lands on cases/CW) — before the fix this silently relocated the
+    // real cursor to row 7 (projects/CW) instead.
+    await sendKeys(input, ['down', 'down', 'down', 'down', 'down'], 60);
     assert.equal(foldersBox._keys[foldersBox.selected], 'cases/CW', 'cursor is really on cases/CW, not projects/CW');
 
     // Continue past it and confirm projects/CW is still reachable and
@@ -81,7 +90,7 @@ test('navigating onto a folder whose sibling shares its leaf name lands on the C
 test('renaming the folder the cursor is really on affects only that folder, not its same-named sibling', async () => {
   const { app, input, foldersBox } = await mountWithSameLeafFolders();
   try {
-    await sendKeys(input, ['down', 'down', 'down'], 60);
+    await sendKeys(input, ['down', 'down', 'down', 'down', 'down'], 60);
     assert.equal(foldersBox._keys[foldersBox.selected], 'cases/CW');
 
     sendKey(input, 'e'); // rename in place — the prompt prefills with the current path

@@ -1,3 +1,12 @@
+/*
+ * Copyright 2026 The Mycelium Authors. All rights reserved.
+ *
+ * Use of this source code is governed by the MIT License
+ * that can be found in the LICENSE file.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 import { join } from 'node:path';
 import { writeFileSync, readFileSync, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { complete, mapConcurrent } from '../llm.js';
@@ -7,6 +16,11 @@ import { TREE_DIR, ensureDirs } from '../paths.js';
 import { isSuperseded, isInSubtree, listTreeDirs } from '../organize.js';
 import { contentLocale } from '../config.js';
 import { sessionsForPeriod } from './digest.js';
+import { listClips, clipText } from '../clip.js';
+
+// Per-clip cap on what reaches the prompt — one pinned turn can be a whole
+// pasted log, and every clip in the subtree rides along on each `w`/`k`.
+const CLIP_PROMPT_CHARS = 2000;
 
 /**
  * Folders with at least one FILED session (unfiled/`_inbox` sessions are
@@ -52,6 +66,23 @@ export async function buildKnowledgeText(folder) {
     })
     .join('\n');
 
+  // Clips are excerpts a person deliberately pinned (clip.js) — the one
+  // human signal of "this mattered" the summaries above can't carry, so the
+  // prompt asks for them to be reflected rather than weighed like the rest.
+  const clips = listClips({ folder });
+  const clipMaterial = clips
+    .map((c) => {
+      const body = clipText(c);
+      const cut = body.length > CLIP_PROMPT_CHARS ? `${body.slice(0, CLIP_PROMPT_CHARS)}…` : body;
+      return c.note ? `### ${c.note}\n${cut}` : cut;
+    })
+    .join('\n\n---\n\n');
+  const clipSection = !clips.length
+    ? ''
+    : locale === 'ko'
+      ? `\n\n아래는 사용자가 대화에서 직접 골라 고정한 원문(클립)이다. 사용자가 중요하다고 판단한 내용이므로 지식에 반드시 반영해라.\n\n${clipMaterial}`
+      : `\n\nBelow are excerpts (clips) the user pinned from these conversations by hand. The user judged these important — make sure the knowledge reflects them.\n\n${clipMaterial}`;
+
   // Korean branch is the original prompt, unchanged — see contentLocale()
   // (config.js).
   const prompt =
@@ -64,13 +95,13 @@ AGENTS.md에 그대로 주입될 지식 본문이지, 방금 한 일에 대한 �
 아니다. 첫 줄부터 바로 실제 지식(컨벤션/결정/용어)으로 시작해라.
 한국어 마크다운 본문만 출력.
 
-${material}`
+${material}${clipSection}`
       : `Below are the session summaries and decisions from the "${folder}" workspace. Distill the "project knowledge" an AI starting new work in this space should already know — recurring conventions, settled decisions, frequently-used terms, and things to watch out for. Not a list of individual sessions — refined knowledge instead.
 
 Forbidden: don't open or close with a status-report/meta phrase like "Done", "Organized and saved", "This will be referenced in future work". This output is knowledge that gets injected verbatim into the next session's AGENTS.md, not a report on what you just did. Start from the very first line with the actual knowledge (conventions/decisions/terms) itself.
 Output markdown body only.
 
-${material}`;
+${material}${clipSection}`;
 
   let knowledge;
   try {

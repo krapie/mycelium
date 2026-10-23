@@ -1,3 +1,12 @@
+/*
+ * Copyright 2026 The Mycelium Authors. All rights reserved.
+ *
+ * Use of this source code is governed by the MIT License
+ * that can be found in the LICENSE file.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
@@ -653,4 +662,19 @@ test('pendingSuggestions() hides a stale suggestion on a human-owned session (#1
     pendingSuggestions().some((p) => p.id === 'hp-2'),
     false,
   );
+});
+
+test('suggestPlacements() keeps a move made while the LLM call was running, and still stamps the cooldown', async () => {
+  seed('sp-race', { folder: null, organizedBy: 'auto', extracted: { title: 'x', tags: [], summary: 'about api work', decisions: [], todos: [] } });
+  __setTestProvider(async () => {
+    move('sp-race', 'sp-race-folder'); // the human files it during the call
+    return JSON.stringify({ placements: [{ id: 'sp-race', folder: 'sp-other', reason: 'r' }] });
+  });
+
+  await suggestPlacements({ folder: null, ids: ['sp-race'] });
+
+  const n = loadRaw('sp-race');
+  assert.equal(n.folder, 'sp-race-folder', 'the human placement survives the stamp');
+  assert.equal(n.organizedBy, 'human');
+  assert.ok(n.lastClassifiedAt, 'and the cooldown is still recorded');
 });

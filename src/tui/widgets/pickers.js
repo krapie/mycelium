@@ -1,3 +1,12 @@
+/*
+ * Copyright 2026 The Mycelium Authors. All rights reserved.
+ *
+ * Use of this source code is governed by the MIT License
+ * that can be found in the LICENSE file.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 import pkg from 'neo-blessed';
 const blessed = pkg.default || pkg;
 import { C } from '../theme.js';
@@ -182,7 +191,7 @@ export function multiSelectLabel(label, { defaultAll = false, preview = false } 
   return ` ${label} — ${hint} `;
 }
 
-export function multiSelectList(app, label, items, cb, { defaultAll = false, previewText } = {}) {
+export function multiSelectList(app, label, items, cb, { defaultAll = false, previewText, pickCurrentIfNone = false } = {}) {
   const selected = new Set(defaultAll ? items.map((_, i) => i) : []);
   const render = (it, i) => `${selected.has(i) ? `{${C.fox}-fg}✓{/} ` : '  '}${it.label}`;
   const box = blessed.list({
@@ -228,8 +237,13 @@ export function multiSelectList(app, label, items, cb, { defaultAll = false, pre
     cb(null);
   });
   box.key(['enter'], () => {
+    // Opt-in: where Enter-on-the-highlighted-row is the natural gesture (clip
+    // pinning), nothing checked means "this one" rather than "none". Not the
+    // default — the review pickers above rely on an empty Enter applying
+    // nothing.
+    const picked = selected.size || !pickCurrentIfNone ? items.filter((_, i) => selected.has(i)) : [items[box.selected]].filter(Boolean);
     box.destroy();
     app.render();
-    cb(items.filter((_, i) => selected.has(i)).map((it) => it.value));
+    cb(picked.map((it) => it.value));
   });
 }

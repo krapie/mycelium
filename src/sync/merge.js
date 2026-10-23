@@ -1,3 +1,12 @@
+/*
+ * Copyright 2026 The Mycelium Authors. All rights reserved.
+ *
+ * Use of this source code is governed by the MIT License
+ * that can be found in the LICENSE file.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Pure merge rules for a session record (raw/<id>.json) that two machines
 // both changed since their last sync. git hands the merge driver the common
 // ancestor, ours and theirs (see git.js's registerMergeDrivers()); a line

@@ -1,4 +1,13 @@
 #!/usr/bin/env node
+/*
+ * Copyright 2026 The Mycelium Authors. All rights reserved.
+ *
+ * Use of this source code is governed by the MIT License
+ * that can be found in the LICENSE file.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 import './quiet-warnings.js';
 import { VERSION } from './version.js';
 import { scanCmd, reindexCmd, archiveCmd } from './cli/capture.js';
@@ -7,9 +16,13 @@ import { autotagCmd, digestCmd, knowledgeCmd } from './cli/learn.js';
 import { contextCmd, injectCmd, handoffCmd, resumeCmd } from './cli/reuse.js';
 import { searchCmd, listCmd, tagsCmd } from './cli/find.js';
 import { backlogCmd } from './cli/backlog.js';
+import { clipCmd } from './cli/clip.js';
 import { cleanupCmd } from './cli/cleanup.js';
 import { daemonCmd, demoCmd, langCmd } from './cli/run.js';
 import { syncCmd } from './cli/sync.js';
+import { serveCmd } from './cli/serve.js';
+import { doctorCmd } from './cli/doctor.js';
+import { setupCmd } from './cli/setup.js';
 import { printHelp } from './cli/help.js';
 
 // Dispatch table — barrel-adjacent to organize.js/daemon.js's own
@@ -27,6 +40,7 @@ const COMMANDS = {
   unmerge: unmergeCmd,
   unsplit: unsplitCmd,
   backlog: backlogCmd,
+  clip: clipCmd,
   autotag: autotagCmd,
   digest: digestCmd,
   knowledge: knowledgeCmd,
@@ -40,6 +54,9 @@ const COMMANDS = {
   cleanup: cleanupCmd,
   daemon: daemonCmd,
   sync: syncCmd,
+  serve: serveCmd,
+  doctor: doctorCmd,
+  setup: setupCmd,
   demo: demoCmd,
   lang: langCmd,
 };

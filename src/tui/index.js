@@ -1,3 +1,12 @@
+/*
+ * Copyright 2026 The Mycelium Authors. All rights reserved.
+ *
+ * Use of this source code is governed by the MIT License
+ * that can be found in the LICENSE file.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 import { createApp } from './app.js';
 import { sessionsView } from './views/sessions.js';
 import { welcomeModal, firstScanModal } from './widgets/viewers.js';

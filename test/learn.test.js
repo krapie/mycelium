@@ -1,3 +1,12 @@
+/*
+ * Copyright 2026 The Mycelium Authors. All rights reserved.
+ *
+ * Use of this source code is governed by the MIT License
+ * that can be found in the LICENSE file.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { useTempHome } from './helpers.js';
@@ -8,7 +17,7 @@ const { emptyNeutral } = await import('../src/schema.js');
 const { saveRaw, loadRaw, deleteRaw } = await import('../src/scanner.js');
 const { __setTestProvider, __clearTestProvider } = await import('../src/llm.js');
 const { autoTagSession, tagAll } = await import('../src/learn.js');
-const { tag } = await import('../src/organize.js');
+const { tag, move, setContent } = await import('../src/organize.js');
 const { loadConfig, saveConfig } = await import('../src/config.js');
 
 function seed(id, overrides = {}) {
@@ -284,4 +293,52 @@ test('tagAll() stops after consecutive failures instead of burning through the w
 
   assert.equal(res.stoppedEarly, true);
   assert.equal(calls, 3); // never attempted the remaining 6, let alone anything else in the store
+});
+
+// The LLM call takes seconds to minutes; a person (or the editor, which stays
+// usable meanwhile) can move, tag or delete the session in that time. The
+// result must be applied to the session as it is NOW, not as it was when the
+// call started — otherwise it silently undoes their edit.
+test('autoTagSession() keeps a move made while the LLM call was running', async () => {
+  seed('race-move', { turns: [{ role: 'user', text: 'fix the login bug' }], folder: null, organizedBy: 'auto' });
+  __setTestProvider(async () => {
+    move('race-move', 'Work/auth'); // the human files it during the call
+    return mockReply({ title: 'Fix login', summary: 'fixed login' });
+  });
+
+  const res = await autoTagSession('race-move');
+
+  assert.equal(res.ok, true);
+  const n = loadRaw('race-move');
+  assert.equal(n.folder, 'Work/auth', 'the move survives');
+  assert.equal(n.organizedBy, 'human', 'and so does the sticky human flag');
+  assert.equal(n.extracted.summary, 'fixed login', 'while the summary is still applied');
+});
+
+test('autoTagSession() honors a title lock and hand-picked tags set while the call was running', async () => {
+  seed('race-lock', { turns: [{ role: 'user', text: 'x' }] });
+  __setTestProvider(async () => {
+    setContent('race-lock', { title: 'My own title' }); // locks the title
+    tag('race-lock', ['mine'], []);
+    return mockReply({ title: 'LLM title', tags: ['generated'] });
+  });
+
+  await autoTagSession('race-lock');
+
+  const n = loadRaw('race-lock');
+  assert.equal(n.extracted.title, 'My own title');
+  assert.ok(n.extracted.tags.includes('mine') && n.extracted.tags.includes('generated'));
+});
+
+test('autoTagSession() does not bring back a session deleted while the call was running', async () => {
+  seed('race-del', { turns: [{ role: 'user', text: 'x' }] });
+  __setTestProvider(async () => {
+    deleteRaw('race-del');
+    return mockReply();
+  });
+
+  const res = await autoTagSession('race-del');
+
+  assert.equal(res.ok, false);
+  assert.equal(loadRaw('race-del'), null, 'still gone');
 });

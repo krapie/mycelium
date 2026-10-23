@@ -1,6 +1,15 @@
-import { complete, parseJsonReply, mapConcurrent } from './llm.js';
+/*
+ * Copyright 2026 The Mycelium Authors. All rights reserved.
+ *
+ * Use of this source code is governed by the MIT License
+ * that can be found in the LICENSE file.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+import { complete, parseJsonReply, mapConcurrent, classifyLlmError } from './llm.js';
 import { loadRaw, saveRaw, allRaw } from './scanner.js';
-import { isBacklog } from './schema.js';
+import { isBacklog, ownTurns } from './schema.js';
 import { listTags } from './index-db.js';
 import { isArchive } from './organize/folders.js';
 import { contentLocale } from './config.js';
@@ -8,7 +17,7 @@ import { contentLocale } from './config.js';
 // Cap how much of a long session we send to the tagger. First + last slices
 // capture the intent and the outcome without paying for the whole transcript.
 function sessionExcerpt(neutral, locale, budget = 6000) {
-  const lines = neutral.turns.map((t) => `${t.role}: ${t.text}`);
+  const lines = ownTurns(neutral).map((t) => `${t.role}: ${t.text}`);
   const joined = lines.join('\n');
   if (joined.length <= budget) return joined;
   const head = joined.slice(0, Math.floor(budget * 0.6));
@@ -110,22 +119,30 @@ export async function autoTagSession(sessionId, { existingTags } = {}) {
   const parsed = parseJsonReply(reply);
   if (!parsed) return { ok: false, error: 'unparseable LLM reply' };
 
-  if (!n.titleLocked && typeof parsed.title === 'string') {
-    n.extracted.title = parsed.title.trim();
+  // The call above took seconds to minutes; the record may have been moved,
+  // re-tagged, locked or deleted meanwhile (by a person, the TUI, the daemon or
+  // an editor — the editor stays usable during a summarize run). Apply the
+  // result to the record as it is NOW: saving the copy loaded before the call
+  // would undo that edit, and resurrect a deleted session.
+  const cur = loadRaw(sessionId);
+  if (!cur) return { ok: false, error: `no session ${sessionId}` };
+
+  if (!cur.titleLocked && typeof parsed.title === 'string') {
+    cur.extracted.title = parsed.title.trim();
   }
   if (Array.isArray(parsed.tags)) {
     // Tags a person added or removed by hand (tag()) outrank the LLM's
     // guess, the same way titleLocked protects a hand-set title (#141).
-    const removed = new Set(n.humanRemovedTags || []);
+    const removed = new Set(cur.humanRemovedTags || []);
     const generated = parsed.tags.filter((t) => typeof t === 'string' && t.trim() && !removed.has(t)).slice(0, 5);
-    n.extracted.tags = [...new Set([...(n.humanTags || []), ...generated])];
+    cur.extracted.tags = [...new Set([...(cur.humanTags || []), ...generated])];
   }
-  if (typeof parsed.summary === 'string') n.extracted.summary = parsed.summary;
-  if (Array.isArray(parsed.decisions)) n.extracted.decisions = parsed.decisions;
-  if (Array.isArray(parsed.todos)) n.extracted.todos = parsed.todos;
-  n.summarizedTurnCount = n.turns.length;
-  saveRaw(n);
-  return { ok: true, session: n };
+  if (typeof parsed.summary === 'string') cur.extracted.summary = parsed.summary;
+  if (Array.isArray(parsed.decisions)) cur.extracted.decisions = parsed.decisions;
+  if (Array.isArray(parsed.todos)) cur.extracted.todos = parsed.todos;
+  cur.summarizedTurnCount = cur.turns.length;
+  saveRaw(cur);
+  return { ok: true, session: cur };
 }
 
 /**
@@ -209,11 +226,11 @@ export async function tagAll({ force = false, onProgress, limit, concurrency = 1
           return { ok: true };
         }
         failed++;
-        return { ok: false };
+        return { ok: false, fatal: classifyLlmError(res.error) === 'missing' };
       } catch (err) {
         failed++;
         if (onProgress) onProgress(null, err);
-        return { ok: false };
+        return { ok: false, fatal: classifyLlmError(err.message) === 'missing' };
       }
     },
     { stopAfterConsecutiveFailures },

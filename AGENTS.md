@@ -37,11 +37,15 @@ src/
   config.js           config.json read/write (locale, machine name, etc.) + excluded.txt (deleted ids)
   sync.js             barrel — see src/sync/{git,merge,cycle}.js (store sync across machines via git, docs/sync.md)
   llm.js              headless LLM calls via the user's own claude/codex CLI subscription
+  bridge.js           method table behind `mycelium serve --stdio` (JSON-RPC for editor integrations; docs/vscode.md)
   agents.js           derives binFor/resumeArgsFor from the adapter registry
+  setup.js            installs agent-commands/ per adapter commandInstall; marker-stamped so a re-run never clobbers a user edit
   adapters/           one file per agent CLI (claude-code.js, codex.js, kiro.js) + index.js registry
+  agent-commands/     the /clip command shipped per agent (claude/, kiro/, codex/), installed by setup.js
   tui/                the neo-blessed interface — app.js (shell), views/ (sessions.js, calendar.js),
                        widgets/ (pickers.js, viewers.js), data.js (thin read layer over scanner+index-db),
                        tutorial.js + tutorial-data.js + tutorial-mock-llm.js + personas.js (first-run tour / `mycelium demo`)
+vscode/               VS Code extension (CommonJS, no bundler, no runtime deps) — talks only to `mycelium serve`, never imports src/
 docs/                 detailed guides (linked from README.md's "Learn More")
 test/                 node:test suite — see "Tests" below
 .github/              CI/CD workflows, issue/PR templates
@@ -56,6 +60,7 @@ Keep this pattern flat, not deeply nested — no `services/`/`repositories/`/`co
 ## Code conventions
 
 - **No Prettier.** `eslint.config.js` is correctness-only (`no-unused-vars` with a `^_` ignore pattern for intentionally-unused params, plus `js.configs.recommended`). Match the surrounding file's hand-written style; don't reformat unrelated code.
+- **License header on every JS file.** `npm run lint` runs `scripts/check-license-headers.js` and fails on a `.js`/`.mjs`/`.cjs` file without the MIT/SPDX header; `npm run lint:headers:fix` inserts it (shebang-aware). Add it when creating a new file.
 - **No premature abstraction.** Don't extract a helper for a pattern that looks similar but isn't actually shared logic — this repo has an explicit example of *not* doing that: `deleteSession()`'s full-store backlink sweep vs. `unmerge()`/`unsplit()`'s single-field clears look similar but aren't the same operation, so no shared helper was extracted (see `docs/features.md`'s cross-cutting-duplication section, item 2, for the reasoning written out).
 - **Comments explain WHY, not WHAT.** Default to no comments; add one only for a non-obvious constraint, invariant, or the reason behind a workaround. Read any existing comment in a file you're editing before assuming behavior — this codebase leans on comments to record hard-won bug history (e.g. issue #3's "20+ concurrent LLM processes" incident is referenced from `daemon.js`/`organize.js`/`learn.js` wherever a concurrency guard exists).
 - **Human-facing text**: LLM prompts (in `learn.js`, `insight.js`, `organize.js`'s classification, `split.js`) and their expected JSON output follow `config.js`'s `contentLocale()` (`config.json`'s `locale` field, `'ko'` or else `'en'`) — the same locale `src/tui/i18n.js`'s `t()` already uses for UI chrome, so generated *content* (auto-tag titles/summaries, classification reasons, digests, KNOWLEDGE.md text, split labels) now matches whichever language a user has picked instead of always coming back Korean regardless. Two non-LLM-prompt call sites follow the exact same convention for the exact same reason (human-facing text a user reads/pastes, not chrome): `handoff.js`'s `buildHandoff()` (the seed prompt copied for the *next* agent) and `reuse.js`'s `injectAgentsMd()` (one marker comment inside the injected AGENTS.md block). Each of these keeps its original Korean text unchanged under the `'ko'` branch and adds an English one alongside it — not a translation layer, two maintained versions per call site. Switch locale via `mycelium lang <en|ko>`, the in-TUI `l` key, or the language picker shown on first launch / before every `mycelium demo` persona pick (see Key bindings below). Code identifiers, comments, README/docs, and commit messages are English regardless. The tutorial/`mycelium demo` never calls a real LLM (see Tests below) — `tutorial-mock-llm.js`'s mock dispatch/parsing branches on the same locale so its canned output stays consistent with what the real prompts would produce (`tui/personas.js`'s mock session content is fully bilingual, `{en, ko}` per field, not just the surrounding chrome).
@@ -95,8 +100,9 @@ Full reference: [`docs/tui.md`](./docs/tui.md). Quick map, since a change to any
 | Capture | `s` scan |
 | Organize | `m` move · `t` tag · `o` smart organize |
 | Learn | `a` auto-tag/summarize · `w` extract folder knowledge · `k` review + inject knowledge updates across every active folder at once (unrelated to Digest/`d`) |
-| Reuse | `n` new agent (asks: open here, or copy command for another tab) · `h` handoff · `r` resume · `i` inject AGENTS.md |
+| Reuse | `n` new agent (asks: open here, or copy command for another tab) · `h` handoff · `r` resume · `c` preview the folder's inherited context · `i` inject AGENTS.md |
 | Backlog | `b` write an item to start later · `r`/detail-`Enter` start it (seeded handoff) · `e` edit its title + notes |
+| Clip | `p` pin turns of a session verbatim (its own `Clips` collection under `New`, alongside `Backlog`; counts as must-reflect material next time `w`/`k` drafts knowledge) |
 | Navigation | `Enter`/`→` drill in · `Esc`/`←` back · `Space` multi-select · `/` search · `v` Calendar tab |
 | Other | `Shift+M` merge · `Shift+S` split · `Shift+O` cycle sort · `Shift+H` filter by machine (synced stores) · `y` copy · `d` digests · `g` re-show onboarding · `l` switch language (confirm, then restarts) · `?` full shortcut list · `q` quit |
 

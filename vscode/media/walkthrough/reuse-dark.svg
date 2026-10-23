@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 700 190" width="700" height="190" role="img" aria-label="Capture, Organize, Learn, Reuse">
+<g>
+  <rect x="28" y="56" width="128" height="74" rx="10" fill="none" stroke="#6f6a5a" stroke-width="1.5"/>
+  <text x="92" y="89" text-anchor="middle" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="18" font-weight="600" fill="#e9e4d6">Capture</text>
+  <text x="92" y="110" text-anchor="middle" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="11.5" fill="#a39d8a">scan sessions</text>
+</g>
+<g>
+  <rect x="200" y="56" width="128" height="74" rx="10" fill="none" stroke="#6f6a5a" stroke-width="1.5"/>
+  <text x="264" y="89" text-anchor="middle" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="18" font-weight="600" fill="#e9e4d6">Organize</text>
+  <text x="264" y="110" text-anchor="middle" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="11.5" fill="#a39d8a">folders &amp; tags</text>
+</g>
+<g>
+  <rect x="372" y="56" width="128" height="74" rx="10" fill="none" stroke="#6f6a5a" stroke-width="1.5"/>
+  <text x="436" y="89" text-anchor="middle" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="18" font-weight="600" fill="#e9e4d6">Learn</text>
+  <text x="436" y="110" text-anchor="middle" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="11.5" fill="#a39d8a">summaries &amp; knowledge</text>
+</g>
+<g>
+  <rect x="544" y="56" width="128" height="74" rx="10" fill="#7fe0c4" stroke="#7fe0c4" stroke-width="0"/>
+  <text x="608" y="89" text-anchor="middle" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="18" font-weight="600" fill="#14140f">Reuse</text>
+  <text x="608" y="110" text-anchor="middle" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="11.5" fill="#14140f">resume &amp; hand off</text>
+</g>
+<path d="M164 93 h28 m-6 -5 l6 5 l-6 5" fill="none" stroke="#6f6a5a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M336 93 h28 m-6 -5 l6 5 l-6 5" fill="none" stroke="#6f6a5a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M508 93 h28 m-6 -5 l6 5 l-6 5" fill="none" stroke="#6f6a5a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M608 140 v22 h-516 v-22 m-5 6 l5 -6 l5 6" fill="none" stroke="#6f6a5a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="1 5"/>
+<text x="350" y="30" text-anchor="middle" font-family="system-ui,-apple-system,Segoe UI,sans-serif" font-size="12" fill="#a39d8a" letter-spacing="1.5">YOU ARE HERE</text>
+</svg>

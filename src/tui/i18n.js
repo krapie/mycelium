@@ -1,4 +1,14 @@
+/*
+ * Copyright 2026 The Mycelium Authors. All rights reserved.
+ *
+ * Use of this source code is governed by the MIT License
+ * that can be found in the LICENSE file.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 import { loadConfig, saveConfig } from '../config.js';
+import { classifyLlmError } from '../llm.js';
 
 // TUI display language. Read once at process start (the TUI is a fresh
 // process per launch — no in-session toggle key, only `mycelium lang <en|ko>`
@@ -32,6 +42,8 @@ const en = {
   'common.searchPrompt': 'Search',
   'folders.root': 'Root',
   'folders.new': 'New',
+  'folders.backlog': 'Backlog',
+  'folders.clips': 'Clips',
   'sessions.foldersPanelLabel': ' Folders ',
   'sessions.sessionsPanelLabel': ' Sessions ',
   'sessions.detailPanelLabel': ' Detail ',
@@ -72,6 +84,16 @@ const en = {
   'sessions.summarizeDone': (done, failed, lastError) =>
     `Summarized: ${done}${failed ? ` (failed ${failed}${lastError ? `: ${lastError}` : ''})` : ''}`,
   'sessions.copied': 'Session content copied to clipboard',
+  'clip.pickTitle': 'Pin which turns?',
+  'clip.notePrompt': 'Note for this clip (optional)',
+  'clip.saved': (n) => `${n} clip${n === 1 ? '' : 's'} pinned — mycelium clip list to see them`,
+  'clip.noTurns': 'This session has no conversation to clip',
+  'clip.jumpHint': 'Enter: open the session this came from · y: copy · x: delete clip',
+  'clip.sourceGone': 'The source session is gone — the text below is all that was kept · y: copy · x: delete clip',
+  'clip.deleteConfirmTitle': 'Delete this clip? (the session itself is untouched)',
+  'clip.deleted': 'Clip deleted',
+  'clip.copied': 'Clip copied to clipboard',
+  'sessions.clipBadge': 'Clip',
   'sessions.copyFailed': 'No clipboard tool found (pbcopy etc.)',
   'sessions.sortLabel_title': 'sort: title A-Z',
   'sessions.sortLabel_agent': 'sort: agent',
@@ -111,6 +133,7 @@ const en = {
   'detail.splitFrom': (label) => `Split from: ${label}`,
   'detail.superseded': (labels) => `Superseded by: ${labels}`,
   'detail.splitInto': (n, labels) => `Split into ${n}: ${labels}`,
+  'detail.clips': (n) => `Pinned clips (${n})`,
 
   // sessions.js — status bar. Used to spell out the full 4-stage/11-key
   // breakdown on every screen; that detail now lives in the `?` modal
@@ -153,7 +176,6 @@ const en = {
   'export.summary': '## Summary',
   'export.decisions': '## Decisions',
   'export.todos': '## To-dos',
-  'export.files': '## Files',
   'export.conversation': '## Conversation',
 
   // viewers.js
@@ -307,6 +329,7 @@ const en = {
   'actions.organize': 'Organize session (auto-file)',
   'actions.merge': 'Merge sessions',
   'actions.split': 'Split session',
+  'actions.clip': 'Pin part of this conversation',
   'actions.knowledge': 'Generate folder insights',
   'actions.handoff': 'Continue on another agent',
   'actions.newAgent': 'New task with folder context',
@@ -373,8 +396,15 @@ const en = {
   'picker.multiHintAllChecked': (preview) => `all checked, space to uncheck, ${preview ? 'p preview, ' : ''}enter apply, esc cancel`,
   'picker.multiHintPick': (preview) => `space select, * all, ${preview ? 'p preview, ' : ''}enter apply, esc cancel`,
   'smart.pendingOnOpen': (n) => `${n} suggestion${n === 1 ? '' : 's'} waiting — press o to review`,
-  'smart.summarizeStoppedEarly': (done, total) =>
-    `Stopped after summarizing ${done}/${total} — looks like your Claude/Codex usage limit was hit. Your progress is saved; press o again later to continue.`,
+  'smart.summarizeStoppedEarly': (done, total, lastError) => {
+    const head = `Stopped after summarizing ${done}/${total} — `;
+    const tail = ' Your progress is saved; press o again later to continue.';
+    const kind = classifyLlmError(lastError);
+    if (kind === 'missing') return `${head}the agent CLI (claude/codex) was not found on PATH. Install it or add its directory to PATH.${tail}`;
+    if (kind === 'usage') return `${head}looks like your Claude/Codex usage limit was hit.${tail}`;
+    if (kind === 'auth') return `${head}the agent CLI needs re-authentication; run it interactively once (e.g. claude), then try again.${tail}`;
+    return `${head}the last call failed${lastError ? `: ${String(lastError).slice(0, 200)}` : ''}.${tail}`;
+  },
   'smart.placementsStoppedEarly': (err) => `Some placements failed (${err}) — showing what did come back. Press o again later for the rest.`,
 
   // calendar.js — Calendar tab (v key toggles Sessions ↔ Calendar)
@@ -403,6 +433,8 @@ const ko = {
   'common.searchPrompt': '검색',
   'folders.root': 'Root',
   'folders.new': 'New',
+  'folders.backlog': '백로그',
+  'folders.clips': '클립',
   'sessions.foldersPanelLabel': ' 폴더 ',
   'sessions.sessionsPanelLabel': ' 세션 ',
   'sessions.detailPanelLabel': ' 상세 ',
@@ -438,6 +470,16 @@ const ko = {
   'sessions.summarizeDone': (done, failed, lastError) =>
     `요약·태깅 완료: ${done}개${failed ? ` (실패 ${failed}개${lastError ? `: ${lastError}` : ''})` : ''}`,
   'sessions.copied': '세션 내용을 클립보드에 복사함',
+  'clip.pickTitle': '어떤 턴을 고정할까요?',
+  'clip.notePrompt': '클립 메모 (선택 사항)',
+  'clip.saved': (n) => `클립 ${n}개 고정됨 — mycelium clip list로 확인`,
+  'clip.noTurns': '이 세션에는 고정할 대화가 없습니다',
+  'clip.jumpHint': 'Enter: 원본 세션 열기 · y: 복사 · x: 클립 삭제',
+  'clip.sourceGone': '원본 세션이 삭제됨 — 아래 원문만 남아 있음 · y: 복사 · x: 클립 삭제',
+  'clip.deleteConfirmTitle': '이 클립을 삭제할까요? (세션 자체는 그대로)',
+  'clip.deleted': '클립 삭제됨',
+  'clip.copied': '클립을 클립보드에 복사함',
+  'sessions.clipBadge': '클립',
   'sessions.copyFailed': '복사 도구(pbcopy 등)를 찾지 못함',
   'sessions.sortLabel_title': '정렬: 제목순',
   'sessions.sortLabel_agent': '정렬: 에이전트순',
@@ -473,6 +515,7 @@ const ko = {
   'detail.splitFrom': (label) => `분할됨 — 원본: ${label}`,
   'detail.superseded': (labels) => `대체됨: ${labels}`,
   'detail.splitInto': (n, labels) => `${n}개로 분할됨: ${labels}`,
+  'detail.clips': (n) => `고정한 클립 (${n})`,
 
   'lifecycle.bar': (fg) =>
     `캡처·{${fg}-fg}s{/} → 정리·{${fg}-fg}o{/} → 학습·{${fg}-fg}w{/} → 재사용·{${fg}-fg}n{/}`,
@@ -509,7 +552,6 @@ const ko = {
   'export.summary': '## 요약',
   'export.decisions': '## 결정',
   'export.todos': '## 할 일',
-  'export.files': '## 파일',
   'export.conversation': '## 대화',
 
   'viewer.textViewLabel': (title) => ` ${title} (↑↓ 스크롤, y 복사, Esc 닫기) `,
@@ -630,6 +672,7 @@ const ko = {
   'actions.organize': '세션 정리 (자동 분류)',
   'actions.merge': '세션 병합',
   'actions.split': '세션 분할',
+  'actions.clip': '대화 일부 고정 (클립)',
   'actions.knowledge': '폴더 안의 인사이트 생성',
   'actions.handoff': '다른 에이전트로 작업을 이어서',
   'actions.newAgent': '폴더 컨텍스트로 새 작업 시작',
@@ -695,8 +738,15 @@ const ko = {
   'picker.multiHintAllChecked': (preview) => `모두 선택됨 · Space 해제 · ${preview ? 'p 미리보기 · ' : ''}Enter 적용 · Esc 취소`,
   'picker.multiHintPick': (preview) => `Space 선택 · * 전체 · ${preview ? 'p 미리보기 · ' : ''}Enter 적용 · Esc 취소`,
   'smart.pendingOnOpen': (n) => `${n}개 정리 제안 대기 중 — o로 확인`,
-  'smart.summarizeStoppedEarly': (done, total) =>
-    `${done}/${total}개 요약 후 중단됨 — Claude/Codex 사용량 한도에 도달한 것 같습니다. 지금까지의 진행 상황은 저장되어 있으니, 나중에 다시 o를 눌러 이어서 진행하세요.`,
+  'smart.summarizeStoppedEarly': (done, total, lastError) => {
+    const head = `${done}/${total}개 요약 후 중단됨 — `;
+    const tail = ' 지금까지의 진행 상황은 저장되어 있으니, 나중에 다시 o를 눌러 이어서 진행하세요.';
+    const kind = classifyLlmError(lastError);
+    if (kind === 'missing') return `${head}에이전트 CLI(claude/codex)를 PATH에서 찾을 수 없습니다. 설치하거나 PATH에 추가하세요.${tail}`;
+    if (kind === 'usage') return `${head}Claude/Codex 사용량 한도에 도달한 것 같습니다.${tail}`;
+    if (kind === 'auth') return `${head}에이전트 CLI 재인증이 필요합니다. 터미널에서 한 번 직접 실행(예: claude)해 로그인한 뒤 다시 시도하세요.${tail}`;
+    return `${head}마지막 호출이 실패했습니다${lastError ? `: ${String(lastError).slice(0, 200)}` : ''}.${tail}`;
+  },
   'smart.placementsStoppedEarly': (err) => `일부 배치 제안이 실패했습니다 (${err}) — 성공한 것만 표시합니다. 나머지는 나중에 다시 o를 눌러주세요.`,
 
   // calendar.js — 캘린더 탭 (v 키로 세션 ↔ 캘린더 전환)
@@ -752,6 +802,7 @@ Day to day, it's a simple loop: {${fg}-fg}s{/} capture → {${fg}-fg}o{/} organi
   {${fg}-fg}n{/}       Start a NEW task with this folder's context (new agent) — no prior conversation carried over, just the folder's accumulated knowledge. After picking an agent/directory, asks "open here" or "copy command" (paste into a separate terminal tab to run several sessions in parallel)
   {${fg}-fg}m{/} / {${fg}-fg}t{/}   Move to folder / edit tags
   {${fg}-fg}x{/}       Delete session (Mycelium record only, original log kept)
+  {${fg}-fg}p{/}       Pin part of the conversation as a clip — pick turns, kept verbatim even if the session is later deleted, and reflected by w
   {${fg}-fg}w{/}       Extract folder knowledge — preview then confirm
   {${fg}-fg}c{/}       View inherited context
   {${fg}-fg}i{/}       Inject into AGENTS.md — preview then confirm (n/h do this automatically; use i to refresh a session opened outside Mycelium)
@@ -768,7 +819,7 @@ Day to day, it's a simple loop: {${fg}-fg}s{/} capture → {${fg}-fg}o{/} organi
   {${fg}-fg}↑↓{/}      Scroll
   {${fg}-fg}Enter{/}   Resume — choose "open here" or "copy command" (r in the sessions panel always opens here)
   {${fg}-fg}Esc / ←{/}     Back to sessions
-  {${fg}-fg}a / e / y / x{/}  Same as sessions panel
+  {${fg}-fg}a / e / y / p / x{/}  Same as sessions panel
 
 Sessions linked by handoff show {${spore}-fg}↩{/}/{${spore}-fg}→{/} markers in the list and continuation links in detail.`;
 
@@ -832,6 +883,7 @@ ko['help.text'] = (fg, spore) => `{bold}Context Flywheel{/}
   {${fg}-fg}n{/}       이 폴더 컨텍스트로 새 작업 시작 (새 에이전트) — 이전 대화는 안 넘어가고 폴더에 쌓인 지식만. 에이전트/디렉터리 선택 후 "여기서 열기" 또는 "명령어 복사" 선택 (복사하면 다른 터미널 탭에 붙여넣어 여러 세션을 동시에 실행 가능)
   {${fg}-fg}m{/} / {${fg}-fg}t{/}   폴더 이동 / 태그 편집
   {${fg}-fg}x{/}       세션 삭제 (Mycelium 저장소에서만, 원본 로그 유지)
+  {${fg}-fg}p{/}       대화 일부를 클립으로 고정 — 턴을 골라 원문 그대로 보관 (세션을 지워도 남음), w 지식 추출에 반영
   {${fg}-fg}w{/}       폴더 지식 추출 — 미리보기 후 확인
   {${fg}-fg}c{/}       상속 컨텍스트 보기
   {${fg}-fg}i{/}       AGENTS.md에 주입 — 미리보기 후 확인 (n/h는 자동으로 함; Mycelium 밖에서 연 세션 새로고침용)
@@ -848,7 +900,7 @@ ko['help.text'] = (fg, spore) => `{bold}Context Flywheel{/}
   {${fg}-fg}↑↓{/}      스크롤
   {${fg}-fg}Enter{/}   이어열기 — "여기서 열기" 또는 "명령어 복사" 선택 (세션 패널의 r은 항상 바로 열기)
   {${fg}-fg}Esc / ←{/}     세션 패널로
-  {${fg}-fg}a / e / y / x{/}  세션 패널과 동일
+  {${fg}-fg}a / e / y / p / x{/}  세션 패널과 동일
 
 핸드오프로 이어진 세션은 목록에 {${spore}-fg}↩{/}/{${spore}-fg}→{/} 마커, 상세에 이어받음/이어감 링크로 표시됩니다.`;
 

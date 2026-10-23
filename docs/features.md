@@ -133,7 +133,20 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   scheduling new work once that many calls fail in a row (real usage
   exhaustion makes every subsequent call fail identically) instead of
   burning through the rest of a large backlog one doomed subprocess at a
-  time. Each function reports `stoppedEarly` so callers can distinguish
+  time. `summarizeCandidates` also returns `lastError`, and the TUI's
+  "stopped early" toast names the cause (`llm.js`'s `classifyLlmError`:
+  usage limit, needs re-authentication, or the raw last error) rather than
+  always blaming the usage limit. Every `complete()` child runs with
+  `cwd: os.tmpdir()` so it doesn't load the launch project's
+  CLAUDE.md/hooks/MCP, and the daemon's organize/tag/digest/knowledge
+  cycles run one tiny `llmPreflight()` call first and skip (logging once
+  per outage) when it fails. [partial] (the organize gate is tested; the
+  other gates and the child's actual `cwd` are not). A missing agent CLI
+  (`spawn claude ENOENT`) is reported as `claude not installed` and stops
+  the batch at once (`fatal` in `mapConcurrent()`); the bridge's LLM methods
+  (`autotag`, `organizeSuggest`, `knowledgeBuild`) fail fast with that same
+  message and accept `extraPath` (login-shell directories) so the VS Code
+  extension can retry and find the agent. [tested] Each function reports `stoppedEarly` so callers can distinguish
   "ran out of quota, stop here" from "some unrelated one-off failures."
   Per-candidate/per-chunk progress is written to disk as it completes
   either way, so stopping early never loses prior work. `applyPlacements`
@@ -181,7 +194,7 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
 
 ## Insight: Digests and folder knowledge (`src/insight.js`, `insight/digest.js`, `insight/knowledge.js`)
 
-`insight.js` is a barrel (Phase 3 split, issue #89, same `export * from` pattern as `organize.js`/`daemon.js`): `insight/digest.js` owns `sessionsForPeriod()`/`generateDigest()`, `insight/knowledge.js` owns everything else below — the `d` vs. `k` distinction. `knowledge.js`'s `foldersActiveOn()` imports `sessionsForPeriod` from `digest.js` (a cross-sibling import, same shape as `organize/classify.js` importing from `organize/folders.js`) since it's knowledge-side scoping that happens to reuse the digest feature's day-filter helper. Every existing importer keeps using `'../insight.js'` unchanged.
+`insight.js` is a barrel (Phase 3 split, issue #89, same `export * from` pattern as `organize.js`/`daemon.js`): `insight/digest.js` owns `sessionsForPeriod()`/`generateDigest()`, `insight/knowledge.js` owns everything else below, the `d` vs. `k` distinction. `knowledge.js`'s `foldersActiveOn()` imports `sessionsForPeriod` from `digest.js` (a cross-sibling import, same shape as `organize/classify.js` importing from `organize/folders.js`) since it's knowledge-side scoping that happens to reuse the digest feature's day-filter helper. Every existing importer keeps using `'../insight.js'` unchanged.
 
 - **Generate a daily/weekly narrative digest.** `generateDigest({period, date})`.
   ISO week computation (Monday-based, UTC); no sessions for the period
@@ -232,7 +245,7 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   Walks root to leaf, concatenating every ancestor's `KNOWLEDGE.md` that
   exists (missing ones silently skipped). Refuses a `folderPath` with `..`
   segments (`isSafeFolderPath()`, `paths.js`) rather than letting the
-  `TREE_DIR` join escape outside it and read an arbitrary file — found via
+  `TREE_DIR` join escape outside it and read an arbitrary file, found via
   CodeRabbit review on #91; the same unguarded join pattern still exists
   in `organize/folders.js`'s folder CRUD and `insight.js`'s KNOWLEDGE.md
   writers, tracked separately (issue #92) rather than fixed here since it
@@ -243,7 +256,7 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   app: edits a file Mycelium doesn't own**, outside `~/.mycelium`. Only
   touches content between `<!-- mycelium:begin:<folder> -->`/
   `<!-- mycelium:end:<folder> -->` markers, one block per folder rather
-  than one per file (issue #90 — a directory hosting sessions from two
+  than one per file (issue #90, a directory hosting sessions from two
   different folders, e.g. a monorepo root, used to have the second
   inject silently discard whatever the first folder had already
   written); replaces in place if that folder's own block is present,
@@ -284,7 +297,7 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   digest-review auto-inject can use it too, without core importing from
   `tui/**`. Filters to directories that still `existsSync()`. [tested]
 - **Infer which folder a bare working directory belongs to.**
-  `folderForDir(dir)` — the reverse of `dirsForFolder()`: given a
+  `folderForDir(dir)`, the reverse of `dirsForFolder()`: given a
   directory, returns the folder of whichever session most recently
   (`startedAt`) had that `projectDir`/`cwd`, or `null` if none has.
   Excludes `_archive`, same as `classificationCandidates()`/`tagAll()`
@@ -298,26 +311,26 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   `hooks/session-start.sh` (a Claude Code `SessionStart` hook, wired via
   `hooks/hooks.json`) shells out to `mycelium hook session-start --dir
   <cwd>` (`src/cli/hook.js`'s `hookCmd`), which calls `folderForDir(dir)`
-  then `injectAgentsMd(dir, folder)` if one was found — the same write the
+  then `injectAgentsMd(dir, folder)` if one was found, the same write the
   TUI's `i`/`n`/`h` already trigger, just reached from Claude Code's own
   lifecycle instead of a key press. No-ops silently (exit 0, no stdout) if
   `mycelium` isn't on `PATH`, the directory has no known folder, or that
-  folder has no `KNOWLEDGE.md` yet — a `SessionStart` hook is meant to be
+  folder has no `KNOWLEDGE.md` yet, a `SessionStart` hook is meant to be
   a silent best-effort convenience, never a source of session-start
   errors. On success, prints `hookSpecificOutput.additionalContext`
   (locale-aware per `contentLocale()`) so Claude sees a one-line note that
-  the refresh happened. Deliberately undocumented in `printHelp()` — like
+  the refresh happened. Deliberately undocumented in `printHelp()`, like
   `--tutorial`, invoked by tooling, not typed by a person. [tested] (CLI
   dispatch test covers the inject-happens, no-folder-no-op, and
   unknown-subcommand-no-op cases; the actual shell script itself is
-  exercised manually, not under `npm test` — see
+  exercised manually, not under `npm test`, see
   `docs/claude-code-plugin.md`)
 - **Slash commands reaching into Mycelium from inside a conversation.**
   `skills/mycelium-search`, `skills/mycelium-backlog`,
-  `skills/mycelium-context` — thin `SKILL.md` instructions telling Claude
+  `skills/mycelium-context`, thin `SKILL.md` instructions telling Claude
   to run the existing `mycelium search`/`backlog`/`inject` CLI commands
   via `Bash` and present the results; no new runtime logic. `[untested]`
-  (skill *content* isn't exercised by `npm test` — Claude Code loads and
+  (skill *content* isn't exercised by `npm test`; Claude Code loads and
   interprets `SKILL.md` itself, outside this repo's test surface; the CLI
   commands they wrap are already covered under Find/Backlog/Reuse above).
 
@@ -343,7 +356,7 @@ instructions and the full rationale.
 
 ## Backlog (`src/backlog.js`, `src/cli/backlog.js`)
 
-As a user, I can **write down something to work on later, before any agent has run**, file it in a folder like any session, and start it whenever I'm ready — the agent opens seeded with my own notes plus that folder's accumulated knowledge, and the session it produces takes the note's place outright — it inherits the note's folder and title, and the note itself is gone.
+As a user, I can **write down something to work on later, before any agent has run**, file it in a folder like any session, and start it whenever I'm ready, the agent opens seeded with my own notes plus that folder's accumulated knowledge, and the session it produces takes the note's place outright, it inherits the note's folder and title, and the note itself is gone.
 
 - **Write a backlog item.** `createBacklog({title, description, folder})`.
   Stored as an ordinary session record with `kind: 'backlog'` and an empty
@@ -365,34 +378,34 @@ As a user, I can **write down something to work on later, before any agent has r
   doing both would leave a `continuationOf` pointing at a record that no
   longer exists. `markBacklogEntered(id)` stamps `doneAt` when the agent is
   actually launched or its command copied, never when the picker is opened
-  and cancelled — so an item whose command is already out there, but which
+  and cancelled, so an item whose command is already out there, but which
   hasn't produced a session yet, reads as started instead of untouched.
   [tested] (`test/backlog.test.js`, `test/e2e/backlog-e2e.test.js`)
 - **The session REPLACES the item, on whichever scan captures it.**
   `buildBacklogSeed()` stamps the item's id into the prompt itself
   (`schema.js`'s `backlogSeedMarker()`, an HTML comment at the end of the
-  seed) — the only signal that survives a command copied into a terminal
-  Mycelium never sees — and `scanner.js`'s `consumeBacklogItem()` redeems it
+  seed), the only signal that survives a command copied into a terminal
+  Mycelium never sees, and `scanner.js`'s `consumeBacklogItem()` redeems it
   at capture: the session takes over the item's folder (as a `'human'`
   placement, since a person filed it there) and the title the human wrote
   (`titleLocked`, so auto-tagging can't overwrite it), and the item's own
-  record is deleted. One row, not a note and a session shadowing each other
-  — same reasoning as `organize.js`'s `foldProductIntoSession()` for a
+  record is deleted. One row, not a note and a session shadowing each other,
+  same reasoning as `organize.js`'s `foldProductIntoSession()` for a
   merge/split product, and nothing is lost: the note's full text IS that
   session's first prompt. Every user turn is searched, not just the first
-  (agents prepend synthetic user-role turns of their own — see `schema.js`'s
-  `SYNTHETIC_TURN`), and on every import rather than only the first, since
+  (agents prepend synthetic user-role turns of their own, see `schema.js`'s
+  `SYNTHETIC_TURN`, which allows `_` so `<ide_selection>` counts), and on every import rather than only the first, since
   the item's own existence is the real gate. `scan()` returns
   `consumedBacklog` so callers that reindex precisely (`launch.js`) drop
   those rows from the index. The parent's own file is deleted only AFTER
   `neutral`'s write succeeds (same ordering as `foldProductIntoSession()`'s
-  `saveRaw(target)` before `deleteSession(product)`) — deleting it first
+  `saveRaw(target)` before `deleteSession(product)`), deleting it first
   would risk losing the item's only record to a crash between the two
   writes, before the session meant to replace it ever reached disk.
   [tested] (`test/backlog.test.js`)
 - **Reopening an already-started item asks first.** An item whose command
   was printed/copied but never captured (see the invariant above) stays open
-  to retry on purpose — but `resume-handoff.js`'s `doOpenBacklog()` used to
+  to retry on purpose, but `resume-handoff.js`'s `doOpenBacklog()` used to
   let a second `r` fire silently, seeding a second command for the same
   item when only whichever session gets captured first can actually consume
   it. Now a `doneAt` item confirms before opening again rather than being
@@ -411,7 +424,7 @@ As a user, I can **write down something to work on later, before any agent has r
   Nothing filters backlog rows out of the sessions list, `listBacklog()`,
   or `mycelium backlog list`: an item leaves only by being consumed by the
   session it started. One marked started but never actually run stays put on
-  purpose — it is the only record of that intent, and "copy command" can
+  purpose, it is the only record of that intent, and "copy command" can
   hand out a command nobody ever pastes. [tested] (`test/backlog.test.js`)
 - **Invariant: the LLM paths refuse a note instead of treating it as an
   empty session.** The transcript-shaped ones (`learn.js`'s
@@ -424,7 +437,7 @@ As a user, I can **write down something to work on later, before any agent has r
   could otherwise trip `stopAfterConsecutiveFailures` and kill the rest of
   a daemon cycle. [tested] (`test/backlog.test.js`)
 - **Find it.** `schema.js`'s `searchableText()` now leads with
-  `extracted.title` — for a backlog item it's the only text there is
+  `extracted.title`, for a backlog item it's the only text there is
   besides the description, and for a captured session it's the phrase
   someone is most likely to search by. `cli/find.js`'s `list`/`search`
   print `[backlog]` in place of the agent name and fall back to the title,
@@ -442,7 +455,7 @@ As a user, I can **write down something to work on later, before any agent has r
   the note vanish. [untested]
 - **TUI.** `b` on the Folders or Sessions panel writes an item into the
   folder being browsed (title prompt, then optional description; Esc on
-  the title abandons, Esc on the description just leaves it empty) —
+  the title abandons, Esc on the description just leaves it empty),
   folder-scoped like `n`, and unfiled when written from `Root`. A
   `[Backlog]` badge replaces the agent hashtag (no agent has been chosen
   yet) and dims to `[Opened]` once started. `r`/detail-`Enter`/the action
@@ -451,6 +464,18 @@ As a user, I can **write down something to work on later, before any agent has r
   *and* description for a backlog item (both are the user's own text and
   both seed the agent), unlike a captured session whose summary stays
   AI-generated. [tested] (`test/e2e/backlog-e2e.test.js`)
+
+## Clip (`src/clip.js`, `src/cli/clip.js`)
+
+As a user, I can **pin part of a captured conversation — one answer, or a short run of turns — and keep it verbatim**, without copying it out of Mycelium, and have it count as "this mattered" the next time the folder's knowledge is drafted.
+
+- **Pin turns.** `createClip({sessionId, from, to, note})` — 1-based, inclusive turn range (the numbers `mycelium clip add <session>` prints). Stored in its own `clips/<id>.json`, not as a session `kind` like backlog: a clip is a piece *of* a session, so as session rows it would crowd the list and need an `isBacklog()`-style guard in every summary/digest/classify path. Rejects an out-of-range range, a missing session, and a backlog item (no conversation). [tested] (`test/clip.test.js`)
+- **Survives its source.** The pinned turns are copied, not referenced by index, so deleting/merging/splitting the session never empties a clip. `clipFolder()` follows the session's *current* folder while it exists (moving a session with `m` carries its clips) and falls back to the folder it had when pinned. `listClips({folder, sessionId})` scopes like `listBacklog()`. [tested] (`test/clip.test.js`)
+- **Reflected by knowledge drafting.** `insight/knowledge.js`'s `buildKnowledgeText()` appends the folder subtree's clips to the prompt as must-reflect material (each capped at 2000 chars), locale-following like the rest of the prompt; a folder with no clips gets the prompt unchanged. Covers `w` and the `k` review queue, which share that function. [tested] (`test/clip.test.js`)
+- **TUI `p`.** From the sessions list or detail: the detail panel shows no transcript, so turns are picked from a `multiSelectList` (`p` inside it previews a turn in full); a contiguous run becomes one clip, gaps start another, then an optional note. The detail panel lists a session's clips under its lineage links, escaped so code braces aren't parsed as blessed tags. Also in the `.` action palette. [tested] (`test/e2e/clip-e2e.test.js`)
+- **Browse them: `Backlog` and `Clips` under New.** Two fixed entries right under `New` in the folders panel (`sessions.js`'s `reloadFolders()`), keyed by Symbols so no real folder name can collide. Selecting one sets `state.view` (`'backlog'`/`'clips'`) and leaves `state.folder` at Root's `undefined` — deliberately a separate field, so every folder-scoped action (`b`/`w`/`c`/`i`, folder `a`/`e`/`m`/`x`) never sees a fake folder; `isRealFolder()` excludes the Symbols too. Backlog = the store-wide list filtered to `kind: 'backlog'`, counted via `index-db.js`'s `backlogCount()` (not an `allRaw()` walk on every redraw). Clips = `listClips()` shaped as rows (`clipRow()`, `kind: 'clip'`); `currentRow()` returns nothing on a clip row, so session actions bound to the same keys are no-ops there, and clip rows get their own detail-`Enter` (jump to the source session in its folder; Root if it's archived), `y` (copy), `x` (delete clip). `formatClipDetail()` (`render.js`) shows the full pinned text, escaped. `/` matches clip text/note directly (clips aren't in the FTS index). [tested] (`test/e2e/clip-e2e.test.js`)
+- **CLI.** `mycelium clip add <session> [--turn N[-M]] [--note T]` (no `--turn` prints the numbered turns), `clip list [--folder f] [--session s]`, `clip show <clip>`, `clip rm <clip>`, `clip note <clip> T`; ids take an 8-char prefix. [tested] (`test/clip.test.js`)
+- **Pin from inside a conversation: `clip add --here [--last N]`.** `here.js`'s `resolveHere()` takes the session id the agent exports to its tool shells, named by an adapter's optional `sessionEnv` (Claude Code: `CLAUDE_CODE_SESSION_ID`, kiro-cli: `KIRO_SESSION_ID`, Codex: `CODEX_THREAD_ID`, read from codex 0.162's binary but not yet seen at runtime; when several are set because one agent was started from another's shell, the newest transcript, the inner agent's, wins); with none it fails and asks for the id instead of guessing from cwd + recency, which would pick the wrong conversation whenever two are open in one project. It scans first (the session is usually not captured yet), then `lastTurnsRange()` picks the last N turns ending at the newest assistant turn, so a trailing user turn (the pin request itself) is never what's pinned; `--here` without `--turn`/`--last` means `--last 1`. `--list [N]` prints the N newest answers instead, one per question (`recentAnswers()`: only the last assistant turn before the next user turn, since an agent narrates between tool calls and those fragments would crowd the list), each with its turn number and the question it followed. The agent commands (`src/agent-commands/`: Claude Code `/clip`, kiro-cli `@clip` prompt, Codex `$clip` skill, each taking `[N | pick] [note]`) all list first and then pin by an explicit `--turn` from that list, so whatever the model says before running anything can never become "the last answer"; `pick` shows the list and waits for the user's choice. Claude Code lists through `!` expansion, before the model replies, where its request isn't a turn; kiro and Codex run the list themselves and pass `--skip-request`, which ends it before the newest user turn, the request itself. A `--here --turn` into a session already captured skips the scan (turns only append, so a listed number still means the same turn; the scan is most of the command's time). Codex 0.163 has skills, no `~/.codex/prompts`, and its sandbox needs `~/.mycelium` in `sandbox_workspace_write.writable_roots`. The Codex skill is untested end to end. [tested] (`test/clip.test.js`, `test/here.test.js`, `test/adapters.test.js`)
 
 ## Split (`src/split.js`)
 
@@ -477,6 +502,20 @@ As a user, I can **write down something to work on later, before any agent has r
 - **One-shot safe tidy** (purge meta, prune folders, reindex). `tidy()`. [tested]
 - **Full destructive reset.** `resetStore()`. Deletes `~/.mycelium`
   entirely (irreversible; original agent logs untouched). [tested]
+
+## Setup (`src/setup.js`, `src/cli/setup.js`)
+
+As a user, I can **install the `/clip` command into whichever agent CLIs I actually have**, and re-run it after upgrading Mycelium without losing the edits I made to those files.
+
+- **Install per agent, declared by the adapter.** `planSetup()` walks `ADAPTERS` and uses each one's optional `commandInstall` (`{dir, files, note?}`, documented in `base.js` alongside `sessionEnv`) — so adding an agent stays "one adapter file plus one command file", with no install path hardcoded here. An adapter without the field (`opencode`) is skipped; an agent whose `bin` isn't on PATH is planned but never written, reusing `agents.js`'s `which()` rather than a second notion of "installed". `dir` reads an env override (`CLAUDE_COMMANDS_DIR`, `KIRO_PROMPTS_DIR`, `CODEX_SKILLS_DIR`) like the adapters' session roots, which is what lets tests run without writing into a real `~/.claude`. [tested] (`test/setup.test.js`)
+- **Re-runnable, and never clobbers an edit.** Each installed file carries one `<!-- mycelium:command <name> sha=<hash of the body> -->` line — the same self-describing-marker trick `reuse.js` uses for its AGENTS.md block, for the same reason: on disk, a file we wrote, a file the user has since edited, and a file that was never ours are otherwise indistinguishable. Status is one of `install`, `update` (ours, unmodified, shipped copy changed), `current`, `modified` or `foreign`; `applySetup()` writes only the first two, re-checking each file right before its write (so one created or edited after planning is left alone) and replacing it via a temp file and rename. The marker is inserted *after* YAML frontmatter, since Claude Code and Kiro both require the `---` block to open the file. [tested] (`test/setup.test.js`)
+- **`--dry-run` prints the same table.** One summary either way, with only the verb tense differing, so what a real run will do is exactly what was previewed. Any `--dry-run`, even with a stray word after it, is a preview. [tested] (`test/setup.test.js`)
+- **Won't widen a sandbox for you.** Codex's sandbox denies writes outside the workspace, so `$clip` can't reach the store until `~/.mycelium` is in `sandbox_workspace_write.writable_roots`. That's the one `commandInstall.note`: `setup` prints the TOML to paste (path escaped for TOML) and applies nothing, because moving a security boundary is the user's decision. It prints on every run for an installed Codex, not only the run that wrote the skill, since `doctor` sends people back here. Detecting that it's still missing belongs to `doctor`, which reads only the active `[sandbox_workspace_write]` table, compares whole paths, and says so separately when the config can't be read. [tested] (`test/setup.test.js`, `test/doctor.test.js`)
+
+## Diagnostics (`src/doctor.js`, `src/cli/doctor.js`)
+
+- **Report the environment for a bug report.** `mycelium doctor [--json]` prints versions, platform, shell, the PATH the process really has, where each agent CLI/`git`/`ssh` resolve (`whichPath()`, the lookup `which()` uses), the LLM provider's binary, store state and sync remote; the home directory is printed as `~`. The bridge's `doctor` method returns the same data (honouring `extraPath`) so the VS Code *Copy Diagnostics* command can add the editor's side. [tested] (`test/doctor.test.js`)
+- **Report whether each agent command is in place.** The same `planSetup()` the `setup` command runs, passed `doctor`'s own PATH lookup so "installed" means one thing in both, plus whether Codex's sandbox still excludes the store. Reported only — `doctor` never installs or edits anything. [tested] (`test/doctor.test.js`)
 
 ## Daemon / Background Upkeep (`src/daemon.js`)
 
@@ -522,7 +561,18 @@ As a user, I can **write down something to work on later, before any agent has r
   `MYCELIUM_NO_AUTOSTART`. [untested]
 - **Explicit detached daemon** (`mycelium daemon --detach`/`--stop`).
   `spawnDetachedDaemon()`/`stopDetachedDaemon()`. Idempotent via pidfile
-  and liveness check. [untested]
+  and liveness check. The started version is recorded in `daemon.version`;
+  `--detach` replaces a daemon on a different (or untracked) version
+  instead of reporting "already running". [partial]
+  (`test/daemon-process.test.js`; the real spawn is faked via a `kill` seam)
+- **A detached daemon survives a CLI update (#203).** `runDaemon()`'s
+  `onUpgrade` checks `package.json` on disk every minute (two consecutive polls must agree); on a version
+  change the standalone daemon starts a replacement
+  (`handOverToFreshDaemon()`) and exits. A daemon that doesn't own the
+  pidfile (launchd/systemd) just exits for its supervisor to restart. An
+  unreadable `package.json` mid-reinstall counts as "no change". `mycelium
+  doctor` shows a stale daemon. [partial] (`test/daemon-process.test.js`,
+  `test/doctor.test.js`; the timer wiring itself is untested)
 
 ## Sync (`src/sync.js`, `src/sync/{git,merge,cycle}.js`, `src/cli/sync.js`)
 
@@ -541,13 +591,13 @@ As a user, I can **use one store from several machines** (a laptop and a home se
 - **Sessions deleted on a pushing machine are kept on the collecting one.**
   `collectPushed()` restores any `raw/` file a pusher's merge would delete
   and keeps a file the pusher deleted but the collector edited; only
-  `raw/` — folder renames/removals still follow the pusher. `mycelium sync
+  `raw/`; folder renames and removals still follow the pusher. `mycelium sync
   deletes propagate` (`config.sync.propagateDeletes`) turns this off; two-way
   machines always propagate deletes. [tested] (`test/sync.test.js`)
 - **Set up.** `mycelium sync host <path>` (`createHostRepo()`: a bare git
   repo) and `mycelium sync init <git-url> [--collect|--two-way] [--worker]` (`initRepo()`: turns
-  `HOME` into a working copy, writes `.gitignore` for machine-local files —
-  `db/`, `config.json`, daemon files — and `.gitattributes` routing each
+  `HOME` into a working copy, writes `.gitignore` for machine-local files
+  (`db/`, `config.json`, daemon files) and `.gitattributes` routing each
   file kind to a merge driver, stamps `host` on pre-existing records, then
   runs the first sync, which for a two-way/collect machine merges the two
   existing stores with `--allow-unrelated-histories`). [tested]
@@ -587,7 +637,7 @@ As a user, I can **use one store from several machines** (a laptop and a home se
   [untested]
 - **Tell the machines apart.** `data.machines()` (`src/tui/data.js`) is
   `{ thisMachine, hosts }` only when sync is on *and* the index holds more
-  than one `host` (`listHosts()`, from the index's `host` column) — otherwise
+  than one `host` (`listHosts()`, from the index's `host` column), otherwise
   no machine UI appears. Then: an `@machine` badge on Sessions rows and
   Calendar day-list rows (dim for this machine, highlighted for others),
   a `Machine:` line in `formatSessionDetail()`, `Shift+H` to filter the
@@ -612,17 +662,17 @@ As a user, I can **use one store from several machines** (a laptop and a home se
   `claude`/`['--resume', id]` for an unrecognized source. [untested]
 - **Check whether the source agent still has this session before resuming
   it.** `sourceSessionExists(source, id)` (`src/scanner.js`, despite living
-  next to the resume helpers conceptually — reuses each adapter's own
+  next to the resume helpers conceptually, reuses each adapter's own
   `listSessions()` rather than a new per-adapter method). `r` / detail-Enter
   → "Open here" (`resume-handoff.js`'s `doResume()`) call this first: if the
   source agent has pruned its own copy (Claude Code's default retention
-  window, etc. — see `docs/handoff.md`), resuming would otherwise shell out
-  and fail with the real CLI's own error. Offers a choice instead —
+  window, etc., see `docs/handoff.md`), resuming would otherwise shell out
+  and fail with the real CLI's own error. Offers a choice instead:
   continue via Handoff (which never depended on that file, see `h` below)
   or try resuming anyway (the check is a listing, not a guarantee).
   Defaults to `true` (assume it exists) for an unregistered source or a
   `listSessions()` failure, and skips the real check entirely under
-  `MYCELIUM_DEMO_MODE` (same guard `scan()` uses — a mock session's id was
+  `MYCELIUM_DEMO_MODE` (same guard `scan()` uses, a mock session's id was
   never really captured by any real adapter, so unguarded it would always
   read as "expired"). [tested]
 - **Resolve the correct working directory to resume in.**
@@ -642,13 +692,9 @@ As a user, I can **use one store from several machines** (a laptop and a home se
   `scan()` reparses stored records that still carry it once, deleting
   noise-only ones (returned as `removed`). [partial] (parse tested,
   corrupt-line resilience and `filesChanged` regex not directly tested)
-- **Codex adapter.** Parses `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`.
-  [partial] (parse tested; `session_meta` id-override case not tested)
-- **Kiro adapter.** Unions 3 on-disk formats (SQLite v1/v2, JSONL
-  sidecar); v2 opened `readOnly: true` (never mutates the user's real
-  DB). [partial] (only the JSONL fallback is tested; the SQLite v1/v2
-  paths, which the module's own doc says are what's actually live, are
-  untested)
+- **Codex adapter.** Parses `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`: Codex 0.16x's `event_msg` `item_completed` `UserMessage`/`AgentMessage` items, or the older `user_message`/`agent_message` events when a file has none of the new ones. A subagent's own rollout (`session_meta.source.subagent`, e.g. the `auto_review` guardian, whose answers are JSON verdicts) parses to no turns, so it is never captured.
+  [partial] (both formats and the subagent skip tested; `session_meta` id-override case not tested)
+- **Kiro adapter.** Unions 4 on-disk formats: the kiro-cli 2.3x session store (`~/.kiro/sessions/<workspace hash>/<session id>/session.json` + `messages.jsonl`, `listStoreSessions()`, the only one a current kiro-cli writes; `Reasoning` entries are thinking, not turns), SQLite v1/v2, and the JSONL sidecar; v2 opened `readOnly: true` (never mutates the user's real DB). Session directories are named both `sess_<uuid>` and `cli_<uuid>_<suffix>`, so any non-dot directory with a `messages.jsonl` counts. [partial] (the session store and the JSONL fallback are tested; the SQLite v1/v2 paths are untested)
 - **OpenCode adapter.** Reads `~/.local/share/opencode/opencode.db`
   (SQLite, `XDG_DATA_HOME`-aware, `OPENCODE_SQLITE_DB` override), opened
   `readOnly: true` (never mutates the user's real DB); joins
@@ -675,7 +721,7 @@ As a user, I can **use one store from several machines** (a laptop and a home se
 - **Rename a machine.** `mycelium sync name <name>` / `sync init --name`
   (`renameMachine()`, `src/sync/machine.js`): relabels this machine's
   sessions (`host`), writes the config, reindexes, then syncs. A one-way
-  machine's remote branch moves with the name — the old one is recorded in
+  machine's remote branch moves with the name: the old one is recorded in
   `config.sync.staleBranches` and deleted after the new push succeeds
   (retried until it does), and the sync fetch prunes it. The collecting
   machine and two-way machines take the new name through a normal 3-way
@@ -747,9 +793,9 @@ As a user, I can **use one store from several machines** (a laptop and a home se
   consecutive failures, regardless of cause, is itself the signal a real
   usage-limit exhaustion is happening. [tested] (`test/llm.test.js`)
 
-## CLI (`src/cli.js` — a dispatch table only; the real implementation lives in `src/cli/*.js`), see [`docs/cli.md`](./cli.md) for the full command reference
+## CLI (`src/cli.js`, a dispatch table only; the real implementation lives in `src/cli/*.js`), see [`docs/cli.md`](./cli.md) for the full command reference
 
-`src/cli.js`'s `main()` is dispatch only — parse argv, look up the command in a `COMMANDS` table, call the matching handler — mirroring `organize.js`/`daemon.js`'s own barrel+siblings pattern. Each command's real implementation lives in its own `src/cli/*.js` sibling, grouped the same way `printHelp()`'s own output groups them: `capture.js` (scan/reindex/archive), `organize.js` (organize/mkdir/mv/tag/unmerge/unsplit), `learn.js` (autotag/digest/knowledge), `reuse.js` (context/inject/handoff/resume), `find.js` (search/list/tags), `cleanup.js` (cleanup), `run.js` (daemon/demo/lang), plus a shared `util.js` (`fail`/`parseFlags`) and `help.js` (the unrecognized-command usage text). Every command funnels errors through one `fail(msg)` (`console.error` + `exit 1`) except the unrecognized-command branch, which does its own `process.exit(cmd?1:0)` — a latent dead-code oddity (unreachable `exit(0)` since the no-command case is handled earlier and launches the TUI instead). `cleanup archive` is equally destructive to `cleanup reset` but has no `--yes` confirmation gate — a real safety inconsistency worth fixing. `printHelp()`'s usage text follows `contentLocale()` (`mycelium lang`), English by default, with one maintained Korean version alongside it (tested in `cli-dispatch.test.js`); several other commands' output strings are still hardcoded Korean, independent of `mycelium lang` — worth a decision before assuming the rest of the CLI is localized. Most of the 25+ subcommands' argument-parsing/routing/output-formatting layer is now exercised directly (`test/cli.test.js`, spawning the real binary — `node src/cli.js <args>` — against an isolated `MYCELIUM_HOME` per test) — the underlying module functions they call were already tested where noted above; this closes the gap in the dispatch layer itself. `test/cli-dispatch.test.js` covers the same dispatch table from the module-split side (built alongside the `cli.js` → `src/cli/*.js` extraction — see that file's own comment) and adds one scenario `cli.test.js` doesn't: `scan`'s `MYCELIUM_DEMO_MODE=1` guard asserting an exact `scanned 0, imported 0, skipped 0, failed 0` (`cli.test.js`'s own `scan` test runs against the real, unguarded adapters instead, asserting only the output's shape). One real, unavoidable gap remains: LLM-dependent branches (`autotag`'s actual tagging call, `organize`'s actual classification when nothing's pre-queued, `digest`, `knowledge`'s actual extraction) aren't covered this way — `__setTestProvider()` (`llm.js`) is an in-process-only seam that doesn't survive a spawned subprocess boundary, so only their argument-validation/empty-store early-exit paths are covered here (verified to return before ever reaching `complete()`); the LLM-invoking branches themselves are covered at the module level instead (`learn.test.js`/`organize.test.js`/`insight.test.js`, via the mock provider). `resume --exec`, a bare `daemon` invocation (foreground, blocks), `daemon --detach`, and `demo` are also excluded — they spawn/exec a real process, block in a foreground loop, or launch an interactive TUI (`daemon --stop` is tested, since it does neither). [partial] (`test/cli.test.js`, `test/cli-dispatch.test.js`)
+`src/cli.js`'s `main()` is dispatch only, parse argv, look up the command in a `COMMANDS` table, call the matching handler, mirroring `organize.js`/`daemon.js`'s own barrel+siblings pattern. Each command's real implementation lives in its own `src/cli/*.js` sibling, grouped the same way `printHelp()`'s own output groups them: `capture.js` (scan/reindex/archive), `organize.js` (organize/mkdir/mv/tag/unmerge/unsplit), `learn.js` (autotag/digest/knowledge), `reuse.js` (context/inject/handoff/resume), `find.js` (search/list/tags), `cleanup.js` (cleanup), `run.js` (daemon/demo/lang), plus a shared `util.js` (`fail`/`parseFlags`) and `help.js` (the unrecognized-command usage text). Every command funnels errors through one `fail(msg)` (`console.error` + `exit 1`) except the unrecognized-command branch, which does its own `process.exit(cmd?1:0)`, a latent dead-code oddity (unreachable `exit(0)` since the no-command case is handled earlier and launches the TUI instead). `cleanup archive` is equally destructive to `cleanup reset` but has no `--yes` confirmation gate, a real safety inconsistency worth fixing. `printHelp()`'s usage text follows `contentLocale()` (`mycelium lang`), English by default, with one maintained Korean version alongside it (tested in `cli-dispatch.test.js`); several other commands' output strings are still hardcoded Korean, independent of `mycelium lang`, worth a decision before assuming the rest of the CLI is localized. Most of the 25+ subcommands' argument-parsing/routing/output-formatting layer is now exercised directly (`test/cli.test.js`, spawning the real binary, `node src/cli.js <args>`, against an isolated `MYCELIUM_HOME` per test), the underlying module functions they call were already tested where noted above; this closes the gap in the dispatch layer itself. `test/cli-dispatch.test.js` covers the same dispatch table from the module-split side (built alongside the `cli.js` → `src/cli/*.js` extraction, see that file's own comment) and adds one scenario `cli.test.js` doesn't: `scan`'s `MYCELIUM_DEMO_MODE=1` guard asserting an exact `scanned 0, imported 0, skipped 0, failed 0` (`cli.test.js`'s own `scan` test runs against the real, unguarded adapters instead, asserting only the output's shape). One real, unavoidable gap remains: LLM-dependent branches (`autotag`'s actual tagging call, `organize`'s actual classification when nothing's pre-queued, `digest`, `knowledge`'s actual extraction) aren't covered this way, `__setTestProvider()` (`llm.js`) is an in-process-only seam that doesn't survive a spawned subprocess boundary, so only their argument-validation/empty-store early-exit paths are covered here (verified to return before ever reaching `complete()`); the LLM-invoking branches themselves are covered at the module level instead (`learn.test.js`/`organize.test.js`/`insight.test.js`, via the mock provider). `resume --exec`, a bare `daemon` invocation (foreground, blocks), `daemon --detach`, and `demo` are also excluded, they spawn/exec a real process, block in a foreground loop, or launch an interactive TUI (`daemon --stop` is tested, since it does neither). [partial] (`test/cli.test.js`, `test/cli-dispatch.test.js`)
 
 - **`--version` / `-v` / `-V`.** Prints `mycelium v<version>` and exits
   0, reading `src/version.js`'s `VERSION` (parsed once from
@@ -767,6 +813,23 @@ As a user, I can **use one store from several machines** (a laptop and a home se
   `i18n.js` since a product name plus semver reads the same in `en`/`ko`.
   [tested] (`test/cli-version.test.js` spawns the real bin for all three
   flag forms; `test/version.test.js` covers `VERSION` itself)
+
+## Editor bridge (`src/bridge.js`, `src/cli/serve.js`) and VS Code extension (`vscode/`), see [`docs/vscode.md`](./vscode.md)
+
+- **Drive the store over JSON-RPC.** `mycelium serve --stdio` reads one JSON-RPC 2.0 request per line and answers on stdout, running requests one at a time in arrival order. `console.log`/`warn`/`info` are redirected to stderr first, so a stray log line from any module can't corrupt a response. Errors from the underlying `{ ok: false, error }` results become JSON-RPC errors (-32000); unknown methods -32601, bad JSON -32700. A notification (no id) gets no reply. [tested] (`test/bridge.test.js`, including a real spawned process whose stdout must be pure JSON)
+- **Bridge methods only map onto existing functions.** `folders`/`sessions`/`detail`/`tags`/`scan`/`mkdir`/`move`/`tag`/`delete`/`agents`/`resumeCommand`/`newCommand`/`handoff`/`dirsForFolder`/`context`/`inject`/`doctor`; no store logic lives in the bridge. `move`/`mkdir` reject unsafe folder paths (`isSafeFolderPath`), `resumeCommand` refuses merge/split products and sessions the agent no longer has (same as `mycelium resume`), `detail` omits `turns`. [partial] (folders/sessions/detail/move/tag/delete/mkdir/handoff covered; `resumeCommand`/`newCommand`/`inject`/`agents` not yet)
+- **Bridge LLM steps.** `autotag` (ids, or whatever lacks a summary up to `limit`), `organizeSuggest` → `organizeApply`, `knowledgeBuild` → `knowledgeSave`, `knowledgePending`/`Promote`/`Dismiss`, and `cancel` (`killInFlight()`). These three long ones (`LONG`) run outside serve.js's one-at-a-time queue and report `progress` notifications tagged with the caller's token. Results are applied to the record as it is when the LLM call returns, not as it was when it started, so a move, tag or delete made in between is kept (`autoTagSession()`, `suggestPlacements()`). `organizeSuggest` shares `reviewablePlacements()` with `mycelium organize`, so both bound and order the work the same way. [tested] (`test/bridge-llm.test.js`, with a fake LLM provider; progress lines over a real pipe are covered by the client tests, not by an LLM run)
+- **Filter sessions by working directory.** The index records the directory a session ran in (`work_dir`); `listSessions({ dir })` / bridge `sessions({ dir })` match that directory and anything below it (not a sibling sharing a string prefix). An index from before the column is rebuilt once. [tested] (`test/index-workdir.test.js`, `test/bridge.test.js`)
+- **Start a session in the window of its own project.** Resume / Hand off / New Agent open their terminal, or, for Claude sessions, the Claude Code panel (next entry), in a window on the session's directory (or here, if this window's folders already contain or sit inside it). The request is a file in `~/.mycelium-vscode-launch/` that the target window's extension claims by deleting it, the sender waits for that, and falls back to starting here (with a note) if nobody does within ~15s. Requests older than two minutes are dropped; two windows on one project can't both take one. `mycelium.openSessionIn: thisWindow` opts out. [partial] (`vscode/test/launch.test.js` covers relatedness, claiming, staleness and atomicity; opening the windows themselves needs a running editor)
+- **Know when the CLI is missing or too old.** A CLI from before `serve` prints its help and exits 0 without answering; the client reports that as `OLD_CLI` ("needs 0.5.0 or newer"), as does a `hello` older than `MIN_CLI`. Both show an upgrade welcome view instead of an empty sidebar. [tested] (`vscode/test/client.test.js`, `shell.test.js`)
+- **Find the CLI without trusting the editor's environment.** An editor started from the Dock can lack the shell's PATH, so `mycelium` was "not found" and even a full path failed (`#!/usr/bin/env node`). The extension looks on PATH, in the usual install locations (Homebrew, npm global, nvm/Volta/asdf, `%APPDATA%\\npm`), then asks the login shell once (its own 15s limit, cached), and runs the CLI with a PATH that starts with the CLI's directory. A missing node is reported as `NO_NODE`, a 0.4.x CLI (help on stdout, exit 1) as too old, and the child's stderr is kept in the error and in the Mycelium output channel (*Show Log*). [tested] (`vscode/test/cli-path.test.js`, `client.test.js`; checked against the real CLI under `env -i PATH=/usr/bin:/bin`)
+- **Run on Windows.** `which()` splits PATH on `;` and tries PATHEXT there; the client spawns the CLI through a shell on win32; terminals get `bin`/`args`/`cwd` (never a POSIX command line) and the receiving window quotes them for its own shell (bash/zsh, PowerShell; a `cmd` terminal gets only harmless words, anything else, such as a handoff prompt, runs that terminal in PowerShell instead, since cmd has no safe quoting and PowerShell's typographic quotes are doubled too). [partial] (every rule is unit-tested with an injected platform; the CI vscode job also runs on a Windows runner, but no one has driven a real Windows editor yet)
+- **Open Claude sessions in the Claude Code panel.** With the Claude Code extension installed, Resume on a Claude session (an id Claude Code recorded, not a merge/split product or backlog note), Hand off to Claude and Start New Agent → Claude run `claude-vscode.primaryEditor.open(sessionId?, prompt?)` instead of starting a terminal: the same entry point as its `vscode://anthropic.claude-code/open` URI, after activating that extension. The prompt is put in the input box, not sent. It needs no `claude` on PATH, Claude Code ships its own binary, so `resumeCommand`/`newCommand` take `allowMissingBin` (answering with `binMissing` instead of refusing) and `agents` takes `all` (every agent with `onPath`); a launch that has neither a usable panel nor the CLI says so instead of opening a terminal that can't run it (the terminal fallback after a failed panel exists only when the CLI's binary does). When the CLI says an agent "is not installed", or the agent picker finds any agent off PATH, the extension asks the login shell for its PATH once (cached) and repeats the request with those directories as `extraPath`, the bridge's `agents`, `resumeCommand` and `newCommand` look there too, without restarting the CLI, so requests in flight are untouched; every failed command is written to the Mycelium output channel. A launch always carries its command line too, so a failure (no extension, command missing, bad id) falls back to a terminal with a notice. `mycelium.claudeCode.openIn` (`auto` follows `claudeCode.useTerminal`); the panel finds a session only through its project, so it opens in the project's window like terminals do, and in any other window (`thisWindow`, or no answer from the project's window) a terminal is used instead. The sending window always attaches the request for an eligible session; the window that runs it applies its own extension and settings checks, and says so if `panel` was asked for by name but the extension isn't there. [partial] (decisions, request format and the open/fallback sequence are tested against a stand-in editor; not driven in a real editor with Claude Code)
+- **Publish the extension to the VS Code Marketplace and Open VSX.** A `vscode-v<version>` GitHub Release builds the `.vsix`, attaches it, and two independent jobs publish that same file to each registry using the `VSCE_PAT` / `OVSX_PAT` repo secrets; a registry whose token isn't set is skipped, and *Run workflow* with a tag publishes (or retries) an existing release. Pre-releases stay pre-releases. [untested] (workflow YAML is validated and the `.vsix` builds with the icon and banner; a real publish needs the accounts and tokens, so the first one is the test)
+- **Delete a session from the editor.** Right-click a session (multi-select works) → *Delete Session*, or *Delete* on its page, after a modal confirmation. The bridge's `delete` calls `deleteSession()`: only Mycelium's record is removed, the agent's own log stays, and the id goes on the shared exclude list (`excluded.txt`) so a rescan won't re-capture it. Neighbours' lineage links to a deleted session are cleared and re-indexed with it, and a batch that fails part-way still refreshes what was already deleted (bridge and tree). An open session page for a deleted session closes. A CLI from before `delete` answers "method not found", shown as an error. [partial] (`test/bridge.test.js` covers the method, the exclude list, lineage cleanup, the index and the error cases; `vscode/test/panel-html.test.js` covers the button; the confirmation and tree refresh need a running editor and are verified manually)
+- **Write, edit and start a backlog item from the editor.** Bridge `backlogAdd` (title required, optional notes and folder), `backlogUpdate` (title/notes of a backlog item only) and `backlogOpen` (the `mycelium backlog open` steps: best-effort AGENTS.md injection for the item's folder, the seed with its marker, `doneAt` stamped; returns the command plus the `prompt`). In the editor: *Add Backlog Item* (Actions, quick menu, folder menu), then *Start* / *Edit* on the item's page or tree row; Claude gets the note in the Claude Code panel's input box, other agents get it as argv in a terminal. A second start of an item that already has `doneAt` asks first. A CLI from before these methods answers "unknown method", shown as an update hint. [partial] (`test/bridge.test.js` covers the three methods; `vscode/test/panel-html.test.js` covers the page; the prompts, picker and terminal need a running editor and are verified manually)
+- **Browse sessions by day in the editor (experimental).** Bridge `calendar({year, month})` returns `{ year, month, counts }` (day of month → sessions, by last activity, `_archive` excluded; same `sessionCountsByDay()` the TUI's Calendar tab uses; a bad month/year is an error). With `mycelium.experimental.calendar` on, *Open Calendar* shows a webview with a Sunday-first month grid (shade by count: 1-2, 3-5, 6+), the selected day's sessions under it (`sessions({date})`) and Open / Resume / Hand off per row (merged/split rows can only be handed off, backlog rows only opened). Previous/next month and *Today* buttons; arrow keys move the selected day, with one tab stop in the grid (roving tabindex). Counts redraw on every refresh. The page follows the theme; strings are English/Korean. [partial] (`test/bridge.test.js` covers `calendar`; `vscode/test/calendar-html.test.js` covers the grid, shading, selection, rows, language and markup-escaping; the panel's messaging and keyboard focus need a running editor and are verified manually)
+- **Browse and reuse from the editor sidebar.** Four views (Actions, This Workspace, Folders, and a hidden-by-default Recent), a themed session page with Resume / Hand off / Move / Tags / Summarize, drag-and-drop filing, smart organize with a tick-list review, folder knowledge extraction with a diff before saving, search, injecting into AGENTS.md, and a Get Started walkthrough. Refreshes when files under `raw/` change. [partial] (`vscode/test/` covers the RPC client, progress matching, the session-page HTML, including that session text can't inject markup, and the time/grouping helpers; the views and commands need a running editor and are verified manually)
 
 ## TUI: App shell (`src/tui/app.js`, `index.js`)
 
@@ -889,6 +952,19 @@ As a user, I can **use one store from several machines** (a laptop and a home se
   `spinner-toast-e2e.test.js` cases pass unchanged; manually re-verified
   via a real, non-mocked merge, the toast now stays visible continuously
   for the operation's whole real duration)
+- **Claude Code VS Code extension context blocks stay out of previews.** The
+  claude adapter strips `<ide_selection>`/`<ide_opened_file>`/
+  `<ide_diagnostics>`/`<system-reminder>` blocks from user turns (keeping the
+  prompt that follows) and drops `[Request interrupted by user…]` turns;
+  stored records holding them are re-parsed once. [tested]
+- **Forked Claude Code conversations link to their parent.** The VS Code
+  extension's "Fork conversation" copies a transcript with no pointer back, so
+  `scan()` (`linkForks`) groups claude records by cwd + startedAt + first real
+  user turn, picks the parent (fewest " (fork)" title suffixes, then earliest
+  file birthtime), and sets `continuationOf` plus `forkPoint` (shared-prefix
+  turn count) on the rest; previews and summarizer excerpts use only the turns
+  after `forkPoint` (`schema.js`'s `ownTurns`). The `custom-title` entry shape
+  is assumed (`customTitle`), not verified against a real fork. [tested]
 - **In-flight LLM subprocesses are killed on quit, not orphaned.**
   `llm.js`'s `complete()` had no `detached` flag and nothing tracked its
   spawned child beyond the local Promise closure. `app.js`'s `quit()`
@@ -956,9 +1032,9 @@ Live preview on navigate; `a` new subfolder; `e` rename (blocked on Root/New); `
 
 ## TUI: Sessions panel (`src/tui/views/sessions.js`, `sessions-actions.js`)
 
-Navigation (Enter/→ drill in, Esc/← back), multi-select (`Space`, `*` select-scoped-all), `Shift+O` cycle sort, `Shift+T` pick sort directly (see below), `Shift+M` merge (2+ selected, git-like), `Shift+S` LLM split-review (multi-select, all ranges pre-checked, same default as `o`'s multi-select), `/` search, `v` toggle Calendar tab (co-hosted screen, `activeTab`-guarded key scoping, the largest architectural coordination point in the file), `s` scan, `o` smart-organize (largest/most stateful handler: cached-vs-fresh branch, two sequential LLM phases, toast-dismiss race, multi-select review, always-clear-queue-on-close), `?` help, `g` re-show onboarding, `m`/`t` move/tag, `x` delete (sweeps backlinks across all targets), `n` launch new agent (open-here-or-copy choice, see below), `r` resume (falls back straight to Handoff for a merge/split product with no real id to resume; offers a Handoff-or-try-anyway choice instead when a non-derived session's source agent no longer has it — see `sourceSessionExists()` above), `h` handoff (post-launch folds a merge/split product into the new real session), detail-panel `Enter` resume-or-copy choice, `a` auto-tag (sequential batch with per-item progress and partial-failure tolerance), `e` rename title, `y` copy to clipboard, `d` digest reader (nested mini-screen, plain narrative summary, no knowledge coupling, see `k` below), `k` knowledge review (see below), `c` view context, `i` inject AGENTS.md (preview-then-confirm, sibling to `w`). [untested]
+Navigation (Enter/→ drill in, Esc/← back), multi-select (`Space`, `*` select-scoped-all), `Shift+O` cycle sort, `Shift+T` pick sort directly (see below), `Shift+M` merge (2+ selected, git-like), `Shift+S` LLM split-review (multi-select, all ranges pre-checked, same default as `o`'s multi-select), `/` search, `v` toggle Calendar tab (co-hosted screen, `activeTab`-guarded key scoping, the largest architectural coordination point in the file), `s` scan, `o` smart-organize (largest/most stateful handler: cached-vs-fresh branch, two sequential LLM phases, toast-dismiss race, multi-select review, always-clear-queue-on-close), `?` help, `g` re-show onboarding, `m`/`t` move/tag, `x` delete (sweeps backlinks across all targets), `n` launch new agent (open-here-or-copy choice, see below), `r` resume (falls back straight to Handoff for a merge/split product with no real id to resume; offers a Handoff-or-try-anyway choice instead when a non-derived session's source agent no longer has it, see `sourceSessionExists()` above), `h` handoff (post-launch folds a merge/split product into the new real session), detail-panel `Enter` resume-or-copy choice, `a` auto-tag (sequential batch with per-item progress and partial-failure tolerance), `e` rename title, `y` copy to clipboard, `d` digest reader (nested mini-screen, plain narrative summary, no knowledge coupling, see `k` below), `k` knowledge review (see below), `c` view context, `i` inject AGENTS.md (preview-then-confirm, sibling to `w`). [untested]
 
-**Action handlers split into `sessions-actions.js` (Phase 2, issue #88).** `doScan`/`doOrganize`/`doRefreshKnowledge`(`k`)/`doMerge`/`doSplit`/`doKnowledge`(`w`)/`doNewAgent` — each a substantial, mostly self-contained LLM- or mutation-driving flow — moved out of `mount()`'s closure into that sibling file as functions taking an explicit `ctx` (built once in `mount()`: `{app, state, foldersBox, listBox, detailBox, currentRow, reloadFolders, reloadList, asyncReviewFlowRunning}`), the same `ctx`-object pattern `tutorial-runner.js` established for `startTutorial()`. `sessions.js` keeps a thin same-named wrapper per handler (`const doScan = () => actions.doScan(ctx);`) at the exact spot the original inline definition lived, so every key binding (`screenKey`/`listBox.key`/`foldersBox.key`) and `openActionMenu()`'s item list reference the same names unchanged. `ctx.asyncReviewFlowRunning` is the one field these functions mutate (was a bare `let` closed over by all five async handlers; centralizing it into `ctx` is what makes moving them out of `mount()`'s closure possible at all). `doHandoff` (also named in the issue's plan) was already extracted earlier, into `resume-handoff.js`, shared with the Calendar tab. Pure mechanical extraction, verified by the full e2e suite (`test/e2e/demo-e2e.test.js`, `test/e2e/sessions-sort-e2e.test.js`) with no test changes needed.
+**Action handlers split into `sessions-actions.js` (Phase 2, issue #88).** `doScan`/`doOrganize`/`doRefreshKnowledge`(`k`)/`doMerge`/`doSplit`/`doKnowledge`(`w`)/`doNewAgent`, each a substantial, mostly self-contained LLM- or mutation-driving flow, moved out of `mount()`'s closure into that sibling file as functions taking an explicit `ctx` (built once in `mount()`: `{app, state, foldersBox, listBox, detailBox, currentRow, reloadFolders, reloadList, asyncReviewFlowRunning}`), the same `ctx`-object pattern `tutorial-runner.js` established for `startTutorial()`. `sessions.js` keeps a thin same-named wrapper per handler (`const doScan = () => actions.doScan(ctx);`) at the exact spot the original inline definition lived, so every key binding (`screenKey`/`listBox.key`/`foldersBox.key`) and `openActionMenu()`'s item list reference the same names unchanged. `ctx.asyncReviewFlowRunning` is the one field these functions mutate (was a bare `let` closed over by all five async handlers; centralizing it into `ctx` is what makes moving them out of `mount()`'s closure possible at all). `doHandoff` (also named in the issue's plan) was already extracted earlier, into `resume-handoff.js`, shared with the Calendar tab. Pure mechanical extraction, verified by the full e2e suite (`test/e2e/demo-e2e.test.js`, `test/e2e/sessions-sort-e2e.test.js`) with no test changes needed.
 
 - **`Shift+T`: pick a sort order directly, instead of `Shift+O`'s blind
   cycle** (issue [#51](https://github.com/krapie/mycelium/issues/51)).
@@ -1030,7 +1106,7 @@ Navigation (Enter/→ drill in, Esc/← back), multi-select (`Space`, `*` select
   written, mirroring `n`'s own directory picker (`launch.js`'s
   `resolveDir()`). [tested] (`test/e2e/demo-e2e.test.js`'s "a folder
   spanning 2+ real directories asks which ones to inject into")
-- **`applyKnowledgeApprovals()` restores focus to `listBox` after the review picker closes.** Found while re-rendering `demo/tapes/*-full.tape` for the retention step (#103) — the real 20-step tutorial presses `k` immediately before Merge, a sequence no existing test covered (the e2e "full lifecycle" walkthrough uses `c`/Escape there instead), which silently broke `Space`/`Shift+M` (both `listBox.key()` bindings) right after approving a knowledge review: focus was left nowhere in particular once `multiSelectList` destroyed itself. Confirmed via `git show` on the Phase 2 extraction (#101) that this was already missing in the original, pre-extraction `sessions.js` code — a genuinely pre-existing gap, not a regression from that split. [tested] (`test/e2e/demo-e2e.test.js`'s "k: listBox regains focus after apply")
+- **`applyKnowledgeApprovals()` restores focus to `listBox` after the review picker closes.** Found while re-rendering `demo/tapes/*-full.tape` for the retention step (#103); the real 20-step tutorial presses `k` immediately before Merge, a sequence no existing test covered (the e2e "full lifecycle" walkthrough uses `c`/Escape there instead), which silently broke `Space`/`Shift+M` (both `listBox.key()` bindings) right after approving a knowledge review: focus was left nowhere in particular once `multiSelectList` destroyed itself. Confirmed via `git show` on the Phase 2 extraction (#101) that this was already missing in the original, pre-extraction `sessions.js` code, a genuinely pre-existing gap, not a regression from that split. [tested] (`test/e2e/demo-e2e.test.js`'s "k: listBox regains focus after apply")
 - **`multiSelectList`'s optional `previewText`, and `p` inside the
   knowledge review, the actual `confirmText()` checkpoint the review
   checklist was missing.** The checklist's own item label truncates to
@@ -1134,9 +1210,9 @@ Month grid, day list, and detail, same drill-down language as Sessions. Grid lef
 
 **`mockSplit()`'s split-range computation is dynamic, not hardcoded.** Every persona's individual mock sessions happen to have 4 turns each, but `mergeSessions()` prepends a provenance separator turn (role `'system'`) before each merged block, and the CSE persona's merge target is a 3-way merge, so the real turn count the split prompt numbers varies by persona and is no longer always 4. `mockSplit()` reads the actual highest turn number out of the prompt via regex, splits it roughly in half, and labels the two halves with the active persona's `splitLabels`, a fixed response used to silently drop every turn past 4 for any merge bigger than 2x2.
 
-**Highest state-machine complexity in the app.** `startTutorial()` (`tutorial.js`) is setup/wiring only — it mounts the narrator box, toggles `MYCELIUM_DEMO_MODE`, and builds a `ctx` object; the actual step-walking engine (`render`/`finish`/`settleAt`/`pollUntil`/`advanceFrom`/`onKeypress`/`matchesWaitFor`, all mutually recursive over the shared step cursor) lives in `tutorial-runner.js` as named functions taking that `ctx` explicitly instead of closing over locals (Phase 2 split, issue #88; `endTutorial`/`injectDemoSessions` are passed into `ctx` rather than imported by `tutorial-runner.js`, to avoid a cycle between the two files). A narrator overlay runs its own `app.screen.on('keypress', ...)` listener alongside (never wrapping) sessions.js's real handlers, inferring "did a real action's modal open/close" by polling `app.screen.children.length` against a captured baseline, a generic heuristic that works because every picker/viewer in the codebase parents itself to `app.screen`. 20-step script: an opening step stating what Mycelium actually is (Capture → Organize → Learn → Reuse), merged with the panel-navigation lesson (← → between Folders/Sessions/Detail), an action-palette intro (`.`), then the full lifecycle, Scan (`s`) → Organize (`o`) → Learn (`w`) → Reuse (`n`, an agent picker → directory picker → copy-command flow that writes a real `AGENTS.md` — see below, not the read-only `c` preview this replaced) → a retention takeaway naming why that snapshot matters (Claude Code prunes old sessions, Codex/Kiro don't, so `n`/`h` keep working regardless) → Knowledge review (`k`) → session lineage (Shift+M merge, Shift+S split) → freeform explore, closing on a recap of the day-to-day loop (`s`/`o`/`w`/`n`, framed as "the Context Flywheel," noting that most of it already runs on its own in the background so pressing those keys is mostly reviewing and confirming, not starting from scratch). `render()` computes the visible `Step N/Total` label from `STEPS.length` and the current index rather than baking a number into each title string, so inserting or removing a step is a pure array edit. The opening step's `waitFor` is `'enter'`, on that exact screen Enter is also `sessions.js`'s own real `foldersBox.key('enter', drillIntoSessions)`, so pressing it both advances the narrator and performs the literal "step into Sessions" action the lesson describes. Mixing `waitFor`+`thenWait` (poll for a real modal), plain `waitFor` (a literal key), a `shift: true` flag (blessed's raw keypress reports Shift+M as `key.name: 'm'` plus `key.shift: true`, not the `'S-m'` combo-string form only `element.key()` bindings understand), and `pollOnEntry` (used by the merge title-prompt step and the Reuse step's picker-chain-close step, both of which poll for the state change directly rather than waiting on one specific key).
+**Highest state-machine complexity in the app.** `startTutorial()` (`tutorial.js`) is setup/wiring only: it mounts the narrator box, toggles `MYCELIUM_DEMO_MODE`, and builds a `ctx` object; the actual step-walking engine (`render`/`finish`/`settleAt`/`pollUntil`/`advanceFrom`/`onKeypress`/`matchesWaitFor`, all mutually recursive over the shared step cursor) lives in `tutorial-runner.js` as named functions taking that `ctx` explicitly instead of closing over locals (Phase 2 split, issue #88; `endTutorial`/`injectDemoSessions` are passed into `ctx` rather than imported by `tutorial-runner.js`, to avoid a cycle between the two files). A narrator overlay runs its own `app.screen.on('keypress', ...)` listener alongside (never wrapping) sessions.js's real handlers, inferring "did a real action's modal open/close" by polling `app.screen.children.length` against a captured baseline, a generic heuristic that works because every picker/viewer in the codebase parents itself to `app.screen`. 20-step script: an opening step stating what Mycelium actually is (Capture → Organize → Learn → Reuse), merged with the panel-navigation lesson (← → between Folders/Sessions/Detail), an action-palette intro (`.`), then the full lifecycle, Scan (`s`) → Organize (`o`) → Learn (`w`) → Reuse (`n`, an agent picker → directory picker → copy-command flow that writes a real `AGENTS.md`, see below, not the read-only `c` preview this replaced) → a retention takeaway naming why that snapshot matters (Claude Code prunes old sessions, Codex/Kiro don't, so `n`/`h` keep working regardless) → Knowledge review (`k`) → session lineage (Shift+M merge, Shift+S split) → freeform explore, closing on a recap of the day-to-day loop (`s`/`o`/`w`/`n`, framed as "the Context Flywheel," noting that most of it already runs on its own in the background so pressing those keys is mostly reviewing and confirming, not starting from scratch). `render()` computes the visible `Step N/Total` label from `STEPS.length` and the current index rather than baking a number into each title string, so inserting or removing a step is a pure array edit. The opening step's `waitFor` is `'enter'`, on that exact screen Enter is also `sessions.js`'s own real `foldersBox.key('enter', drillIntoSessions)`, so pressing it both advances the narrator and performs the literal "step into Sessions" action the lesson describes. Mixing `waitFor`+`thenWait` (poll for a real modal), plain `waitFor` (a literal key), a `shift: true` flag (blessed's raw keypress reports Shift+M as `key.name: 'm'` plus `key.shift: true`, not the `'S-m'` combo-string form only `element.key()` bindings understand), and `pollOnEntry` (used by the merge title-prompt step and the Reuse step's picker-chain-close step, both of which poll for the state change directly rather than waiting on one specific key).
 
-**Reuse step demonstrates the real `n` mechanism, not a preview of it.** `doNewAgent()` (`sessions.js`) passes `copyOnly: !!app.tutorialSignal` into `launchAgent()` (`launch.js`) — truthy for the tutorial's whole duration, so its `n` step can never foreground a real, possibly-billed agent subprocess on a stray click; it always takes the copy-command path. `launchAgent()`'s agent-availability check and `agents.js`'s `newCommandLine()` both also bypass the real `which()` install check while `MYCELIUM_DEMO_MODE === '1'` (the same flag `scanner.js` already branches on to skip real adapter scanning during a tutorial run) — CI and most contributors' machines have no agent CLI installed at all, which would otherwise leave the picker empty and strand the step's `thenWait: 'open'` poll forever. Every mock session is stamped with a real, disposable `projectDir` (`tutorial.js`'s `tutorialProjectDir()`, `${HOME}-tutorial-repo`), created in `injectDemoSessions()` and removed in `endTutorial()`, so the step's directory picker offers a clean real suggestion and its "go check the real AGENTS.md" instruction points somewhere genuinely real (but fake), never the user's actual project. [tested] (`test/e2e/demo-e2e.test.js`'s dedicated `n` case asserts `copyOnly` skipped the choice menu and a real `AGENTS.md` landed on disk with the folder's actual knowledge; `test/agents.test.js` covers the `MYCELIUM_DEMO_MODE` bypass)
+**Reuse step demonstrates the real `n` mechanism, not a preview of it.** `doNewAgent()` (`sessions.js`) passes `copyOnly: !!app.tutorialSignal` into `launchAgent()` (`launch.js`), truthy for the tutorial's whole duration, so its `n` step can never foreground a real, possibly-billed agent subprocess on a stray click; it always takes the copy-command path. `launchAgent()`'s agent-availability check and `agents.js`'s `newCommandLine()` both also bypass the real `which()` install check while `MYCELIUM_DEMO_MODE === '1'` (the same flag `scanner.js` already branches on to skip real adapter scanning during a tutorial run), CI and most contributors' machines have no agent CLI installed at all, which would otherwise leave the picker empty and strand the step's `thenWait: 'open'` poll forever. Every mock session is stamped with a real, disposable `projectDir` (`tutorial.js`'s `tutorialProjectDir()`, `${HOME}-tutorial-repo`), created in `injectDemoSessions()` and removed in `endTutorial()`, so the step's directory picker offers a clean real suggestion and its "go check the real AGENTS.md" instruction points somewhere genuinely real (but fake), never the user's actual project. [tested] (`test/e2e/demo-e2e.test.js`'s dedicated `n` case asserts `copyOnly` skipped the choice menu and a real `AGENTS.md` landed on disk with the folder's actual knowledge; `test/agents.test.js` covers the `MYCELIUM_DEMO_MODE` bypass)
 
 **Skip-ahead matching, restricted to distinctive keys.** Because this listener only narrates alongside sessions.js's real handlers, a human who presses a later step's key before the current step's own, for example `o` while still on step 1's pure panel-navigation lesson, still triggers the real action regardless. An exact match on the current step still always wins; failing that, it scans forward for the first later step this keypress satisfies, but **only** for `o`/`w`/`n`/Shift+M/ Shift+S (`AMBIGUOUS_KEYS` in `tutorial-runner.js` excludes `enter`/`left`/ `right`, since those are pressed constantly for reasons that have nothing to do with the tutorial script and a false match on one of them could silently jump the narrator several steps ahead). [tested] (`test/e2e/demo-e2e.test.js`'s "pressing a later step's key early" case drives the legitimate `o` skip-ahead end to end and asserts the narrator still reaches `completed: true`; "a stray Enter on step 1 does not falsely cascade the narrator forward" is the regression test for the false-match case)
 

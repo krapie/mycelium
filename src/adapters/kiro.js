@@ -1,3 +1,12 @@
+/*
+ * Copyright 2026 The Mycelium Authors. All rights reserved.
+ *
+ * Use of this source code is governed by the MIT License
+ * that can be found in the LICENSE file.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs';
@@ -9,6 +18,14 @@ export const label = 'Kiro';
 export const bin = 'kiro-cli';
 export const newArgs = (seed) => ['chat', ...(seed ? [seed] : [])];
 export const resumeArgs = (sessionId) => ['chat', '--resume-id', sessionId];
+// Set in the shell tool's environment to session.json's `id` (sess_<uuid>,
+// the store format below) — checked against kiro-cli 2.32.0.
+export const sessionEnv = 'KIRO_SESSION_ID';
+// `@clip`. Kiro calls these prompts; same one-.md-per-name shape as Claude's.
+export const commandInstall = {
+  dir: process.env.KIRO_PROMPTS_DIR || join(homedir(), '.kiro', 'prompts'),
+  files: [{ from: 'kiro/clip.md', to: 'clip.md' }],
+};
 
 // Kiro CLI has three on-disk formats, verified against a real installed
 // kiro-cli (v2.13.0):
@@ -17,7 +34,10 @@ export const resumeArgs = (sessionId) => ['chat', '--resume-id', sessionId];
 //   v1 (legacy): same DB, conversations(key, value) — no timestamps, one row per cwd.
 //   v3 (JSONL sidecar, only seen as an empty stub, kept best-effort):
 //     ~/.kiro/sessions/cli/<uuid>.json + <uuid>.jsonl.
+// kiro-cli 2.3x (verified on 2.32.0) writes none of these anymore — see the
+// session store below, without which nothing from a current kiro-cli is captured.
 const SESSIONS_DIR = process.env.KIRO_SESSIONS_DIR || join(homedir(), '.kiro', 'sessions', 'cli');
+const STORE_DIR = process.env.KIRO_STORE_DIR || join(homedir(), '.kiro', 'sessions');
 const SQLITE_CANDIDATES = [
   process.env.KIRO_SQLITE_DB,
   join(homedir(), 'Library', 'Application Support', 'kiro-cli', 'data.sqlite3'), // macOS
@@ -57,6 +77,51 @@ function listJsonlSessions() {
       _createdAt: meta.created_at || null,
       _updatedAt: meta.updated_at || null,
     });
+  }
+  return refs;
+}
+
+// The session store (kiro-cli 2.3x): one directory per session,
+//   ~/.kiro/sessions/<workspace hash>/<session id>/session.json (id,
+//   workspacePaths, createdAt, lastModifiedAt) + messages.jsonl, one
+//   { payload: { type, ... } } event per line.
+export function listStoreSessions(root = STORE_DIR) {
+  if (!existsSync(root)) return [];
+  const refs = [];
+  for (const ws of readdirSync(root)) {
+    if (ws === 'cli') continue; // v3's directory, listed by listJsonlSessions()
+    let dirs;
+    try {
+      dirs = readdirSync(join(root, ws));
+    } catch {
+      continue; // a stray file, not a workspace directory
+    }
+    for (const d of dirs) {
+      // sess_<uuid> and cli_<uuid>_<suffix> both occur; .index is bookkeeping
+      if (d.startsWith('.')) continue;
+      const path = join(root, ws, d, 'messages.jsonl');
+      let mtimeMs;
+      try {
+        mtimeMs = statSync(path).mtimeMs;
+      } catch {
+        continue;
+      }
+      let meta = {};
+      try {
+        meta = JSON.parse(readFileSync(join(root, ws, d, 'session.json'), 'utf8'));
+      } catch {
+        /* still parseable; id falls back to the directory name, no cwd */
+      }
+      refs.push({
+        id: meta.id || d,
+        path,
+        mtimeMs,
+        _kind: 'store',
+        _cwd: meta.workspacePaths?.[0] || null,
+        _createdAt: meta.createdAt || null,
+        _updatedAt: meta.lastModifiedAt || null,
+      });
+    }
   }
   return refs;
 }
@@ -108,7 +173,7 @@ function listSqliteSessions() {
 }
 
 export function listSessions() {
-  const jsonl = listJsonlSessions();
+  const jsonl = [...listStoreSessions(), ...listJsonlSessions()];
   const seen = new Set(jsonl.map((r) => r.id));
   const sqlite = listSqliteSessions().filter((r) => !seen.has(r.id));
   return [...jsonl, ...sqlite];
@@ -184,9 +249,38 @@ function parseJsonl(neutral, ref) {
   }
 }
 
+function parseStore(neutral, ref) {
+  neutral.cwd = ref._cwd;
+  neutral.projectDir = ref._cwd;
+  if (ref._createdAt) neutral.startedAt = ref._createdAt;
+  if (ref._updatedAt) neutral.endedAt = ref._updatedAt;
+
+  for (const line of readFileSync(ref.path, 'utf8').split('\n')) {
+    if (!line.trim()) continue;
+    let p;
+    try {
+      p = JSON.parse(line).payload;
+    } catch {
+      continue;
+    }
+    if (!p) continue;
+    if (p.type === 'user' && typeof p.content === 'string' && p.content.trim()) {
+      neutral.turns.push({ role: 'user', text: p.content });
+    } else if (p.type === 'assistant' && p.operationType !== 'Reasoning' && typeof p.content === 'string' && p.content.trim()) {
+      // 'Reasoning' entries are the model's thinking, not something it said.
+      neutral.turns.push({ role: 'assistant', text: p.content });
+    } else if (p.type === 'tool_call') {
+      const target = p.filePath || p.args?.command || p.args?.path || '';
+      const tool = p.toolName || 'tool';
+      neutral.toolActivity.push(target ? `${tool}: ${String(target).slice(0, 120)}` : tool);
+    }
+  }
+}
+
 export function parse(ref) {
   const neutral = emptyNeutral(ref.id, name);
-  if (ref._kind === 'jsonl') parseJsonl(neutral, ref);
+  if (ref._kind === 'store') parseStore(neutral, ref);
+  else if (ref._kind === 'jsonl') parseJsonl(neutral, ref);
   else parseSqliteHistory(neutral, ref);
   return neutral;
 }

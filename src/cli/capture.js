@@ -1,3 +1,12 @@
+/*
+ * Copyright 2026 The Mycelium Authors. All rights reserved.
+ *
+ * Use of this source code is governed by the MIT License
+ * that can be found in the LICENSE file.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 import { scan, allRaw, reevaluateArchive } from '../scanner.js';
 import { firstUserText } from '../schema.js';
 import { reindex } from '../index-db.js';

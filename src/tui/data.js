@@ -1,3 +1,12 @@
+/*
+ * Copyright 2026 The Mycelium Authors. All rights reserved.
+ *
+ * Use of this source code is governed by the MIT License
+ * that can be found in the LICENSE file.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 import { loadRaw } from '../scanner.js';
 import {
   reindex,
@@ -10,7 +19,10 @@ import {
   listSessions,
   listHosts,
   sessionCountsByDay as dbSessionCountsByDay,
+  backlogCount,
 } from '../index-db.js';
+
+export { backlogCount };
 import { listTreeDirs, isArchive } from '../organize.js';
 import { machineName } from '../config.js';
 import { syncSettings } from '../sync.js';
@@ -78,6 +90,7 @@ function mapRow(r) {
     supersededBy: parseJsonArray(r.superseded_by),
     splitInto: parseJsonArray(r.split_into),
     host: r.host || null,
+    workDir: r.work_dir || null,
     snippet: r.snippet || null,
   };
 }
@@ -89,14 +102,14 @@ function mapRow(r) {
 // version of this function squashed undefined into null here ("no folder ⇒
 // treat as unfiled"), which is exactly why Root only ever showed unfiled
 // sessions — that's now New's job, and Root means the literal top level.
-export function sessions({ folder, query, tags, date } = {}) {
+export function sessions({ folder, query, tags, date, dir } = {}) {
   const searching = !!(query || (tags && tags.length) || date);
   if (searching) {
     let rows = search({ query, tags: tags || [], folder, date }).map(mapRow);
     if (folder) rows = rows.filter((r) => r.folder === folder || (r.folder && r.folder.startsWith(folder + '/')));
     return rows;
   }
-  return listSessions({ folder }).map(mapRow);
+  return listSessions({ folder, dir }).map(mapRow);
 }
 
 /** Session counts per day for one calendar month, excluding _archive (same

@@ -20,6 +20,19 @@ mycelium backlog add "Fix the flaky scan test" --desc "starts failing above ~200
 mycelium backlog list [--folder f]             # items still waiting (an item disappears when the session it started is captured)
 mycelium backlog open <session|prefix> [--agent a] [--dir D] [--copy]  # print the command that starts it, seeded with your notes (that session replaces the item on the next scan)
 
+# Clip (pin part of a conversation verbatim — same as TUI p)
+mycelium clip add <session>                    # no --turn: print the session's turns, numbered
+mycelium clip add <session> --turn 12-13 --note "prompt caching layout"
+mycelium clip list [--folder f] [--session s]
+mycelium clip show <clip> / rm <clip>
+mycelium clip note <clip> "new note"           # replace (or, with nothing after the id, clear) a clip's note
+mycelium clip add --here [--last N]            # from inside an agent: the session it's in, its last N turns ending at the newest answer (default 1)
+                                               # --skip-request: the newest user turn is the pin request itself, end before it
+mycelium clip add --here --list [N]            # the N (default 10) newest answers, one per question, with the turn numbers --turn takes
+                                               # Claude Code: copy src/agent-commands/claude/clip.md to ~/.claude/commands/ and type /clip [note]
+                                               # Kiro CLI: copy src/agent-commands/kiro/clip.md to ~/.kiro/prompts/ and type @clip [note]
+                                               # Codex: copy the src/agent-commands/codex/clip/ directory to ~/.codex/skills/ and type $clip [note] (not yet verified end to end)
+
 # Learn
 mycelium autotag                               # retroactively summarize/tag past sessions in bulk
 mycelium digest [week] [--date YYYY-MM-DD]
@@ -98,14 +111,41 @@ mycelium cleanup reset --yes # full reset: delete ~/.mycelium entirely → re-sc
 
 For a clean start: `mycelium cleanup reset --yes && mycelium scan`.
 
+## Setup
+
+```sh
+mycelium setup             # install /clip into every agent CLI that's on PATH
+mycelium setup --dry-run   # print the same table without writing anything
+```
+
+Copies this version's command files to where each agent looks for them — `~/.claude/commands/clip.md`, `~/.kiro/prompts/clip.md`, `~/.codex/skills/clip/SKILL.md` — skipping any agent whose CLI isn't installed. Each file gets a marker line recording the hash of what was written, so a later run can tell the three cases apart and report one of: `installed`, `updated` (ours, and this version ships a newer copy), `already current`, `edited since install` or `not installed by Mycelium`. Only the first two write; a file you edited, or one that was never Mycelium's, is left exactly as it is. Re-running after a `mycelium` upgrade is the intended way to refresh them.
+
+Codex is the one agent needing a step this command won't take for you: its sandbox denies writes outside the workspace, so `$clip` can't reach the store until `~/.mycelium` is in `writable_roots`. `setup` prints the lines to paste on every run; widening a sandbox is a security decision, so it is never applied automatically. `mycelium doctor` reports whether it's still missing.
+
+## Diagnose
+
+```sh
+mycelium doctor            # environment report to paste into a bug report
+mycelium doctor --json     # same data as JSON
+```
+
+Prints the Mycelium and Node versions, platform and shell, the PATH this process actually has, where each agent CLI (`claude`, `codex`, ...), `git` and `ssh` resolve to (or `NOT FOUND`), the state of each agent command `mycelium setup` manages (plus whether Codex's sandbox still blocks the store), and the store state (session count, index, daemon). Your home directory is shown as `~`.
+
+## Editor integration
+
+```sh
+mycelium serve --stdio    # newline-delimited JSON-RPC 2.0 on stdin/stdout; exits when stdin closes
+```
+Not meant to be run by hand. The VS Code extension (see [VS Code](./vscode.md)) starts it and talks to it, so an editor never imports this package's modules or needs its own `node:sqlite`. Anything the methods print goes to stderr; stdout carries only responses and progress notifications for the LLM-backed methods.
+
 ## Background-only, no TUI (optional)
 
 If you want scanning, organizing, and digests to keep running without the TUI open (headless use, always on a server), start a detached daemon process explicitly:
 ```sh
-mycelium daemon --detach    # no-op if already running (idempotent); logs to ~/.mycelium/daemon.log
+mycelium daemon --detach    # no-op if already running the current version (idempotent); logs to ~/.mycelium/daemon.log
 mycelium daemon --stop      # stops it if running, no-op otherwise
 ```
-Works the same way whether you installed with `npm install -g` or via `git clone` (use `node src/cli.js daemon --detach` in the latter case if you skipped `npm link`). There's no auto-start on reboot; wire `mycelium daemon --detach` into launchd, systemd, or cron yourself if you want that. **A daemon started this way keeps running whatever code was current when it started.** After updating mycelium, run `mycelium daemon --stop` then `--detach` again to pick up the new code.
+Works the same way whether you installed with `npm install -g` or via `git clone` (use `node src/cli.js daemon --detach` in the latter case if you skipped `npm link`). There's no auto-start on reboot; wire `mycelium daemon --detach` into launchd, systemd, or cron yourself if you want that. After you update mycelium, the running daemon notices within a minute and restarts itself on the new code. `mycelium daemon --detach` also replaces a daemon that is on a different version, and `mycelium doctor` flags a stale one. If you run `mycelium daemon` under launchd or systemd, the daemon exits after an update so your supervisor restarts it.
 
 Background upkeep's intervals and limits are all environment variable tunable. The defaults are conservative on purpose, so a large backlog doesn't pile up LLM processes all at once. That pile-up is exactly what caused Claude's console window to keep popping up on Windows, [#3](https://github.com/krapie/mycelium/issues/3):
 

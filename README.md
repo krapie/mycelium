@@ -6,7 +6,11 @@
 [![coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/krapie/511d91209145406ab7f7ed1e9fbcd49c/raw/mycelium-coverage.json)](https://github.com/krapie/mycelium/actions/workflows/coverage.yml)
 [![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![node](https://img.shields.io/badge/node-%3E%3D22.16-brightgreen)](https://nodejs.org)
+[![VS Code Marketplace](https://img.shields.io/open-vsx/v/krapie/mycelium-vscode?label=VS%20Code%20extension)](https://marketplace.visualstudio.com/items?itemName=krapie.mycelium-vscode)
 [![Ask DeepWiki](https://img.shields.io/badge/Ask-DeepWiki-blue)](https://deepwiki.com/krapie/mycelium)
+
+> [!TIP]
+> **Use VS Code? Try the [VS Code extension](#vs-code-extension).** It plugs into your IDE and is easier to use than the TUI.
 
 *[한국어 가이드](./README.ko.md)*
 
@@ -14,26 +18,34 @@
 
 You create a lot of AI sessions while working, and most of them get lost the moment they end. Mycelium organizes the ones worth remembering and extracts their knowledge, insights, and context, so the next one already knows what mattered.
 
-- **Capture** — Claude Code, Codex, Kiro, and OpenCode sessions land in one place, automatically.
-- **Organize** — grouped by the project, case, or service they belong to.
-- **Learn** — what repeats across a folder's sessions becomes durable knowledge.
-- **Reuse** — your next session inherits that knowledge, insights, and context automatically when started from Mycelium.
+- **Capture**: Claude Code, Codex, Kiro, and OpenCode sessions land in one place, automatically.
+- **Organize**: grouped by the project, case, or service they belong to.
+- **Learn**: what repeats across a folder's sessions becomes durable knowledge.
+- **Reuse**: your next session inherits that knowledge, insights, and context automatically when started from Mycelium.
 
 Local-first, model-agnostic, human-controlled.
 
 ## Demo
 
-![mycelium demo — a Cloud Support Engineer's cases, organized and learned from](https://github.com/krapie/mycelium/releases/download/demo-assets/cse-highlight.gif)
+![mycelium demo: a Cloud Support Engineer's cases, organized and learned from](https://github.com/krapie/mycelium/releases/download/demo-assets/cse-highlight.gif)
 
-`mycelium demo` walks through the same loop interactively — try it with
+`mycelium demo` walks through the same loop interactively. Try it with
 `npm install -g @kevinprk/mycelium && mycelium demo`, or see it as a
 Software Engineer / Solutions Architect instead of a Cloud Support
 Engineer by picking a different persona when it asks.
 
+## VS Code extension
+
+Prefer your editor? The extension puts the same sessions, folders, and knowledge in VS Code's sidebar. Resume or hand off a session in one click, in Claude Code's panel if you use it. It runs the CLI (0.5.1 or newer), so [install that first](#install).
+
+![Mycelium in VS Code: the sidebar and a session page](https://github.com/krapie/mycelium/releases/download/demo-assets/vscode-hero.png)
+
+[Marketplace](https://marketplace.visualstudio.com/items?itemName=krapie.mycelium-vscode) · [Open VSX](https://open-vsx.org/extension/krapie/mycelium-vscode) · [Guide](./docs/vscode.md)
+
 ## Requirements
 
 > **Mycelium uses your own LLM usage.** `organize`, `autotag`, `knowledge`,
-> and split suggestions call your own `claude`/`codex` CLI — including
+> and split suggestions call your own `claude`/`codex` CLI, including
 > automatically in the background while mycelium is open. Disable with
 > `MYCELIUM_NO_AUTOSTART=1`, or tune it in [`docs/cli.md`](./docs/cli.md).
 
@@ -41,6 +53,7 @@ Engineer by picking a different persona when it asks.
 
 - Node.js ≥ 22.16, git
 - AI agents: `claude` / `codex` / `kiro-cli` / `opencode`
+- VS Code, Cursor, or Windsurf (only for the [extension](#vs-code-extension))
 
 ## Install
 
@@ -54,6 +67,11 @@ Or via Homebrew:
 brew install krapie/tap/mycelium
 ```
 
+For the [VS Code extension](#vs-code-extension) (needs the CLI above):
+```sh
+code --install-extension krapie.mycelium-vscode   # Cursor / Windsurf: same id, from Open VSX
+```
+
 To hack on it, clone instead:
 ```sh
 git clone https://github.com/krapie/mycelium.git
@@ -63,12 +81,12 @@ cd mycelium && npm install && npm link
 ## Getting Started
 
 ```sh
-mycelium        # launch the TUI — first run offers a guided tour
-mycelium demo   # try it risk-free first — separate store, your real data untouched
+mycelium        # launch the TUI (first run offers a guided tour)
+mycelium demo   # try it risk-free first (separate store, your real data untouched)
 ```
 
 Sessions from Claude Code, Codex, Kiro, and OpenCode are captured automatically in the
-background — no manual scan needed. Day to day it's a simple loop, the
+background; no manual scan needed. Day to day it's a simple loop, the
 **Context Flywheel**: `s` capture → `o` organize → `w` learn → `n` start the
 next session with everything it needs. Most of that already runs by itself
 in the background; pressing these keys is mostly reviewing and confirming
@@ -76,17 +94,17 @@ what's already waiting for you.
 
 `mycelium demo` walks through that same loop against mock sessions, in your
 choice of language and persona, then hands off straight into your real
-sessions once you finish it — an early `Esc` bail just exits, your actual
+sessions once you finish it. An early `Esc` bail just exits; your actual
 `~/.mycelium` store untouched either way.
 
-Display language defaults to English — switch any time with
+Display language defaults to English; switch any time with
 `mycelium lang <en|ko>`, the in-TUI `l` key, or the language picker shown on
 first launch.
 
 > Skipped `npm link`? Use `node src/cli.js <command>` instead.
 
 Mycelium stores everything on your machine (`~/.mycelium/`) with no
-server or telemetry — safe to use inside restricted orgs that already
+server or telemetry; safe to use inside restricted orgs that already
 permit `claude`/`codex`. Just note that its LLM calls
 (organize/autotag/knowledge) do carry session content to the provider,
 the same as any direct CLI use.
@@ -96,14 +114,15 @@ the same as any direct CLI use.
 Full guide in [`docs/`](./docs):
 
 - [**How It Works**](./docs/how-it-works.md): the loop, and why it holds together, in two diagrams
-- [**TUI**](./docs/tui.md) — the 3-column interface + every keyboard shortcut
-- [**Learn/Reuse loop**](./docs/learn-reuse.md) — how sessions pass knowledge forward
-- [**Handoff**](./docs/handoff.md) — continuing work across agent CLIs
-- [**Sync**](./docs/sync.md) — one store across several machines (laptop + home server)
-- [**CLI reference**](./docs/cli.md) — every subcommand, for scripting
-- [**Architecture**](./docs/architecture.md) — data location, design principles, status
-- [**Feature catalog**](./docs/features.md) — every capability, with test-coverage status
-- [**Roadmap**](./ROADMAP.md) — where the project is headed, and its non-goals
+- [**TUI**](./docs/tui.md): the 3-column interface + every keyboard shortcut
+- [**Learn/Reuse loop**](./docs/learn-reuse.md): how sessions pass knowledge forward
+- [**Handoff**](./docs/handoff.md): continuing work across agent CLIs
+- [**Sync**](./docs/sync.md): one store across several machines (laptop + home server)
+- [**VS Code**](./docs/vscode.md): the same Sessions panel in your editor's sidebar
+- [**CLI reference**](./docs/cli.md): every subcommand, for scripting
+- [**Architecture**](./docs/architecture.md): data location, design principles, status
+- [**Feature catalog**](./docs/features.md): every capability, with test-coverage status
+- [**Roadmap**](./ROADMAP.md): where the project is headed, and its non-goals
 
 ## Cleanup (experimental stage)
 
@@ -113,7 +132,7 @@ mycelium cleanup reset --yes # irreversible: wipes ~/.mycelium entirely
 ```
 
 `tidy`/`folders`/`archive`/`index`/`reset` never touch your original agent
-logs, so `mycelium scan` can always rebuild — see
+logs, so `mycelium scan` can always rebuild; see
 [`docs/cli.md`](./docs/cli.md) for the full breakdown.
 
 ## Contributing
@@ -124,6 +143,6 @@ to add a new AI agent CLI.
 ## Working in this Repo with an AI Agent
 
 Using Claude Code, Codex, Cursor, or similar on Mycelium itself? Point it at
-[`AGENTS.md`](./AGENTS.md) first — a dense reference covering conventions, key
+[`AGENTS.md`](./AGENTS.md) first: a dense reference covering conventions, key
 bindings, and the contributing workflow. (Claude Code doesn't read AGENTS.md
 on its own, so `CLAUDE.md` in this repo's root just imports it.)

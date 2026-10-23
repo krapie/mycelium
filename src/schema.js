@@ -1,3 +1,12 @@
+/*
+ * Copyright 2026 The Mycelium Authors. All rights reserved.
+ *
+ * Use of this source code is governed by the MIT License
+ * that can be found in the LICENSE file.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 /**
  * Neutral session schema — the model-agnostic form every adapter produces.
  *
@@ -79,6 +88,7 @@ export function emptyNeutral(id, source) {
     doneAt: null, // backlog only: when it was opened into a real agent session
     continuationOf: null, // this session continues another (handoff parent id)
     continuedTo: [], // sessions that continued this one (handoff children)
+    forkPoint: null, // fork of continuationOf: how many leading turns are shared history (scanner.js's linkForks)
     suggestedFolder: null, // smart-organize's queued-but-unreviewed placement guess
     suggestedReason: null, // short LLM-given reason for suggestedFolder
     lastClassifiedAt: null, // suggestPlacements()'s last look at this session — avoids re-asking the LLM every cycle when nothing matched
@@ -99,7 +109,26 @@ export function emptyNeutral(id, source) {
 // (slash-command echoes, bash tool output, <system-reminder>, etc.) — all
 // start with an XML-ish tag, which a real person's first message essentially
 // never does, so skip past them when picking a turn for the preview.
-const SYNTHETIC_TURN = /^<[a-z][a-z-]*>/i;
+// `\w` (not just letters and '-') so underscore tags like <ide_selection> count.
+const SYNTHETIC_TURN = /^<[a-z][\w-]*>/i;
+
+/** First real (non-synthetic) user turn in a plain turn array. */
+export function firstRealUserTurn(turns) {
+  return turns.find((x) => x.role === 'user' && x.text?.trim() && !SYNTHETIC_TURN.test(x.text.trim())) || null;
+}
+
+/**
+ * The turns a session contributed itself. A fork (forkPoint = how many
+ * leading turns it shares with its parent) shouldn't get the parent's
+ * preview/title/summary, so previews and summarizer excerpts start after
+ * that point. A fork with nothing of its own yet falls back to the full
+ * transcript rather than an empty preview/prompt.
+ */
+export function ownTurns(neutral) {
+  const fp = neutral.forkPoint;
+  if (!fp || fp <= 0 || fp >= neutral.turns.length) return neutral.turns;
+  return neutral.turns.slice(fp);
+}
 
 /**
  * The first real (non-synthetic) user turn, or null if there isn't one.
@@ -110,7 +139,7 @@ const SYNTHETIC_TURN = /^<[a-z][a-z-]*>/i;
  * 200-char preview length.
  */
 export function firstUserTurn(neutral) {
-  return neutral.turns.find((x) => x.role === 'user' && x.text?.trim() && !SYNTHETIC_TURN.test(x.text.trim())) || null;
+  return firstRealUserTurn(ownTurns(neutral));
 }
 
 /** A short one-line preview used in lists / FTS fallback. */

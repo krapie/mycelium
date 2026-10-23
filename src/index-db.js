@@ -1,3 +1,12 @@
+/*
+ * Copyright 2026 The Mycelium Authors. All rights reserved.
+ *
+ * Use of this source code is governed by the MIT License
+ * that can be found in the LICENSE file.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 import { DatabaseSync } from 'node:sqlite';
 import { ensureDirs, DB_PATH } from './paths.js';
 import { allRaw } from './scanner.js';
@@ -43,7 +52,10 @@ let db = null;
 export function openDb() {
   if (db) return db;
   ensureDirs();
-  db = new DatabaseSync(DB_PATH);
+  // The daemon, TUI, CLI and the editor's `serve` process all write this file;
+  // without a timeout a second writer fails instantly with SQLITE_BUSY. Set in
+  // the constructor so it also covers the journal_mode switch just below.
+  db = new DatabaseSync(DB_PATH, { timeout: 5000 });
   db.exec('PRAGMA journal_mode = WAL;');
   db.exec(SCHEMA);
   // Migrate older index DBs that predate the title column (index is derived,
@@ -60,23 +72,48 @@ export function openDb() {
       if (!String(err.message).includes('duplicate column')) throw err;
     }
   }
-  // `host` (which machine a session came from, see config.js's machineName())
-  // arrived after the index did: an index built before it has every row's
-  // host empty until rebuilt. Rebuilding is cheap and the index is derived,
-  // so do it once, right when the column first appears on a non-empty index.
-  try {
-    db.exec('ALTER TABLE sessions ADD COLUMN host TEXT');
-    if (db.prepare('SELECT COUNT(*) AS n FROM sessions').get().n > 0) reindex();
-  } catch (err) {
-    if (!String(err.message).includes('duplicate column')) throw err;
+  // `host` (which machine a session came from) and `work_dir` (the directory
+  // a session ran in, for an editor's "this workspace" view) arrived after the
+  // index did: an index built before them has those columns empty until
+  // rebuilt. Rebuilding is cheap and the index is derived, so do it once,
+  // right when a column first appears on a non-empty index. Both columns are
+  // added before the rebuild, which writes both.
+  let added = false;
+  for (const col of ['host TEXT', 'work_dir TEXT']) {
+    try {
+      db.exec(`ALTER TABLE sessions ADD COLUMN ${col}`);
+      added = true;
+    } catch (err) {
+      if (!String(err.message).includes('duplicate column')) throw err;
+    }
   }
+  if (added && db.prepare('SELECT COUNT(*) AS n FROM sessions').get().n > 0) reindex();
   return db;
+}
+
+/** Run `fn` as one atomic write. WAL readers in other processes (the editor's
+ * `serve`) then see either the old index or the new one, never the empty gap
+ * between a DELETE and its re-INSERTs — that gap showed up as every session
+ * and folder disappearing until the next refresh. */
+function inTransaction(d, fn) {
+  d.exec('BEGIN IMMEDIATE');
+  try {
+    fn();
+    d.exec('COMMIT');
+  } catch (err) {
+    try {
+      d.exec('ROLLBACK');
+    } catch {
+      // SQLite already rolled back (e.g. SQLITE_FULL/IOERR); keep the original error.
+    }
+    throw err;
+  }
 }
 
 function prepareWriters(d) {
   return {
     insSession: d.prepare(
-      'INSERT OR REPLACE INTO sessions (id, source, folder, started_at, ended_at, preview, title, summary, organized_by, kind, done_at, continuation_of, continued_to, tags, merged_from, split_from, superseded_by, split_into, host) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      'INSERT OR REPLACE INTO sessions (id, source, folder, started_at, ended_at, preview, title, summary, organized_by, kind, done_at, continuation_of, continued_to, tags, merged_from, split_from, superseded_by, split_into, host, work_dir) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
     ),
     insFts: d.prepare('INSERT INTO session_fts (id, body) VALUES (?, ?)'),
     upsertTag: d.prepare('INSERT OR IGNORE INTO tags (name) VALUES (?)'),
@@ -106,6 +143,7 @@ function writeSessionRow(w, n) {
     JSON.stringify(n.supersededBy || []),
     JSON.stringify(n.splitInto || []),
     n.host ?? null,
+    n.projectDir || n.cwd || null,
   );
   w.insFts.run(n.id, searchableText(n));
   for (const tag of n.extracted.tags || []) {
@@ -122,10 +160,13 @@ function writeSessionRow(w, n) {
  * which gets slow once the store has hundreds/thousands of sessions. */
 export function reindex() {
   const d = openDb();
-  d.exec('DELETE FROM sessions; DELETE FROM session_fts; DELETE FROM session_tags;');
-  const w = prepareWriters(d);
+  // Parse raw/ before taking the write lock: that's the slow part.
   const raws = allRaw();
-  for (const n of raws) writeSessionRow(w, n);
+  const w = prepareWriters(d);
+  inTransaction(d, () => {
+    d.exec('DELETE FROM sessions; DELETE FROM session_fts; DELETE FROM session_tags;');
+    for (const n of raws) writeSessionRow(w, n);
+  });
   return raws.length;
 }
 
@@ -133,25 +174,39 @@ export function reindex() {
  * O(total sessions), for the common case where exactly one session changed. */
 export function reindexOne(n) {
   const d = openDb();
-  d.prepare('DELETE FROM sessions WHERE id = ?').run(n.id);
-  d.prepare('DELETE FROM session_fts WHERE id = ?').run(n.id);
-  d.prepare('DELETE FROM session_tags WHERE session_id = ?').run(n.id);
-  writeSessionRow(prepareWriters(d), n);
+  const w = prepareWriters(d);
+  inTransaction(d, () => {
+    d.prepare('DELETE FROM sessions WHERE id = ?').run(n.id);
+    d.prepare('DELETE FROM session_fts WHERE id = ?').run(n.id);
+    d.prepare('DELETE FROM session_tags WHERE session_id = ?').run(n.id);
+    writeSessionRow(w, n);
+  });
 }
 
 /** Same as reindexOne, batched over a handful of sessions (one still-cheap
  * statement round-trip per session, not a full-store rebuild). */
 export function reindexMany(sessions) {
-  for (const n of sessions) reindexOne(n);
+  const d = openDb();
+  const w = prepareWriters(d);
+  inTransaction(d, () => {
+    for (const n of sessions) {
+      d.prepare('DELETE FROM sessions WHERE id = ?').run(n.id);
+      d.prepare('DELETE FROM session_fts WHERE id = ?').run(n.id);
+      d.prepare('DELETE FROM session_tags WHERE session_id = ?').run(n.id);
+      writeSessionRow(w, n);
+    }
+  });
 }
 
 /** Remove one session from the index (after a delete — there's no raw file
  * left to reindexOne() from). */
 export function removeFromIndex(id) {
   const d = openDb();
-  d.prepare('DELETE FROM sessions WHERE id = ?').run(id);
-  d.prepare('DELETE FROM session_fts WHERE id = ?').run(id);
-  d.prepare('DELETE FROM session_tags WHERE session_id = ?').run(id);
+  inTransaction(d, () => {
+    d.prepare('DELETE FROM sessions WHERE id = ?').run(id);
+    d.prepare('DELETE FROM session_fts WHERE id = ?').run(id);
+    d.prepare('DELETE FROM session_tags WHERE session_id = ?').run(id);
+  });
 }
 
 /** Session counts grouped by folder — for the TUI folder tree, without reading raw/. */
@@ -175,6 +230,12 @@ export function folderCounts() {
       "SELECT COALESCE(folder, '') AS folder, COUNT(*) AS n FROM sessions WHERE superseded_by IS NULL OR superseded_by = '[]' GROUP BY folder",
     )
     .all();
+}
+
+/** Backlog items in the index — the folders panel's Backlog count, read on
+ * every reloadFolders(), so from here rather than backlog.js's allRaw() walk. */
+export function backlogCount() {
+  return openDb().prepare("SELECT COUNT(*) AS n FROM sessions WHERE kind = 'backlog'").get().n;
 }
 
 /** Session counts per day-of-month (also grouped by folder, so callers can
@@ -216,9 +277,26 @@ function jsonArrayLength(s) {
  * `date` ('YYYY-MM-DD'), if given, narrows to that single day (matches
  * folder's post-query filter style rather than a separate WHERE clause).
  */
-export function listSessions({ folder, date, includeSuperseded = false } = {}) {
+// A recorded directory can be Windows-style (`C:\work\app\pkg`), and the
+// caller's own spelling may differ (`c:/Work/app`): compare without caring
+// about the separator, a trailing one, or case — drive letters and Windows
+// paths are case-insensitive. A POSIX path is left alone (a `\` is a legal
+// character in a name there).
+const winLike = (p) => /^[A-Za-z]:[\\/]|^\\\\/.test(p);
+const normDir = (p) => (winLike(p) ? p.replace(/\\/g, '/').toLowerCase() : p).replace(/\/+$/, '');
+
+export function listSessions({ folder, date, dir, includeSuperseded = false } = {}) {
   const d = openDb();
   let rows = d.prepare('SELECT * FROM sessions ORDER BY started_at DESC').all();
+  // Sessions that ran in `dir` or anywhere below it — an editor's "this
+  // workspace" view, where the workspace folder is usually a project root.
+  if (dir) {
+    const base = normDir(dir);
+    rows = rows.filter((r) => {
+      const w = r.work_dir && normDir(r.work_dir);
+      return w && (w === base || w.startsWith(base + '/'));
+    });
+  }
   // Matches sessionCountsByDay()'s grouping — a day's session list should be
   // "sessions active that day", same basis as what the calendar grid counted.
   if (date) rows = rows.filter((r) => (r.ended_at || r.started_at || '').slice(0, 10) === date);

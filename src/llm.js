@@ -1,4 +1,17 @@
+/*
+ * Copyright 2026 The Mycelium Authors. All rights reserved.
+ *
+ * Use of this source code is governed by the MIT License
+ * that can be found in the LICENSE file.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 import { spawn } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { join, delimiter } from 'node:path';
+import { AsyncLocalStorage } from 'node:async_hooks';
 
 /**
  * Minimal LLM call via a headless coding-CLI subprocess. We reuse whatever
@@ -32,6 +45,28 @@ export function __setTestProvider(fn) {
 }
 export function __clearTestProvider() {
   _testProvider = null;
+}
+
+// Directories a caller (the editor, via the bridge's `extraPath`) knows the
+// agent CLI may live in although this process was started without them.
+// AsyncLocalStorage so concurrent requests each see their own, without
+// threading an option through every learn/organize/insight function.
+const agentPath = new AsyncLocalStorage();
+export function withAgentPath(dirs, fn) {
+  return Array.isArray(dirs) && dirs.length ? agentPath.run(dirs, fn) : fn();
+}
+
+function spawnEnv() {
+  const dirs = agentPath.getStore();
+  if (!dirs) return process.env;
+  // Windows env keys are case-insensitive ('Path'); reuse whichever spelling exists.
+  const key = Object.keys(process.env).find((k) => k.toUpperCase() === 'PATH') || 'PATH';
+  return { ...process.env, [key]: [...dirs, process.env[key]].filter(Boolean).join(delimiter) };
+}
+
+/** The program complete() will spawn, or null under the test provider (nothing is spawned). */
+export function providerBin() {
+  return _testProvider ? null : PROVIDER === 'codex' ? 'codex' : 'claude';
 }
 
 // Every in-flight complete() child, tracked so killInFlight() (app.js's
@@ -83,6 +118,37 @@ export function isUnknownNoPersistenceFlag(stderr) {
   return /unknown option/i.test(stderr) && /no-session-persistence/.test(stderr);
 }
 
+/**
+ * Rough cause of a failed complete(), from its error text. Deliberately
+ * lenient pattern-matching used only to pick which message to SHOW — and to
+ * stop a batch early on 'missing' (agent CLI not installed), where retrying
+ * can't help. Otherwise never control flow: mapConcurrent's breaker still
+ * trips on any run of failures. 'usage' wins over 'auth' when both match.
+ */
+export function classifyLlmError(message) {
+  const m = String(message || '');
+  if (/\bnot installed\b|\bENOENT\b/.test(m)) return 'missing';
+  if (/rate.?limit|usage.?limit|limit reached|quota|too many requests|\b429\b|overloaded|credit balance/i.test(m)) return 'usage';
+  if (/credential|log ?in\b|logged out|unauthori[sz]ed|authenticat|\btoken\b|not a terminal|not a tty|api key|\b401\b|\b403\b/i.test(m)) return 'auth';
+  if (/llm timeout/i.test(m)) return 'timeout';
+  return 'other';
+}
+
+/**
+ * One tiny call to find out whether the agent CLI can answer right now, so
+ * a background cycle can skip itself instead of spawning calls that are
+ * bound to fail (each can block for the full 240s timeout). Resolves to
+ * null when healthy, else the error message.
+ */
+export async function llmPreflight({ timeoutMs = 45000 } = {}) {
+  try {
+    await complete('Reply with the single word: ok', { timeoutMs });
+    return null;
+  } catch (err) {
+    return err.message || String(err);
+  }
+}
+
 export async function complete(prompt, { timeoutMs = 240000 } = {}) {
   if (_testProvider) return _testProvider(prompt, { timeoutMs });
   const fullPrompt = `${META_MARKER}\n${prompt}`;
@@ -98,6 +164,17 @@ export async function complete(prompt, { timeoutMs = 240000 } = {}) {
   }
 }
 
+// A shared tmpdir() is writable by other users, who could plant a CLAUDE.md/
+// AGENTS.md there for the agent CLI to load. mkdtemp creates the directory
+// 0700, so one private empty dir per process is both neutral and safe.
+let _neutralCwd = null;
+function neutralCwd() {
+  if (_neutralCwd) return _neutralCwd;
+  _neutralCwd = mkdtempSync(join(tmpdir(), 'mycelium-llm-'));
+  process.on('exit', () => rmSync(_neutralCwd, { recursive: true, force: true }));
+  return _neutralCwd;
+}
+
 function runCli(cmd, args, timeoutMs) {
   return new Promise((resolve, reject) => {
     // windowsHide: on Windows, spawn() opens a real visible console window
@@ -105,7 +182,11 @@ function runCli(cmd, args, timeoutMs) {
     // default is false) — with dozens of these calls firing in the
     // background, that's what looked like "Claude DOS windows keep
     // appearing" in practice (issue #3). No-op on macOS/Linux.
-    const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+    // cwd: a neutral dir, not the launch dir — otherwise the agent CLI loads
+    // that project's CLAUDE.md/AGENTS.md, hooks and MCP servers, which is
+    // slower and lets the model start working on project instructions
+    // instead of answering the one-shot prompt (pushing it into the timeout).
+    const child = spawn(cmd, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, cwd: neutralCwd(), env: spawnEnv() });
     inFlight.add(child);
     const untrack = () => inFlight.delete(child);
     let out = '';
@@ -120,7 +201,9 @@ function runCli(cmd, args, timeoutMs) {
     child.on('error', (e) => {
       clearTimeout(timer);
       untrack();
-      reject(e);
+      // Same wording as agents.js's "<bin> not installed", which the VS Code
+      // extension already retries with the login shell's PATH.
+      reject(e.code === 'ENOENT' ? Object.assign(new Error(`${cmd} not installed`), { code: 'ENOENT' }) : e);
     });
     child.on('close', (code) => {
       clearTimeout(timer);
@@ -193,6 +276,9 @@ export async function mapConcurrent(items, concurrency, worker, { stopAfterConse
       const idx = i++;
       const r = await worker(items[idx], idx);
       results[idx] = r;
+      // A failure no retry can fix (the agent CLI isn't installed): stop now,
+      // not after N doomed calls.
+      if (r && r.fatal) stoppedEarly = true;
       if (!stopAfterConsecutiveFailures) continue;
       if (r && r.ok === false) {
         consecutiveFailures++;

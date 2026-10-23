@@ -1,3 +1,12 @@
+/*
+ * Copyright 2026 The Mycelium Authors. All rights reserved.
+ *
+ * Use of this source code is governed by the MIT License
+ * that can be found in the LICENSE file.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 // Shared source of truth for the tutorial/`mycelium demo`'s mock content —
 // one place per persona/storyline instead of two files independently
 // hardcoding folder names. `mergeStorylineIndex` names the storyline the

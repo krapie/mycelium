@@ -1,3 +1,12 @@
+/*
+ * Copyright 2026 The Mycelium Authors. All rights reserved.
+ *
+ * Use of this source code is governed by the MIT License
+ * that can be found in the LICENSE file.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 import { readFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { loadConfig, saveConfig } from '../config.js';
@@ -14,12 +23,13 @@ export async function daemonCmd(args) {
   if (flags.detach) {
     const { spawnDetachedDaemon } = await import('../daemon.js');
     const res = spawnDetachedDaemon();
-    console.log(res.started ? `daemon started (pid ${res.pid})` : `daemon already running (pid ${res.pid})`);
+    if (res.restarted) console.log(`daemon restarted (${res.from} -> ${res.to}, pid ${res.pid})`);
+    else console.log(res.started ? `daemon started (pid ${res.pid})` : `daemon already running (pid ${res.pid})`);
     return;
   }
-  const { runDaemon, installShutdownHandlers } = await import('../daemon.js');
+  const { runDaemon, installShutdownHandlers, handOverToFreshDaemon } = await import('../daemon.js');
   installShutdownHandlers();
-  await runDaemon();
+  await runDaemon({ onUpgrade: () => handOverToFreshDaemon() });
 }
 
 // Runs the tutorial against a completely separate store — never the real

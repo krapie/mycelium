@@ -1,3 +1,12 @@
+/*
+ * Copyright 2026 The Mycelium Authors. All rights reserved.
+ *
+ * Use of this source code is governed by the MIT License
+ * that can be found in the LICENSE file.
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 import { homedir } from 'node:os';
 import { join, dirname, basename } from 'node:path';
 import { readdirSync, readFileSync, existsSync, statSync } from 'node:fs';
@@ -26,6 +35,15 @@ export const label = 'Claude Code';
 export const bin = 'claude';
 export const newArgs = (seed) => (seed ? [seed] : []);
 export const resumeArgs = (sessionId) => ['--resume', sessionId];
+// Set in the Bash tool's environment (and `!` command expansions) to the id
+// of the transcript file below — checked against Claude Code 2.1.303.
+export const sessionEnv = 'CLAUDE_CODE_SESSION_ID';
+// `/clip`. A command is one .md file per command name, picked up by an
+// already-open session (checked against 2.1.303) — no restart needed.
+export const commandInstall = {
+  dir: process.env.CLAUDE_COMMANDS_DIR || join(homedir(), '.claude', 'commands'),
+  files: [{ from: 'claude/clip.md', to: 'clip.md' }],
+};
 
 // Claude Code stores one dir per encoded cwd under ~/.claude/projects/, each
 // containing <sessionId>.jsonl transcripts. Verified against the real layout.
@@ -46,12 +64,13 @@ export function listSessions() {
       if (!f.endsWith('.jsonl')) continue;
       const path = join(full, f);
       let mtimeMs;
+      let birthtimeMs;
       try {
-        mtimeMs = statSync(path).mtimeMs;
+        ({ mtimeMs, birthtimeMs } = statSync(path));
       } catch {
         continue;
       }
-      refs.push({ id: f.replace(/\.jsonl$/, ''), path, mtimeMs });
+      refs.push({ id: f.replace(/\.jsonl$/, ''), path, mtimeMs, birthtimeMs });
     }
   }
   return refs;
@@ -78,6 +97,27 @@ export function isCommandNoise(text) {
   return !text.replace(COMMAND_NOISE, '').trim();
 }
 
+// The VS Code extension prepends context blocks to the user's message
+// (<ide_selection>…</ide_selection>\nreal prompt), and Claude Code can add
+// <system-reminder> blocks. The real prompt often follows in the same
+// message, so strip the blocks and keep the rest instead of dropping the turn.
+const INJECTED_BLOCK = /<(ide_selection|ide_opened_file|ide_diagnostics|system-reminder)>[\s\S]*?<\/\1>/g;
+const INTERRUPT_MARKER = /^\[Request interrupted by user(?: for tool use)?\]$/;
+
+/** The user's own words in a stored/raw user turn, or '' if it's all bookkeeping. */
+export function cleanUserText(text) {
+  const t = text.replace(INJECTED_BLOCK, '').trim();
+  if (INTERRUPT_MARKER.test(t) || isCommandNoise(t)) return '';
+  return t;
+}
+
+// Trailing " (fork)" suffixes the extension appends to a forked
+// conversation's custom title (a fork of a fork has two).
+function forkDepthOf(title) {
+  const m = /(?: \(fork\))+$/.exec(title || '');
+  return m ? m[0].length / ' (fork)'.length : 0;
+}
+
 function toolActivityFromContent(content, sink) {
   if (!Array.isArray(content)) return;
   for (const block of content) {
@@ -95,6 +135,7 @@ export function parse(ref) {
   const neutral = emptyNeutral(ref.id, name);
   const raw = readFileSync(ref.path, 'utf8');
   const lines = raw.split('\n');
+  let customTitle = null;
 
   for (const line of lines) {
     if (!line.trim()) continue;
@@ -111,9 +152,12 @@ export function parse(ref) {
       neutral.endedAt = evt.timestamp;
     }
 
-    if (evt.type === 'user' && evt.message && !evt.isMeta) {
-      const text = textFromMessageContent(evt.message.content);
-      if (text.trim() && !isCommandNoise(text)) neutral.turns.push({ role: 'user', text });
+    if (evt.type === 'custom-title') {
+      // Latest entry wins, as with a rename.
+      customTitle = evt.customTitle ?? evt.title ?? customTitle;
+    } else if (evt.type === 'user' && evt.message && !evt.isMeta) {
+      const text = cleanUserText(textFromMessageContent(evt.message.content));
+      if (text) neutral.turns.push({ role: 'user', text });
     } else if (evt.type === 'assistant' && evt.message) {
       const text = textFromMessageContent(evt.message.content);
       if (text.trim()) neutral.turns.push({ role: 'assistant', text });
@@ -127,6 +171,11 @@ export function parse(ref) {
   // indistinguishable from '/' → '-' after encoding). Only fall back to
   // decoding the folder name for zero-message sessions.
   neutral.projectDir = neutral.cwd || decodeProjectDir(ref.path);
+
+  // Fork detection inputs (scanner.js's linkForks): the transcript has no
+  // pointer back to the source session, so the link is inferred from these.
+  neutral.forkDepth = forkDepthOf(customTitle);
+  neutral.fileBirthMs = ref.birthtimeMs ?? null;
 
   // Best-effort filesChanged from tool activity referencing paths.
   const files = new Set();
