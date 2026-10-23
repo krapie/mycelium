@@ -1,6 +1,0 @@
-{"id":"n1","timestamp":"2026-10-20T07:00:00.000Z","payload":{"type":"agent_note","content":"<session_context>model</session_context>"}}
-{"id":"u1","timestamp":"2026-10-20T07:00:01.000Z","payload":{"type":"user","content":"What does Glacier Instant Retrieval optimize for?","documents":[],"images":[]}}
-{"id":"r1","timestamp":"2026-10-20T07:00:02.000Z","payload":{"type":"assistant","operationType":"Reasoning","content":"The user asks about S3 storage classes.","reasoningSignature":"sig"}}
-{"id":"c1","timestamp":"2026-10-20T07:00:03.000Z","payload":{"type":"tool_call","toolCallId":"t1","toolName":"execute_bash","args":{"command":"aws s3 ls"},"status":"completed"}}
-{"id":"c1r","timestamp":"2026-10-20T07:00:04.000Z","payload":{"type":"tool_result","toolCallId":"t1","content":"ok","success":true}}
-{"id":"a1","timestamp":"2026-10-20T07:00:05.000Z","payload":{"type":"assistant","operationType":"Say","content":"Rarely accessed data that still needs millisecond retrieval."}}
