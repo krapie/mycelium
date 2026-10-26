@@ -6,7 +6,7 @@ Design principles ([`docs/architecture.md`](./docs/architecture.md) — local-on
 
 ## Where 0.x stands
 
-v0.3.2. The four-stage loop (Capture → Organize → Learn → Reuse) runs end to end against real sessions from Claude Code, Codex, Kiro, and OpenCode, and the TUI and CLI are already thin callers over a shared core. Several parts are still provisional: LLM output quality is being tuned against real model responses ([#70](https://github.com/krapie/mycelium/issues/70)), some adapter parse paths lack tests, and the localization scope is unsettled. Full capability inventory with test-coverage status: [`docs/features.md`](./docs/features.md).
+v0.6.0. The four-stage loop (Capture → Organize → Learn → Reuse) runs end to end against real sessions from Claude Code, Codex, Kiro, and OpenCode, and the TUI and CLI are already thin callers over a shared core. Since then the surface has grown past that loop: Clip pins turns verbatim (and `/clip` reaches the store from inside a conversation), a VS Code extension reads the same store through `mycelium serve`, and [Sync](./docs/sync.md) shares one store across machines. Several parts are still provisional: Sync is experimental and has had little real-world use, LLM output quality is being tuned against real model responses ([#70](https://github.com/krapie/mycelium/issues/70)), some adapter parse paths lack tests, and the localization scope is unsettled. Full capability inventory with test-coverage status: [`docs/features.md`](./docs/features.md).
 
 ## The road to 1.0.0
 
@@ -32,7 +32,7 @@ Real directions, deliberately not gating 1.0 — each is a larger bet that build
 
 Derived from [`docs/architecture.md`](./docs/architecture.md)'s principles. Naming these is a design decision, not a missing feature.
 
-- **No hosted service, Mycelium-owned server, or account system.** The store is local (`~/.mycelium/`, or `MYCELIUM_HOME`). Moving it between machines is a manual copy of `raw/` + `tree/` followed by `mycelium reindex` — not a sync service.
+- **No hosted service, Mycelium-owned server, or account system.** The store is local (`~/.mycelium/`, or `MYCELIUM_HOME`). [Sync](./docs/sync.md) shares one store across your own machines, and does it without breaking this: there is no Mycelium-run server and no account, because the central copy is a git repo *you* host. A machine that never runs `sync init` stays exactly as local as before. What stays ruled out is Mycelium hosting anything on your behalf.
 - **No telemetry, analytics, or phone-home.** The only outbound traffic is the LLM calls (organize/autotag/knowledge/split), which send selected session content to whichever CLI/provider the user already configured — the same as using that CLI directly.
 - **No separate API key or credential.** `complete()` rides the user's existing `claude` / `codex` / `kiro` / `opencode` subscription. Anything that would require a dedicated paid key gets flagged as a principle deviation and decided explicitly, not adopted silently ([#86](https://github.com/krapie/mycelium/issues/86)).
 - **No bundled or embedded model, no vendor lock-in.** Storage stays a neutral schema, never one agent's session format; adding an agent stays one adapter file.

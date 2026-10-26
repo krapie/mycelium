@@ -139,7 +139,10 @@ mv ~/.mycelium ~/.mycelium.synced && cp -a ~/.mycelium.backup-<date> ~/.mycelium
 | `raw/` (sessions and backlog items) | `db/index.db` (each machine rebuilds it) |
 | `tree/` (folders, `KNOWLEDGE.md`) | `config.json` (language, machine name, path map, sync settings) |
 | `digests/` | `daemon.pid`, `daemon.log` |
+| `clips/` (pinned excerpts) | |
 | `excluded.txt` (deleted sessions) | |
+
+A clip carries its own copy of the turns it pinned, so it syncs as transcript text in its own right rather than as a pointer into `raw/` — worth knowing alongside the privacy note below, since a clip of a session reaches the remote even where [deletions do not](#deleting-on-the-laptop-does-not-delete-on-the-server).
 
 Each session records the machine it was captured on (`host`). The agent's own transcript only exists on that machine, so pressing `r` elsewhere offers a [handoff](./handoff.md) instead of a resume.
 

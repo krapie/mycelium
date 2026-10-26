@@ -23,6 +23,8 @@ You create a lot of AI sessions while working, and most of them get lost the mom
 - **Learn**: what repeats across a folder's sessions becomes durable knowledge.
 - **Reuse**: your next session inherits that knowledge, insights, and context automatically when started from Mycelium.
 
+Summaries are the agent's read of a session. When you want something kept exactly as it was said, **Clip** it: `p` in the TUI, or `/clip` from inside the conversation itself. A clip holds the turns verbatim, outlives the session it came from, and is material the next knowledge draft has to reflect rather than weigh.
+
 Local-first, model-agnostic, human-controlled.
 
 ## Demo

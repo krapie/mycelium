@@ -7,7 +7,7 @@ Start with [How It Works](./how-it-works.md) for the short version: the loop, wh
 ## Lifecycle
 
 - [How It Works](./how-it-works.md). The loop and the data flow, in two diagrams.
-- [Learn/Reuse loop](./learn-reuse.md). What a finished session feeds into the next one, and what runs automatically.
+- [Learn/Reuse loop](./learn-reuse.md). What a finished session feeds into the next one, and what runs automatically — including Clip (`p`, `/clip`), the one input a person pins by hand.
 - [Handoff](./handoff.md). Continuing the same work on a different agent.
 - [Sync (experimental)](./sync.md). One store shared by several machines.
 - [TUI](./tui.md). The three-panel interface and every key.

@@ -305,38 +305,6 @@ Coverage legend: `[tested]` · `[untested]` · `[partial]` (partially tested).
   below), which has no TUI to ask "which folder?" the way the `i` key
   does. [tested]
 
-## Claude Code Plugin (`.claude-plugin/`, `hooks/`, `skills/`, `src/cli/hook.js`)
-
-- **Auto-refresh `AGENTS.md` at Claude Code session start.**
-  `hooks/session-start.sh` (a Claude Code `SessionStart` hook, wired via
-  `hooks/hooks.json`) shells out to `mycelium hook session-start --dir
-  <cwd>` (`src/cli/hook.js`'s `hookCmd`), which calls `folderForDir(dir)`
-  then `injectAgentsMd(dir, folder)` if one was found, the same write the
-  TUI's `i`/`n`/`h` already trigger, just reached from Claude Code's own
-  lifecycle instead of a key press. No-ops silently (exit 0, no stdout) if
-  `mycelium` isn't on `PATH`, the directory has no known folder, or that
-  folder has no `KNOWLEDGE.md` yet, a `SessionStart` hook is meant to be
-  a silent best-effort convenience, never a source of session-start
-  errors. On success, prints `hookSpecificOutput.additionalContext`
-  (locale-aware per `contentLocale()`) so Claude sees a one-line note that
-  the refresh happened. Deliberately undocumented in `printHelp()`, like
-  `--tutorial`, invoked by tooling, not typed by a person. [tested] (CLI
-  dispatch test covers the inject-happens, no-folder-no-op, and
-  unknown-subcommand-no-op cases; the actual shell script itself is
-  exercised manually, not under `npm test`, see
-  `docs/claude-code-plugin.md`)
-- **Slash commands reaching into Mycelium from inside a conversation.**
-  `skills/mycelium-search`, `skills/mycelium-backlog`,
-  `skills/mycelium-context`, thin `SKILL.md` instructions telling Claude
-  to run the existing `mycelium search`/`backlog`/`inject` CLI commands
-  via `Bash` and present the results; no new runtime logic. `[untested]`
-  (skill *content* isn't exercised by `npm test`; Claude Code loads and
-  interprets `SKILL.md` itself, outside this repo's test surface; the CLI
-  commands they wrap are already covered under Find/Backlog/Reuse above).
-
-See [`docs/claude-code-plugin.md`](./claude-code-plugin.md) for install
-instructions and the full rationale.
-
 ## Handoff (`src/handoff.js`)
 
 - **Generate a cross-agent handoff prompt.** `buildHandoff(sessionId, locale =
