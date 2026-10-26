@@ -379,3 +379,27 @@ test('git() runs without askpass helpers and gives a stalled network call a dead
     process.env = saved;
   }
 });
+
+// A machine that has never run the TUI or a scan has no store yet, and
+// `sync init` checks for git before initRepo() creates one. git() runs in the
+// store, where execFile answers ENOENT for the missing directory exactly as it
+// would for a missing binary — so this reported "git is not installed" on a
+// machine that had git, which is step 2 of docs/sync.md on a fresh laptop.
+test('the git check survives a store that does not exist yet, and a missing cwd is not reported as a missing git', { skip: !hasGit }, async () => {
+  const { git, hasGit: checkGit } = await import('../src/sync.js');
+  const gone = join(mkdtempSync(join(tmpdir(), 'mycelium-nocwd-')), 'never-created');
+
+  assert.equal(await checkGit(), true, 'git is found without depending on the store');
+
+  const r = await git(['--version'], { cwd: gone });
+  assert.equal(r.ok, false);
+  assert.notEqual(r.missing, true, 'a missing cwd must not claim git is missing');
+  assert.match(r.stderr, /no such directory/);
+
+  // End to end: the real path a fresh machine takes.
+  const root = mkdtempSync(join(tmpdir(), 'mycelium-fresh-'));
+  const remote = join(root, 'remote.git');
+  const fresh = machine(join(root, 'never-made'));
+  fresh.cli('sync', 'host', remote);
+  assert.match(fresh.cli('sync', 'init', remote, '--collect'), /sync set up/);
+});
