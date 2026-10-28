@@ -46,7 +46,7 @@ Mycelium "getting smarter automatically" does **not** mean it edits skills like 
 | Capture (scan) | Automatic every 5 min (no folder assignment, new sessions start unfiled) | Manual, `mycelium scan`, or reopen the TUI |
 | Organize: smart organize (`o`) | Auto-computed every 30 min, queued (not applied by default) | Manual `o` or `mycelium organize` |
 | Learn: summarize/tag (`a`) | Runs automatically on newly-captured sessions | Manual `a` or `mycelium autotag` |
-| Learn: clip (`p`) | **Never automatic, by design** — a clip means a person judged this worth keeping word for word, which is exactly what nothing else can infer | Manual `p`, `mycelium clip add`, or `/clip` inside the agent |
+| Learn: clip (`p`) | **Never automatic, by design** — a clip means a person judged this worth keeping word for word, which is exactly what nothing else can infer | Manual `p`, `mycelium clip add <session> --turn N` (or `--here`), or `/clip` inside the agent |
 | Learn: folder knowledge (`w`) | **Not automatic** | Manual `w` or `mycelium knowledge <folder>` |
 | Reuse: AGENTS.md injection | Always automatic for sessions launched with `n`/`h` | Same, independent of whether the TUI is running |
 
