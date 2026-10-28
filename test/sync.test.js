@@ -403,3 +403,21 @@ test('the git check survives a store that does not exist yet, and a missing cwd 
   fresh.cli('sync', 'host', remote);
   assert.match(fresh.cli('sync', 'init', remote, '--collect'), /sync set up/);
 });
+
+// The check must not read the current directory to find one that exists:
+// process.cwd() throws when the directory has been deleted under the process,
+// and cli.js calls main() with no catch, so `sync init` would exit on a stack
+// trace. Restored by chdir to an absolute path, which works from a gone cwd.
+test('the git check does not depend on the current directory still existing', { skip: !hasGit || process.platform === 'win32' }, async () => {
+  const { hasGit: checkGit } = await import('../src/sync.js');
+  const here = process.cwd();
+  const doomed = mkdtempSync(join(tmpdir(), 'mycelium-doomed-'));
+  try {
+    process.chdir(doomed);
+    rmSync(doomed, { recursive: true, force: true });
+    assert.throws(() => process.cwd(), { code: 'ENOENT' }, 'precondition: the cwd is really gone');
+    assert.equal(await checkGit(), true);
+  } finally {
+    process.chdir(here);
+  }
+});

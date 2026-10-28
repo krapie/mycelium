@@ -9,6 +9,7 @@
 
 import { execFile } from 'node:child_process';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { HOME, ensureDirs } from '../paths.js';
@@ -77,9 +78,14 @@ export function git(args, { batch = true, timeout = 0, cwd = HOME } = {}) {
  * On a machine that has never run the TUI or a scan there is no `~/.mycelium`
  * yet, which made the check fail and report a missing git on a machine that
  * had git — the first thing docs/sync.md tells a new laptop to do.
+ *
+ * The home directory rather than `process.cwd()`: reading the current one
+ * throws outright when it has been deleted under the process, and cli.js
+ * calls main() with no catch, so that would exit `sync init` on a stack
+ * trace instead of the directory message below.
  */
 export async function hasGit() {
-  return !(await git(['--version'], { cwd: process.cwd() })).missing;
+  return !(await git(['--version'], { cwd: homedir() })).missing;
 }
 
 /** Sync is on once `mycelium sync init` has recorded a remote for this machine. */
