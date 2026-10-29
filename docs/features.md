@@ -615,7 +615,11 @@ As a user, I can **install the `/clip` command into whichever agent CLIs I actua
   and pre-commit hooks. ssh runs in batch mode and askpass helpers are
   emptied, so background sync never prompts; `fetch`/`push` get a deadline
   (`MYCELIUM_SYNC_TIMEOUT_MS`, 2 min) so a stalled one can't hold the lock.
-  [tested] (`test/sync.test.js`)
+  `git()` runs in the store, so it only trusts `execFile`'s `ENOENT` as "no
+  git" once that directory exists — the same error means a missing cwd, and
+  `hasGit()` (which `sync init` calls before `initRepo()` creates the store)
+  deliberately runs outside it, so a machine that has never scanned isn't
+  told to reinstall a git it has. [tested] (`test/sync.test.js`)
 - **Field-level merge of session records.** `mergeSession(base, ours,
   theirs)`, invoked by git as `mycelium sync merge-driver session`: a
   field only one side changed comes from that side; when both changed,

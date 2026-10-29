@@ -9,6 +9,7 @@
 
 import { execFile } from 'node:child_process';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { HOME, ensureDirs } from '../paths.js';
@@ -50,21 +51,41 @@ export const NET_TIMEOUT_MS = Number(process.env.MYCELIUM_SYNC_TIMEOUT_MS || 2 *
  * the sync forever. For the same reason askpass helpers are emptied: VS
  * Code's terminal exports its own GIT_ASKPASS, which would pop a credential
  * dialog for an https remote. `timeout` (ms, 0 = none) kills a stalled call.
+ * `cwd` is the store, since every other caller operates on it.
  */
-export function git(args, { batch = true, timeout = 0 } = {}) {
+export function git(args, { batch = true, timeout = 0, cwd = HOME } = {}) {
   const env = { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_ASKPASS: '', SSH_ASKPASS: '' };
   if (batch && !process.env.GIT_SSH_COMMAND) env.GIT_SSH_COMMAND = 'ssh -o BatchMode=yes';
   return new Promise((resolve) => {
-    execFile('git', args, { cwd: HOME, env, timeout, maxBuffer: 64 * 1024 * 1024 }, (err, stdout, stderr) => {
-      if (err?.code === 'ENOENT') return resolve({ ok: false, missing: true, stdout: '', stderr: 'git is not installed' });
+    execFile('git', args, { cwd, env, timeout, maxBuffer: 64 * 1024 * 1024 }, (err, stdout, stderr) => {
+      // execFile answers ENOENT for a missing binary AND for a cwd that
+      // doesn't exist, so `missing` is only honest once the cwd is there.
+      // Reporting both as "git is not installed" sent people off to
+      // reinstall a git they already had.
+      if (err?.code === 'ENOENT') {
+        if (!existsSync(cwd)) return resolve({ ok: false, stdout: '', stderr: `no such directory: ${cwd}` });
+        return resolve({ ok: false, missing: true, stdout: '', stderr: 'git is not installed' });
+      }
       if (err?.killed) return resolve({ ok: false, timedOut: true, stdout: '', stderr: `timed out after ${Math.round(timeout / 1000)}s` });
       resolve({ ok: !err, stdout: String(stdout).trim(), stderr: String(stderr).trim() });
     });
   });
 }
 
+/**
+ * Deliberately not run in the store: `git --version` says nothing about it,
+ * and `sync init` asks this *before* initRepo()'s ensureDirs() creates it.
+ * On a machine that has never run the TUI or a scan there is no `~/.mycelium`
+ * yet, which made the check fail and report a missing git on a machine that
+ * had git — the first thing docs/sync.md tells a new laptop to do.
+ *
+ * The home directory rather than `process.cwd()`: reading the current one
+ * throws outright when it has been deleted under the process, and cli.js
+ * calls main() with no catch, so that would exit `sync init` on a stack
+ * trace instead of the directory message below.
+ */
 export async function hasGit() {
-  return !(await git(['--version'])).missing;
+  return !(await git(['--version'], { cwd: homedir() })).missing;
 }
 
 /** Sync is on once `mycelium sync init` has recorded a remote for this machine. */
