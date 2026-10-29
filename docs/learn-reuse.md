@@ -20,10 +20,23 @@ Mycelium "getting smarter automatically" does **not** mean it edits skills like 
    directory get auto-assigned by rule).
 4. **Learn**
    - `a`. Summarizes and tags the session. To have a cleanup rule show up as a `decision`, ask once before wrapping up: "summarize the documentation conventions we settled on this time." `a` structures that answer into `decisions`. Each press updates whichever of summary, tags, decisions, and todos the latest extraction actually returns, leaving the rest as they were; press it again whenever the session has moved forward. Only the title, once set (whether `a` generated it first or you wrote it with `e`), stays put; fix it with `e` if the auto-extracted one isn't right.
+   - `p` (optional). **Pins a turn verbatim as a clip.** `a` gives you
+     the agent's read of the session; a clip is the one place you say
+     "these exact words" instead. Use it for the wording that got
+     settled, the error message that explains the fix, the snippet you'd
+     otherwise paste again next time. Clips keep their own copy of the
+     text, so they survive the session being deleted. Also `/clip` from
+     inside the conversation, without leaving the agent.
    - `w`. **Extracts the folder's (`case/foo`) knowledge**: compiles the
      summaries and decisions of every session in that folder, not just
      this case but past cases in the same folder too, into
-     `KNOWLEDGE.md`.
+     `KNOWLEDGE.md`. Clips pinned anywhere in that folder go into the
+     same draft, but not as one more thing to weigh: the prompt
+     (`insight/knowledge.js`) tells the model these are excerpts a person
+     picked by hand and that the knowledge **has to** reflect them. That
+     asymmetry is the point of clipping at all — everything else in the
+     draft is the model's judgement about what mattered, and a clip is
+     yours.
 5. **Reuse.** The next time you open a new session in the same folder (`n`/`h`), Mycelium automatically injects that folder's current `KNOWLEDGE.md` into the working directory's `AGENTS.md`. Claude Code, Codex, Kiro, and OpenCode already know this folder's settled conventions the moment the session starts. `/write` and `/proofread` are unchanged, but the background knowledge underneath them has changed, so the output differs.
 
 ## What's actually automatic
@@ -33,6 +46,7 @@ Mycelium "getting smarter automatically" does **not** mean it edits skills like 
 | Capture (scan) | Automatic every 5 min (no folder assignment, new sessions start unfiled) | Manual, `mycelium scan`, or reopen the TUI |
 | Organize: smart organize (`o`) | Auto-computed every 30 min, queued (not applied by default) | Manual `o` or `mycelium organize` |
 | Learn: summarize/tag (`a`) | Runs automatically on newly-captured sessions | Manual `a` or `mycelium autotag` |
+| Learn: clip (`p`) | **Never automatic, by design** — a clip means a person judged this worth keeping word for word, which is exactly what nothing else can infer | Manual `p`, `mycelium clip add <session> --turn N` (or `--here`), or `/clip` inside the agent |
 | Learn: folder knowledge (`w`) | **Not automatic** | Manual `w` or `mycelium knowledge <folder>` |
 | Reuse: AGENTS.md injection | Always automatic for sessions launched with `n`/`h` | Same, independent of whether the TUI is running |
 
