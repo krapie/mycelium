@@ -62,15 +62,23 @@ function registerUpkeep(ctx, { client, refresh, run, t, log }) {
   const config = () => vscode.workspace.getConfiguration('mycelium');
   const setSetting = (value) => config().update('autoUpkeep', value, vscode.ConfigurationTarget.Global);
 
+  // Said once per window; the actions that need upkeep then do nothing instead of failing.
+  const markOld = () => {
+    supported = false;
+    status = null;
+    if (warnedOld) return;
+    warnedOld = true;
+    log.appendLine('upkeep: this CLI predates background upkeep; falling back to manual actions');
+    vscode.window.showWarningMessage(t.upkeepOld);
+  };
+
   const fetchStatus = async () => {
     if (!supported) return null;
     try {
       status = await client.request('upkeepStatus');
     } catch (err) {
       if (!isOldCli(err)) throw err;
-      supported = false;
-      status = null;
-      log.appendLine('upkeep: this CLI predates background upkeep; falling back to manual actions');
+      markOld();
     }
     return status;
   };
@@ -85,11 +93,7 @@ function registerUpkeep(ctx, { client, refresh, run, t, log }) {
       return true;
     } catch (err) {
       if (!isOldCli(err)) throw err;
-      supported = false;
-      if (!warnedOld) {
-        warnedOld = true;
-        vscode.window.showWarningMessage(t.upkeepOld);
-      }
+      markOld();
       return false;
     }
   };
@@ -128,11 +132,12 @@ function registerUpkeep(ctx, { client, refresh, run, t, log }) {
 
   /** Called once the CLI answered `hello`. */
   const connected = async () => {
+    supported = true; // the CLI may have been updated or swapped since the last connect
+    quietScan(1500); // not waiting on the status request (it may fail), but late enough that a running daemon is seen first
     await fetchStatus();
     const decision = upkeepDecision({ setting: config().get('autoUpkeep'), asked: ctx.globalState.get(ASKED_KEY) });
     if (decision === 'start') await start();
     else if (decision === 'ask' && supported) ask().catch((e) => log.appendLine(`upkeep: ${e.message}`));
-    quietScan();
   };
 
   /**

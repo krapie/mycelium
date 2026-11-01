@@ -162,8 +162,10 @@ function registerAi(ctx, { client, askCli, refresh, run, pickFolder, t }) {
   });
 
   // The whole loop in one go: the same steps the daemon runs on a timer, but now,
-  // then only what needs a human is put in front of them. Each step is skipped
-  // quietly if the CLI predates it, so an old CLI still gets scan + summarize.
+  // then only what needs a human is put in front of them. Knowledge is prepared
+  // after the placements are reviewed, because only filed sessions count toward
+  // a folder's knowledge. The scan itself is quick and not cancellable; the
+  // LLM steps are.
   runLlm('mycelium.runAll', async () => {
     const scanned = await client.request('scan');
     await refresh();
@@ -171,17 +173,31 @@ function registerAi(ctx, { client, askCli, refresh, run, pickFolder, t }) {
     await refresh();
     const list = await llm('Mycelium: organizing…', 'organizeSuggest', {});
     await refresh();
+    if (list.length) await reviewPlacements(list);
+
+    let knowledgeFailed = 0;
+    let knowledgeSkipped = false;
     try {
-      await llm('Mycelium: preparing knowledge…', 'knowledgePropose', { date: new Date().toISOString().slice(0, 10) });
+      const k = await llm('Mycelium: preparing knowledge…', 'knowledgePropose', { date: new Date().toISOString().slice(0, 10) });
+      knowledgeFailed = k.failed || 0;
     } catch (err) {
       if (!/unknown method/.test(err.message)) throw err;
+      knowledgeSkipped = true; // a CLI from before knowledgePropose
     }
     const pending = await client.request('knowledgePending');
-    if (!list.length && !pending.length) {
-      return vscode.window.showInformationMessage(`${t.runAllDone(scanned.imported ?? 0)}${tagged.tagged ? ` · ${tagged.tagged} summarized` : ''}`);
+
+    const problems = [
+      tagged.failed ? `${tagged.failed} session${tagged.failed === 1 ? '' : 's'} could not be summarized` : '',
+      knowledgeFailed ? `${knowledgeFailed} knowledge update${knowledgeFailed === 1 ? '' : 's'} failed` : '',
+      knowledgeSkipped ? t.runAllOldKnowledge : '',
+    ].filter(Boolean);
+    const more = tagged.tagged >= AUTOTAG_BATCH ? ' — run again to summarize more' : '';
+    if (problems.length) vscode.window.showWarningMessage(`Mycelium: ${problems.join('; ')}`);
+    if (!list.length && !pending.length && !problems.length) {
+      return vscode.window.showInformationMessage(`${t.runAllDone(scanned.imported ?? 0)}${tagged.tagged ? ` · ${tagged.tagged} summarized` : ''}${more}`);
     }
-    if (list.length) await reviewPlacements(list);
     if (pending.length) await vscode.commands.executeCommand('mycelium.reviewKnowledge');
+    else if (more) vscode.window.showInformationMessage(`Mycelium: summarized ${tagged.tagged}${more}`);
   });
 
   run('mycelium.openKnowledge', async (el) => {

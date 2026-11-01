@@ -51,6 +51,7 @@ const STR = {
     upkeepUnknown: 'Status unavailable', upkeepStateOff: 'Not running', upkeepStateOn: (pid, v) => `Running (pid ${pid}${v ? `, v${v}` : ''})`, upkeepNothingQueued: 'nothing waiting for review',
     upkeepStarted: 'Mycelium: background upkeep is on', upkeepStopped: 'Mycelium: background upkeep is off',
     runAllDone: (n) => `Mycelium: captured ${n}, nothing else needed review`,
+    runAllOldKnowledge: 'knowledge was not prepared because this CLI is too old (update: npm install -g @kevinprk/mycelium, or use Extract folder knowledge)',
     actions: {
       runAll: { label: 'Run everything now', stage: 'Capture → Learn · AI', tip: 'Scan, summarize, suggest folders and prepare knowledge in one go, then walk you through what needs your OK. You can cancel any time.' },
       upkeep: { label: 'Background upkeep', stage: 'Auto', tip: 'Scans, summarizes and prepares suggestions on its own, so you only review. Click to turn it on or off.' },
@@ -105,6 +106,7 @@ const STR = {
     upkeepUnknown: '상태를 알 수 없음', upkeepStateOff: '실행 중 아님', upkeepStateOn: (pid, v) => `실행 중 (pid ${pid}${v ? `, v${v}` : ''})`, upkeepNothingQueued: '검토할 항목 없음',
     upkeepStarted: 'Mycelium: 백그라운드 관리를 켰습니다', upkeepStopped: 'Mycelium: 백그라운드 관리를 껐습니다',
     runAllDone: (n) => `Mycelium: ${n}개 캡처, 그 외 검토할 항목은 없습니다`,
+    runAllOldKnowledge: 'CLI가 오래되어 지식을 준비하지 못했습니다 (업데이트: npm install -g @kevinprk/mycelium, 또는 폴더 지식 추출 사용)',
     actions: {
       runAll: { label: '지금 모두 실행', stage: 'Capture → Learn · AI', tip: '스캔, 요약, 폴더 제안, 지식 준비를 한 번에 하고 확인이 필요한 것만 차례로 보여 줍니다. 언제든 취소할 수 있습니다.' },
       upkeep: { label: '백그라운드 관리', stage: '자동', tip: '스캔, 요약, 제안 준비를 알아서 해 두므로 검토만 하면 됩니다. 눌러서 켜거나 끌 수 있습니다.' },

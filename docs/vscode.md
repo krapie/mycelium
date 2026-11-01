@@ -70,7 +70,7 @@ Because summaries use your own `claude` or `codex` login, the extension asks onc
 
 With upkeep off, new sessions are still scanned when the window connects and a few seconds after an agent terminal the extension opened is closed. That calls no LLM.
 
-*Run Everything Now* (the top item under Actions) does the whole loop once: scan, summarize, organize, prepare knowledge, then walks through whatever needs your OK. It can be cancelled at any step. It needs a CLI with the upkeep methods; an older CLI shows an update hint and keeps the manual actions.
+*Run Everything Now* (the top item under Actions) does the whole loop once: scan, summarize, organize, prepare knowledge, then walks through whatever needs your OK. The scan is quick and finishes first; the summarize, organize and knowledge steps can be cancelled. It needs a CLI with the upkeep methods; an older CLI shows an update hint and keeps the manual actions.
 
 ## Which window a session opens in
 
