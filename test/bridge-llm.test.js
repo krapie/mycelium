@@ -31,7 +31,58 @@ function seed(id, over = {}) {
 }
 
 test('the LLM-backed methods are the ones serve.js runs outside its queue', () => {
-  assert.deepEqual([...LONG].sort(), ['autotag', 'knowledgeBuild', 'organizeSuggest']);
+  assert.deepEqual([...LONG].sort(), ['autotag', 'knowledgeBuild', 'knowledgePropose', 'organizeSuggest']);
+});
+
+test('upkeepStatus counts what the daemon queued and sees a live pidfile', async () => {
+  const { writePendingKnowledgeText } = await import('../src/insight.js');
+  const { queueSuggestions, clearSuggestions } = await import('../src/organize.js');
+  const { dismissPendingKnowledge } = await import('../src/insight.js');
+  const { DAEMON_PID_PATH, DAEMON_VERSION_PATH, ensureDirs } = await import('../src/paths.js');
+  const { writeFileSync, rmSync } = await import('node:fs');
+  ensureDirs();
+
+  const idle = (await call('upkeepStatus')).result;
+  assert.equal(idle.running, false);
+  assert.equal(idle.suggestions, 0);
+
+  seed('up-1');
+  queueSuggestions([{ id: 'up-1', folder: 'Up/area', reason: 'r' }]);
+  writePendingKnowledgeText('Up/area', 'proposed');
+  // This test process stands in for a live daemon.
+  writeFileSync(DAEMON_PID_PATH, String(process.pid));
+  writeFileSync(DAEMON_VERSION_PATH, '9.9.9');
+  try {
+    const s = (await call('upkeepStatus')).result;
+    assert.deepEqual({ running: s.running, pid: s.pid, version: s.version, suggestions: s.suggestions, knowledge: s.knowledge }, { running: true, pid: process.pid, version: '9.9.9', suggestions: 1, knowledge: 1 });
+  } finally {
+    rmSync(DAEMON_PID_PATH, { force: true });
+    rmSync(DAEMON_VERSION_PATH, { force: true });
+    clearSuggestions(['up-1']); // a queued suggestion would be reused by the organizeSuggest test below
+    dismissPendingKnowledge('Up/area');
+  }
+});
+
+test('upkeepStatus treats a stale pidfile as not running', async () => {
+  const { DAEMON_PID_PATH, ensureDirs } = await import('../src/paths.js');
+  const { writeFileSync, rmSync } = await import('node:fs');
+  ensureDirs();
+  writeFileSync(DAEMON_PID_PATH, '2147483646');
+  try {
+    assert.equal((await call('upkeepStatus')).result.running, false);
+  } finally {
+    rmSync(DAEMON_PID_PATH, { force: true });
+  }
+});
+
+test('knowledgePropose stages a proposal for folders active that day', async () => {
+  const { pendingKnowledgeReviews } = await import('../src/insight.js');
+  seed('kp-1', { folder: 'kp-folder', startedAt: '2026-03-05T10:00:00.000Z' });
+  __setTestProvider(async () => 'generated knowledge text');
+  const res = (await call('knowledgePropose', { date: '2026-03-05' })).result;
+  assert.deepEqual(res, { proposed: 1, failed: 0 });
+  assert.ok(pendingKnowledgeReviews().some((r) => r.folder === 'kp-folder'));
+  await call('knowledgeDismiss', { folder: 'kp-folder' });
 });
 
 test('autotag with ids summarizes those sessions and reports progress under the caller token', async () => {

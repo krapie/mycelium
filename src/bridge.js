@@ -16,12 +16,14 @@ import { organizeLimit } from './config.js';
 import { listTreeDirs } from './organize.js';
 import {
   buildKnowledgeText,
+  proposeKnowledgeRefreshes,
   writeKnowledgeText,
   pendingKnowledgeReviews,
   promoteKnowledge,
   dismissPendingKnowledge,
 } from './insight.js';
-import { mkdir, move, tag, deleteSession, setContent, reviewablePlacements, applyPlacements, clearSuggestions } from './organize.js';
+import { mkdir, move, tag, deleteSession, setContent, reviewablePlacements, applyPlacements, clearSuggestions, pendingSuggestions } from './organize.js';
+import { daemonStatus, spawnDetachedDaemon, stopDetachedDaemon } from './daemon.js';
 import { createBacklog, buildBacklogSeed, markBacklogEntered } from './backlog.js';
 import { isBacklog } from './schema.js';
 import { dirsForFolder, injectAgentsMd, assembleContext } from './reuse.js';
@@ -88,7 +90,7 @@ const lineageOf = (n) => ({
 // one-at-a-time queue so a refresh isn't stuck behind them. They report
 // through ctx.notify, tagged with the caller's `token` so it can tell which
 // request a progress line belongs to.
-export const LONG = new Set(['autotag', 'organizeSuggest', 'knowledgeBuild']);
+export const LONG = new Set(['autotag', 'organizeSuggest', 'knowledgeBuild', 'knowledgePropose']);
 
 const reporter = (ctx, params) => (info) => ctx.notify('progress', { token: params.token, ...info });
 
@@ -350,6 +352,14 @@ export const METHODS = {
     return { folder, text: gen.text, count: gen.count, current: currentKnowledge(folder) };
   }),
 
+  // Stages proposals for every folder active on `date` (default today), the
+  // same call the TUI's `k` makes; they are then reviewed via knowledgePending.
+  knowledgePropose: llmStep(async ({ date }) => {
+    const day = typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : new Date().toISOString().slice(0, 10);
+    const res = await proposeKnowledgeRefreshes(day);
+    return { proposed: res.proposed, failed: res.failed.length };
+  }),
+
   knowledgeSave: ({ folder, text }) => {
     safeFolder(folder);
     need(typeof text === 'string' && text.trim(), 'empty knowledge text');
@@ -362,6 +372,15 @@ export const METHODS = {
   knowledgePromote: ({ folder }) => ok(promoteKnowledge(safeFolder(folder))),
 
   knowledgeDismiss: ({ folder }) => dismissPendingKnowledge(safeFolder(folder)),
+
+  // --- Background upkeep (the detached daemon) ---
+
+  // What the daemon has queued for a human, plus whether it is running.
+  upkeepStatus: () => ({ ...daemonStatus(), suggestions: pendingSuggestions().length, knowledge: pendingKnowledgeReviews().length }),
+
+  upkeepStart: () => spawnDetachedDaemon(),
+
+  upkeepStop: () => stopDetachedDaemon(),
 
   // Best-effort: ends the in-flight claude/codex children; the caller's
   // consecutive-failure breaker then stops the rest of the batch.

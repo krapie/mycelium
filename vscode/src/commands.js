@@ -18,6 +18,7 @@ const { withWiderPath } = require('./retry.js');
 const { launchDir, relatedTo, enqueue, pending, withdraw } = require('./launch.js');
 const { workspaceDirs } = require('./views.js');
 const { registerAi } = require('./ai.js');
+const { registerUpkeep } = require('./upkeep.js');
 const { formatDiagnostics } = require('./diagnostics.js');
 const { resolveCli } = require('./cli-path.js');
 const os = require('os');
@@ -440,6 +441,7 @@ function register(ctx, { client, panel, calendar, refresh, foldersView, language
 
   run('mycelium.menu', async () => {
     const items = [
+      { label: `$(run-all) ${t.upkeepRunNow}`, cmd: 'mycelium.runAll' },
       { label: `$(sync) ${t.menuScan}`, cmd: 'mycelium.scan' },
       { label: `$(sparkle) ${t.menuOrganize}`, cmd: 'mycelium.organize' },
       { label: `$(search) ${t.menuSearch}`, cmd: 'mycelium.search' },
@@ -453,7 +455,8 @@ function register(ctx, { client, panel, calendar, refresh, foldersView, language
     if (pick) await vscode.commands.executeCommand(pick.cmd);
   });
 
-  registerAi(ctx, { client, askCli, refresh, run, pickFolder });
+  registerAi(ctx, { client, askCli, refresh, run, pickFolder, t });
+  return { upkeep: registerUpkeep(ctx, { client, refresh, run, t, log }) };
 }
 
 module.exports = { register, GUIDE };
