@@ -17,6 +17,14 @@ name: Publish to Homebrew
 on:
   release:
     types: [published]
+  # A re-run of a failed run uses the workflow file as it was at the release's
+  # commit, so a fix to this file only reaches an already-published release
+  # through a fresh run with the existing tag.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to bump the formula for (for example v0.6.2)
+        required: true
 
 jobs:
   update-homebrew-tap:
@@ -28,8 +36,9 @@ jobs:
       contents: read
     steps:
       - name: Wait for the npm tarball to be published
+        env:
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
-          TAG="${{ github.event.release.tag_name }}"
           VERSION="${TAG#v}" # release tags are "v0.1.5"; the npm tarball path has no leading v
           URL="https://registry.npmjs.org/@kevinprk/mycelium/-/mycelium-${VERSION}.tgz"
           # 20 x 15s (5 min) used to be the bound here, but it failed this
@@ -53,8 +62,8 @@ jobs:
       - name: Bump mycelium formula in krapie/homebrew-tap
         env:
           HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
-          TAG="${{ github.event.release.tag_name }}"
           VERSION="${TAG#v}"
           # brew bump-formula-pr has no --tap flag (confirmed against its own
           # --help, which only lists a bare [formula] positional arg) — the
@@ -66,6 +75,10 @@ jobs:
           # macos-latest runner has no taps beyond Homebrew's own core/cask,
           # so this has to be explicit.
           brew tap krapie/tap
+          # Newer Homebrew refuses to load a formula from a tap it was not told
+          # to trust ("Refusing to load formula krapie/tap/mycelium from
+          # untrusted tap", v0.6.2). This is our own tap, so trust it.
+          brew trust --tap krapie/tap
           brew bump-formula-pr \
             --url "https://registry.npmjs.org/@kevinprk/mycelium/-/mycelium-${VERSION}.tgz" \
             --no-browse \
