@@ -85,6 +85,7 @@ async function activate(ctx) {
   const proxy = { request: (m, p, o) => client.request(m, p, o), loginDirs: () => client.loginDirs() };
 
   let foldersView;
+  let upkeep; // set by register() below; the status poll runs before and after it
   const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 50);
   status.command = 'mycelium.menu';
   status.text = '$(type-hierarchy) Mycelium';
@@ -93,11 +94,12 @@ async function activate(ctx) {
   let storeLabel = '';
   const updateStatus = async () => {
     try {
-      const [f, groups, pending] = await Promise.all([proxy.request('folders'), workspaceGroups(proxy), proxy.request('knowledgePending')]);
+      const [f, groups, pending, upkeepState] = await Promise.all([proxy.request('folders'), workspaceGroups(proxy), proxy.request('knowledgePending'), upkeep ? upkeep.fetchStatus().catch(() => null) : null]);
+      upkeep?.observe(upkeepState);
       markConnected();
       const here = groups.reduce((n, g) => n + g.rows.length, 0);
       status.text = `$(type-hierarchy) ${here} ${t.here} · ${f.inbox} ${t.newCount}${pending.length ? ` · $(book) ${pending.length}` : ''}`;
-      actions.setStats({ inbox: f.inbox, pending: pending.length });
+      actions.setStats({ inbox: f.inbox, pending: pending.length, suggestions: upkeepState ? upkeepState.suggestions : 0, upkeep: !!(upkeepState && upkeepState.running), upkeepLine: upkeepState ? upkeep.describe() : '' });
       status.tooltip = [`Mycelium${storeLabel ? ` — ${storeLabel}` : ''}`, pending.length ? `${pending.length} knowledge update(s) to review` : ''].filter(Boolean).join('\n');
     } catch (err) {
       status.text = '$(warning) Mycelium';
@@ -160,6 +162,7 @@ async function activate(ctx) {
       storeLabel = shown;
       updateStatus();
       markConnected();
+      upkeep?.connected().catch((err) => log.appendLine(`upkeep: ${err.message}`));
       if (hello.protocol < MIN_PROTOCOL) {
         vscode.window.showWarningMessage(`Mycelium ${hello.version} is too old for this extension — run: npm i -g @kevinprk/mycelium`);
       }
@@ -188,7 +191,7 @@ async function activate(ctx) {
     { dispose: () => { clearTimeout(debounce); watcher?.dispose(); client.dispose(); } },
   );
 
-  register(ctx, { client: proxy, panel, calendar, refresh, foldersView, language, log });
+  ({ upkeep } = register(ctx, { client: proxy, panel, calendar, refresh, foldersView, language, log }));
 
   // Sessions another window asked this one to start (see launch.js): any that
   // belong to a folder open here. Checked now — a window opened just for this

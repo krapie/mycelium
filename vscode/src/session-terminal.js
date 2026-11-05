@@ -12,6 +12,11 @@ const vscode = require('vscode');
 const { terminalColor } = require('./items.js');
 const { commandFor, needsFallbackShell } = require('./shell.js');
 
+// Which terminals are agent sessions this extension started, so closing one can
+// trigger a scan (upkeep.js) without reacting to the user's ordinary shells.
+const agentTerminals = new WeakSet();
+const isAgentTerminal = (term) => agentTerminals.has(term);
+
 /** A fresh terminal tab per launch — several agents can run side by side — colored by agent so they stay apart. */
 function openTerminal({ name, cwd, bin, args, key }) {
   // cmd can't be handed an arbitrary prompt safely (shell.js); that one
@@ -19,8 +24,9 @@ function openTerminal({ name, cwd, bin, args, key }) {
   const fallback = needsFallbackShell(vscode.env.shell, bin, args);
   const shell = fallback ? 'powershell.exe' : vscode.env.shell;
   const term = vscode.window.createTerminal({ name, cwd, iconPath: new vscode.ThemeIcon('sparkle'), color: terminalColor(key), ...(fallback ? { shellPath: shell } : {}) });
+  agentTerminals.add(term);
   term.show();
   term.sendText(commandFor(shell, bin, args));
 }
 
-module.exports = { openTerminal };
+module.exports = { openTerminal, isAgentTerminal };

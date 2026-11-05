@@ -62,6 +62,16 @@ What this doesn't do: Claude Code's own session list shows Claude's sessions, an
 
 Agent colors (Claude, Codex, Kiro, OpenCode, merged, backlog) follow the theme and can be changed with `workbench.colorCustomizations` (`mycelium.agent.*`).
 
+## Background upkeep
+
+Scan, summarize, folder suggestions and knowledge updates do not have to be clicked one by one. The extension can keep the same background upkeep the TUI runs (`mycelium daemon --detach`) going for you. It scans every few minutes, summarizes new sessions, queues folder suggestions about every half hour, and prepares knowledge updates once a day. You only review: Smart organize opens the queued suggestions right away, and Review Knowledge Updates shows the proposals. A notification appears when something new is waiting.
+
+Because summaries use your own `claude` or `codex` login, the extension asks once the first time it connects. Answer *Turn on*, *Not now* or *Never*, or set `mycelium.autoUpkeep` to `on` or `off` later. Only one daemon runs no matter how many windows are open, and it keeps running after VS Code closes. Click *Background upkeep* under Actions (or run *Mycelium: Background Upkeep…*) to see whether it is running, its process and version, and how much is waiting for review. The same menu has *Restart*, *Turn off* and *Show daemon log*. Restart is the fix for a daemon that looks stuck or still runs old code after a CLI update.
+
+With upkeep off, new sessions are still scanned when the window connects and a few seconds after an agent terminal the extension opened is closed. That calls no LLM.
+
+*Run Everything Now* (the top item under Actions) does the whole loop once: scan, summarize, organize, prepare knowledge, then walks through whatever needs your OK. The scan is quick and finishes first; the summarize, organize and knowledge steps can be cancelled. It needs a CLI with the upkeep methods; an older CLI shows an update hint and keeps the manual actions.
+
 ## Which window a session opens in
 
 Sessions are tied to the directory they ran in, and you will usually have a window per project. **Resume**, **Hand off** and **Start New Agent Session** therefore open (a terminal, or the Claude Code panel for Claude sessions) in a window on that session's own directory: if this window already has the project open (or a folder inside or around it), the terminal opens here; otherwise VS Code opens a window on that directory, or switches this one, if it has no folder open, and the terminal starts there, the way a new tab would.
@@ -74,6 +84,7 @@ This hand-off needs the Mycelium extension to be **installed**, because the new 
 |---|---|
 | `mycelium.path` | The `mycelium` executable (default: from `PATH`). |
 | `mycelium.home` | Data directory (`MYCELIUM_HOME`); empty uses `~/.mycelium`. |
+| `mycelium.autoUpkeep` | `ask` (default): ask once. `on`: start the background upkeep whenever the window connects. `off`: never start it. |
 | `mycelium.openSessionIn` | `projectWindow` (default): terminals open in a window on the session's directory. `thisWindow`: always here. |
 
 ## Troubleshooting
@@ -128,6 +139,6 @@ Seeds an isolated store (`~/.mycelium-vscode-dev`, sample sessions from the demo
 
 ## Protocol (version 1)
 
-Request `{"jsonrpc":"2.0","id":1,"method":"sessions","params":{"folder":"Projects/x"}}`, response `{"jsonrpc":"2.0","id":1,"result":[...]}` or `{"error":{"code":-32000,"message":"..."}}`. Methods are the table in `src/bridge.js`: `hello`, `folders`, `sessions` (`folder`/`query`/`tags`/`date`/`dir`/`limit`), `detail`, `tags`, `scan`, `mkdir`, `move`, `tag`, `agents`, `resumeCommand`, `newCommand`, `handoff`, `dirsForFolder`, `context`, `inject`, `doctor`, `exists`, and the LLM-backed `autotag`, `organizeSuggest`, `organizeApply`, `knowledgeBuild`, `knowledgeSave`, `knowledgePending`, `knowledgePromote`, `knowledgeDismiss`, `cancel`.
+Request `{"jsonrpc":"2.0","id":1,"method":"sessions","params":{"folder":"Projects/x"}}`, response `{"jsonrpc":"2.0","id":1,"result":[...]}` or `{"error":{"code":-32000,"message":"..."}}`. Methods are the table in `src/bridge.js`: `hello`, `folders`, `sessions` (`folder`/`query`/`tags`/`date`/`dir`/`limit`), `detail`, `tags`, `scan`, `mkdir`, `move`, `tag`, `agents`, `resumeCommand`, `newCommand`, `handoff`, `dirsForFolder`, `context`, `inject`, `doctor`, `exists`, and the LLM-backed `autotag`, `organizeSuggest`, `organizeApply`, `knowledgeBuild`, `knowledgeSave`, `knowledgePending`, `knowledgePromote`, `knowledgeDismiss`, `cancel`. Background upkeep adds `upkeepStatus`, `upkeepStart`, `upkeepStop` and the LLM-backed `knowledgePropose`.
 
 Ordinary requests run one at a time in arrival order. The three that take minutes (`autotag`, `organizeSuggest`, `knowledgeBuild`) run outside that queue, so a refresh isn't stuck behind them, and report progress as id-less notifications, `{"jsonrpc":"2.0","method":"progress","params":{"token":"t7","done":3,"total":10}}`, where `token` is the one the caller put in the request's params.

@@ -97,6 +97,14 @@ export function spawnDetachedDaemon({ kill = stopDetachedDaemon } = {}) {
   return { started: true, pid: child.pid, ...(restartedFrom && { restarted: true, from: restartedFrom, to: VERSION }) };
 }
 
+/** Whether a `--detach` daemon is alive, and which version it was started as. */
+export function daemonStatus() {
+  if (!existsSync(DAEMON_PID_PATH)) return { running: false };
+  const pid = Number(readFileSync(DAEMON_PID_PATH, 'utf8').trim());
+  if (!pid || !isAlive(pid)) return { running: false };
+  return { running: true, pid, version: readRecordedVersion() };
+}
+
 function readRecordedVersion() {
   try {
     return readFileSync(DAEMON_VERSION_PATH, 'utf8').trim() || null;
