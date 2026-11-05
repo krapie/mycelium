@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.3.2
 
-- **Background upkeep**: the extension can keep Mycelium's background upkeep running, so new sessions are scanned and summarized on their own and folder suggestions and knowledge updates are ready for you to review. It asks once; change it with `mycelium.autoUpkeep`. A notification tells you when something is waiting. Needs a `mycelium` CLI with upkeep support (next release after 0.5.5).
+- **Background upkeep**: the extension can keep Mycelium's background upkeep running, so new sessions are scanned and summarized on their own and folder suggestions and knowledge updates are ready for you to review. It asks once; change it with `mycelium.autoUpkeep`. A notification tells you when something is waiting. Needs `mycelium` CLI 0.6.2.
 - **Daemon status and control**: the *Background upkeep* item shows whether the daemon runs, its process and version, and what is queued. Its menu can restart or turn off the daemon and open its log.
 - **Run Everything Now**: one command (top of Actions) for scan, summarize, organize and knowledge, then walks you through what needs your OK.
 - New sessions are scanned automatically when the window connects and after an agent terminal closes, even with upkeep off.
