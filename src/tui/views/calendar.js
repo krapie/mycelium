@@ -14,6 +14,19 @@ import * as data from '../data.js';
 import { t } from '../i18n.js';
 import { formatSessionDetail } from '../render.js';
 import { createResumeHandoff } from '../resume-handoff.js';
+import {
+  move as organizeMove,
+  tag as organizeTag,
+  deleteSession,
+  setContent,
+} from '../../organize.js';
+import { pickFolder, editTags, menu, textPrompt, multiSelectList } from '../widgets/pickers.js';
+import { copyToClipboard } from '../clipboard.js';
+import { autoTagSession } from '../../learn.js';
+import { mapConcurrent } from '../../llm.js';
+import { createClip } from '../../clip.js';
+import { sessionToText } from './sessions.js';
+import * as actions from './sessions-actions.js';
 
 const MONTH_NAMES_EN = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -52,7 +65,9 @@ export function createCalendarTab(app, { onBack }) {
   let gridBox, dayListBox, calDetailBox;
   let year, month, day, counts;
   let dayRows = [];
+  const selected = new Set();
   let level = 'grid'; // 'grid' | 'dayList' | 'detail' — which panel to refocus on activate()
+  let sortBy = 'recent';
 
   function clampDay() {
     day = Math.min(day, daysInMonth(year, month));
@@ -115,20 +130,32 @@ export function createCalendarTab(app, { onBack }) {
 
   function loadDay() {
     const date = ymd(year, month, day);
-    dayRows = data.sessions({ date });
+    let rows = data.sessions({ date });
+    if (sortBy === 'date-asc') {
+      rows.sort((a, b) => (a.startedAt || '').localeCompare(b.startedAt || ''));
+    } else if (sortBy === 'title') {
+      rows.sort((a, b) => (a.title || a.summary || '').localeCompare(b.title || b.summary || ''));
+    } else if (sortBy === 'title-desc') {
+      rows.sort((a, b) => (b.title || b.summary || '').localeCompare(a.title || a.summary || ''));
+    } else if (sortBy === 'agent') {
+      rows.sort((a, b) => (a.source || '').localeCompare(b.source || ''));
+    }
+    dayRows = rows;
     const machines = data.machines();
     const items = dayRows.length
       ? dayRows.map((r) => {
+          const mark = selected.has(r.id) ? `{${C.fox}-fg}✓{/} ` : '';
           const src = `{${sourceColor(r.source)}-fg}#${sourceLabel(r.source)}{/}`;
           // Same @machine badge as the Sessions list, on a store synced across machines.
           const host = machines && r.host ? `{${r.host === machines.thisMachine ? C.faint : C.host}-fg}@${r.host.slice(0, 12)}{/} ` : '';
           const title = (r.title || r.summary || r.preview || t('common.noContent')).replace(/\s+/g, ' ').slice(0, 60);
-          return `${title}{|}${host}${src} {${C.dim}-fg}${r.folder || t('sessions.newBadge')}{/}`;
+          return `${mark}${title}{|}${host}${src} {${C.dim}-fg}${r.folder || t('sessions.newBadge')}{/}`;
         })
       : [`{gray-fg}${t('sessions.empty')}{/}`];
     dayListBox.setLabel(t('calendar.dayListLabel', date, dayRows.length));
+    const prev = dayListBox.selected ?? 0;
     dayListBox.setItems(items);
-    dayListBox.select(0);
+    if (dayRows.length) dayListBox.select(Math.min(prev, dayRows.length - 1));
     showCalDetail();
   }
 
@@ -145,6 +172,7 @@ export function createCalendarTab(app, { onBack }) {
   // session counts. day is always a real day of the resulting month, so
   // loadMonth()'s clampDay() is a no-op here.
   function moveDay(delta) {
+    selected.clear();
     const d = new Date(year, month - 1, day + delta);
     const ny = d.getFullYear();
     const nm = d.getMonth() + 1;
@@ -214,6 +242,7 @@ export function createCalendarTab(app, { onBack }) {
     // ←→ ±1 day, ↑↓ ±1 week; both roll into the adjacent month at the edges
     // (moveDay). PgUp/PgDn jump a whole month, keeping the same day-of-month.
     const changeMonth = (delta) => {
+      selected.clear();
       month += delta;
       if (month < 1) {
         month = 12;
@@ -282,6 +311,266 @@ export function createCalendarTab(app, { onBack }) {
     dayListBox.key('r', doResume);
     dayListBox.key('h', () => doHandoff());
 
+    const currentRow = () => dayRows[dayListBox.selected];
+    const targets = () => (selected.size ? [...selected] : currentRow() ? [currentRow().id] : []);
+
+    const afterMutate = (ids) => {
+      selected.clear();
+      data.refreshMany(ids);
+      loadMonth();
+      renderAll();
+      dayListBox.focus();
+      level = 'dayList';
+      app.render();
+    };
+
+    // Organize: move to folder
+    dayListBox.key('m', () => {
+      const ids = targets();
+      if (!ids.length) return;
+      pickFolder(app, (folder) => {
+        if (folder === undefined) return dayListBox.focus();
+        for (const id of ids) organizeMove(id, folder);
+        app.notify(t('sessions.movedTo', ids.length, folder || t('sessions.newBadge')));
+        afterMutate(ids);
+        dayListBox.focus();
+      });
+    });
+
+    // Organize: edit tags
+    dayListBox.key('t', () => {
+      const ids = targets();
+      if (!ids.length) return;
+      const cur = ids.length === 1 ? data.detail(ids[0])?.extracted.tags || [] : [];
+      editTags(app, cur, (edit) => {
+        if (!edit) return dayListBox.focus();
+        for (const id of ids) organizeTag(id, edit.add, edit.remove);
+        app.notify(t('sessions.tagsUpdated', ids.length));
+        afterMutate(ids);
+        dayListBox.focus();
+      });
+    });
+
+    // Organize: delete
+    const doDelete = () => {
+      const ids = targets();
+      if (!ids.length) return;
+      menu(
+        app,
+        t('sessions.deleteConfirmTitle', ids.length),
+        [
+          { label: t('common.delete'), value: 'yes' },
+          { label: t('common.cancel'), value: 'no' },
+        ],
+        (ans) => {
+          if (ans !== 'yes') return dayListBox.focus();
+          const touched = new Set(ids);
+          for (const id of ids) for (const otherId of deleteSession(id).touchedIds || []) touched.add(otherId);
+          app.notify(t('sessions.deleted', ids.length));
+          afterMutate([...touched]);
+          dayListBox.focus();
+          level = 'dayList';
+        },
+      );
+    };
+    dayListBox.key('x', doDelete);
+    calDetailBox.key('x', doDelete);
+
+    // Learn: auto-tag
+    const doAutoTag = async () => {
+      const ids = targets();
+      if (!ids.length) return;
+      let done = 0;
+      let failed = 0;
+      let lastError = null;
+      const spin = app.startSpinner(t('sessions.summarizing', 0, ids.length));
+      await mapConcurrent(ids, 3, async (id) => {
+        try {
+          const res = await autoTagSession(id);
+          if (res.ok) done++;
+          else {
+            failed++;
+            lastError = res.error;
+          }
+        } catch (err) {
+          failed++;
+          lastError = err.message;
+        }
+        spin.update(t('sessions.summarizing', done + failed, ids.length));
+        data.refreshOne(id);
+        loadDay();
+        if (currentRow() && currentRow().id === id) showCalDetail();
+      });
+      spin.stop();
+      selected.clear();
+      loadMonth();
+      renderAll();
+      app.notify(t('sessions.summarizeDone', done, failed, lastError), failed ? 6 : 3);
+    };
+    dayListBox.key('a', doAutoTag);
+    calDetailBox.key('a', doAutoTag);
+
+    // Edit title
+    const doEditTitle = () => {
+      const r = currentRow();
+      if (!r) return;
+      const n = data.detail(r.id);
+      const save = (fields) => {
+        const res = setContent(r.id, fields);
+        app.notify(res.ok ? t('editor.saved') : t('editor.saveFailed', res.error), res.ok ? 2 : 3);
+        data.refreshOne(r.id);
+        loadMonth();
+        renderAll();
+        if (currentRow() && currentRow().id === r.id) showCalDetail();
+        app.render();
+      };
+      textPrompt(app, t('editor.titlePrompt'), n?.extracted.title || '', (val) => {
+        if (val === null) return;
+        if (r.kind !== 'backlog') return save({ title: val });
+        textPrompt(app, t('editor.descPrompt'), n?.extracted.summary || '', (desc) => {
+          save(desc === null ? { title: val } : { title: val, summary: desc });
+        });
+      });
+    };
+    dayListBox.key('e', doEditTitle);
+    calDetailBox.key('e', doEditTitle);
+
+    // Copy to clipboard
+    const doCopy = () => {
+      const r = currentRow();
+      if (!r) return;
+      const n = data.detail(r.id);
+      if (!n) return;
+      const ok = copyToClipboard(sessionToText(n));
+      app.notify(ok ? t('sessions.copied') : t('sessions.copyFailed'), ok ? 2 : 3);
+    };
+    dayListBox.key('y', doCopy);
+    calDetailBox.key('y', doCopy);
+
+    // Pin clip
+    const doClip = () => {
+      const r = currentRow();
+      if (!r) return;
+      const refocus = () => (level === 'detail' ? calDetailBox : dayListBox).focus();
+      const n = data.detail(r.id);
+      if (!n?.turns?.length) return app.notify(t('clip.noTurns'), 3);
+      const items = n.turns.map((turn) => {
+        const preview = (turn.text || '').replace(/\s+/g, ' ').slice(0, 60);
+        return `[${turn.role}] ${preview}`;
+      });
+      multiSelectList(app, t('clip.selectTurns'), items, (picked) => {
+        if (!picked || !picked.length) return refocus();
+        const from = picked[0] + 1;
+        const to = picked[picked.length - 1] + 1;
+        textPrompt(app, t('clip.notePrompt'), '', (note) => {
+          if (note === null) return refocus();
+          const res = createClip({ sessionId: r.id, from, to, note });
+          app.notify(res.ok ? t('clip.saved') : res.error, 3);
+          refocus();
+        });
+      });
+    };
+    dayListBox.key('p', doClip);
+
+    // Multi-selection with space and *
+    dayListBox.key('space', () => {
+      const r = currentRow();
+      if (!r) return;
+      if (selected.has(r.id)) selected.delete(r.id);
+      else selected.add(r.id);
+      loadDay();
+      app.render();
+    });
+
+    dayListBox.key('*', () => {
+      if (!dayRows.length) return;
+      const allSelected = dayRows.every((r) => selected.has(r.id));
+      for (const r of dayRows) {
+        if (allSelected) selected.delete(r.id);
+        else selected.add(r.id);
+      }
+      loadDay();
+      app.render();
+    });
+
+    // Shift+O: cycle sort
+    const SORT_CYCLE = ['recent', 'title', 'agent'];
+    dayListBox.key('S-o', () => {
+      const i = SORT_CYCLE.indexOf(sortBy);
+      sortBy = SORT_CYCLE[(i + 1) % SORT_CYCLE.length];
+      loadDay();
+      app.render();
+    });
+
+    // Shift+T: sort picker
+    dayListBox.key('S-t', () => {
+      menu(
+        app,
+        t('sessions.sortPickerTitle'),
+        [
+          { label: t('sessions.sortOption_recent'), value: 'date-desc' },
+          { label: t('sessions.sortOption_dateAsc'), value: 'date-asc' },
+          { label: t('sessions.sortOption_title'), value: 'title' },
+          { label: t('sessions.sortOption_titleDesc'), value: 'title-desc' },
+        ],
+        (val) => {
+          dayListBox.focus();
+          if (val === undefined) return;
+          sortBy = val;
+          loadDay();
+          app.render();
+        },
+      );
+    });
+
+    // Context for sessions-actions (doMerge, doSplit)
+    const actionCtx = {
+      app,
+      state: { selected },
+      listBox: dayListBox,
+      currentRow,
+      reloadFolders: () => loadMonth(),
+      reloadList: () => renderAll(),
+    };
+
+    // Shift+M: merge
+    dayListBox.key('S-m', () => actions.doMerge(actionCtx));
+
+    // Shift+S: split
+    dayListBox.key('S-s', () => actions.doSplit(actionCtx));
+
+    // .: action menu
+    function openActionMenu() {
+      if (level === 'detail') return;
+
+      const hint = (k) => `  {${C.text}-fg}(${k}){/}`;
+      const items = [];
+      const r = currentRow();
+      if (r) {
+        const multi = selected.size > 1;
+        const sessionItems = [];
+        sessionItems.push({ label: `${t('actions.handoff')}${hint('h')}`, value: () => doHandoff() });
+        sessionItems.push({ label: `${t('actions.lineage')}${hint('Enter')}`, value: drillIntoCalDetail });
+        sessionItems.push({ label: `${t('actions.split')}${hint('Shift+S')}`, value: () => actions.doSplit(actionCtx) });
+        sessionItems.push({ label: `${t('actions.clip')}${hint('p')}`, value: doClip });
+        if (multi) sessionItems.push({ label: `${t('actions.merge')}${hint('Shift+M')}`, value: () => actions.doMerge(actionCtx) });
+        items.push({ header: true, label: t('actions.groupSession') });
+        items.push(...sessionItems);
+      }
+      if (!items.length) return;
+      menu(
+        app,
+        t('actions.title'),
+        items,
+        (fn) => {
+          if (typeof fn === 'function') fn();
+          else if (level === 'dayList') dayListBox.focus();
+        },
+        { width: '50%', dismissOnBlur: true },
+      );
+    }
+    dayListBox.key('.', openActionMenu);
+
     // Detail: ↑↓ scroll (native, keys:true); Esc/← back to the day list;
     // Enter opens the same "resume here / copy command" choice as the
     // Sessions screen's detail panel.
@@ -316,6 +605,7 @@ export function createCalendarTab(app, { onBack }) {
 
   function deactivate() {
     if (!created) return;
+    selected.clear();
     gridBox.hide();
     dayListBox.hide();
     calDetailBox.hide();

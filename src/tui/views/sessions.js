@@ -58,7 +58,7 @@ function clipRow(c) {
 
 // Plain-text rendering of a session for the clipboard (title, summary, and the
 // full transcript — everything you'd want to paste elsewhere).
-function sessionToText(n) {
+export function sessionToText(n) {
   const L = [];
   if (n.extracted.title) L.push(`# ${n.extracted.title}`);
   L.push(`${n.source} · ${(n.startedAt || '').slice(0, 16).replace('T', ' ')} · ${n.folder || t('sessions.newBadge')}`, '');
