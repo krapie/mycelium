@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.3
+
+- **Recent by last activity**: a session you resume moves back to the top, and the Recent view and the "n days ago" labels follow its last activity instead of when it started. Needs `mycelium` CLI 0.6.3.
+
 ## 0.3.2
 
 - **Background upkeep**: the extension can keep Mycelium's background upkeep running, so new sessions are scanned and summarized on their own and folder suggestions and knowledge updates are ready for you to review. It asks once; change it with `mycelium.autoUpkeep`. A notification tells you when something is waiting. Needs `mycelium` CLI 0.6.2.
