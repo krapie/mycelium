@@ -22,7 +22,7 @@ function sessionItem(row, { language, showFolder = false } = {}) {
   const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
   item.id = `s:${row.id}`;
   const tags = (row.tags || []).slice(0, 2).map((g) => `#${g}`).join(' ');
-  item.description = [relativeTime(row.startedAt, Date.now(), language), showFolder && (row.folder || t.unfiled), tags].filter(Boolean).join(' · ');
+  item.description = [relativeTime(row.endedAt || row.startedAt, Date.now(), language), showFolder && (row.folder || t.unfiled), tags].filter(Boolean).join(' · ');
   item.iconPath = new vscode.ThemeIcon(ICON[key] || 'circle-filled', new vscode.ThemeColor(`mycelium.agent.${key}`));
   item.contextValue = key === 'backlog' ? 'backlog' : key === 'merged' ? 'product' : 'session';
   const tip = new vscode.MarkdownString();

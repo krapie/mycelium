@@ -65,7 +65,7 @@ function sessionRow(r, t, language, now) {
   const label = r.title || (r.preview || '').slice(0, 70) || r.id.slice(0, 8) || t.cal.untitled;
   const product = !!((r.mergedFrom && r.mergedFrom.length) || r.splitFrom);
   const backlog = r.kind === 'backlog';
-  const sub = [agentLabel(r), r.folder || t.unfiled, relativeTime(r.startedAt, now, language)].filter(Boolean).join(' · ');
+  const sub = [agentLabel(r), r.folder || t.unfiled, relativeTime(r.endedAt || r.startedAt, now, language)].filter(Boolean).join(' · ');
   const act = (action, label, disabled) => `<button class="btn" data-action="${action}" data-id="${esc(r.id)}"${disabled ? ' disabled' : ''}>${esc(label)}</button>`;
   return `<li class="srow agent-${key}"><button class="open" data-action="open" data-id="${esc(r.id)}" title="${esc(r.id)}"><span class="dot"></span><span class="t">${esc(label)}</span><span class="sub">${esc(sub)}</span></button>`
     + (backlog ? '' : `${act('resume', t.resume, product)}${act('handoff', t.handoff)}`) + '</li>';

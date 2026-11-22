@@ -38,7 +38,7 @@ function groupByRecency(rows, now = Date.now(), maxDays = 14) {
   const today = startOfDay(new Date(now));
   const buckets = { today: [], yesterday: [], thisWeek: [], earlier: [] };
   for (const r of rows) {
-    const t = Date.parse(r.startedAt || '');
+    const t = Date.parse(r.endedAt || r.startedAt || '');
     if (Number.isNaN(t)) continue;
     const diff = Math.round((today - startOfDay(new Date(t))) / DAY);
     if (diff < 0 || diff === 0) buckets.today.push(r);

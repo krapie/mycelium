@@ -724,7 +724,10 @@ As a user, I can **install the `/clip` command into whichever agent CLIs I actua
 - **List/filter sessions.** `listSessions({folder, date, includeSuperseded})`.
   Same 3-way folder-scope contract as elsewhere (undefined = all, null =
   unfiled, string = subtree); date matches `ended_at` falling back to
-  `started_at` (last-activity, not creation). [tested]
+  `started_at` (last-activity, not creation). Rows are ordered by that same
+  last-activity time (`COALESCE(ended_at, started_at)` DESC), so resuming an
+  old session moves it back to the top. The TUI's date sorts, `mycelium find`
+  and the VS Code lists use the same basis. [tested]
 - **Full-text + tag + folder search.** `search(...)`. FTS5, bm25-ranked
   when a text query is given; tag filter is AND; query tokens
   individually quoted to survive punctuation/Korean text. [tested]
@@ -1026,7 +1029,7 @@ Navigation (Enter/→ drill in, Esc/← back), multi-select (`Space`, `*` select
   reach `agent` sort. `sortRows()` gained three comparators that didn't
   exist yet: `title-desc` (flipped `title` compare), `date-asc` (a real
   ascending sort), and `date-desc` (a real descending sort). The
-  picker's "Newest first" option deliberately uses `date-desc`, not
+  picker's "Recently active first" option deliberately uses `date-desc`, not
   `Shift+O`'s `recent`; `recent` is a bare pass-through of whatever
   `data.sessions()` already returned, which is FTS relevance order while
   a search is active, not date order, so reusing it would have made
