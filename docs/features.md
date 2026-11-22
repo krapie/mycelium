@@ -724,9 +724,9 @@ As a user, I can **install the `/clip` command into whichever agent CLIs I actua
 - **List/filter sessions.** `listSessions({folder, date, includeSuperseded})`.
   Same 3-way folder-scope contract as elsewhere (undefined = all, null =
   unfiled, string = subtree); date matches `ended_at` falling back to
-  `started_at` (last-activity, not creation). Rows are ordered by that same
-  last-activity time (`COALESCE(ended_at, started_at)` DESC), so resuming an
-  old session moves it back to the top. The TUI's date sorts, `mycelium find`
+  `started_at` (last-activity, not creation). Rows without a text query are ordered by that
+  same last-activity time (`COALESCE(ended_at, started_at)` DESC), so resuming
+  an old session moves it back to the top; text-search results keep relevance order. The TUI's date sorts, `mycelium find`
   and the VS Code lists use the same basis. [tested]
 - **Full-text + tag + folder search.** `search(...)`. FTS5, bm25-ranked
   when a text query is given; tag filter is AND; query tokens
