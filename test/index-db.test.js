@@ -42,7 +42,7 @@ test('listSessions() three-way folder scope: undefined=all, null=unfiled only, s
   assert.deepEqual(subtree, ['ls-2', 'ls-3']);
 });
 
-test('listSessions() orders by started_at DESC', () => {
+test('listSessions() orders by started_at DESC when nothing was resumed', () => {
   seed('ord-1', { startedAt: '2026-01-01T00:00:00.000Z' });
   seed('ord-2', { startedAt: '2026-01-03T00:00:00.000Z' });
   seed('ord-3', { startedAt: '2026-01-02T00:00:00.000Z' });
@@ -51,6 +51,14 @@ test('listSessions() orders by started_at DESC', () => {
   const idx = (id) => ids.indexOf(id);
   assert.ok(idx('ord-2') < idx('ord-3'));
   assert.ok(idx('ord-3') < idx('ord-1'));
+});
+
+test('listSessions() puts a resumed old session (recent endedAt) above newer-started ones', () => {
+  seed('res-old', { startedAt: '2026-01-01T00:00:00.000Z', endedAt: '2026-01-10T00:00:00.000Z' });
+  seed('res-new', { startedAt: '2026-01-05T00:00:00.000Z', endedAt: '2026-01-05T01:00:00.000Z' });
+  reindex();
+  const ids = listSessions({}).map((r) => r.id);
+  assert.ok(ids.indexOf('res-old') < ids.indexOf('res-new'));
 });
 
 test('listSessions() hides _archive by default but includes it when explicitly browsed', () => {

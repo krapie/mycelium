@@ -209,7 +209,7 @@ function register(ctx, { client, panel, calendar, refresh, foldersView, language
         if (mine !== seq) return; // a newer keystroke already asked
         qp.items = rows.map((r) => ({
           label: r.title || r.preview || r.id.slice(0, 8),
-          description: [relativeTime(r.startedAt, Date.now(), language), r.folder || t.unfiled].filter(Boolean).join(' · '),
+          description: [relativeTime(r.endedAt || r.startedAt, Date.now(), language), r.folder || t.unfiled].filter(Boolean).join(' · '),
           detail: r.snippet || r.summary || undefined,
           iconPath: new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor(`mycelium.agent.${agentKey(r)}`)),
           buttons: r.kind === 'backlog' ? [startButton] : [resumeButton, handoffButton],

@@ -40,6 +40,9 @@ import * as actions from './sessions-actions.js';
 const BACKLOG_KEY = Symbol('backlog');
 const CLIPS_KEY = Symbol('clips');
 
+// Sort/display basis: a resumed session's endedAt moves it back to the top.
+const lastActive = (n) => n.endedAt || n.startedAt || '';
+
 // A clip shaped like a session row, so the list's own sort/render code can
 // show it. `kind: 'clip'` is what keeps it out of currentRow().
 function clipRow(c) {
@@ -171,15 +174,15 @@ export function sessionsView(opts = {}) {
       );
     }
     if (state.sortBy === 'date-desc') {
-      return [...list].sort((a, b) => (b.startedAt || '').localeCompare(a.startedAt || ''));
+      return [...list].sort((a, b) => lastActive(b).localeCompare(lastActive(a)));
     }
     if (state.sortBy === 'date-asc') {
-      return [...list].sort((a, b) => (a.startedAt || '').localeCompare(b.startedAt || ''));
+      return [...list].sort((a, b) => lastActive(a).localeCompare(lastActive(b)));
     }
     if (state.sortBy === 'agent') {
       return [...list].sort((a, b) => {
         const c = sourceLabel(a.source).localeCompare(sourceLabel(b.source));
-        return c !== 0 ? c : (b.startedAt || '').localeCompare(a.startedAt || '');
+        return c !== 0 ? c : lastActive(b).localeCompare(lastActive(a));
       });
     }
     return list;

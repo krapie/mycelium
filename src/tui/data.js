@@ -76,6 +76,7 @@ function mapRow(r) {
     source: r.source,
     folder: r.folder,
     startedAt: r.started_at,
+    endedAt: r.ended_at,
     title: r.title,
     summary: r.summary,
     preview: r.preview,

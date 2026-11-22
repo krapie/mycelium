@@ -29,7 +29,7 @@ export function searchCmd(args) {
 
 export function listCmd(args) {
   const { flags } = parseFlags(args);
-  let raws = allRaw().sort((a, b) => (b.startedAt || '').localeCompare(a.startedAt || ''));
+  let raws = allRaw().sort((a, b) => (b.endedAt || b.startedAt || '').localeCompare(a.endedAt || a.startedAt || ''));
   // _archive is hidden from the TUI by default (see tui/data.js) — this
   // is the "specific command" that still shows it: mycelium list --folder _archive
   if (flags.folder) {

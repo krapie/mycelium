@@ -272,7 +272,8 @@ function jsonArrayLength(s) {
 
 
 /**
- * Non-search list feed: sessions ordered by started_at DESC.
+ * Non-search list feed: sessions ordered by last activity (ended_at, else started_at) DESC,
+ * so a resumed old session moves back to the top.
  * folder === null → only unfiled (Root); folder string → that subtree; undefined → everything.
  * `date` ('YYYY-MM-DD'), if given, narrows to that single day (matches
  * folder's post-query filter style rather than a separate WHERE clause).
@@ -287,7 +288,7 @@ const normDir = (p) => (winLike(p) ? p.replace(/\\/g, '/').toLowerCase() : p).re
 
 export function listSessions({ folder, date, dir, includeSuperseded = false } = {}) {
   const d = openDb();
-  let rows = d.prepare('SELECT * FROM sessions ORDER BY started_at DESC').all();
+  let rows = d.prepare('SELECT * FROM sessions ORDER BY COALESCE(ended_at, started_at) DESC').all();
   // Sessions that ran in `dir` or anywhere below it — an editor's "this
   // workspace" view, where the workspace folder is usually a project root.
   if (dir) {
@@ -332,7 +333,7 @@ export function search({ query, tags = [], folder, date, includeSuperseded = fal
   if (match) {
     // snippet() column index 1 = FTS's `body` (id is column 0 and UNINDEXED).
     // bm25 via `ORDER BY rank` puts relevance-scored hits first — otherwise
-    // the outer started_at DESC sort would drown out topically-strong matches
+    // the outer last-activity DESC sort would drown out topically-strong matches
     // with anything more recent.
     const rows = d
       .prepare(
@@ -357,7 +358,7 @@ export function search({ query, tags = [], folder, date, includeSuperseded = fal
     ids = ids === null ? tagIds : new Set([...ids].filter((x) => tagIds.has(x)));
   }
 
-  let sessions = d.prepare('SELECT * FROM sessions ORDER BY started_at DESC').all();
+  let sessions = d.prepare('SELECT * FROM sessions ORDER BY COALESCE(ended_at, started_at) DESC').all();
   if (ids !== null) sessions = sessions.filter((s) => ids.has(s.id));
   // Same ended_at-first basis as listSessions()/sessionCountsByDay() — the
   // calendar's date filter goes through here too when combined with a search.
